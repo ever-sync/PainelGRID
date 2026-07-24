@@ -12,8 +12,15 @@ import { JsonLogger } from './common/logger/json-logger.service';
 import { createCorsOriginDelegate } from './config/cors-origins';
 import { initSentryFromEnv } from './config/sentry';
 
-process.on('unhandledRejection', (reason: any) => {
-  if (reason?.code === 'ECONNREFUSED' || reason?.errors?.some((e: any) => e?.code === 'ECONNREFUSED')) {
+process.on('unhandledRejection', (reason: unknown) => {
+  const details =
+    reason && typeof reason === 'object'
+      ? (reason as { code?: unknown; errors?: Array<{ code?: unknown }> })
+      : null;
+  if (
+    details?.code === 'ECONNREFUSED' ||
+    details?.errors?.some((error) => error.code === 'ECONNREFUSED')
+  ) {
     return;
   }
   console.error('Unhandled Rejection:', reason);

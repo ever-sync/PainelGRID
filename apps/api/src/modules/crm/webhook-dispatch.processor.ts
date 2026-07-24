@@ -1,6 +1,9 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
+import { request as httpsRequest } from 'node:https';
+import type { LookupFunction } from 'node:net';
+import { resolveSafeWebhookDestination } from '../../common/outbound-url.util';
 import { PrismaService } from '../../config/prisma.service';
 import { WebhookDispatchService } from './webhook-dispatch.service';
 
@@ -57,21 +60,14 @@ export class WebhookDispatchProcessor extends WorkerHost {
         return;
       }
 
-      const response = await fetch(webhookEvent.destination_url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(webhookEvent.payload),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+      const destination = await resolveSafeWebhookDestination(webhookEvent.destination_url);
+      const status = await this.postPinnedWebhook(destination, webhookEvent.payload);
 
       await this.prisma.webhookEvent.update({
         where: { id: webhookEvent.id },
         data: {
           sent_at: new Date(),
-          http_status: response.status,
+          http_status: status,
           next_retry_at: null,
         },
       });
@@ -99,6 +95,47 @@ export class WebhookDispatchProcessor extends WorkerHost {
         );
       }
     }
+  }
+
+  private postPinnedWebhook(
+    destination: Awaited<ReturnType<typeof resolveSafeWebhookDestination>>,
+    payload: unknown,
+  ): Promise<number> {
+    const body = JSON.stringify(payload);
+    const lookup: LookupFunction = (_hostname, _options, callback) => {
+      callback(null, destination.address, destination.family);
+    };
+
+    return new Promise((resolve, reject) => {
+      const request = httpsRequest(
+        destination.url,
+        {
+          method: 'POST',
+          agent: false,
+          lookup,
+          servername: destination.url.hostname,
+          headers: {
+            'content-type': 'application/json',
+            'content-length': Buffer.byteLength(body),
+          },
+        },
+        (response) => {
+          response.resume();
+          const status = response.statusCode ?? 0;
+          if (status < 200 || status >= 300) {
+            reject(new Error(`HTTP ${status}`));
+            return;
+          }
+          resolve(status);
+        },
+      );
+
+      request.setTimeout(10_000, () => {
+        request.destroy(new Error('Timeout ao enviar webhook'));
+      });
+      request.on('error', reject);
+      request.end(body);
+    });
   }
 
   async handleCleanupIdempotency(job: Job<IdempotencyCleanupJob>) {

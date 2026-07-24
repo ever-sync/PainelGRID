@@ -16,6 +16,7 @@ import {
 import { fetchAllLeads, type ApiLead } from "../../services/leads";
 import { readStoredSession } from "../../services/auth";
 import { useLeadRealtimeSync } from "../../hooks/useLeadRealtimeSync";
+import { createAudioContext } from "../../utils/audioContext";
 import { ConnectionDot } from "../../components/tv/ConnectionDot";
 import {
   ago,
@@ -199,9 +200,7 @@ export function EventTVQueuePage() {
 
       // Play notification sound
       try {
-        const context = new (
-          window.AudioContext || (window as any).webkitAudioContext
-        )();
+        const context = createAudioContext();
         const osc = context.createOscillator();
         const gain = context.createGain();
         osc.connect(gain);

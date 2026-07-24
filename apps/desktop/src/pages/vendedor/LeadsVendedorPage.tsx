@@ -24,6 +24,7 @@ import { Select } from "../../components/ui/Select";
 import { Notice } from "../../components/ui/Notice";
 import type { Event, Lead, User } from "../../types";
 import { resolveClientId, resolveVendorId } from "../../utils/userContext";
+import { createAudioContext } from "../../utils/audioContext";
 import { readStoredSession } from "../../services/auth";
 import { createAppointment } from "../../services/appointments";
 import { listEvents, mapApiEventToEvent } from "../../services/events";
@@ -154,9 +155,7 @@ const APPOINTMENT_PERIOD_OPTIONS = [
 
 function playBeep() {
   try {
-    const ctx = new (
-      window.AudioContext || (window as any).webkitAudioContext
-    )();
+    const ctx = createAudioContext();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);

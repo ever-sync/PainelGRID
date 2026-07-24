@@ -31,9 +31,9 @@ export class ResilientRedisClient {
     }
     try {
       return await this.redis.get(key);
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.isFallbackActive = true;
-      this.logger.error(`Erro ao ler do Redis, usando fallback: ${err.message}`);
+      this.logger.error(`Erro ao ler do Redis, usando fallback: ${this.errorMessage(err)}`);
       return this.fallback.get(key);
     }
   }
@@ -47,9 +47,9 @@ export class ResilientRedisClient {
         return (await this.redis.set(key, value, 'EX', ttlSeconds)) as 'OK';
       }
       return (await this.redis.set(key, value)) as 'OK';
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.isFallbackActive = true;
-      this.logger.error(`Erro ao escrever no Redis, usando fallback: ${err.message}`);
+      this.logger.error(`Erro ao escrever no Redis, usando fallback: ${this.errorMessage(err)}`);
       return this.fallback.set(key, value, mode, ttlSeconds);
     }
   }
@@ -60,9 +60,9 @@ export class ResilientRedisClient {
     }
     try {
       return await this.redis.del(...keys);
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.isFallbackActive = true;
-      this.logger.error(`Erro ao deletar do Redis, usando fallback: ${err.message}`);
+      this.logger.error(`Erro ao deletar do Redis, usando fallback: ${this.errorMessage(err)}`);
       return this.fallback.del(...keys);
     }
   }
@@ -97,9 +97,9 @@ return raw
       if (result === '__LOCKED__') return { status: 'locked' };
       if (typeof result === 'string') return { status: 'valid', payload: result };
       return { status: 'missing' };
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.isFallbackActive = true;
-      this.logger.error(`Erro ao validar 2FA no Redis, usando fallback: ${err.message}`);
+      this.logger.error(`Erro ao validar 2FA no Redis, usando fallback: ${this.errorMessage(err)}`);
       return this.fallback.consumeTwoFactorChallenge(key, codeHash, maxAttempts);
     }
   }
@@ -113,14 +113,14 @@ return raw
     }
     try {
       return await (this.redis.scan as any)(cursor, ...args);
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.isFallbackActive = true;
-      this.logger.error(`Erro ao escanear Redis, usando fallback: ${err.message}`);
+      this.logger.error(`Erro ao escanear Redis, usando fallback: ${this.errorMessage(err)}`);
       return this.fallback.scan(cursor, ...args);
     }
   }
 
-  on(event: string, fn?: (...args: any[]) => void): this {
+  on(event: string, fn?: (...args: unknown[]) => void): this {
     if (fn) {
       this.redis.on(event, fn);
     }
@@ -134,6 +134,10 @@ return raw
       // ignore
     }
     return this.fallback.quit();
+  }
+
+  private errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 }
 

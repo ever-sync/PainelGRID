@@ -13,7 +13,9 @@ const META_FILE_KEYS = [
  * O Nest faz merge `{ ...arquivo, ...process.env }`; variáveis vazias no shell (ex.: FACEBOOK_APP_ID=)
  * sobrescrevem o .env e quebram Meta. Recuperamos valores dos arquivos quando o merge veio vazio.
  */
-function hydrateMetaKeysFromEnvFiles(env: EnvironmentVariables): EnvironmentVariables {
+function hydrateMetaKeysFromEnvFiles(
+  env: EnvironmentVariables,
+): EnvironmentVariables {
   const fromFiles = mergeEnvFilesNestOrder(getApiEnvFilePaths());
   const next: EnvironmentVariables = { ...env };
   for (const key of META_FILE_KEYS) {
@@ -60,7 +62,9 @@ function validateOptionalHttpOriginList(value: string, key: string) {
 
 function validateDuration(value: string, key: string) {
   if (!/^\d+[smhd]$/.test(value.trim().toLowerCase())) {
-    throw new Error(`Duracao invalida para ${key}. Use formatos como 15m, 7d ou 1h.`);
+    throw new Error(
+      `Duracao invalida para ${key}. Use formatos como 15m, 7d ou 1h.`,
+    );
   }
 }
 
@@ -73,7 +77,9 @@ function validateMinLength(value: string, key: string, min: number) {
 export function validateEnvironment(raw: EnvironmentVariables) {
   const env = hydrateMetaKeysFromEnvFiles(raw);
   const databaseUrl =
-    env.DATABASE_URL?.trim() || env.POSTGRES_URL?.trim() || requireString(env, 'DATABASE_URL');
+    env.DATABASE_URL?.trim() ||
+    env.POSTGRES_URL?.trim() ||
+    requireString(env, 'DATABASE_URL');
   const isVercel = env.VERCEL === '1';
   const redisUrlRaw = env.REDIS_URL?.trim();
   if (redisUrlRaw) {
@@ -94,13 +100,21 @@ export function validateEnvironment(raw: EnvironmentVariables) {
   validateMinLength(jwtRefreshSecret, 'JWT_REFRESH_SECRET', 32);
 
   /** Valores de fallback do código (ConfigService) — nunca em produção com segredos assim. */
-  const knownDevSecrets = ['leadflow_access_secret', 'leadflow_refresh_secret'] as const;
+  const knownDevSecrets = [
+    'leadflow_access_secret',
+    'leadflow_refresh_secret',
+  ] as const;
   const jwtSecretLc = jwtSecret.toLowerCase();
   const jwtRefreshLc = jwtRefreshSecret.toLowerCase();
 
   if (nodeEnv === 'production') {
-    if (jwtSecret.includes('sua_chave') || jwtRefreshSecret.includes('sua_chave')) {
-      throw new Error('JWT_SECRET e JWT_REFRESH_SECRET devem ser substituidos por valores reais.');
+    if (
+      jwtSecret.includes('sua_chave') ||
+      jwtRefreshSecret.includes('sua_chave')
+    ) {
+      throw new Error(
+        'JWT_SECRET e JWT_REFRESH_SECRET devem ser substituidos por valores reais.',
+      );
     }
     if (jwtSecret === jwtRefreshSecret) {
       throw new Error(
@@ -115,9 +129,12 @@ export function validateEnvironment(raw: EnvironmentVariables) {
       }
     }
     if (jwtSecretLc.includes('changeme') || jwtRefreshLc.includes('changeme')) {
-      throw new Error('Remova placeholders como "changeme" dos JWTs em producao.');
+      throw new Error(
+        'Remova placeholders como "changeme" dos JWTs em producao.',
+      );
     }
-    const allowResetToken = env.ALLOW_PASSWORD_RESET_TOKEN_RESPONSE?.trim().toLowerCase();
+    const allowResetToken =
+      env.ALLOW_PASSWORD_RESET_TOKEN_RESPONSE?.trim().toLowerCase();
     if (allowResetToken === 'true' || allowResetToken === '1') {
       throw new Error(
         'ALLOW_PASSWORD_RESET_TOKEN_RESPONSE nao pode estar ativo em producao ' +
@@ -148,6 +165,39 @@ export function validateEnvironment(raw: EnvironmentVariables) {
 
   const integrationKey = env.LEADFLOW_INTEGRATION_API_KEY?.trim();
   const integrationActor = env.LEADFLOW_INTEGRATION_ACTOR_USER_ID?.trim();
+  const integrationClientId = env.LEADFLOW_INTEGRATION_CLIENT_ID?.trim();
+  const allowLegacyIntegrationKey = env.ALLOW_LEGACY_INTEGRATION_KEY?.trim().toLowerCase();
+  if (
+    allowLegacyIntegrationKey &&
+    !['true', 'false', '1', '0'].includes(allowLegacyIntegrationKey)
+  ) {
+    throw new Error('ALLOW_LEGACY_INTEGRATION_KEY deve ser true ou false.');
+  }
+  if (integrationKey) {
+    validateMinLength(integrationKey, 'LEADFLOW_INTEGRATION_API_KEY', 32);
+  }
+  if (
+    integrationClientId &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      integrationClientId,
+    )
+  ) {
+    throw new Error('LEADFLOW_INTEGRATION_CLIENT_ID deve ser um UUID valido.');
+  }
+  if (nodeEnv === 'production' && integrationKey && !integrationClientId) {
+    throw new Error(
+      'LEADFLOW_INTEGRATION_CLIENT_ID e obrigatorio em producao quando a chave de integracao esta ativa.',
+    );
+  }
+  if (
+    nodeEnv === 'production' &&
+    integrationKey &&
+    !['true', '1'].includes(allowLegacyIntegrationKey ?? '')
+  ) {
+    throw new Error(
+      'Chave global legada desativada em producao. Remova LEADFLOW_INTEGRATION_API_KEY ou defina ALLOW_LEGACY_INTEGRATION_KEY=true temporariamente durante a migracao.',
+    );
+  }
   if (integrationKey && !integrationActor) {
     // Aviso apenas — o app funciona sem actor, mas o CRM nao move automaticamente.
     console.warn(
@@ -162,7 +212,9 @@ export function validateEnvironment(raw: EnvironmentVariables) {
       integrationActor,
     )
   ) {
-    throw new Error('LEADFLOW_INTEGRATION_ACTOR_USER_ID deve ser um UUID valido.');
+    throw new Error(
+      'LEADFLOW_INTEGRATION_ACTOR_USER_ID deve ser um UUID valido.',
+    );
   }
 
   return {

@@ -25,6 +25,7 @@ import {
   readDashboardDarkEnabled,
 } from "../../lib/dashboard-dark-mode";
 import { resolveClientId } from "../../utils/userContext";
+import { createAudioContext } from "../../utils/audioContext";
 import { MissingClientScope } from "../../components/shared/MissingClientScope";
 import { readStoredSession } from "../../services/auth";
 import { checkInAppointment } from "../../services/appointments";
@@ -354,9 +355,7 @@ export function CheckinPage() {
 
   const playBeep = (freq = 880) => {
     try {
-      const ctx = new (
-        window.AudioContext || (window as any).webkitAudioContext
-      )();
+      const ctx = createAudioContext();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);

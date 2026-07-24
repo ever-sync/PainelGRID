@@ -1,6 +1,13 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { Client, Prisma } from '@prisma/client';
 import { Role } from '../../common/types';
+import { assertSafeWebhookUrl } from '../../common/outbound-url.util';
 import { PrismaService } from '../../config/prisma.service';
 import { RedisService } from '../../config/redis.service';
 import { AuthenticatedUser } from '../auth/auth.types';
@@ -235,6 +242,9 @@ export class ClientsService {
   }
 
   async create(dto: CreateClientDto, gestorId: string): Promise<ClientListItem> {
+    const webhookUrl = dto.webhook_url_n8n?.trim()
+      ? await this.validateWebhookUrl(dto.webhook_url_n8n)
+      : null;
     const settings = this.buildSettings(
       {},
       {
@@ -260,7 +270,7 @@ export class ClientsService {
             cnpj: dto.cnpj?.trim() ?? null,
             plan: dto.plan?.trim() || 'basic',
             logo_url: dto.logo_url ?? null,
-            webhook_url_n8n: dto.webhook_url_n8n?.trim() ?? null,
+            webhook_url_n8n: webhookUrl,
             phone_number: dto.phone_number?.trim() ?? null,
             whatsapp_number: dto.whatsapp_number?.trim() ?? null,
             settings,
@@ -286,7 +296,14 @@ export class ClientsService {
       await this.assertGestorOwnsClient(user.sub, id);
       await this.invalidateClientCache(id, user.sub);
     } else if (user.role === Role.CLIENTE && user.client_id === id) {
-      // Cliente pode ajustar apenas a própria empresa nas telas de configuração.
+      if (
+        dto.plan !== undefined ||
+        dto.is_active !== undefined ||
+        dto.webhook_url_n8n !== undefined ||
+        dto.crm_stage_status_rules !== undefined
+      ) {
+        throw new ForbiddenException('Campos administrativos exigem acesso de gestor');
+      }
     } else {
       throw new ForbiddenException('Sem permissao para editar esta empresa');
     }
@@ -309,6 +326,13 @@ export class ClientsService {
       dto.is_active !== undefined ||
       dto.crm_stage_status_rules !== undefined;
 
+    const webhookUrl =
+      dto.webhook_url_n8n === undefined
+        ? undefined
+        : dto.webhook_url_n8n?.trim()
+          ? await this.validateWebhookUrl(dto.webhook_url_n8n)
+          : null;
+
     const row = await this.prisma.client.update({
       where: { id },
       data: {
@@ -316,8 +340,7 @@ export class ClientsService {
         cnpj: dto.cnpj === undefined ? undefined : (dto.cnpj?.trim() ?? null),
         plan: dto.plan?.trim(),
         logo_url: dto.logo_url,
-        webhook_url_n8n:
-          dto.webhook_url_n8n === undefined ? undefined : (dto.webhook_url_n8n?.trim() ?? null),
+        webhook_url_n8n: webhookUrl,
         phone_number:
           dto.phone_number === undefined ? undefined : (dto.phone_number?.trim() ?? null),
         whatsapp_number:
@@ -355,6 +378,14 @@ export class ClientsService {
     }
 
     throw new ForbiddenException('Sem permissao para este cliente');
+  }
+
+  private async validateWebhookUrl(raw: string): Promise<string> {
+    try {
+      return await assertSafeWebhookUrl(raw);
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
+    }
   }
 
   async deleteForUser(user: AuthenticatedUser, clientId: string) {

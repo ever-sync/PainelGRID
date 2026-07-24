@@ -7,6 +7,7 @@ import {
   IsEnum,
   IsOptional,
   IsString,
+  IsUrl,
   IsUUID,
   MaxLength,
   MinLength,
@@ -55,6 +56,7 @@ export class UpdateClientDto {
 
   @IsOptional()
   @IsString()
+  @IsUrl({ protocols: ['https'], require_protocol: true })
   @MaxLength(500)
   webhook_url_n8n?: string | null;
 

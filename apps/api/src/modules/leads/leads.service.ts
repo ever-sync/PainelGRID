@@ -1671,8 +1671,10 @@ export class LeadsService {
         'EX',
         120, // 2 minutos
       );
-    } catch (err: any) {
-      this.logger.error(`Falha ao salvar chamada de vendedor no Redis: ${err.message}`);
+    } catch (err: unknown) {
+      this.logger.error(
+        `Falha ao salvar chamada de vendedor no Redis: ${this.errorMessage(err)}`,
+      );
     }
 
     this.realtimeEvents.emitVendorCalled(lead.client_id, callPayload);
@@ -2511,16 +2513,26 @@ export class LeadsService {
         });
 
         if (response.ok) {
-          const raw = (await response.json()) as any;
+          const rawValuePayload: unknown = await response.json();
+          const raw = this.toUnknownRecord(rawValuePayload);
           // Suporta tanto respostas no nível raiz quanto objetos aninhados (dados, veiculo, result, response, fipe)
-          const data = raw?.dados || raw?.veiculo || raw?.result || raw?.response || raw?.fipe || raw;
+          const data =
+            ['dados', 'veiculo', 'result', 'response', 'fipe']
+              .map((key) => this.toUnknownRecord(raw[key]))
+              .find((value) => Object.keys(value).length > 0) ?? raw;
           
-          const brand = data?.brand || data?.marca || raw?.brand || raw?.marca;
-          const model = data?.model || data?.modelo || raw?.model || raw?.modelo;
+          const brand =
+            this.firstDefined(data, ['brand', 'marca']) ??
+            this.firstDefined(raw, ['brand', 'marca']);
+          const model =
+            this.firstDefined(data, ['model', 'modelo']) ??
+            this.firstDefined(raw, ['model', 'modelo']);
           const modelYear =
-            data?.modelYear || data?.anoModelo || data?.ano_modelo || data?.year || data?.ano || raw?.anoModelo || raw?.ano;
+            this.firstDefined(data, ['modelYear', 'anoModelo', 'ano_modelo', 'year', 'ano']) ??
+            this.firstDefined(raw, ['anoModelo', 'ano']);
           const rawValue =
-            data?.fipeValue || data?.fipe_valor || data?.valor || data?.value || raw?.fipeValue || raw?.valor;
+            this.firstDefined(data, ['fipeValue', 'fipe_valor', 'valor', 'value']) ??
+            this.firstDefined(raw, ['fipeValue', 'valor']);
 
           if (brand && model) {
             let formattedValue = 'N/A';
@@ -2543,8 +2555,8 @@ export class LeadsService {
           const errorText = await response.text().catch(() => '');
           this.logger.error(`APIBRASIL HTTP ${response.status} ao consultar placa ${plate}: ${errorText}`);
         }
-      } catch (err: any) {
-        this.logger.error(`Erro ao consultar placa na APIBrasil: ${err.message}`);
+      } catch (err: unknown) {
+        this.logger.error(`Erro ao consultar placa na APIBrasil: ${this.errorMessage(err)}`);
       }
     } else {
       this.logger.warn(`APIBRASIL_TOKEN ou APIBRASIL_DEVICE ausentes no .env ao consultar placa ${plate}.`);
@@ -2589,8 +2601,33 @@ export class LeadsService {
         action: 'updated',
         updated_at: new Date().toISOString(),
       });
-    } catch (err: any) {
-      this.logger.error(`Erro ao atualizar notas com FIPE do lead ${leadId}: ${err.message}`);
+    } catch (err: unknown) {
+      this.logger.error(
+        `Erro ao atualizar notas com FIPE do lead ${leadId}: ${this.errorMessage(err)}`,
+      );
     }
+  }
+
+  private toUnknownRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  }
+
+  private firstDefined(
+    record: Record<string, unknown>,
+    keys: string[],
+  ): unknown {
+    for (const key of keys) {
+      const value = record[key];
+      if (value !== undefined && value !== null && value !== '') {
+        return value;
+      }
+    }
+    return undefined;
+  }
+
+  private errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 }

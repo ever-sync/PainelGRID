@@ -135,6 +135,10 @@ export interface MetaCreativePayload {
 export interface MetaInsightPayload {
   campaign_id?: string;
   campaign_name?: string;
+  adset_id?: string;
+  adset_name?: string;
+  ad_id?: string;
+  ad_name?: string;
   date_start?: string;
   spend?: string;
   impressions?: string;
@@ -145,6 +149,8 @@ export interface MetaInsightPayload {
   frequency?: string;
   actions?: Array<{ action_type?: string; value?: string }>;
 }
+
+export type MetaInsightLevel = 'campaign' | 'adset' | 'ad';
 
 export interface MetaLeadPayload {
   id?: string;

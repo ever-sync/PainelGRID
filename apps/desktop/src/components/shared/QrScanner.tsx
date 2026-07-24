@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { Camera, CameraOff, AlertCircle, Zap, ZapOff } from "lucide-react";
 import { triggerHapticFeedback } from "../../utils/haptics";
+import { createAudioContext } from "../../utils/audioContext";
+
+type TorchCapabilities = MediaTrackCapabilities & { torch?: boolean };
+type TorchConstraintSet = MediaTrackConstraintSet & { torch?: boolean };
 
 interface QrScannerProps {
   onScan: (decodedText: string) => void;
@@ -11,9 +15,7 @@ interface QrScannerProps {
 
 function playBeep() {
   try {
-    const ctx = new (
-      window.AudioContext || (window as any).webkitAudioContext
-    )();
+    const ctx = createAudioContext();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -79,7 +81,8 @@ export function QrScanner({ onScan, onClose, dark = false }: QrScannerProps) {
 
         // Check for torch capability
         try {
-          const capabilities = html5QrCode.getRunningTrackCapabilities() as any;
+          const capabilities =
+            html5QrCode.getRunningTrackCapabilities() as TorchCapabilities;
           if (capabilities && capabilities.torch) {
             setHasTorch(true);
           }
@@ -118,8 +121,8 @@ export function QrScanner({ onScan, onClose, dark = false }: QrScannerProps) {
     const nextTorchState = !torchOn;
     try {
       await qrRef.current.applyVideoConstraints({
-        advanced: [{ torch: nextTorchState } as any],
-      } as any);
+        advanced: [{ torch: nextTorchState } as TorchConstraintSet],
+      });
       setTorchOn(nextTorchState);
     } catch (e) {
       console.error("Falha ao alternar lanterna", e);

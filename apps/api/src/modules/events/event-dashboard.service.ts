@@ -359,7 +359,7 @@ export class EventDashboardService {
       .sort((a, b) => b.count - a.count);
 
     // Buscar chamadas de vendedores ativas no Redis
-    const activeCalls: any[] = [];
+    const activeCalls: unknown[] = [];
     for (const clientId of participantClientIds) {
       try {
         const [_, keys] = await this.redis.client.scan(
@@ -377,7 +377,7 @@ export class EventDashboardService {
             }
           }
         }
-      } catch (err: any) {
+      } catch {
         // Silently swallow Redis errors
       }
     }

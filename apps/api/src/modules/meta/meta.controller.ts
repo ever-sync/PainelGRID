@@ -156,6 +156,19 @@ export class MetaController {
   }
 
   @Roles(Role.GESTOR, Role.CLIENTE)
+  @Get('campaigns-report/:clientId')
+  @ApiOperation({
+    summary: 'Relatorio hierarquico Campanha -> Conjunto -> Anuncio com metricas agregadas',
+  })
+  @ApiResponse({ status: 200, description: 'Relatorio retornado com sucesso' })
+  getCampaignsReport(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('clientId', new ParseUUIDPipe()) clientId: string,
+  ): Promise<Record<string, unknown>> {
+    return this.metaService.getCampaignsReport(user, clientId);
+  }
+
+  @Roles(Role.GESTOR, Role.CLIENTE)
   @Post('sync/full')
   @ApiOperation({ summary: 'Dispara sincronização completa da integração Meta' })
   @ApiResponse({ status: 201, description: 'Sincronização disparada com sucesso' })

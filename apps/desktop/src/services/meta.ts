@@ -25,6 +25,35 @@ type MetaSummaryResponse = {
   };
 };
 
+export type MetaCampaignReportRow = {
+  id: string;
+  name: string;
+  status: string | null;
+  spend: number;
+  leads: number;
+  cost_per_lead: number;
+  impressions: number;
+  conversations: number;
+  cost_per_conversation: number;
+  reach: number;
+};
+
+export type MetaAdReportRow = MetaCampaignReportRow;
+
+export type MetaAdSetReportRow = MetaCampaignReportRow & {
+  ads: MetaAdReportRow[];
+};
+
+export type MetaCampaignsReportItem = MetaCampaignReportRow & {
+  ad_sets: MetaAdSetReportRow[];
+};
+
+export type MetaCampaignsReportResponse = {
+  client_id: string;
+  connected: boolean;
+  campaigns: MetaCampaignsReportItem[];
+};
+
 export type MetaBusinessApiOption = {
   id: string;
   name: string;
@@ -168,6 +197,16 @@ export function getMetaSummary(clientId: string, token: string) {
     method: "GET",
     token,
   });
+}
+
+export function getMetaCampaignsReport(clientId: string, token: string) {
+  return httpRequest<MetaCampaignsReportResponse>(
+    `/meta/campaigns-report/${clientId}`,
+    {
+      method: "GET",
+      token,
+    },
+  );
 }
 
 export function syncMetaFull(clientId: string, token: string) {

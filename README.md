@@ -82,6 +82,12 @@ npm run dev
 ## Observacoes
 
 - O backend ja possui autenticacao JWT, RBAC, Prisma, Redis, Swagger e modulos de negocio ativos.
+- Credenciais de integracao por cliente sao criadas em
+  `POST /api/clients/:clientId/integration-credentials`; o segredo e exibido uma unica vez.
+  Rotacao e revogacao usam os endpoints `/:credentialId/rotate` e `/:credentialId/revoke`.
+- A chave global por ambiente e apenas uma ponte de migracao. Em producao ela exige
+  `LEADFLOW_INTEGRATION_CLIENT_ID` e `ALLOW_LEGACY_INTEGRATION_KEY=true`. Remova essas
+  variaveis apos distribuir as credenciais por cliente.
 - O desktop ja consome a API real para autenticacao, leads, eventos, clientes e integracoes Meta; ainda existem mocks residuais em partes especificas da UI.
 - `apps/web` contem apenas build estatico legado e nao faz parte dos workspaces ativos.
 - A documentacao detalhada de QA e rastreabilidade esta em `docs/qa/`.

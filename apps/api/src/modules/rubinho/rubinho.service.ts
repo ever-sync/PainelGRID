@@ -354,19 +354,6 @@ export class RubinhoService {
       );
     }
 
-    // Build conditional includes to avoid loading large text fields when not needed
-    const rubinhoAgentInclude: any = {};
-    if (includeKnowledge) {
-      rubinhoAgentInclude.faqs = {
-        select: { question: true, answer: true },
-        orderBy: { created_at: 'asc' },
-      };
-      rubinhoAgentInclude.documents = {
-        select: { title: true, content: true },
-        orderBy: { created_at: 'asc' },
-      };
-    }
-
     // Find the active Rubinho agent linked to this event
     const association = await this.prisma.rubinhoAgentEvent.findFirst({
       where: {
@@ -375,7 +362,16 @@ export class RubinhoService {
       },
       include: {
         rubinho_agent: {
-          include: Object.keys(rubinhoAgentInclude).length > 0 ? rubinhoAgentInclude : undefined,
+          include: {
+            faqs: {
+              select: { question: true, answer: true },
+              orderBy: { created_at: 'asc' },
+            },
+            documents: {
+              select: { title: true, content: true },
+              orderBy: { created_at: 'asc' },
+            },
+          },
         },
       },
     });
@@ -386,53 +382,38 @@ export class RubinhoService {
       );
     }
 
-    const agent = association.rubinho_agent as any;
+    const agent = association.rubinho_agent;
 
     const event = await this.prisma.event.findUnique({
       where: { id: resolvedEventId },
       select: { client_id: true },
     });
 
-    let vehicles: any[] | undefined = undefined;
-    if (includeKnowledge && event?.client_id) {
-      const activeVehicles = await this.prisma.vehicle.findMany({
-        where: {
-          client_id: event.client_id,
-          status: true,
-        },
-        select: {
-          brand: true,
-          model: true,
-          year_or_km: true,
-          price: true,
-          stores: true,
-          tags: true,
-          image_url: true,
-          category: true,
-          gallery: true,
-          condition: true,
-          manufacturing_year: true,
-          model_year: true,
-          km: true,
-        },
-        orderBy: { created_at: 'desc' },
-      });
-      vehicles = activeVehicles.map((v) => ({
-        brand: v.brand,
-        model: v.model,
-        year_or_km: v.year_or_km,
-        price: v.price,
-        stores: v.stores,
-        tags: v.tags,
-        image_url: v.image_url,
-        category: v.category,
-        gallery: v.gallery,
-        condition: v.condition,
-        manufacturing_year: v.manufacturing_year,
-        model_year: v.model_year,
-        km: v.km,
-      }));
-    }
+    const vehicles =
+      includeKnowledge && event?.client_id
+        ? await this.prisma.vehicle.findMany({
+            where: {
+              client_id: event.client_id,
+              status: true,
+            },
+            select: {
+              brand: true,
+              model: true,
+              year_or_km: true,
+              price: true,
+              stores: true,
+              tags: true,
+              image_url: true,
+              category: true,
+              gallery: true,
+              condition: true,
+              manufacturing_year: true,
+              model_year: true,
+              km: true,
+            },
+            orderBy: { created_at: 'desc' },
+          })
+        : undefined;
 
     return {
       agent_id: agent.id,
@@ -442,12 +423,8 @@ export class RubinhoService {
       tone: agent.tone,
       delay_minutes: agent.delay_minutes,
       system_prompt: agent.prompt,
-      faq: agent.faqs
-        ? agent.faqs.map((f: any) => ({ question: f.question, answer: f.answer }))
-        : undefined,
-      documents: agent.documents
-        ? agent.documents.map((d: any) => ({ title: d.title, content: d.content }))
-        : undefined,
+      faq: includeKnowledge ? agent.faqs : undefined,
+      documents: includeKnowledge ? agent.documents : undefined,
       vehicles,
     };
   }

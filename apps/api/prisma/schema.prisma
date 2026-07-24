@@ -82,6 +82,7 @@ model Client {
   updated_at                  DateTime                   @updatedAt
   agent_action_logs           AgentActionLog[]
   idempotency_requests        ApiIdempotencyRequest[]
+  integration_credentials     IntegrationCredential[]
   appointments                Appointment[]
   campaigns                   Campaign[]
   gestor                      User                       @relation("GestorClients", fields: [gestor_id], references: [id])
@@ -113,6 +114,22 @@ model Client {
 
   @@index([gestor_id])
   @@map("clients")
+}
+
+model IntegrationCredential {
+  id           String    @id @default(uuid()) @db.Uuid
+  client_id    String    @db.Uuid
+  name         String    @db.VarChar(100)
+  key_prefix   String    @db.VarChar(24)
+  key_hash     String    @unique @db.Char(64)
+  created_at   DateTime  @default(now())
+  expires_at   DateTime?
+  revoked_at   DateTime?
+  last_used_at DateTime?
+  client       Client    @relation(fields: [client_id], references: [id], onDelete: Cascade)
+
+  @@index([client_id, revoked_at])
+  @@map("integration_credentials")
 }
 
 model Lead {

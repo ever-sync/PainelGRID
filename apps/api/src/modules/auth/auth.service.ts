@@ -8,7 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHmac, randomInt, randomUUID } from 'crypto';
@@ -33,9 +33,9 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   private readonly accessTokenSecret: string;
-  private readonly accessTokenExpiresIn: string;
+  private readonly accessTokenExpiresIn: JwtSignOptions['expiresIn'];
   private readonly refreshTokenSecret: string;
-  private readonly refreshTokenExpiresIn: string;
+  private readonly refreshTokenExpiresIn: JwtSignOptions['expiresIn'];
 
   constructor(
     private readonly usersService: UsersService,
@@ -45,12 +45,18 @@ export class AuthService {
     private readonly mailService: MailService,
   ) {
     this.accessTokenSecret = this.configService.get<string>('JWT_SECRET', 'leadflow_access_secret');
-    this.accessTokenExpiresIn = this.configService.get<string>('JWT_EXPIRES_IN', '15m');
+    this.accessTokenExpiresIn = this.configService.get<JwtSignOptions['expiresIn']>(
+      'JWT_EXPIRES_IN',
+      '15m',
+    );
     this.refreshTokenSecret = this.configService.get<string>(
       'JWT_REFRESH_SECRET',
       'leadflow_refresh_secret',
     );
-    this.refreshTokenExpiresIn = this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d');
+    this.refreshTokenExpiresIn = this.configService.get<JwtSignOptions['expiresIn']>(
+      'JWT_REFRESH_EXPIRES_IN',
+      '7d',
+    );
   }
 
   async login(dto: LoginDto) {
@@ -157,7 +163,7 @@ export class AuthService {
 
   /** TTL do refresh em segundos (ex.: max-age do cookie httpOnly). */
   getRefreshJwtTtlSeconds(): number {
-    return parseDurationToSeconds(this.refreshTokenExpiresIn);
+    return parseDurationToSeconds(String(this.refreshTokenExpiresIn ?? '7d'));
   }
 
   async refresh(refreshTokenRaw: string) {
@@ -335,7 +341,7 @@ export class AuthService {
     };
 
     const refreshTokenId = randomUUID();
-    const refreshTtl = parseDurationToSeconds(this.refreshTokenExpiresIn);
+    const refreshTtl = parseDurationToSeconds(String(this.refreshTokenExpiresIn));
     await this.persistRefreshAllowlistOrThrow(refreshTokenId, user.id, refreshTtl);
 
     const accessPayload: AuthTokenPayload = {
@@ -353,11 +359,11 @@ export class AuthService {
       const [accessToken, refreshToken] = await Promise.all([
         this.jwtService.signAsync(accessPayload, {
           secret: this.accessTokenSecret,
-          expiresIn: this.accessTokenExpiresIn as any,
+          expiresIn: this.accessTokenExpiresIn,
         }),
         this.jwtService.signAsync(refreshPayload, {
           secret: this.refreshTokenSecret,
-          expiresIn: this.refreshTokenExpiresIn as any,
+          expiresIn: this.refreshTokenExpiresIn,
         }),
       ]);
 

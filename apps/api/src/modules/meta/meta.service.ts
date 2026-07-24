@@ -17,6 +17,7 @@ import { ConversationChannel, Prisma, SenderType } from '@prisma/client';
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { normalizeBrazilianPhone, phoneDigits } from '../../common/phone.util';
 import { Role } from '../../common/types';
+import { withTimeout } from '../../common/utils/with-timeout';
 import { PrismaService } from '../../config/prisma.service';
 import { RedisService } from '../../config/redis.service';
 import { AuthenticatedUser } from '../auth/auth.types';
@@ -39,6 +40,7 @@ import {
   type MetaBusinessSummary,
   type MetaCampaignPayload,
   type MetaCreativePayload,
+  type MetaInsightLevel,
   type MetaInsightPayload,
   type MetaLeadFormSummary,
   type MetaLeadPayload,
@@ -53,6 +55,7 @@ import {
   type WhatsappSendMessageResponse,
   type WhatsappUploadMediaResponse,
 } from './meta.types';
+import { assertMetaGraphUrl, assertMetaMediaUrl } from './meta-url.util';
 
 @Injectable()
 export class MetaService implements OnModuleInit {
@@ -73,15 +76,19 @@ export class MetaService implements OnModuleInit {
 
   async onModuleInit() {
     try {
-      await this.metaSyncQueue.add(
-        'token-refresh',
-        { thresholdDays: 7 },
-        {
-          repeat: { pattern: '0 4 * * *' },
-          removeOnComplete: true,
-          removeOnFail: false,
-          jobId: 'meta-token-refresh-daily',
-        },
+      await withTimeout(
+        this.metaSyncQueue.add(
+          'token-refresh',
+          { thresholdDays: 7 },
+          {
+            repeat: { pattern: '0 4 * * *' },
+            removeOnComplete: true,
+            removeOnFail: false,
+            jobId: 'meta-token-refresh-daily',
+          },
+        ),
+        5000,
+        'Agendamento de renovacao de tokens Meta',
       );
       this.logger.log('Renovacao diaria de tokens Meta agendada (cron 04:00)');
     } catch (err) {
@@ -876,6 +883,126 @@ export class MetaService implements OnModuleInit {
     };
   }
 
+  /** Relatorio hierarquico Campanha -> Conjunto de anuncios -> Anuncio, com metricas agregadas. */
+  async getCampaignsReport(user: AuthenticatedUser, clientId: string) {
+    await this.assertMetaClientAccess(user, clientId);
+
+    const connection = await this.db.metaConnection.findFirst({
+      where: {
+        client_id: clientId,
+        status: { in: ['connected', 'expired', 'pending'] },
+      },
+      orderBy: { updated_at: 'desc' },
+    });
+
+    if (!connection) {
+      return { client_id: clientId, connected: false, campaigns: [] };
+    }
+
+    const [campaigns, adSets, ads, insights] = await Promise.all([
+      this.db.metaCampaign.findMany({ where: { meta_connection_id: connection.id } }),
+      this.db.metaAdSet.findMany({ where: { meta_connection_id: connection.id } }),
+      this.db.metaAd.findMany({ where: { meta_connection_id: connection.id } }),
+      this.db.metaDailyInsight.findMany({
+        where: { meta_connection_id: connection.id },
+        select: {
+          level: true,
+          entity_id: true,
+          spend: true,
+          impressions: true,
+          leads: true,
+          reach: true,
+          raw_payload: true,
+        },
+      }),
+    ]);
+
+    type EntityMetrics = {
+      spend: number;
+      leads: number;
+      impressions: number;
+      reach: number;
+      conversations: number;
+    };
+
+    const metricsByEntity = new Map<string, EntityMetrics>();
+
+    for (const row of insights) {
+      const key = `${row.level}:${row.entity_id}`;
+      const current = metricsByEntity.get(key) ?? {
+        spend: 0,
+        leads: 0,
+        impressions: 0,
+        reach: 0,
+        conversations: 0,
+      };
+      current.spend += Number(row.spend ?? 0);
+      current.leads += row.leads ?? 0;
+      current.impressions += row.impressions ?? 0;
+      current.reach += row.reach ?? 0;
+      const rawActions = (
+        row.raw_payload as { actions?: Array<{ action_type?: string; value?: string }> } | null
+      )?.actions;
+      current.conversations += this.extractConversationCount(rawActions) ?? 0;
+      metricsByEntity.set(key, current);
+    }
+
+    const round2 = (value: number) => Math.round(value * 100) / 100;
+
+    const buildRow = (id: string, name: string, level: MetaInsightLevel) => {
+      const m = metricsByEntity.get(`${level}:${id}`) ?? {
+        spend: 0,
+        leads: 0,
+        impressions: 0,
+        reach: 0,
+        conversations: 0,
+      };
+      return {
+        id,
+        name,
+        spend: round2(m.spend),
+        leads: m.leads,
+        cost_per_lead: m.leads > 0 ? round2(m.spend / m.leads) : 0,
+        impressions: m.impressions,
+        conversations: m.conversations,
+        cost_per_conversation:
+          m.conversations > 0 ? round2(m.spend / m.conversations) : 0,
+        reach: m.reach,
+      };
+    };
+
+    const adsByAdSetId = new Map<string, typeof ads>();
+    for (const ad of ads) {
+      const key = ad.meta_ad_set_id ?? '';
+      const list = adsByAdSetId.get(key) ?? [];
+      list.push(ad);
+      adsByAdSetId.set(key, list);
+    }
+
+    const adSetsByCampaignId = new Map<string, typeof adSets>();
+    for (const adSet of adSets) {
+      const key = adSet.meta_campaign_id ?? '';
+      const list = adSetsByCampaignId.get(key) ?? [];
+      list.push(adSet);
+      adSetsByCampaignId.set(key, list);
+    }
+
+    const report = campaigns.map((campaign) => ({
+      ...buildRow(campaign.meta_campaign_id, campaign.name, 'campaign'),
+      status: campaign.status,
+      ad_sets: (adSetsByCampaignId.get(campaign.meta_campaign_id) ?? []).map((adSet) => ({
+        ...buildRow(adSet.meta_ad_set_id, adSet.name, 'adset'),
+        status: adSet.status,
+        ads: (adsByAdSetId.get(adSet.meta_ad_set_id) ?? []).map((ad) => ({
+          ...buildRow(ad.meta_ad_id, ad.name, 'ad'),
+          status: ad.status,
+        })),
+      })),
+    }));
+
+    return { client_id: clientId, connected: true, campaigns: report };
+  }
+
   async syncFull(user: AuthenticatedUser, dto: TriggerMetaSyncDto) {
     await this.assertMetaClientAccess(user, dto.client_id);
 
@@ -1446,8 +1573,11 @@ export class MetaService implements OnModuleInit {
       throw new NotFoundException('Midia nao encontrada ou expirada.');
     }
 
-    const response = await fetch(mediaUrl, {
+    const safeMediaUrl = assertMetaMediaUrl(mediaUrl);
+    const response = await fetch(safeMediaUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
+      redirect: 'error',
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {
@@ -1570,8 +1700,30 @@ export class MetaService implements OnModuleInit {
         summary.ads += adsSummary.ads;
         summary.creatives += adsSummary.creatives;
 
-        const insights = await this.fetchInsightsForAccount(adAccountId, connection.access_token);
-        summary.insight_rows += await this.syncInsights(connection, insights);
+        const campaignInsights = await this.fetchInsightsForAccount(
+          adAccountId,
+          connection.access_token,
+          'campaign',
+        );
+        summary.insight_rows += await this.syncInsights(
+          connection,
+          campaignInsights,
+          'campaign',
+        );
+
+        const adSetInsights = await this.fetchInsightsForAccount(
+          adAccountId,
+          connection.access_token,
+          'adset',
+        );
+        summary.insight_rows += await this.syncInsights(connection, adSetInsights, 'adset');
+
+        const adInsights = await this.fetchInsightsForAccount(
+          adAccountId,
+          connection.access_token,
+          'ad',
+        );
+        summary.insight_rows += await this.syncInsights(connection, adInsights, 'ad');
       }
 
       const forms = await this.fetchLeadForms(pageIds, connection.access_token);
@@ -1847,20 +1999,34 @@ export class MetaService implements OnModuleInit {
   private async syncInsights(
     connection: { id: string; client_id: string },
     insights: MetaInsightPayload[],
+    level: MetaInsightLevel = 'campaign',
   ) {
     let synced = 0;
 
     for (const insight of insights) {
       const date = this.toDate(insight.date_start);
-      if (!date || !insight.campaign_id) {
+      const entityId =
+        level === 'ad'
+          ? insight.ad_id
+          : level === 'adset'
+            ? insight.adset_id
+            : insight.campaign_id;
+      const entityName =
+        level === 'ad'
+          ? insight.ad_name
+          : level === 'adset'
+            ? insight.adset_name
+            : insight.campaign_name;
+
+      if (!date || !entityId) {
         continue;
       }
 
       const existing = await this.db.metaDailyInsight.findFirst({
         where: {
           meta_connection_id: connection.id,
-          level: 'campaign',
-          entity_id: insight.campaign_id,
+          level,
+          entity_id: entityId,
           date,
         },
       });
@@ -1868,9 +2034,9 @@ export class MetaService implements OnModuleInit {
       const data = {
         client_id: connection.client_id,
         meta_connection_id: connection.id,
-        level: 'campaign',
-        entity_id: insight.campaign_id,
-        entity_name: insight.campaign_name ?? null,
+        level,
+        entity_id: entityId,
+        entity_name: entityName ?? null,
         date,
         spend: this.toDecimalValue(insight.spend),
         impressions: this.parseInteger(insight.impressions),
@@ -2879,15 +3045,41 @@ export class MetaService implements OnModuleInit {
     }
   }
 
-  private async fetchInsightsForAccount(adAccountId: string, accessToken: string) {
+  private async fetchInsightsForAccount(
+    adAccountId: string,
+    accessToken: string,
+    level: MetaInsightLevel = 'campaign',
+  ) {
+    const levelFields =
+      level === 'ad'
+        ? 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name'
+        : level === 'adset'
+          ? 'campaign_id,campaign_name,adset_id,adset_name'
+          : 'campaign_id,campaign_name';
+
     return this.safeGraphGetAll<MetaInsightPayload>(`act_${adAccountId}/insights`, accessToken, {
-      fields:
-        'campaign_id,campaign_name,date_start,spend,impressions,clicks,cpc,ctr,reach,frequency,actions',
-      level: 'campaign',
+      fields: `${levelFields},date_start,spend,impressions,clicks,cpc,ctr,reach,frequency,actions`,
+      level,
       time_increment: 1,
       date_preset: 'last_30d',
       limit: 500,
     });
+  }
+
+  private extractConversationCount(
+    actions?: Array<{ action_type?: string; value?: string }>,
+  ): number {
+    if (!actions) {
+      return 0;
+    }
+
+    const conversationAction = actions.find(
+      ({ action_type }) =>
+        action_type === 'onsite_conversion.messaging_conversation_started_7d' ||
+        action_type === 'messaging_conversation_started_7d',
+    );
+    const value = Number(conversationAction?.value ?? 0);
+    return Number.isFinite(value) && value >= 0 ? value : 0;
   }
 
   private async fetchLeadDetails(leadId: string, accessToken: string) {
@@ -2977,6 +3169,8 @@ export class MetaService implements OnModuleInit {
       headers: {
         Accept: 'application/json',
       },
+      redirect: 'error',
+      signal: AbortSignal.timeout(15_000),
     });
 
     const payload = await this.readGraphPayload<T>(response);
@@ -3017,6 +3211,8 @@ export class MetaService implements OnModuleInit {
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
+      redirect: 'error',
+      signal: AbortSignal.timeout(15_000),
     });
 
     const payload = await this.readGraphPayload<T>(response);
@@ -3044,6 +3240,8 @@ export class MetaService implements OnModuleInit {
         Authorization: `Bearer ${accessToken}`,
       },
       body: form,
+      redirect: 'error',
+      signal: AbortSignal.timeout(15_000),
     });
 
     const payload = await this.readGraphPayload<T>(response);
@@ -3092,11 +3290,13 @@ export class MetaService implements OnModuleInit {
 
   private createGraphUrl(pathOrUrl: string) {
     if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
-      return new URL(pathOrUrl);
+      return assertMetaGraphUrl(pathOrUrl);
     }
 
     const normalizedPath = pathOrUrl.replace(/^\/+/, '');
-    return new URL(`https://graph.facebook.com/${this.getApiVersion()}/${normalizedPath}`);
+    return assertMetaGraphUrl(
+      `https://graph.facebook.com/${this.getApiVersion()}/${normalizedPath}`,
+    );
   }
 
   private buildAuthUrl(appId: string, redirectUri: string, state: string, scopes: string[]) {

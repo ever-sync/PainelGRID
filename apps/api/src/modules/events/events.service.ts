@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { AppointmentStatus, EventStatus } from '@prisma/client';
+import { AppointmentStatus, EventStatus, Prisma } from '@prisma/client';
 import { Role } from '../../common/types';
 import { PrismaService } from '../../config/prisma.service';
 import { AuthenticatedUser } from '../auth/auth.types';
@@ -17,7 +17,7 @@ type EventRow = {
   launch_date: Date | null;
   event_date: Date;
   event_end_date: Date | null;
-  event_days: any;
+  event_days: Prisma.JsonValue;
   location: string | null;
   capacity: number | null;
   sales_target: number | null;
@@ -315,7 +315,7 @@ export class EventsService {
         launch_date: dto.launch_date ? new Date(dto.launch_date) : null,
         event_date: new Date(dto.event_date),
         event_end_date: dto.event_end_date ? new Date(dto.event_end_date) : null,
-        event_days: dto.event_days ? (dto.event_days as any) : undefined,
+        event_days: dto.event_days ? (dto.event_days as unknown as Prisma.InputJsonValue) : undefined,
         location: dto.location?.trim() || null,
         capacity: dto.capacity ?? null,
         sales_target: dto.sales_target ?? null,
@@ -389,7 +389,10 @@ export class EventsService {
               ? new Date(dto.event_end_date)
               : null
             : undefined,
-        event_days: dto.event_days !== undefined ? (dto.event_days as any) : undefined,
+        event_days:
+          dto.event_days !== undefined
+            ? (dto.event_days as unknown as Prisma.InputJsonValue)
+            : undefined,
         location: dto.location !== undefined ? dto.location.trim() || null : undefined,
         capacity: dto.capacity ?? undefined,
         sales_target: dto.sales_target !== undefined ? dto.sales_target : undefined,

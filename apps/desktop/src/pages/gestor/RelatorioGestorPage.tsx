@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
+import { ChevronDown, ChevronRight, Megaphone } from "lucide-react";
 import { API_BASE } from "../../services/http";
 import {
   Bar,
@@ -19,6 +20,10 @@ import { PageHeader } from "../../components/shared/PageHeader";
 import type { Campaign, Client, Event, Lead, LeadSource } from "../../types";
 import { readStoredSession } from "../../services/auth";
 import { listClients, mapApiClientToClient } from "../../services/clients";
+import {
+  getMetaCampaignsReport,
+  type MetaCampaignsReportItem,
+} from "../../services/meta";
 import {
   getCrmStageCounts,
   listCrmPipelines,
@@ -46,14 +51,7 @@ import {
 
 type AudienceType = "Segmentado" | "Amplo";
 
-type ReportTabId =
-  | "visao-geral"
-  | "eventos"
-  | "campanhas"
-  | "qualidade-leads"
-  | "funil-detalhado"
-  | "ligacoes"
-  | "insights-ia";
+type ReportTabId = "cliente" | "eventos" | "campanhas";
 
 type ReportRecord = {
   id: string;
@@ -104,21 +102,6 @@ type ApiDashboardReportResponse = {
   costs: Record<string, CampaignCost>;
 };
 
-const palette = [
-  "#4158B8",
-  "#10B981",
-  "#F59E0B",
-  "#E51838",
-  "#8B5CF6",
-  "#EC4899",
-  "#06B6D4",
-  "#FB923C",
-  "#84CC16",
-  "#6366F1",
-  "#F43F5E",
-  "#14B8A6",
-];
-
 const cardClass =
   "report-card rounded-[28px] border border-white/90 bg-white/95 p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)]";
 
@@ -152,13 +135,9 @@ const sourceTermLabelMap: Record<LeadSource, string> = {
 };
 
 const reportTabs: Array<{ id: ReportTabId; label: string }> = [
-  { id: "visao-geral", label: "Visao Geral" },
+  { id: "cliente", label: "Cliente" },
   { id: "eventos", label: "Eventos" },
   { id: "campanhas", label: "Campanhas" },
-  { id: "qualidade-leads", label: "Qualidade Leads" },
-  { id: "funil-detalhado", label: "Funil Detalhado" },
-  { id: "ligacoes", label: "Ligacoes" },
-  { id: "insights-ia", label: "Insights IA" },
 ];
 
 const stateCodes = [
@@ -243,17 +222,6 @@ function getWeekRangeLabel(dateString: string) {
   return `${start} a ${end}/${month}`;
 }
 
-function countBy<T>(items: T[], getKey: (item: T) => string) {
-  const bucket = new Map<string, number>();
-
-  items.forEach((item) => {
-    const key = getKey(item);
-    bucket.set(key, (bucket.get(key) ?? 0) + 1);
-  });
-
-  return Array.from(bucket.entries()).sort((a, b) => b[1] - a[1]);
-}
-
 function shortCampaign(value: string) {
   return value.length > 44 ? `${value.slice(0, 44)}...` : value;
 }
@@ -328,37 +296,6 @@ function normalizeApiReport(data: ApiDashboardReportResponse): ReportBase {
     meta: data.meta,
     budgetTotal: data.budget_total,
   };
-}
-
-function attributedSpend(
-  subset: ReportRecord[],
-  costs: Record<string, CampaignCost>,
-  campaignTotals: Record<string, number>,
-) {
-  const perCampaign: Record<string, number> = {};
-  subset.forEach((record) => {
-    perCampaign[record.campaign] = (perCampaign[record.campaign] ?? 0) + 1;
-  });
-
-  let total = 0;
-  const byCampaign: Record<
-    string,
-    { leads: number; spend: number; cpa: number }
-  > = {};
-
-  Object.entries(perCampaign).forEach(([campaign, leads]) => {
-    const full = campaignTotals[campaign] || 1;
-    const spend = costs[campaign]?.spend ?? 0;
-    const attributed = spend * (leads / full);
-    byCampaign[campaign] = {
-      leads,
-      spend: attributed,
-      cpa: leads > 0 ? attributed / leads : 0,
-    };
-    total += attributed;
-  });
-
-  return { total, byCampaign };
 }
 
 function FilterSelect({
@@ -454,6 +391,141 @@ function OverviewMetricCard({
   );
 }
 
+type MetaMetricRow = {
+  id: string;
+  name: string;
+  spend: number;
+  leads: number;
+  cost_per_lead: number;
+  impressions: number;
+  conversations: number;
+  cost_per_conversation: number;
+  reach: number;
+};
+
+function MetaMetricCells({ row }: { row: MetaMetricRow }) {
+  return (
+    <>
+      <td className="px-4 py-3">{formatBRL(row.spend)}</td>
+      <td className="px-4 py-3">{row.leads.toLocaleString("pt-BR")}</td>
+      <td className="px-4 py-3">{formatBRL(row.cost_per_lead)}</td>
+      <td className="px-4 py-3">{row.impressions.toLocaleString("pt-BR")}</td>
+      <td className="px-4 py-3">{row.conversations.toLocaleString("pt-BR")}</td>
+      <td className="px-4 py-3">{formatBRL(row.cost_per_conversation)}</td>
+      <td className="px-4 py-3">{row.reach.toLocaleString("pt-BR")}</td>
+    </>
+  );
+}
+
+function FragmentCampaignRow({
+  campaign,
+  expanded,
+  onToggle,
+  expandedAdSetIds,
+  onToggleAdSet,
+  isDarkMode,
+}: {
+  campaign: MetaCampaignsReportItem;
+  expanded: boolean;
+  onToggle: () => void;
+  expandedAdSetIds: Set<string>;
+  onToggleAdSet: (adSetId: string) => void;
+  isDarkMode: boolean;
+}) {
+  const rowTextClass = isDarkMode ? "text-zinc-200" : "text-zinc-800";
+  return (
+    <>
+      <tr
+        className={clsx(
+          "cursor-pointer border-t border-[#f0e7db] font-semibold",
+          rowTextClass,
+        )}
+        onClick={onToggle}
+      >
+        <td className="px-4 py-3">
+          <span className="flex items-center gap-2">
+            {campaign.ad_sets.length > 0 ? (
+              expanded ? (
+                <ChevronDown size={16} className="text-zinc-400" />
+              ) : (
+                <ChevronRight size={16} className="text-zinc-400" />
+              )
+            ) : (
+              <Megaphone size={14} className="text-zinc-400" />
+            )}
+            {campaign.name}
+          </span>
+        </td>
+        <MetaMetricCells row={campaign} />
+      </tr>
+      {expanded &&
+        campaign.ad_sets.map((adSet) => (
+          <FragmentAdSetRow
+            key={adSet.id}
+            adSet={adSet}
+            expanded={expandedAdSetIds.has(adSet.id)}
+            onToggle={() => onToggleAdSet(adSet.id)}
+            isDarkMode={isDarkMode}
+          />
+        ))}
+    </>
+  );
+}
+
+function FragmentAdSetRow({
+  adSet,
+  expanded,
+  onToggle,
+  isDarkMode,
+}: {
+  adSet: MetaCampaignsReportItem["ad_sets"][number];
+  expanded: boolean;
+  onToggle: () => void;
+  isDarkMode: boolean;
+}) {
+  const rowTextClass = isDarkMode ? "text-zinc-300" : "text-zinc-700";
+  return (
+    <>
+      <tr
+        className={clsx(
+          "cursor-pointer border-t border-[#f0e7db]/70",
+          rowTextClass,
+        )}
+        onClick={onToggle}
+      >
+        <td className="px-4 py-3 pl-9">
+          <span className="flex items-center gap-2">
+            {adSet.ads.length > 0 ? (
+              expanded ? (
+                <ChevronDown size={15} className="text-zinc-400" />
+              ) : (
+                <ChevronRight size={15} className="text-zinc-400" />
+              )
+            ) : (
+              <span className="inline-block w-[15px]" />
+            )}
+            {adSet.name}
+          </span>
+        </td>
+        <MetaMetricCells row={adSet} />
+      </tr>
+      {expanded &&
+        adSet.ads.map((ad) => (
+          <tr
+            key={ad.id}
+            className={clsx(
+              "border-t border-[#f0e7db]/50 text-sm",
+              isDarkMode ? "text-zinc-400" : "text-zinc-600",
+            )}
+          >
+            <td className="px-4 py-3 pl-16">{ad.name}</td>
+            <MetaMetricCells row={ad} />
+          </tr>
+        ))}
+    </>
+  );
+}
+
 export function RelatorioGestorPage() {
   const { user, gestorClientId, setGestorClientId } = useGestorClient();
   const [isDarkMode, setIsDarkMode] = useState(() =>
@@ -463,11 +535,43 @@ export function RelatorioGestorPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [campaignsForClient, setCampaignsForClient] = useState<Campaign[]>([]);
   const [eventsForClient, setEventsForClient] = useState<Event[]>([]);
-  const [activeTab, setActiveTab] = useState<ReportTabId>("visao-geral");
+  const [activeTab, setActiveTab] = useState<ReportTabId>("cliente");
   const [apiReports, setApiReports] = useState<Record<string, ReportBase>>({});
   const [loadError, setLoadError] = useState("");
   const [pipelineStages, setPipelineStages] = useState<KanbanColumn[]>([]);
   const [stageCounts, setStageCounts] = useState<Record<string, number>>({});
+  const [metaCampaignsTree, setMetaCampaignsTree] = useState<
+    MetaCampaignsReportItem[]
+  >([]);
+  const [metaConnected, setMetaConnected] = useState(false);
+  const [expandedCampaignIds, setExpandedCampaignIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [expandedAdSetIds, setExpandedAdSetIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const toggleCampaignExpanded = useCallback((campaignId: string) => {
+    setExpandedCampaignIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(campaignId)) {
+        next.delete(campaignId);
+      } else {
+        next.add(campaignId);
+      }
+      return next;
+    });
+  }, []);
+  const toggleAdSetExpanded = useCallback((adSetId: string) => {
+    setExpandedAdSetIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(adSetId)) {
+        next.delete(adSetId);
+      } else {
+        next.add(adSetId);
+      }
+      return next;
+    });
+  }, []);
   const selectedClientId = gestorClientId;
   const chartGridColor = isDarkMode ? "#2a2a2a" : "#ebe4d8";
   const chartAxisColor = isDarkMode ? "#3f3f46" : "#c8b9a3";
@@ -535,9 +639,7 @@ export function RelatorioGestorPage() {
     void listLeads({}, t)
       .then((rows) => setAllLeads(rows.map(mapApiLeadToLead)))
       .catch(() =>
-        setLoadError(
-          "Não foi possível carregar os leads. Atualize a página.",
-        ),
+        setLoadError("Não foi possível carregar os leads. Atualize a página."),
       );
   }, []);
 
@@ -592,6 +694,33 @@ export function RelatorioGestorPage() {
         setStageCounts({});
       }
     })();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedClientId]);
+
+  useEffect(() => {
+    const t = readStoredSession()?.accessToken;
+    if (!t || !selectedClientId) {
+      setMetaCampaignsTree([]);
+      setMetaConnected(false);
+      return;
+    }
+
+    let active = true;
+
+    void getMetaCampaignsReport(selectedClientId, t)
+      .then((response) => {
+        if (!active) return;
+        setMetaCampaignsTree(response.campaigns);
+        setMetaConnected(response.connected);
+      })
+      .catch(() => {
+        if (!active) return;
+        setMetaCampaignsTree([]);
+        setMetaConnected(false);
+      });
 
     return () => {
       active = false;
@@ -656,58 +785,7 @@ export function RelatorioGestorPage() {
     };
   }, [apiReports, selectedClient, selectedClientIdSafe]);
 
-  const campaignTotals = useMemo(() => {
-    const totals: Record<string, number> = {};
-    reportBase.records.forEach((record) => {
-      totals[record.campaign] = (totals[record.campaign] ?? 0) + 1;
-    });
-    return totals;
-  }, [reportBase.records]);
-
   const filteredRecords = reportBase.records;
-
-  const attributed = useMemo(
-    () => attributedSpend(filteredRecords, reportBase.costs, campaignTotals),
-    [campaignTotals, filteredRecords, reportBase.costs],
-  );
-
-  const metaLeadsAttributed = useMemo(() => {
-    const presentCampaigns: Record<string, number> = {};
-    filteredRecords.forEach((record) => {
-      presentCampaigns[record.campaign] =
-        (presentCampaigns[record.campaign] ?? 0) + 1;
-    });
-
-    let total = 0;
-    Object.entries(presentCampaigns).forEach(([campaign, count]) => {
-      const full = campaignTotals[campaign] || 1;
-      total += (reportBase.costs[campaign]?.results ?? 0) * (count / full);
-    });
-
-    return total;
-  }, [campaignTotals, filteredRecords, reportBase.costs]);
-
-  const taxaAgendamento =
-    metaLeadsAttributed > 0
-      ? Math.min(100, (filteredRecords.length / metaLeadsAttributed) * 100)
-      : 0;
-
-  const segmentedRecords = filteredRecords.filter(
-    (record) => record.audience === "Segmentado",
-  );
-  const amploRecords = filteredRecords.filter(
-    (record) => record.audience === "Amplo",
-  );
-  const segmentedSpend = attributedSpend(
-    segmentedRecords,
-    reportBase.costs,
-    campaignTotals,
-  );
-  const amploSpend = attributedSpend(
-    amploRecords,
-    reportBase.costs,
-    campaignTotals,
-  );
 
   const clientEvents = useMemo(() => eventsForClient, [eventsForClient]);
 
@@ -825,46 +903,6 @@ export function RelatorioGestorPage() {
     [clientEvents],
   );
 
-  const cpaByCampaign = useMemo(() => {
-    return Object.entries(attributed.byCampaign)
-      .map(([campaign, value]) => ({
-        campaign,
-        shortCampaign: shortCampaign(campaign),
-        cpa: Number(value.cpa.toFixed(2)),
-        leads: value.leads,
-        spend: value.spend,
-        color:
-          value.cpa < 25 ? "#10B981" : value.cpa < 50 ? "#F59E0B" : "#E51838",
-      }))
-      .sort((a, b) => a.cpa - b.cpa);
-  }, [attributed.byCampaign]);
-
-  const leadsByCampaign = useMemo(() => {
-    return countBy(filteredRecords, (record) => record.campaign).map(
-      ([campaign, total], index) => ({
-        campaign,
-        shortCampaign: shortCampaign(campaign),
-        total,
-        color: palette[index % palette.length],
-      }),
-    );
-  }, [filteredRecords]);
-
-  const leadsByContent = useMemo(() => {
-    return countBy(filteredRecords, (record) => record.content)
-      .slice(0, 10)
-      .map(([content, total], index) => ({
-        content,
-        shortContent:
-          content.length > 38 ? `${content.slice(0, 38)}...` : content,
-        total,
-        color: palette[index % palette.length],
-      }));
-  }, [filteredRecords]);
-
-  const bestCampaign = cpaByCampaign[0];
-  const topCampaignVolume = leadsByCampaign[0];
-  const topCreative = leadsByContent[0];
   const overviewStats = useMemo(() => {
     const baseRecords = reportBase.records;
     const totalLeads = baseRecords.length;
@@ -940,6 +978,50 @@ export function RelatorioGestorPage() {
       ligacaoCount,
     };
   }, [allLeads, reportBase.records, selectedClientIdSafe]);
+
+  const summaryFunnel = useMemo(() => {
+    const checkin = allLeads.filter(
+      (lead) =>
+        lead.client_id === selectedClientIdSafe &&
+        lead.confirmation_status === "checked_in",
+    ).length;
+    const compraramStage = pipelineStages.find(
+      (stage) => stage.label.trim().toLowerCase() === "compraram",
+    );
+    const compraram = compraramStage
+      ? (stageCounts[compraramStage.id] ?? 0)
+      : 0;
+
+    const stages = [
+      { label: "Leads", value: overviewStats.totalLeads, color: "#3b82f6" },
+      {
+        label: "Confirmados",
+        value: overviewStats.confirmados,
+        color: "#22c55e",
+      },
+      { label: "Check-in", value: checkin, color: "#a855f7" },
+      { label: "Compraram", value: compraram, color: "#E51838" },
+    ];
+    const base = Math.max(stages[0].value, 1);
+
+    return stages.map((stage, index) => ({
+      ...stage,
+      pct: (stage.value / base) * 100,
+      conversionFromPrevious:
+        index === 0
+          ? 100
+          : stages[index - 1].value > 0
+            ? (stage.value / stages[index - 1].value) * 100
+            : 0,
+    }));
+  }, [
+    allLeads,
+    overviewStats.confirmados,
+    overviewStats.totalLeads,
+    pipelineStages,
+    selectedClientIdSafe,
+    stageCounts,
+  ]);
 
   const overviewFunnelData = useMemo(
     () => [
@@ -1033,124 +1115,13 @@ export function RelatorioGestorPage() {
     return tail.map(([month, total]) => ({ month, total }));
   }, [allLeads, selectedClientIdSafe]);
 
-  const activeTabLabel =
-    reportTabs.find((tab) => tab.id === activeTab)?.label ?? "Visao Geral";
-  const isOverviewTab = activeTab === "visao-geral";
+  const isClientTab = activeTab === "cliente";
   const isCampaignsTab = activeTab === "campanhas";
-  const isLeadQualityTab = activeTab === "qualidade-leads";
-  const isFunnelTab = activeTab === "funil-detalhado";
   const isEventsTab = activeTab === "eventos";
-  const isCallsTab = activeTab === "ligacoes";
-  const isInsightsTab = activeTab === "insights-ia";
 
   const leadById = useMemo(
     () => new Map(allLeads.map((lead) => [lead.id, lead])),
     [allLeads],
-  );
-
-  const campaignTabStats = useMemo(() => {
-    const scopedLeads = filteredRecords
-      .map((record) => leadById.get(record.id))
-      .filter((lead): lead is Lead => Boolean(lead));
-
-    const engaged = scopedLeads.filter(
-      (lead) => lead.crm_stage !== "novo" && lead.crm_stage !== "perdido",
-    ).length;
-    const agendados = scopedLeads.filter(
-      (lead) =>
-        lead.crm_stage === "agendado" || lead.crm_stage === "convertido",
-    ).length;
-    const confirmados = scopedLeads.filter(
-      (lead) =>
-        lead.confirmation_status === "confirmed" ||
-        lead.confirmation_status === "checked_in",
-    ).length;
-    const optOut = scopedLeads.filter(
-      (lead) => lead.crm_stage === "perdido",
-    ).length;
-
-    return {
-      leadsUtm: filteredRecords.length,
-      engaged,
-      agendados,
-      confirmados,
-      optOut,
-    };
-  }, [filteredRecords, leadById]);
-
-  const creativeRows = useMemo(() => {
-    const bucket = new Map<
-      string,
-      {
-        creative: string;
-        total: number;
-        rubinho: number;
-        agendados: number;
-        confirmados: number;
-        perdidos: number;
-      }
-    >();
-
-    filteredRecords.forEach((record) => {
-      const lead = leadById.get(record.id);
-      const key = record.content;
-      const current = bucket.get(key) ?? {
-        creative: record.content,
-        total: 0,
-        rubinho: 0,
-        agendados: 0,
-        confirmados: 0,
-        perdidos: 0,
-      };
-
-      current.total += 1;
-
-      if (lead && lead.crm_stage !== "novo" && lead.crm_stage !== "perdido") {
-        current.rubinho += 1;
-      }
-
-      if (
-        lead &&
-        (lead.crm_stage === "agendado" || lead.crm_stage === "convertido")
-      ) {
-        current.agendados += 1;
-      }
-
-      if (
-        lead &&
-        (lead.confirmation_status === "confirmed" ||
-          lead.confirmation_status === "checked_in")
-      ) {
-        current.confirmados += 1;
-      }
-
-      if (lead && lead.crm_stage === "perdido") {
-        current.perdidos += 1;
-      }
-
-      bucket.set(key, current);
-    });
-
-    return Array.from(bucket.values())
-      .map((item) => ({
-        ...item,
-        engajPct: item.total > 0 ? (item.rubinho / item.total) * 100 : 0,
-        convPct: item.total > 0 ? (item.agendados / item.total) * 100 : 0,
-      }))
-      .sort((a, b) => b.total - a.total);
-  }, [filteredRecords, leadById]);
-
-  const campaignCreativesChartData = useMemo(
-    () =>
-      creativeRows.slice(0, 8).map((row) => ({
-        creative:
-          row.creative.length > 18
-            ? `${row.creative.slice(0, 18)}...`
-            : row.creative,
-        total: row.total,
-        engajados: row.rubinho,
-      })),
-    [creativeRows],
   );
 
   const qualityScopedLeads = useMemo(
@@ -1267,98 +1238,17 @@ export function RelatorioGestorPage() {
     [funnelStageRows],
   );
 
-  const insightCards = useMemo(
-    () => [
-      {
-        title:
-          segmentedSpend.total > 0 &&
-          amploSpend.total > 0 &&
-          segmentedRecords.length > 0 &&
-          amploRecords.length > 0 &&
-          segmentedSpend.total / segmentedRecords.length <=
-            amploSpend.total / amploRecords.length
-            ? "Segmentado esta mais eficiente"
-            : "Amplo precisa de revisao",
-        body:
-          segmentedSpend.total > 0 &&
-          amploSpend.total > 0 &&
-          segmentedRecords.length > 0 &&
-          amploRecords.length > 0
-            ? `CPA Segmentado em ${formatBRL(segmentedSpend.total / Math.max(segmentedRecords.length, 1))} contra ${formatBRL(amploSpend.total / Math.max(amploRecords.length, 1))} no publico Amplo.`
-            : "Ainda nao ha volume suficiente para comparar publicos com seguranca.",
-        toneClass: "border-[#dbeafe] bg-[#eff6ff] text-[#1d4ed8]",
-      },
-      {
-        title:
-          taxaAgendamento >= 20 ? "Taxa acima da meta" : "Taxa abaixo da meta",
-        body:
-          taxaAgendamento >= 20
-            ? `A taxa atual de ${formatPercent(taxaAgendamento)} sustenta a meta comercial deste relatorio.`
-            : `A taxa atual esta em ${formatPercent(taxaAgendamento)}. Vale revisar origem, abordagem e qualificacao para aproximar dos 20%.`,
-        toneClass: "border-[#ede9fe] bg-[#f5f3ff] text-[#6d28d9]",
-      },
-      {
-        title: bestCampaign
-          ? `Melhor CPA: ${bestCampaign.shortCampaign}`
-          : "Sem benchmark de campanhas",
-        body: bestCampaign
-          ? `${bestCampaign.leads} agendamentos com CPA medio de ${formatBRL(bestCampaign.cpa)}. Bom candidato para receber mais verba.`
-          : "Nenhuma campanha com dados suficientes para ranqueamento.",
-        toneClass: "border-[#dcfce7] bg-[#f0fdf4] text-[#15803d]",
-      },
-      {
-        title: topCreative
-          ? `Criativo lider: ${topCreative.shortContent}`
-          : "Criativos aguardando historico",
-        body: topCreative
-          ? `${topCreative.total} leads associados ao criativo com maior tracao dentro do recorte atual.`
-          : "Ainda nao existem criativos suficientes para sugerir um lider.",
-        toneClass: "border-[#fee2e2] bg-[#fff1f2] text-[#be123c]",
-      },
-      {
-        title: topCampaignVolume
-          ? `Maior volume: ${topCampaignVolume.shortCampaign}`
-          : "Volume de campanhas insuficiente",
-        body: topCampaignVolume
-          ? `${topCampaignVolume.total} leads entraram pela campanha mais volumosa do recorte atual. Use esse dado junto do CPA para decidir escala.`
-          : "Sem volume suficiente para indicar uma campanha dominante.",
-        toneClass: "border-[#fef3c7] bg-[#fffbeb] text-[#b45309]",
-      },
-    ],
-    [
-      amploRecords.length,
-      amploSpend.total,
-      bestCampaign,
-      segmentedRecords.length,
-      segmentedSpend.total,
-      taxaAgendamento,
-      topCampaignVolume,
-      topCreative,
-    ],
-  );
-
   const pageSubtitle = useMemo(() => {
     if (isEventsTab) {
       return `${selectedClientCompanyName} · Eventos e presenca`;
     }
 
-    if (isCallsTab) {
-      return `${selectedClientCompanyName} · Operacao de ligacoes e retorno comercial`;
+    if (isCampaignsTab) {
+      return `${selectedClientCompanyName} · Investimento e resultado por campanha`;
     }
 
-    if (isInsightsTab) {
-      return `${selectedClientCompanyName} · Leitura automatica dos sinais da operacao`;
-    }
-
-    return `${reportBase.meta.evento} · ${activeTabLabel}`;
-  }, [
-    activeTabLabel,
-    isCallsTab,
-    isEventsTab,
-    isInsightsTab,
-    reportBase.meta.evento,
-    selectedClientCompanyName,
-  ]);
+    return `${selectedClientCompanyName} · Visao geral do cliente`;
+  }, [isCampaignsTab, isEventsTab, selectedClientCompanyName]);
 
   const handleExport = () => {
     const safeClientName = selectedClientCompanyName
@@ -1393,21 +1283,28 @@ export function RelatorioGestorPage() {
       return;
     }
 
-    if (isInsightsTab) {
-      downloadCsv(`insights-relatorio-${safeClientName}.csv`, [
-        ["Insight", "Resumo"],
-        ...insightCards.map((item) => [item.title, item.body]),
-      ]);
-      return;
-    }
-
-    if (isCallsTab) {
-      downloadCsv(`ligacoes-relatorio-${safeClientName}.csv`, [
-        ["Status", "Observacao"],
+    if (isCampaignsTab) {
+      downloadCsv(`relatorio-campanhas-${safeClientName}.csv`, [
         [
-          "Aguardando integracao",
-          "Esta aba ja foi adicionada ao layout, mas ainda nao recebe dados de ligacoes.",
+          "Campanha",
+          "Valor investido",
+          "Leads",
+          "Custo por lead",
+          "Impressoes",
+          "Conversas",
+          "Custo por conversa",
+          "Contas alcancadas",
         ],
+        ...metaCampaignsTree.map((row) => [
+          row.name,
+          formatBRL(row.spend),
+          String(row.leads),
+          formatBRL(row.cost_per_lead),
+          String(row.impressions),
+          String(row.conversations),
+          formatBRL(row.cost_per_conversation),
+          String(row.reach),
+        ]),
       ]);
       return;
     }
@@ -1538,7 +1435,43 @@ export function RelatorioGestorPage() {
         </div>
       </div>
 
-      {isOverviewTab ? (
+      <div className={reportPanelClass}>
+        <h2 className="mb-5 text-lg font-semibold text-zinc-950">
+          Resumo — Leads → Confirmados → Check-in → Compraram
+        </h2>
+        <div className="space-y-4">
+          {summaryFunnel.map((item, index) => (
+            <div
+              key={item.label}
+              className="grid items-center gap-3 md:grid-cols-[170px_minmax(0,1fr)_150px]"
+            >
+              <div className="text-right text-sm font-medium text-zinc-500">
+                {item.label}
+              </div>
+              <div className="flex items-center">
+                <div className="relative h-10 w-full overflow-hidden rounded-[8px] bg-[#f3eee6]">
+                  <div
+                    className="flex h-full items-center rounded-[4px] px-3 text-[20px] font-black text-white"
+                    style={{
+                      width: `${Math.max(item.pct, item.value > 0 ? 6 : 0)}%`,
+                      background: `linear-gradient(90deg, ${item.color}, ${item.color}dd)`,
+                    }}
+                  >
+                    {item.value.toLocaleString("pt-BR")}
+                  </div>
+                </div>
+              </div>
+              <div className="text-right text-sm text-zinc-400">
+                {index === 0
+                  ? "—"
+                  : `${item.conversionFromPrevious.toFixed(1)}% do anterior`}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {isClientTab ? (
         <div className={reportSectionClass}>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
             <OverviewMetricCard
@@ -1745,153 +1678,7 @@ export function RelatorioGestorPage() {
               </ResponsiveContainer>
             </div>
           </div>
-        </div>
-      ) : isCampaignsTab ? (
-        <div className={reportSectionClass}>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
-            <OverviewMetricCard
-              label="Leads c / UTM"
-              value={campaignTabStats.leadsUtm.toLocaleString("pt-BR")}
-              helper="Leads do recorte atual com criativo associado"
-              valueClassName="text-[#4f8cff]"
-            />
-            <OverviewMetricCard
-              label="Engajados"
-              value={campaignTabStats.engaged.toLocaleString("pt-BR")}
-              helper="Leads que avancaram no fluxo Rubinho"
-              valueClassName="text-[#b15cff]"
-            />
-            <OverviewMetricCard
-              label="Agendados"
-              value={campaignTabStats.agendados.toLocaleString("pt-BR")}
-              helper="Leads em agendado ou convertido"
-              valueClassName="text-[#22c55e]"
-            />
-            <OverviewMetricCard
-              label="Confirmados"
-              value={campaignTabStats.confirmados.toLocaleString("pt-BR")}
-              helper="Confirmados ou com check-in"
-              valueClassName="text-[#3ddc84]"
-            />
-            <OverviewMetricCard
-              label="Opt-out"
-              value={campaignTabStats.optOut.toLocaleString("pt-BR")}
-              helper="Leads perdidos dentro do recorte"
-              valueClassName="text-[#ff5b5b]"
-            />
-          </div>
 
-          <div className={reportTableClass}>
-            <div className="border-b border-[#eadfce] px-5 py-4 text-lg font-semibold text-zinc-950">
-              Criativos
-            </div>
-
-            {creativeRows.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-[#fbf7f2]">
-                    <tr className="text-left text-[12px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
-                      <th className="px-4 py-3">Criativo</th>
-                      <th className="px-4 py-3">Total</th>
-                      <th className="px-4 py-3">Rubinho</th>
-                      <th className="px-4 py-3">Agend.</th>
-                      <th className="px-4 py-3">Confirm.</th>
-                      <th className="px-4 py-3">Perdidos</th>
-                      <th className="px-4 py-3">Engaj%</th>
-                      <th className="px-4 py-3">Conv%</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {creativeRows.map((row) => (
-                      <tr
-                        key={row.creative}
-                        className={clsx("border-t border-[#f0e7db]", isDarkMode ? "text-zinc-200" : "text-zinc-800")}
-                      >
-                        <td className="px-4 py-3 font-semibold">
-                          {row.creative}
-                        </td>
-                        <td className="px-4 py-3 font-semibold">
-                          {row.total.toLocaleString("pt-BR")}
-                        </td>
-                        <td className="px-4 py-3 font-semibold text-[#b15cff]">
-                          {row.rubinho.toLocaleString("pt-BR")}
-                        </td>
-                        <td className="px-4 py-3 font-semibold text-[#22c55e]">
-                          {row.agendados.toLocaleString("pt-BR")}
-                        </td>
-                        <td className="px-4 py-3 font-semibold text-[#3ddc84]">
-                          {row.confirmados.toLocaleString("pt-BR")}
-                        </td>
-                        <td className="px-4 py-3 font-semibold text-[#ff5b5b]">
-                          {row.perdidos.toLocaleString("pt-BR")}
-                        </td>
-                        <td className="px-4 py-3">
-                          {row.engajPct.toFixed(1)}%
-                        </td>
-                        <td className="px-4 py-3">{row.convPct.toFixed(1)}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="px-5 py-8 text-sm text-zinc-500">
-                Nao existem criativos suficientes para montar a visao de
-                campanhas.
-              </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 gap-4">
-            <div className={reportPanelClass}>
-              <h2 className="mb-5 text-lg font-semibold text-zinc-950">
-                Criativos
-              </h2>
-              <div className="h-[320px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={campaignCreativesChartData}
-                    margin={{ top: 16, right: 24, left: 12, bottom: 36 }}
-                  >
-                    <CartesianGrid
-                      stroke={chartGridColor}
-                      strokeDasharray="3 4"
-                      vertical={false}
-                    />
-                    <XAxis
-                      dataKey="creative"
-                      tick={{ fill: chartTickColor, fontSize: 12 }}
-                      angle={-40}
-                      textAnchor="end"
-                      axisLine={{ stroke: chartAxisColor }}
-                      tickLine={{ stroke: chartAxisColor }}
-                      height={64}
-                    />
-                    <YAxis
-                      tick={{ fill: chartTickColor, fontSize: 12 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        ...chartTooltipStyle,
-                      }}
-                    />
-                    <Legend wrapperStyle={{ color: chartTickColor }} />
-                    <Bar dataKey="total" fill="#c7ced9" radius={[4, 4, 0, 0]} />
-                    <Bar
-                      dataKey="engajados"
-                      fill="#a855f7"
-                      radius={[4, 4, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : isLeadQualityTab ? (
-        <div className={reportSectionClass}>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3">
             <OverviewMetricCard
               label="Engajados"
@@ -2001,52 +1788,42 @@ export function RelatorioGestorPage() {
               </div>
             </div>
           </div>
-        </div>
-      ) : isFunnelTab ? (
-        <div className={reportSectionClass}>
-          <div className={reportTableClass}>
-            <div className="flex items-center justify-between border-b border-[#eadfce] px-5 py-4">
-              <h2 className="text-lg font-semibold uppercase tracking-[0.08em] text-zinc-500">
-                Funil Completo
-              </h2>
-              <span className="rounded-md border border-[#eadfce] bg-[#fbf7f2] px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
-                CSV
-              </span>
-            </div>
 
-            <div className="px-5 py-4">
-              <div className="space-y-4">
-                {funnelStageRows.map((row) => (
-                  <div
-                    key={row.label}
-                    className="grid items-center gap-3 md:grid-cols-[170px_minmax(0,1fr)_64px]"
-                  >
-                    <div className="text-right text-[15px] font-medium text-zinc-600">
-                      {row.label}
-                    </div>
-                    <div className="flex items-center">
-                      <div className="h-9 w-full overflow-hidden rounded-[4px] bg-transparent">
-                        <div
-                          className="flex h-full items-center rounded-[4px] px-3 text-[22px] font-black tracking-tight text-white"
-                          style={{
-                            width: `${Math.max((row.count / funnelMaxCount) * 100, row.count > 0 ? 6 : 2)}%`,
-                            backgroundColor: row.color,
-                          }}
-                        >
-                          <span className="text-[22px] leading-none">
-                            {row.count.toLocaleString("pt-BR")}
-                          </span>
-                        </div>
+          <details className={reportPanelClass}>
+            <summary className="cursor-pointer text-lg font-semibold text-zinc-950">
+              Funil detalhado do CRM (todas as etapas)
+            </summary>
+            <div className="mt-5 space-y-4">
+              {funnelStageRows.map((row) => (
+                <div
+                  key={row.label}
+                  className="grid items-center gap-3 md:grid-cols-[170px_minmax(0,1fr)_64px]"
+                >
+                  <div className="text-right text-[15px] font-medium text-zinc-600">
+                    {row.label}
+                  </div>
+                  <div className="flex items-center">
+                    <div className="h-9 w-full overflow-hidden rounded-[4px] bg-transparent">
+                      <div
+                        className="flex h-full items-center rounded-[4px] px-3 text-[22px] font-black tracking-tight text-white"
+                        style={{
+                          width: `${Math.max((row.count / funnelMaxCount) * 100, row.count > 0 ? 6 : 2)}%`,
+                          backgroundColor: row.color,
+                        }}
+                      >
+                        <span className="text-[22px] leading-none">
+                          {row.count.toLocaleString("pt-BR")}
+                        </span>
                       </div>
                     </div>
-                    <div className="text-right text-[18px] text-zinc-400">
-                      {row.pct.toFixed(1)}%
-                    </div>
                   </div>
-                ))}
-              </div>
+                  <div className="text-right text-[18px] text-zinc-400">
+                    {row.pct.toFixed(1)}%
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+          </details>
         </div>
       ) : isEventsTab ? (
         <div className={reportSectionClass}>
@@ -2098,7 +1875,10 @@ export function RelatorioGestorPage() {
                     {eventDashboardRows.map((row) => (
                       <tr
                         key={row.id}
-                        className={clsx("border-t border-[#f0e7db]", isDarkMode ? "text-zinc-200" : "text-zinc-800")}
+                        className={clsx(
+                          "border-t border-[#f0e7db]",
+                          isDarkMode ? "text-zinc-200" : "text-zinc-800",
+                        )}
                       >
                         <td className="px-4 py-3 font-semibold">{row.name}</td>
                         <td className="px-4 py-3">
@@ -2273,38 +2053,72 @@ export function RelatorioGestorPage() {
             </div>
           </div>
         </div>
-      ) : isCallsTab ? (
-        <div className={cardClass}>
-          <h2 className="text-[18px] font-extrabold tracking-tight text-zinc-950">
-            Aba de ligacoes adicionada
-          </h2>
-          <p className="mt-2 max-w-3xl text-sm text-zinc-500">
-            O layout agora segue a estrutura da imagem com a aba de ligacoes no
-            topo. Esta visao ainda nao possui integracao de dados nesta tela,
-            entao deixei o espaco pronto para conectar indicadores como
-            tentativas, contatos efetivos, retornos e conversao por operador.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-          {insightCards.map((item) => (
-            <div
-              key={item.title}
-              className={`rounded-[28px] border p-6 shadow-[0_16px_40px_rgba(15,23,42,0.06)] ${item.toneClass}`}
-            >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">
-                Insights IA
-              </p>
-              <h2 className="mt-3 text-[20px] font-black tracking-tight">
-                {item.title}
+      ) : isCampaignsTab ? (
+        <div className={reportSectionClass}>
+          {!metaConnected ? (
+            <div className={cardClass}>
+              <h2 className="text-[18px] font-extrabold tracking-tight text-zinc-950">
+                Meta Ads nao conectado
               </h2>
-              <p className="mt-3 text-sm leading-6 text-current/90">
-                {item.body}
+              <p className="mt-2 max-w-3xl text-sm text-zinc-500">
+                Conecte a integracao com o Facebook/Instagram Ads nas
+                configuracoes do cliente para ver campanhas, conjuntos de
+                anuncios e anuncios com investimento, leads e conversas.
               </p>
             </div>
-          ))}
+          ) : metaCampaignsTree.length === 0 ? (
+            <div className={cardClass}>
+              <h2 className="text-[18px] font-extrabold tracking-tight text-zinc-950">
+                Nenhuma campanha encontrada
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm text-zinc-500">
+                A integracao Meta esta conectada, mas ainda nao ha dados de
+                campanhas sincronizados para este cliente.
+              </p>
+            </div>
+          ) : (
+            <div className={reportTableClass}>
+              <div className="border-b border-[#eadfce] px-5 py-4 text-lg font-semibold text-zinc-950">
+                Campanhas · Conjuntos · Anuncios
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-[#fbf7f2]">
+                    <tr className="text-left text-[12px] font-semibold uppercase tracking-[0.12em] text-zinc-400">
+                      <th className="px-4 py-3">Nome</th>
+                      <th className="px-4 py-3">Investido</th>
+                      <th className="px-4 py-3">Leads</th>
+                      <th className="px-4 py-3">Custo/Lead</th>
+                      <th className="px-4 py-3">Impressoes</th>
+                      <th className="px-4 py-3">Conversas</th>
+                      <th className="px-4 py-3">Custo/Conversa</th>
+                      <th className="px-4 py-3">Alcance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metaCampaignsTree.map((campaign) => {
+                      const campaignExpanded = expandedCampaignIds.has(
+                        campaign.id,
+                      );
+                      return (
+                        <FragmentCampaignRow
+                          key={campaign.id}
+                          campaign={campaign}
+                          expanded={campaignExpanded}
+                          onToggle={() => toggleCampaignExpanded(campaign.id)}
+                          expandedAdSetIds={expandedAdSetIds}
+                          onToggleAdSet={toggleAdSetExpanded}
+                          isDarkMode={isDarkMode}
+                        />
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
