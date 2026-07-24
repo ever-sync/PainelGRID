@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Card } from "../../components/ui/Card";
-import { Badge, PlanBadge } from "../../components/ui/Badge";
+import { Badge } from "../../components/ui/Badge";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { Modal } from "../../components/ui/Modal";
 import { Notice } from "../../components/ui/Notice";
@@ -28,7 +28,6 @@ import {
   listClients,
   lookupCompanyByCnpj,
   mapApiClientToClient,
-  updateClient,
 } from "../../services/clients";
 
 function formatPhoneBr(raw: string) {
@@ -227,66 +226,6 @@ export function ClientesPage() {
     }
   }
 
-  function handleOpenEditClient(client: Client) {
-    setEditingClientId(client.id);
-    setEditClientName(client.company_name);
-    setEditClientCnpj(client.cnpj);
-    setEditClientPhone(client.phone_number ?? "");
-    setEditClientWhatsapp(client.whatsapp_number ?? "");
-    setEditClientEmail(client.contact_email);
-    setEditClientAddress(client.address);
-    setEditClientWebhook(client.webhook_url_n8n ?? "");
-    setEditError("");
-    setEditOpen(true);
-  }
-
-  async function handleSaveClientEdit() {
-    const session = readStoredSession();
-    if (!session?.accessToken) {
-      setEditError("Faça login novamente para editar cliente.");
-      return;
-    }
-
-    if (!editingClientId) {
-      setEditError("Cliente inválido para edição.");
-      return;
-    }
-
-    if (!editClientName.trim()) {
-      setEditError("Informe o nome da empresa.");
-      return;
-    }
-
-    setEditLoading(true);
-    setEditError("");
-    try {
-      const row = await updateClient(editingClientId, session.accessToken, {
-        company_name: editClientName.trim(),
-        cnpj: editClientCnpj.trim() || undefined,
-        phone_number: editClientPhone.trim() || undefined,
-        whatsapp_number: editClientWhatsapp.trim() || undefined,
-        contact_email: editClientEmail.trim() || undefined,
-        address: editClientAddress.trim() || undefined,
-        webhook_url_n8n: editClientWebhook.trim() || undefined,
-      });
-
-      setClients((current) =>
-        current.map((client) =>
-          client.id === editingClientId ? mapApiClientToClient(row) : client,
-        ),
-      );
-      setEditOpen(false);
-    } catch (error) {
-      setEditError(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível editar cliente.",
-      );
-    } finally {
-      setEditLoading(false);
-    }
-  }
-
   async function handleDeleteClientFromList(client: Client) {
     setClientToDelete(client);
   }
@@ -457,209 +396,167 @@ export function ClientesPage() {
               </div>
             </Card>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {filteredClients.map((client) => {
-                const eventCount = client.events_count;
-                const hasFacebook = Boolean(
-                  client.facebook_page_id || client.facebook_ad_account_id,
-                );
-                return (
-                  <Card
-                    key={client.id}
-                    className={clsx(
-                      "rounded-[24px] border shadow-[0_12px_30px_rgba(15,23,42,0.06)]",
-                      isDarkMode
-                        ? "border-zinc-800 bg-[#111111]"
-                        : "border-white/80",
-                    )}
-                    padding="md"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div
+            <Card
+              className={clsx(
+                "overflow-hidden rounded-[24px] border p-0 shadow-[0_12px_30px_rgba(15,23,42,0.06)]",
+                isDarkMode ? "border-zinc-800 bg-[#111111]" : "border-white/80",
+              )}
+              padding="none"
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] border-collapse text-sm">
+                  <thead>
+                    <tr
+                      className={clsx(
+                        "border-b text-left text-[10px] font-semibold uppercase tracking-[0.14em]",
+                        isDarkMode
+                          ? "border-zinc-800 text-zinc-500"
+                          : "border-zinc-100 text-zinc-400",
+                      )}
+                    >
+                      <th className="px-5 py-3 font-semibold">Nome</th>
+                      <th className="px-3 py-3 font-semibold">Status</th>
+                      <th className="px-3 py-3 font-semibold">Facebook</th>
+                      <th className="px-3 py-3 text-right font-semibold">
+                        Leads
+                      </th>
+                      <th className="px-3 py-3 text-right font-semibold">
+                        Veículos
+                      </th>
+                      <th className="px-3 py-3 text-right font-semibold">
+                        Eventos
+                      </th>
+                      <th className="px-5 py-3 text-right font-semibold">
+                        Ações
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredClients.map((client) => {
+                      const hasFacebook = Boolean(
+                        client.facebook_page_id ||
+                          client.facebook_ad_account_id,
+                      );
+                      return (
+                        <tr
+                          key={client.id}
                           className={clsx(
-                            "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl",
+                            "border-b last:border-b-0 transition-colors",
                             isDarkMode
-                              ? "bg-[#1c1c1c] text-zinc-400"
-                              : "bg-zinc-100 text-zinc-500",
+                              ? "border-zinc-800 hover:bg-[#161616]"
+                              : "border-zinc-100 hover:bg-zinc-50",
                           )}
                         >
-                          <Building2 size={20} />
-                        </div>
-                        <div className="min-w-0">
-                          <p
+                          <td className="px-5 py-3">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigate(`/gestor/clientes/${client.id}`)
+                              }
+                              className="flex min-w-0 items-center gap-3 text-left"
+                            >
+                              <div
+                                className={clsx(
+                                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+                                  isDarkMode
+                                    ? "bg-[#1c1c1c] text-zinc-400"
+                                    : "bg-zinc-100 text-zinc-500",
+                                )}
+                              >
+                                <Building2 size={16} />
+                              </div>
+                              <span
+                                className={clsx(
+                                  "truncate text-sm font-semibold hover:underline",
+                                  isDarkMode
+                                    ? "text-zinc-100"
+                                    : "text-zinc-950",
+                                )}
+                              >
+                                {client.company_name}
+                              </span>
+                            </button>
+                          </td>
+                          <td className="px-3 py-3">
+                            <Badge
+                              variant={
+                                client.status === "active" ? "green" : "gray"
+                              }
+                              dot
+                            >
+                              {client.status === "active"
+                                ? "Ativo"
+                                : "Inativo"}
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-3">
+                            <Badge variant={hasFacebook ? "blue" : "gray"} dot>
+                              {hasFacebook ? "Conectado" : "Pendente"}
+                            </Badge>
+                          </td>
+                          <td
                             className={clsx(
-                              "truncate text-base font-black tracking-tight",
+                              "px-3 py-3 text-right font-semibold",
                               isDarkMode ? "text-zinc-100" : "text-zinc-950",
                             )}
                           >
-                            {client.company_name}
-                          </p>
-                          <p
+                            {client.leads_count}
+                          </td>
+                          <td
                             className={clsx(
-                              "truncate text-sm",
-                              isDarkMode ? "text-zinc-400" : "text-zinc-500",
+                              "px-3 py-3 text-right font-semibold",
+                              isDarkMode ? "text-zinc-100" : "text-zinc-950",
                             )}
                           >
-                            {client.contact_email ||
-                              client.phone_number ||
-                              "Sem contato"}
-                          </p>
-                        </div>
-                      </div>
-                      <PlanBadge plan={client.plan} />
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Badge
-                        variant={client.status === "active" ? "green" : "gray"}
-                        dot
-                      >
-                        {client.status === "active" ? "Ativo" : "Inativo"}
-                      </Badge>
-                      <Badge variant={hasFacebook ? "blue" : "gray"} dot>
-                        {hasFacebook
-                          ? "Facebook conectado"
-                          : "Facebook pendente"}
-                      </Badge>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-3 gap-2">
-                      <div
-                        className={clsx(
-                          "rounded-[16px] p-2.5",
-                          isDarkMode ? "bg-[#1a1a1a]" : "bg-zinc-50",
-                        )}
-                      >
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
-                          Leads
-                        </p>
-                        <p
-                          className={clsx(
-                            "mt-1.5 text-xl font-black tracking-tight",
-                            isDarkMode ? "text-zinc-100" : "text-zinc-950",
-                          )}
-                        >
-                          {client.leads_count}
-                        </p>
-                      </div>
-                      <div
-                        className={clsx(
-                          "rounded-[16px] p-2.5",
-                          isDarkMode ? "bg-[#1a1a1a]" : "bg-zinc-50",
-                        )}
-                      >
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
-                          Veículos
-                        </p>
-                        <p
-                          className={clsx(
-                            "mt-1.5 text-xl font-black tracking-tight",
-                            isDarkMode ? "text-zinc-100" : "text-zinc-950",
-                          )}
-                        >
-                          {client.vehicles_count}
-                        </p>
-                      </div>
-                      <div
-                        className={clsx(
-                          "rounded-[16px] p-2.5",
-                          isDarkMode ? "bg-[#1a1a1a]" : "bg-zinc-50",
-                        )}
-                      >
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
-                          Eventos
-                        </p>
-                        <p
-                          className={clsx(
-                            "mt-1.5 text-xl font-black tracking-tight",
-                            isDarkMode ? "text-zinc-100" : "text-zinc-950",
-                          )}
-                        >
-                          {eventCount}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div
-                      className={clsx(
-                        "mt-3 space-y-1.5 text-sm",
-                        isDarkMode ? "text-zinc-400" : "text-zinc-500",
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Building2
-                          size={14}
-                          className="shrink-0 text-zinc-400"
-                        />
-                        <span className="font-mono">
-                          {client.cnpj || "Sem CNPJ"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Mail size={14} className="shrink-0 text-[#FF0636]" />
-                        <span className="truncate">
-                          {client.contact_email || client.phone_number || "—"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Phone size={14} className="shrink-0 text-[#3D56A2]" />
-                        <span>{client.phone_number || "Sem telefone"}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <MapPin size={14} className="shrink-0 text-[#FBBB49]" />
-                        <span className="line-clamp-1">{client.address}</span>
-                      </div>
-                    </div>
-
-                    <div
-                      className={clsx(
-                        "mt-4 flex items-center justify-end gap-2 border-t pt-3",
-                        isDarkMode ? "border-zinc-800" : "border-zinc-100",
-                      )}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditClient(client)}
-                        className={clsx(
-                          "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
-                          isDarkMode
-                            ? "border-zinc-700 bg-[#171717] text-zinc-200 hover:bg-[#212121]"
-                            : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50",
-                        )}
-                      >
-                        <Pencil size={13} />
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDeleteClientFromList(client)}
-                        disabled={deletingClientId === client.id}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100 disabled:opacity-60"
-                      >
-                        <Trash2 size={13} />
-                        Excluir
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          navigate(`/gestor/clientes/${client.id}`)
-                        }
-                        className={clsx(
-                          "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-white transition-colors",
-                          isDarkMode
-                            ? "bg-[#1f1f1f] hover:bg-[#2b2b2b]"
-                            : "bg-[#0b0b0b] hover:bg-zinc-900",
-                        )}
-                      >
-                        Detalhe
-                        <Eye size={13} />
-                      </button>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
+                            {client.vehicles_count}
+                          </td>
+                          <td
+                            className={clsx(
+                              "px-3 py-3 text-right font-semibold",
+                              isDarkMode ? "text-zinc-100" : "text-zinc-950",
+                            )}
+                          >
+                            {client.events_count}
+                          </td>
+                          <td className="px-5 py-3">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  navigate(`/gestor/clientes/${client.id}`)
+                                }
+                                aria-label={`Editar ${client.company_name}`}
+                                title="Editar"
+                                className={clsx(
+                                  "inline-flex h-8 w-8 items-center justify-center rounded-full border transition-colors",
+                                  isDarkMode
+                                    ? "border-zinc-700 bg-[#171717] text-zinc-300 hover:bg-[#212121]"
+                                    : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50",
+                                )}
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleDeleteClientFromList(client)
+                                }
+                                disabled={deletingClientId === client.id}
+                                aria-label={`Excluir ${client.company_name}`}
+                                title="Excluir"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100 disabled:opacity-60"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           )}
         </div>
       </div>
@@ -951,111 +848,6 @@ export function ClientesPage() {
             />
           </div>
           {createError ? <Notice tone="error">{createError}</Notice> : null}
-        </div>
-      </Modal>
-
-      <Modal
-        open={editOpen}
-        onClose={() => (editLoading ? null : setEditOpen(false))}
-        title="Editar cliente"
-        size="md"
-        dark={isDarkMode}
-        footer={
-          <>
-            <button
-              type="button"
-              onClick={() => setEditOpen(false)}
-              disabled={editLoading}
-              className={clsx(
-                "rounded-full border px-4 py-2 text-sm font-semibold disabled:opacity-60",
-                isDarkMode
-                  ? "border-zinc-700 text-zinc-200 hover:bg-[#1a1a1a]"
-                  : "border-zinc-200 text-zinc-700 hover:bg-zinc-50",
-              )}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleSaveClientEdit()}
-              disabled={editLoading}
-              className="rounded-full bg-[#FF0636] px-4 py-2 text-sm font-semibold text-white hover:bg-[#e1002d] disabled:opacity-60"
-            >
-              {editLoading ? "Salvando..." : "Salvar alterações"}
-            </button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <div>
-            <label className={modalLabelClass}>Empresa</label>
-            <input
-              value={editClientName}
-              onChange={(event) => setEditClientName(event.target.value)}
-              placeholder="Ex.: Empresa Demo"
-              className={modalInputClass}
-            />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className={modalLabelClass}>CNPJ</label>
-              <input
-                value={editClientCnpj}
-                onChange={(event) => setEditClientCnpj(event.target.value)}
-                placeholder="Opcional"
-                className={modalInputClass}
-              />
-            </div>
-            <div>
-              <label className={modalLabelClass}>Telefone</label>
-              <input
-                value={editClientPhone}
-                onChange={(event) => setEditClientPhone(event.target.value)}
-                placeholder="Opcional"
-                className={modalInputClass}
-              />
-            </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className={modalLabelClass}>WhatsApp</label>
-              <input
-                value={editClientWhatsapp}
-                onChange={(event) => setEditClientWhatsapp(event.target.value)}
-                placeholder="Opcional"
-                className={modalInputClass}
-              />
-            </div>
-            <div>
-              <label className={modalLabelClass}>E-mail de contato</label>
-              <input
-                type="email"
-                value={editClientEmail}
-                onChange={(event) => setEditClientEmail(event.target.value)}
-                placeholder="contato@empresa.com"
-                className={modalInputClass}
-              />
-            </div>
-          </div>
-          <div>
-            <label className={modalLabelClass}>Endereço</label>
-            <input
-              value={editClientAddress}
-              onChange={(event) => setEditClientAddress(event.target.value)}
-              placeholder="Rua, número, bairro, cidade..."
-              className={modalInputClass}
-            />
-          </div>
-          <div>
-            <label className={modalLabelClass}>Webhook n8n</label>
-            <input
-              value={editClientWebhook}
-              onChange={(event) => setEditClientWebhook(event.target.value)}
-              placeholder="https://seu-n8n/webhook/..."
-              className={modalInputClass}
-            />
-          </div>
-          {editError ? <Notice tone="error">{editError}</Notice> : null}
         </div>
       </Modal>
     </div>
