@@ -1,4 +1,6 @@
 import { ConfigService } from '@nestjs/config';
+import { ForbiddenException } from '@nestjs/common';
+import { createHmac } from 'crypto';
 import { Role } from '../../common/types';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../../config/prisma.service';
@@ -64,6 +66,7 @@ describe('MetaService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    config.get.mockReset();
     service = new MetaService(
       prisma as unknown as PrismaService,
       redis as unknown as RedisService,
@@ -72,6 +75,27 @@ describe('MetaService', () => {
       { dispatch: jest.fn() } as never,
       metaSyncQueue as never,
     );
+  });
+
+  it('rejeita webhook Meta sem assinatura valida ou sem corpo bruto', async () => {
+    const rawBody = Buffer.from('{"object":"page"}');
+    config.get.mockImplementation((key: string) =>
+      key === 'META_APP_SECRET' ? 'meta-secret' : undefined,
+    );
+
+    await expect(service.receiveWebhook({ object: 'page' }, undefined, rawBody)).rejects.toThrow(
+      ForbiddenException,
+    );
+    await expect(
+      service.receiveWebhook({ object: 'page' }, 'sha256=invalid', rawBody),
+    ).rejects.toThrow(ForbiddenException);
+
+    const signature = `sha256=${createHmac('sha256', 'meta-secret')
+      .update(rawBody)
+      .digest('hex')}`;
+    await expect(
+      service.receiveWebhook({ object: 'page' }, signature, undefined),
+    ).rejects.toThrow(ForbiddenException);
   });
 
   it('cadastra automaticamente leads do formulário da Meta como form_page', async () => {
@@ -192,6 +216,7 @@ describe('MetaService', () => {
     prisma.lead.create.mockResolvedValue({ id: 'lead-1' });
     prisma.metaLeadImport.create.mockResolvedValue({ id: 'import-1' });
 
+    jest.spyOn(service as any, 'fetchPageAccessToken').mockResolvedValue('page-token-1');
     jest.spyOn(service as any, 'fetchLeadFormLeads').mockResolvedValue([leadPayload]);
 
     const summary = await service.runHistoricalLeadImport('conn-1', 'job-1', []);

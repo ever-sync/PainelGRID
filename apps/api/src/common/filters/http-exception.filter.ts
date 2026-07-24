@@ -44,12 +44,18 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     const message =
       exception instanceof HttpException ? exception.getResponse() : 'Erro interno do servidor';
+    const safePath = request.path || request.url.split('?')[0];
 
     const logPayload = JSON.stringify({
       statusCode: status,
-      path: request.url,
+      path: safePath,
       method: request.method,
-      message: exception instanceof Error ? exception.message : 'Unknown error',
+      message:
+        status >= 500
+          ? 'Internal server error'
+          : exception instanceof Error
+            ? exception.message
+            : 'Request error',
       timestamp: new Date().toISOString(),
     });
 
@@ -66,7 +72,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       statusCode: status,
       message: normalizedMessage,
       error: typeof message === 'string' ? message : (message as Record<string, unknown>).error,
-      path: request.url,
+      path: safePath,
       timestamp: new Date().toISOString(),
     });
   }

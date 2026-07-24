@@ -48,10 +48,10 @@ export class WebhookDispatchService implements OnModuleInit {
           removeOnFail: true,
         },
       );
-      this.logger.debug(`Webhook ${webhookEventId} enfileirado com delay de ${delayMs}ms`);
+      this.logger.debug(`Webhook enfileirado com delay de ${delayMs}ms`);
     } catch (err) {
       this.logger.warn(
-        `Webhook ${webhookEventId} nao enfileirado (Redis indisponivel): ${(err as Error).message}`,
+        `Webhook nao enfileirado (Redis indisponivel): ${(err as Error).message}`,
       );
     }
   }

@@ -100,20 +100,16 @@ export default async function handler(req: Request, res: Response): Promise<void
     }
     cachedApp(req, res);
   } catch (err) {
-    logger.error(
-      '[vercel] handler/bootstrap',
-      err instanceof Error ? err.stack : JSON.stringify(err),
-    );
+    logger.error('[vercel] falha no handler/bootstrap');
     if (res.headersSent) {
       return;
     }
-    const message = err instanceof Error ? err.message : 'Erro interno';
     res.status(500).setHeader('Content-Type', 'application/json; charset=utf-8');
     res.end(
       JSON.stringify({
         statusCode: 500,
         error: 'BootstrapError',
-        message,
+        message: 'Falha ao inicializar o servico.',
         hint: 'Confira variaveis na Vercel (DATABASE_URL, JWT_*, FRONTEND_URL) e os logs da funcao.',
       }),
     );

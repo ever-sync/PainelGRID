@@ -63,7 +63,6 @@ export function VendorCallAlert({ event, onClose }: VendorCallAlertProps) {
           visible ? "scale-100 translate-y-0" : "scale-90 translate-y-12",
         )}
       >
-        <div className="absolute inset-0 bg-[url('/noise.png')] opacity-10 mix-blend-overlay"></div>
         <div className="relative flex flex-col items-center justify-center rounded-[1.7rem] bg-zinc-950/90 px-10 py-24 text-center backdrop-blur-xl">
           <div className="mb-8 flex h-40 w-40 items-center justify-center rounded-full bg-[#e51838]/20 ring-8 ring-[#e51838]/40 animate-pulse">
             <BellRing size={80} className="text-[#e51838]" />

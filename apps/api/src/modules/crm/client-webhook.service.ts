@@ -48,7 +48,7 @@ export class ClientWebhookService {
       await this.webhookDispatch.enqueue(event.id);
     } catch (error) {
       this.logger.warn(
-        `Falha ao disparar webhook ${eventType} para cliente ${clientId}: ${(error as Error).message}`,
+        `Falha ao disparar webhook ${eventType}: ${(error as Error).message}`,
       );
     }
   }

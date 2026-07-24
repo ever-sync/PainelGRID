@@ -174,7 +174,7 @@ export class AuthService {
       storedUserId = await this.redisService.client.get(refreshKey);
     } catch (err) {
       this.logger.warn(
-        `Redis indisponivel na renovacao (${refreshKey}): ${(err as Error).message}`,
+        `Redis indisponivel na renovacao: ${(err as Error).message}`,
       );
       throw new ServiceUnavailableException(
         'Nao foi possivel renovar a sessao. Tente novamente em instantes.',
@@ -189,7 +189,7 @@ export class AuthService {
       await this.redisService.client.del(refreshKey);
     } catch (err) {
       this.logger.error(
-        `Redis indisponivel ao revogar refresh antigo (${refreshKey}): ${(err as Error).message}`,
+        `Redis indisponivel ao revogar refresh antigo: ${(err as Error).message}`,
       );
       throw new ServiceUnavailableException(
         'Nao foi possivel concluir a renovacao da sessao. Tente novamente.',
@@ -394,7 +394,7 @@ export class AuthService {
         throw new Error(`Redis SET retornou ${String(outcome)}`);
       }
     } catch (err) {
-      this.logger.error(`Falha ao persistir refresh em Redis (${key}): ${(err as Error).message}`);
+      this.logger.error(`Falha ao persistir refresh em Redis: ${(err as Error).message}`);
       throw new ServiceUnavailableException(
         'Nao foi possivel criar sessao no momento. Servico temporariamente indisponivel — tente novamente.',
       );
@@ -436,7 +436,7 @@ export class AuthService {
       attemptsRaw = await this.redisService.client.get(key);
     } catch (err) {
       this.logger.warn(
-        `Redis indisponivel ao checar tentativas de login (${email}); ` +
+        'Redis indisponivel ao checar tentativas de login; ' +
           `limite temporariamente DESATIVADO ate o Redis normalizar.`,
       );
       return;
@@ -464,7 +464,7 @@ export class AuthService {
       );
     } catch (err) {
       this.logger.warn(
-        `Redis indisponivel ao registrar falha de login (${email}): ${(err as Error).message}`,
+        `Redis indisponivel ao registrar falha de login: ${(err as Error).message}`,
       );
     }
   }
@@ -517,7 +517,7 @@ export class AuthService {
       }
     } catch (err) {
       this.logger.error(
-        `Falha ao revogar refresh tokens Redis para usuario ${userId}: ${(err as Error).message}`,
+        `Falha ao revogar refresh tokens Redis: ${(err as Error).message}`,
       );
     }
   }

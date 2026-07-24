@@ -411,7 +411,7 @@ export function EventosPage() {
     ];
     if (ev) {
       if (Array.isArray(ev.event_days) && ev.event_days.length > 0) {
-        daysToSet = ev.event_days.map((d: any) => ({
+        daysToSet = ev.event_days.map((d) => ({
           start: typeof d.start === "string" ? d.start.slice(0, 16) : "",
           end: typeof d.end === "string" ? d.end.slice(0, 16) : "",
         }));

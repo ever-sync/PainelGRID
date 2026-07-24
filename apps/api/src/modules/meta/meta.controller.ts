@@ -5,12 +5,14 @@ import {
   Headers,
   Param,
   ParseUUIDPipe,
+  PayloadTooLargeException,
   Post,
   Query,
   RawBodyRequest,
   Req,
   Res,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
@@ -72,6 +74,7 @@ export class MetaController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Get('connect/callback')
   @ApiOperation({ summary: 'Recebe callback OAuth da Meta' })
   @ApiResponse({ status: 200, description: 'Callback processado com sucesso' })
@@ -80,6 +83,7 @@ export class MetaController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Get('connect/callback/window')
   @ApiOperation({ summary: 'Renderiza callback OAuth para popup de autenticação' })
   @ApiResponse({ status: 200, description: 'Página de callback renderizada' })
@@ -202,6 +206,7 @@ export class MetaController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @Get('webhook')
   @ApiOperation({ summary: 'Valida webhook da Meta (handshake)' })
   @ApiResponse({ status: 200, description: 'Webhook validado com sucesso' })
@@ -210,10 +215,18 @@ export class MetaController {
     @Query('hub.verify_token') verifyToken?: string,
     @Query('hub.challenge') challenge?: string,
   ) {
+    if (
+      (verifyToken?.length ?? 0) > 512 ||
+      (challenge?.length ?? 0) > 2048 ||
+      (mode?.length ?? 0) > 32
+    ) {
+      throw new PayloadTooLargeException('Parametros do webhook excedem o limite');
+    }
     return this.metaService.verifyWebhook(mode, verifyToken, challenge);
   }
 
   @Public()
+  @Throttle({ default: { limit: 120, ttl: 60000 } })
   @Post('webhook')
   @ApiOperation({ summary: 'Recebe eventos de webhook da Meta' })
   @ApiResponse({ status: 201, description: 'Evento recebido com sucesso' })
@@ -222,6 +235,9 @@ export class MetaController {
     @Headers('x-hub-signature-256') signature?: string,
     @Req() request?: RawBodyRequest<Request>,
   ): Promise<Record<string, unknown>> {
+    if (!request?.rawBody || request.rawBody.length > 1024 * 1024) {
+      throw new PayloadTooLargeException('Payload do webhook ausente ou acima de 1 MiB');
+    }
     return this.metaService.receiveWebhook(payload, signature, request?.rawBody);
   }
 

@@ -20,8 +20,8 @@ async function main() {
     try {
       console.log(`Executando query...`);
       await prisma.$executeRawUnsafe(query);
-    } catch (e) {
-      console.error(`Erro ao executar query:`, e);
+    } catch {
+      console.error('Erro ao executar query.');
     }
   }
 
@@ -29,8 +29,8 @@ async function main() {
 }
 
 main()
-  .catch((e) => {
-    console.error('Falha na migração:', e);
+  .catch(() => {
+    console.error('Falha na migração.');
     process.exit(1);
   })
   .finally(async () => {

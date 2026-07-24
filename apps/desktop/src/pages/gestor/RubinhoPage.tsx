@@ -106,10 +106,7 @@ export function RubinhoPage() {
         setAgents(agentsData);
         setEvents(eventsData.map(mapApiEventToEvent));
 
-        const leadItems = Array.isArray(leadsData)
-          ? leadsData
-          : (leadsData as any).items || [];
-        setLeads(leadItems.map(mapApiLeadToLead));
+        setLeads(leadsData.map(mapApiLeadToLead));
       })
       .catch((err) => {
         console.error("Erro ao carregar dados do Rubinho:", err);

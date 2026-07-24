@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Ip, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '../../common/decorators';
 import { PublicService } from './public.service';
 import { SubmitRatingDto } from './dto/submit-rating.dto';
@@ -14,12 +15,13 @@ export class PublicController {
    * Não expõe telefone nem e-mail.
    */
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @Get('check-in/preview')
   @ApiOperation({ summary: 'Retorna preview público de check-in por voucher' })
   @ApiResponse({ status: 200, description: 'Preview retornado com sucesso' })
   @ApiResponse({ status: 404, description: 'Convite inválido' })
   previewCheckIn(@Query('v') v: string | undefined, @Ip() ip: string) {
-    if (!v?.trim()) {
+    if (!v?.trim() || v.length > 2048) {
       throw new NotFoundException('Convite invalido');
     }
     return this.publicService.checkInPreview(v.trim(), ip || 'unknown');
@@ -27,16 +29,18 @@ export class PublicController {
 
   /** Dados minimos para a pagina publica de avaliacao (sem autenticacao). */
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @Get('rating/:token')
   @ApiOperation({ summary: 'Retorna preview publico do link de avaliacao' })
   @ApiResponse({ status: 200, description: 'Preview retornado com sucesso' })
   @ApiResponse({ status: 404, description: 'Link de avaliacao invalido' })
   ratingTarget(@Param('token') token: string, @Ip() ip: string) {
-    return this.publicService.ratingTarget(token, ip || 'unknown');
+    return this.publicService.ratingTarget(this.assertRatingToken(token), ip || 'unknown');
   }
 
   /** Envio publico de avaliacao de atendimento (sem autenticacao). */
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('rating/:token')
   @ApiOperation({ summary: 'Envia uma avaliacao publica de atendimento' })
   @ApiResponse({ status: 201, description: 'Avaliacao enviada com sucesso' })
@@ -47,6 +51,18 @@ export class PublicController {
     @Body() dto: SubmitRatingDto,
     @Ip() ip: string,
   ) {
-    return this.publicService.submitRating(token, dto, ip || 'unknown');
+    return this.publicService.submitRating(
+      this.assertRatingToken(token),
+      dto,
+      ip || 'unknown',
+    );
+  }
+
+  private assertRatingToken(token: string): string {
+    const normalized = token.trim().toLowerCase();
+    if (!/^[a-f0-9]{32}$/.test(normalized)) {
+      throw new NotFoundException('Link de avaliacao invalido');
+    }
+    return normalized;
   }
 }

@@ -591,7 +591,12 @@ export function VeiculosPage() {
 
             <select
               value={vehiclesStatusFilter}
-              onChange={(e) => setVehiclesStatusFilter(e.target.value as any)}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === "all" || value === "available" || value === "hidden") {
+                  setVehiclesStatusFilter(value);
+                }
+              }}
               className={clsx(
                 "h-10 rounded-xl border px-3 text-sm font-medium outline-none transition focus:ring-2 focus:ring-red-100 focus:border-[#E51838]",
                 isDarkMode

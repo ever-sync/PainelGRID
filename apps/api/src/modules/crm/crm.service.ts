@@ -576,7 +576,7 @@ export class CrmService {
 
       if (lead.crm_stage && targetStage.display_order < lead.crm_stage.display_order) {
         this.logger.warn(
-          `Bulk: movimento retrogrado ${lead.crm_stage.code} → ${targetStage.code} para lead ${lead.id}`,
+          `Bulk: movimento retrogrado ${lead.crm_stage.code} → ${targetStage.code}`,
         );
       }
 
@@ -638,9 +638,7 @@ export class CrmService {
           return { history, webhookEvent };
         });
 
-        this.logger.log(
-          `Bulk: Lead ${lead.id} movido para ${targetStage.code} por ${movingUser.sub}`,
-        );
+        this.logger.log(`Bulk: lead movido para ${targetStage.code}`);
         await this.webhookDispatch.enqueue(result.webhookEvent.id);
         this.realtimeEvents.emitStageChanged(lead.client_id, {
           lead_id: lead.id,
@@ -725,10 +723,7 @@ export class CrmService {
     const pipelineCode = clientIdToPipelineCode(lead.client_id);
     const stageCode = clientIdToStageCode(lead.client_id, stageSuffix.toUpperCase().trim());
 
-    this.logger.log(
-      `moveLeadBySuffix: lead=${leadId}, suffix=${stageSuffix}, ` +
-      `resolved pipeline=${pipelineCode}, stage=${stageCode}`,
-    );
+    this.logger.log(`Move por sufixo resolvido para a etapa ${stageCode}`);
 
     return this.moveLeadByIntegration(
       leadId,
@@ -963,7 +958,7 @@ export class CrmService {
       }
 
       this.logger.log(
-        `Lead ${lead.id} movido de ${lead.crm_stage?.code ?? 'sem-etapa'} para ${targetStage.code} por ${changedByUserId}`,
+        `Lead movido de ${lead.crm_stage?.code ?? 'sem-etapa'} para ${targetStage.code}`,
       );
       void this.maybeAwardContactedScore(lead, targetStage, changedByUserId);
       if (result.webhookEvent) {
@@ -1263,7 +1258,7 @@ export class CrmService {
         lead_id: lead.id,
         kind: 'contacted' as const,
       });
-      this.logger.debug(`Score contacted: lead=${lead.id} vendor=${vendorId}`);
+      this.logger.debug('Score de contato registrado');
     } catch (err) {
       this.logger.warn(`Nao foi possivel registrar score contacted: ${(err as Error).message}`);
     }

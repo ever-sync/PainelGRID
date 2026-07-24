@@ -28,12 +28,10 @@ export class MailService {
         secure,
         auth: { user, pass },
       });
-      this.logger.log(
-        `SMTP configurado: host=${host} port=${port} secure=${secure} from=${this.from}`,
-      );
+      this.logger.log(`SMTP configurado na porta ${port} (secure=${secure})`);
     } else {
       this.logger.warn(
-        `SMTP NAO configurado — host="${host}" user="${user}" pass="${pass ? '[definida]' : '[vazia]'}"`,
+        'SMTP nao configurado completamente',
       );
     }
   }
@@ -44,18 +42,15 @@ export class MailService {
     const html = this.buildWelcomeHtml({ name, email: to, password, loginUrl: this.frontendUrl });
 
     if (!this.transporter) {
-      this.logger.warn(`Email de boas-vindas nao enviado para ${to}: SMTP nao configurado`);
+      this.logger.warn('Email de boas-vindas nao enviado: SMTP nao configurado');
       return;
     }
 
     try {
-      const info = await this.transporter.sendMail({ from: this.from, to, subject, html });
-      this.logger.log(`Email de boas-vindas enviado para ${to} — messageId: ${info.messageId}`);
+      await this.transporter.sendMail({ from: this.from, to, subject, html });
+      this.logger.log('Email de boas-vindas enviado');
     } catch (err) {
-      this.logger.error(
-        `Falha ao enviar email para ${to}: ${(err as Error).message}`,
-        (err as Error).stack,
-      );
+      this.logger.error('Falha ao enviar email de boas-vindas');
     }
   }
 
@@ -143,20 +138,15 @@ export class MailService {
       if (process.env.NODE_ENV === 'production') {
         throw new Error('SMTP nao configurado');
       }
-      this.logger.log(
-        `[DEV 2FA CODE] Para ${to} (${name}) — Código 2FA: ${code}`,
-      );
+      this.logger.warn('Email 2FA nao enviado em desenvolvimento: SMTP nao configurado');
       return;
     }
 
     try {
-      const info = await this.transporter.sendMail({ from: this.from, to, subject, html });
-      this.logger.log(`Email de 2FA enviado para ${to} — messageId: ${info.messageId}`);
+      await this.transporter.sendMail({ from: this.from, to, subject, html });
+      this.logger.log('Email de 2FA enviado');
     } catch (err) {
-      this.logger.error(
-        `Falha ao enviar email 2FA para ${to}: ${(err as Error).message}`,
-        (err as Error).stack,
-      );
+      this.logger.error('Falha ao enviar email 2FA');
       throw err;
     }
   }

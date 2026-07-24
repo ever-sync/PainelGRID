@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators';
+import { Throttle } from '@nestjs/throttler';
 import { PrismaService } from '../../config/prisma.service';
 import { RedisService } from '../../config/redis.service';
 
@@ -13,6 +14,7 @@ export class HealthController {
   ) {}
 
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @Get()
   @ApiOperation({ summary: 'Health check de Postgres e Redis' })
   @ApiResponse({ status: 200, description: 'Infraestrutura saudável' })

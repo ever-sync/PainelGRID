@@ -255,7 +255,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       setTimeout(() => {
         closeQuickAction();
       }, 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setCheckinResult({
         type: "error",
         text:
@@ -295,7 +295,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     try {
       const data = await queryFipeData(cleanPlate, token);
       setFipeResult(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setFipeError(
         err instanceof Error ? err.message : "Falha ao consultar FIPE.",
       );

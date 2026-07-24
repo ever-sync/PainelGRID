@@ -94,6 +94,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @Post('refresh')
   @ApiOperation({
     summary: 'Renova access token',
@@ -118,6 +119,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @Post('mobile/refresh')
   @ApiOperation({
     summary: 'Renova tokens no app mobile',
@@ -134,6 +136,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @Post('logout')
   @ApiOperation({
     summary: 'Encerra sessao',
@@ -157,6 +160,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @Post('mobile/logout')
   @ApiOperation({
     summary: 'Encerra sessao no app mobile',

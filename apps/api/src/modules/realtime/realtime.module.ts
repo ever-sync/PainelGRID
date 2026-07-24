@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { ClientsModule } from '../clients/clients.module';
 import { RealtimeEventsService } from './realtime-events.service';
 import { RealtimeGateway } from './realtime.gateway';
 
 @Module({
-  imports: [ConfigModule, JwtModule],
+  imports: [ConfigModule, JwtModule, ClientsModule],
   providers: [RealtimeGateway, RealtimeEventsService],
   exports: [RealtimeEventsService],
 })

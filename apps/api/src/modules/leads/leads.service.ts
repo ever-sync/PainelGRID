@@ -1851,7 +1851,7 @@ export class LeadsService {
         caption,
       });
 
-      this.logger.log(`Check-in QR enviado via WhatsApp lead=${lead.id} client=${lead.client_id}`);
+      this.logger.log('Check-in QR enviado via WhatsApp');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(
@@ -2549,17 +2549,16 @@ export class LeadsService {
               value: formattedValue,
             };
           } else {
-            this.logger.warn(`APIBRASIL retornou resposta sem marca/modelo para a placa ${plate}: ${JSON.stringify(raw)}`);
+            this.logger.warn('APIBRASIL retornou resposta sem marca/modelo');
           }
         } else {
-          const errorText = await response.text().catch(() => '');
-          this.logger.error(`APIBRASIL HTTP ${response.status} ao consultar placa ${plate}: ${errorText}`);
+          this.logger.error(`APIBRASIL falhou com HTTP ${response.status}`);
         }
       } catch (err: unknown) {
         this.logger.error(`Erro ao consultar placa na APIBrasil: ${this.errorMessage(err)}`);
       }
     } else {
-      this.logger.warn(`APIBRASIL_TOKEN ou APIBRASIL_DEVICE ausentes no .env ao consultar placa ${plate}.`);
+      this.logger.warn('APIBRASIL_TOKEN ou APIBRASIL_DEVICE ausentes');
     }
     
     return null;

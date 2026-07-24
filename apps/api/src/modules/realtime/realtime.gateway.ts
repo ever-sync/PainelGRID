@@ -14,6 +14,7 @@ import { Server, Socket } from 'socket.io';
 import { AuthTokenPayload } from '../auth/auth.types';
 import { Role } from '../../common/types';
 import { normalizeWebOrigin, parseAllowedOrigins } from '../../config/cors-origins';
+import { ClientsService } from '../clients/clients.service';
 
 @WebSocketGateway({
   namespace: '/realtime',
@@ -27,6 +28,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly clientsService: ClientsService,
   ) {
     this.allowedOrigins = new Set(
       parseAllowedOrigins(this.configService.get<string>('FRONTEND_URL'), 'http://localhost:5173'),
@@ -57,11 +59,14 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
       client.data.user = payload;
 
-      const clientId = this.normalizeClientId(client.handshake.query.client_id) || payload.client_id;
+      const requestedClientId = client.handshake.query.client_id;
+      const normalizedRequestedClientId = this.normalizeClientId(requestedClientId);
+      if (requestedClientId !== undefined && !normalizedRequestedClientId) {
+        throw new Error('client_id invalido');
+      }
+      const clientId = normalizedRequestedClientId || payload.client_id;
       if (clientId) {
-        if (payload.role !== Role.GESTOR && payload.client_id !== clientId) {
-          throw new Error('Acesso negado a este client_id');
-        }
+        await this.assertClientAccess(payload, clientId);
         void client.join(this.room(clientId));
 
         let set = RealtimeGateway.onlineUsers.get(clientId);
@@ -75,7 +80,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
         this.server.to(this.room(clientId)).emit('online_vendors', Array.from(set));
       }
     } catch (error) {
-      this.logger.warn(`Desconectando socket. Falha de autenticacao: ${(error as Error).message}`);
+      this.logger.warn('Desconectando socket por falha de autenticacao');
       client.disconnect(true);
     }
   }
@@ -106,7 +111,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       return { ok: false };
     }
 
-    if (payload.role !== Role.GESTOR && payload.client_id !== clientId) {
+    if (!(await this.canAccessClient(payload, clientId))) {
       return { ok: false };
     }
 
@@ -136,7 +141,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       return null;
     }
     const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : null;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      trimmed,
+    )
+      ? trimmed
+      : null;
   }
 
   private extractTokenFromSocket(client: Socket): string | undefined {
@@ -147,10 +156,26 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     if (authHeader && authHeader.startsWith('Bearer ')) {
       return authHeader.substring(7);
     }
-    if (typeof client.handshake.query.token === 'string') {
-      return client.handshake.query.token;
-    }
     return undefined;
+  }
+
+  private async assertClientAccess(payload: AuthTokenPayload, clientId: string): Promise<void> {
+    if (payload.role === Role.GESTOR) {
+      await this.clientsService.assertGestorOwnsClient(payload.sub, clientId);
+      return;
+    }
+    if (payload.client_id !== clientId) {
+      throw new Error('Acesso negado a este client_id');
+    }
+  }
+
+  private async canAccessClient(payload: AuthTokenPayload, clientId: string): Promise<boolean> {
+    try {
+      await this.assertClientAccess(payload, clientId);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private extractOrigin(client: Socket): string | undefined {

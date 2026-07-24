@@ -23,7 +23,7 @@ process.on('unhandledRejection', (reason: unknown) => {
   ) {
     return;
   }
-  console.error('Unhandled Rejection:', reason);
+  console.error('Unhandled promise rejection');
 });
 
 function shouldEnableSwagger(configService: ConfigService): boolean {

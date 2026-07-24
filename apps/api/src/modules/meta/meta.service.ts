@@ -1416,7 +1416,7 @@ export class MetaService implements OnModuleInit {
     signatureHeader?: string,
     rawBody?: Buffer,
   ) {
-    this.assertWebhookSignature(signatureHeader, rawBody, payload);
+    this.assertWebhookSignature(signatureHeader, rawBody);
 
     const entries = this.readArray<Record<string, unknown>>(payload.entry);
 
@@ -1597,7 +1597,6 @@ export class MetaService implements OnModuleInit {
   private assertWebhookSignature(
     signatureHeader: string | undefined,
     rawBody: Buffer | undefined,
-    payload: Record<string, unknown>,
   ) {
     const secrets = [
       this.configService.get<string>('META_APP_SECRET'),
@@ -1621,10 +1620,12 @@ export class MetaService implements OnModuleInit {
       throw new ForbiddenException('Formato de assinatura invalido.');
     }
 
-    const bodyToSign = rawBody ?? Buffer.from(JSON.stringify(payload), 'utf8');
+    if (!rawBody) {
+      throw new ForbiddenException('Corpo bruto do webhook indisponivel.');
+    }
 
     const isValid = secrets.some((secret) => {
-      const expected = `sha256=${createHmac('sha256', secret).update(bodyToSign).digest('hex')}`;
+      const expected = `sha256=${createHmac('sha256', secret).update(rawBody).digest('hex')}`;
       return this.safeEqual(expected, signature);
     });
 
@@ -2075,7 +2076,7 @@ export class MetaService implements OnModuleInit {
 
     const connection = await this.resolveConnectionForLeadWebhook({ formId, pageId });
     if (!connection) {
-      this.logger.warn(`Webhook leadgen ignorado: conexao nao encontrada para lead ${leadgenId}`);
+      this.logger.warn('Webhook leadgen ignorado: conexao nao encontrada');
       return false;
     }
 
@@ -2153,7 +2154,7 @@ export class MetaService implements OnModuleInit {
 
     if (!assetSelection?.meta_connection) {
       this.logger.warn(
-        `Webhook WhatsApp ignorado: phone_number_id ${phoneNumberId} nao mapeado para cliente.`,
+        'Webhook WhatsApp ignorado: numero nao mapeado para cliente.',
       );
       return false;
     }
@@ -2416,7 +2417,7 @@ export class MetaService implements OnModuleInit {
       return media.url ?? null;
     } catch (error) {
       this.logger.warn(
-        `Nao foi possivel resolver media_url para media ${mediaId}: ${this.getErrorMessage(error)}`,
+        `Nao foi possivel resolver media_url: ${this.getErrorMessage(error)}`,
       );
       return null;
     }
@@ -2828,7 +2829,7 @@ export class MetaService implements OnModuleInit {
       );
     } catch (error) {
       ownedErr = this.getErrorMessage(error);
-      this.logger.warn(`owned_ad_accounts BM ${businessId}: ${ownedErr}`);
+      this.logger.warn(`Falha ao listar owned_ad_accounts: ${ownedErr}`);
     }
 
     try {
@@ -2842,7 +2843,7 @@ export class MetaService implements OnModuleInit {
       );
     } catch (error) {
       clientErr = this.getErrorMessage(error);
-      this.logger.warn(`client_ad_accounts BM ${businessId}: ${clientErr}`);
+      this.logger.warn(`Falha ao listar client_ad_accounts: ${clientErr}`);
     }
 
     const merged = this.uniqueBy(
@@ -2957,10 +2958,10 @@ export class MetaService implements OnModuleInit {
         undefined,
         { subscribed_fields: 'leadgen' },
       );
-      this.logger.log(`Webhook assinado com sucesso para a Pagina ${pageId}`);
+      this.logger.log('Webhook assinado com sucesso para pagina Meta');
     } catch (error) {
       this.logger.warn(
-        `Nao foi possivel assinar o webhook da Pagina ${pageId}: ${this.getErrorMessage(error)}`,
+        `Nao foi possivel assinar webhook de pagina: ${this.getErrorMessage(error)}`,
       );
     }
   }
@@ -2972,7 +2973,7 @@ export class MetaService implements OnModuleInit {
       const pageAccessToken = await this.fetchPageAccessToken(pageId, accessToken);
       if (!pageAccessToken) {
         this.logger.warn(
-          `Sem page access token para ${pageId}; formularios de lead nao podem ser listados.`,
+          'Sem page access token; formularios de lead nao podem ser listados.',
         );
         continue;
       }

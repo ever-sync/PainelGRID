@@ -90,7 +90,7 @@ export class WebhookDispatchProcessor extends WorkerHost {
         await this.webhookDispatchService.enqueue(webhookEvent.id, delayMs);
       } else {
         this.logger.error(
-          `Webhook ${webhookEvent.id} excedeu limite de tentativas`,
+          'Webhook excedeu limite de tentativas',
           error instanceof Error ? error.stack : undefined,
         );
       }

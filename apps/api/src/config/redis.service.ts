@@ -112,7 +112,21 @@ return raw
       return this.fallback.scan(cursor, ...args);
     }
     try {
-      return await (this.redis.scan as any)(cursor, ...args);
+      const options = new Map<string, string>();
+      for (let index = 0; index < args.length; index += 2) {
+        const key = String(args[index] ?? '').toUpperCase();
+        const value = args[index + 1];
+        if (key && value !== undefined) {
+          options.set(key, String(value));
+        }
+      }
+      return await this.redis.scan(
+        String(cursor),
+        'MATCH',
+        options.get('MATCH') ?? '*',
+        'COUNT',
+        options.get('COUNT') ?? '100',
+      );
     } catch (err: unknown) {
       this.isFallbackActive = true;
       this.logger.error(`Erro ao escanear Redis, usando fallback: ${this.errorMessage(err)}`);

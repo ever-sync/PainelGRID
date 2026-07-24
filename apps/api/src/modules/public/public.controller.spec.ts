@@ -10,6 +10,8 @@ describe('PublicController', () => {
   beforeEach(async () => {
     const mockService = {
       checkInPreview: jest.fn(),
+      ratingTarget: jest.fn(),
+      submitRating: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -35,6 +37,9 @@ describe('PublicController', () => {
       expect(() => controller.previewCheckIn('', '127.0.0.1')).toThrow(NotFoundException);
       expect(() => controller.previewCheckIn('   ', '127.0.0.1')).toThrow(NotFoundException);
       expect(() => controller.previewCheckIn(undefined, '127.0.0.1')).toThrow(NotFoundException);
+      expect(() => controller.previewCheckIn('x'.repeat(2049), '127.0.0.1')).toThrow(
+        NotFoundException,
+      );
     });
 
     it('should call service.checkInPreview with trimmed voucher and ip', async () => {
@@ -63,5 +68,12 @@ describe('PublicController', () => {
       await controller.previewCheckIn('voucher', '');
       expect(service.checkInPreview).toHaveBeenCalledWith('voucher', 'unknown');
     });
+  });
+
+  it('rejeita token de avaliacao fora do formato esperado', () => {
+    expect(() => controller.ratingTarget('short-token', '127.0.0.1')).toThrow(
+      NotFoundException,
+    );
+    expect(service.ratingTarget).not.toHaveBeenCalled();
   });
 });

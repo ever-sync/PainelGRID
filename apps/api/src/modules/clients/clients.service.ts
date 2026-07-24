@@ -175,7 +175,7 @@ export class ClientsService {
         return JSON.parse(cached) as Client;
       }
     } catch (err) {
-      this.logger.warn(`Cache miss (erro) ${cacheKey}: ${(err as Error).message}`);
+      this.logger.warn(`Cache miss por erro: ${(err as Error).message}`);
     }
 
     const client = await this.prisma.client.findFirst({
@@ -189,7 +189,7 @@ export class ClientsService {
     try {
       await this.redis.client.set(cacheKey, JSON.stringify(client), 'EX', CLIENT_CACHE_TTL_SECONDS);
     } catch (err) {
-      this.logger.warn(`Falha ao salvar cache ${cacheKey}: ${(err as Error).message}`);
+      this.logger.warn(`Falha ao salvar cache: ${(err as Error).message}`);
     }
 
     return client;

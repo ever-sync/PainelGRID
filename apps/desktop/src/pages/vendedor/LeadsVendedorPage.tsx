@@ -919,9 +919,11 @@ export function LeadsVendedorPage() {
       );
       setCloseAttendanceModal(null);
       await refreshLeads();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setActionError(
-        err?.message || "Não foi possível encerrar o atendimento.",
+        err instanceof Error
+          ? err.message
+          : "Não foi possível encerrar o atendimento.",
       );
     } finally {
       setSaving(false);

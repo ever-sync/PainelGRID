@@ -49,7 +49,7 @@ export class LeadTimelineService {
       });
     } catch (error) {
       this.logger.warn(
-        `Falha ao registrar timeline do lead ${params.leadId}: ${
+        `Falha ao registrar timeline do lead: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );

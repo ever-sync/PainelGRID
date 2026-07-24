@@ -41,13 +41,13 @@ export class MetaSyncProcessor extends WorkerHost {
 
   async handleFullSync(job: Job<FullSyncJob>) {
     const { metaConnectionId, jobId } = job.data;
-    this.logger.log(`Full sync Meta iniciado (conexao ${metaConnectionId}, job ${jobId})`);
+    this.logger.log('Full sync Meta iniciado');
     await this.metaService.runFullSyncForConnection(metaConnectionId, jobId);
   }
 
   async handleHistoricalLeads(job: Job<HistoricalLeadsJob>) {
     const { metaConnectionId, jobId, formIds } = job.data;
-    this.logger.log(`Import historico de leads Meta iniciado (job ${jobId})`);
+    this.logger.log('Import historico de leads Meta iniciado');
     await this.metaService.runHistoricalLeadImport(metaConnectionId, jobId, formIds ?? []);
   }
 

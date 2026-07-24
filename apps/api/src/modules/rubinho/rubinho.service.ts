@@ -355,26 +355,34 @@ export class RubinhoService {
     }
 
     // Find the active Rubinho agent linked to this event
-    const association = await this.prisma.rubinhoAgentEvent.findFirst({
-      where: {
-        event_id: resolvedEventId,
-        rubinho_agent: { status: true },
-      },
-      include: {
-        rubinho_agent: {
+    const association = includeKnowledge
+      ? await this.prisma.rubinhoAgentEvent.findFirst({
+          where: {
+            event_id: resolvedEventId,
+            rubinho_agent: { status: true },
+          },
           include: {
-            faqs: {
-              select: { question: true, answer: true },
-              orderBy: { created_at: 'asc' },
-            },
-            documents: {
-              select: { title: true, content: true },
-              orderBy: { created_at: 'asc' },
+            rubinho_agent: {
+              include: {
+                faqs: {
+                  select: { question: true, answer: true },
+                  orderBy: { created_at: 'asc' },
+                },
+                documents: {
+                  select: { title: true, content: true },
+                  orderBy: { created_at: 'asc' },
+                },
+              },
             },
           },
-        },
-      },
-    });
+        })
+      : await this.prisma.rubinhoAgentEvent.findFirst({
+          where: {
+            event_id: resolvedEventId,
+            rubinho_agent: { status: true },
+          },
+          include: { rubinho_agent: true },
+        });
 
     if (!association?.rubinho_agent) {
       throw new NotFoundException(
@@ -423,8 +431,8 @@ export class RubinhoService {
       tone: agent.tone,
       delay_minutes: agent.delay_minutes,
       system_prompt: agent.prompt,
-      faq: includeKnowledge ? agent.faqs : undefined,
-      documents: includeKnowledge ? agent.documents : undefined,
+      faq: 'faqs' in agent ? agent.faqs : undefined,
+      documents: 'documents' in agent ? agent.documents : undefined,
       vehicles,
     };
   }

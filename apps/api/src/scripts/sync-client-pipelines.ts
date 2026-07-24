@@ -15,11 +15,11 @@ async function main() {
   
   for (const client of clients) {
     try {
-      console.log(`Provisionando funil para o cliente: ${client.company_name} (${client.id})...`);
-      const result = await provisionDefaultCrmPipeline(prisma, client.id);
-      console.log(`Sucesso para o cliente ${client.company_name}. ID do Pipeline: ${result.pipeline_id}`);
-    } catch (error) {
-      console.error(`Erro ao provisionar para o cliente ${client.company_name}:`, error);
+      console.log('Provisionando funil para cliente...');
+      await provisionDefaultCrmPipeline(prisma, client.id);
+      console.log('Funil provisionado com sucesso.');
+    } catch {
+      console.error('Erro ao provisionar funil para cliente.');
     }
   }
   
@@ -27,8 +27,8 @@ async function main() {
 }
 
 main()
-  .catch((e) => {
-    console.error('Falha ao rodar script de sincronização:', e);
+  .catch(() => {
+    console.error('Falha ao rodar script de sincronização.');
     process.exit(1);
   })
   .finally(async () => {
