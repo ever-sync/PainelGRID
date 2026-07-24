@@ -68,6 +68,25 @@ describe('RealtimeGateway security', () => {
     expect(client.disconnect).toHaveBeenCalledWith(true);
   });
 
+  it('does not emit to an unauthorized tenant when a rejected socket disconnects', async () => {
+    jwtService.verifyAsync.mockResolvedValue({
+      sub: 'gestor-1',
+      role: Role.GESTOR,
+      type: 'access',
+    });
+    clientsService.assertGestorOwnsClient.mockRejectedValue(new Error('forbidden'));
+    const client = socket({
+      origin: 'https://app.example.com',
+      authToken: 'jwt',
+      clientId: CLIENT_ID,
+    });
+
+    await gateway.handleConnection(client);
+    gateway.handleDisconnect(client);
+
+    expect(gateway.server.to).not.toHaveBeenCalled();
+  });
+
   it('allows a gestor to join only a client it owns', async () => {
     jwtService.verifyAsync.mockResolvedValue({
       sub: 'gestor-1',
@@ -84,6 +103,7 @@ describe('RealtimeGateway security', () => {
     await gateway.handleConnection(client);
 
     expect(client.join).toHaveBeenCalledWith(`client:${CLIENT_ID}`);
+    expect(client.data.authorizedClientIds).toEqual([CLIENT_ID]);
     expect(client.disconnect).not.toHaveBeenCalled();
   });
 

@@ -67,7 +67,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       const clientId = normalizedRequestedClientId || payload.client_id;
       if (clientId) {
         await this.assertClientAccess(payload, clientId);
-        void client.join(this.room(clientId));
+        await client.join(this.room(clientId));
+        this.trackAuthorizedClient(client, clientId);
 
         let set = RealtimeGateway.onlineUsers.get(clientId);
         if (!set) {
@@ -79,7 +80,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
         // Envia a lista para todos na sala da empresa
         this.server.to(this.room(clientId)).emit('online_vendors', Array.from(set));
       }
-    } catch (error) {
+    } catch {
       this.logger.warn('Desconectando socket por falha de autenticacao');
       client.disconnect(true);
     }
@@ -87,14 +88,16 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   handleDisconnect(client: Socket) {
     const payload = client.data.user as AuthTokenPayload | undefined;
-    if (payload) {
-      const clientId = this.normalizeClientId(client.handshake.query.client_id) || payload.client_id;
-      if (clientId) {
-        const set = RealtimeGateway.onlineUsers.get(clientId);
-        if (set) {
-          set.delete(payload.sub);
-          this.server.to(this.room(clientId)).emit('online_vendors', Array.from(set));
-        }
+    const authorizedClientIds = client.data.authorizedClientIds as string[] | undefined;
+    if (!payload || !authorizedClientIds) {
+      return;
+    }
+
+    for (const clientId of authorizedClientIds) {
+      const set = RealtimeGateway.onlineUsers.get(clientId);
+      if (set) {
+        set.delete(payload.sub);
+        this.server.to(this.room(clientId)).emit('online_vendors', Array.from(set));
       }
     }
   }
@@ -116,6 +119,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
 
     await client.join(this.room(clientId));
+    this.trackAuthorizedClient(client, clientId);
 
     let set = RealtimeGateway.onlineUsers.get(clientId);
     if (!set) {
@@ -134,6 +138,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   private room(clientId: string) {
     return `client:${clientId}`;
+  }
+
+  private trackAuthorizedClient(client: Socket, clientId: string): void {
+    const current = client.data.authorizedClientIds as string[] | undefined;
+    client.data.authorizedClientIds = Array.from(new Set([...(current ?? []), clientId]));
   }
 
   private normalizeClientId(value: unknown): string | null {
