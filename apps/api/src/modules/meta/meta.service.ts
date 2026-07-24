@@ -74,28 +74,27 @@ export class MetaService implements OnModuleInit {
     @InjectQueue('meta-sync') private readonly metaSyncQueue: Queue,
   ) {}
 
-  async onModuleInit() {
-    try {
-      await withTimeout(
-        this.metaSyncQueue.add(
-          'token-refresh',
-          { thresholdDays: 7 },
-          {
-            repeat: { pattern: '0 4 * * *' },
-            removeOnComplete: true,
-            removeOnFail: false,
-            jobId: 'meta-token-refresh-daily',
-          },
+  onModuleInit() {
+    withTimeout(
+      this.metaSyncQueue.add(
+        'token-refresh',
+        { thresholdDays: 7 },
+        {
+          repeat: { pattern: '0 4 * * *' },
+          removeOnComplete: true,
+          removeOnFail: false,
+          jobId: 'meta-token-refresh-daily',
+        },
+      ),
+      5000,
+      'Agendamento de renovacao de tokens Meta',
+    )
+      .then(() => this.logger.log('Renovacao diaria de tokens Meta agendada (cron 04:00)'))
+      .catch((err) =>
+        this.logger.warn(
+          `Nao foi possivel agendar renovacao de tokens Meta: ${this.getErrorMessage(err)}`,
         ),
-        5000,
-        'Agendamento de renovacao de tokens Meta',
       );
-      this.logger.log('Renovacao diaria de tokens Meta agendada (cron 04:00)');
-    } catch (err) {
-      this.logger.warn(
-        `Nao foi possivel agendar renovacao de tokens Meta: ${this.getErrorMessage(err)}`,
-      );
-    }
   }
 
   /**

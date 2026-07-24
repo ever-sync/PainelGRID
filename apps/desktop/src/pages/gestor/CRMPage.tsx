@@ -598,46 +598,52 @@ function LeadDetailModal({
               : "border-b border-zinc-100 bg-zinc-50/60",
           )}
         >
-          <div className="flex flex-wrap items-center gap-x-1 gap-y-2">
+          <div className="flex items-center overflow-x-auto pb-1">
             {progressStages.map((stage, idx) => {
               const isPast = idx < currentStageIndex;
               const isCurrent = idx === currentStageIndex;
-              const isLast = idx === progressStages.length - 1;
+              const isFirst = idx === 0;
               return (
-                <div key={stage.id} className="flex items-center">
-                  <div
-                    className={clsx(
-                      "flex min-w-[90px] flex-col items-center gap-1.5 rounded-lg px-3 py-2.5 text-center transition-all",
-                      isCurrent
-                        ? "bg-[#FF0636]/10"
-                        : isPast
-                          ? dark
-                            ? "opacity-60"
-                            : "opacity-70"
-                          : dark
-                            ? "opacity-30"
-                            : "opacity-40",
-                    )}
-                  >
+                <div key={stage.id} className="flex shrink-0 items-center">
+                  {!isFirst && (
                     <div
                       className={clsx(
-                        "h-1.5 w-full rounded-full",
-                        isCurrent
-                          ? "bg-[#FF0636]"
-                          : isPast
-                            ? "bg-emerald-500"
-                            : dark
-                              ? "bg-zinc-700"
-                              : "bg-zinc-200",
+                        "h-[2px] w-6 shrink-0 rounded-full transition-colors",
+                        isPast || isCurrent
+                          ? "bg-emerald-500"
+                          : dark
+                            ? "bg-[#232323]"
+                            : "bg-zinc-200",
                       )}
                     />
+                  )}
+                  <div className="flex shrink-0 flex-col items-center gap-1.5 px-1.5">
+                    <div
+                      className={clsx(
+                        "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all",
+                        isCurrent
+                          ? "border-[#FF0636] bg-[#FF0636] text-white ring-4 ring-[#FF0636]/15"
+                          : isPast
+                            ? "border-emerald-500 bg-emerald-500 text-white"
+                            : dark
+                              ? "border-[#2a2a2a] bg-transparent"
+                              : "border-zinc-300 bg-white",
+                      )}
+                    >
+                      {isPast && <Check size={12} strokeWidth={3} />}
+                      {isCurrent && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                      )}
+                    </div>
                     <span
                       className={clsx(
-                        "text-[10px] font-semibold uppercase leading-tight tracking-wide",
+                        "max-w-[88px] text-center text-[10px] font-semibold leading-tight tracking-wide",
                         isCurrent
                           ? "text-[#FF0636]"
                           : isPast
-                            ? "text-emerald-600"
+                            ? dark
+                              ? "text-zinc-300"
+                              : "text-zinc-600"
                             : dark
                               ? "text-zinc-600"
                               : "text-zinc-400",
@@ -646,15 +652,6 @@ function LeadDetailModal({
                       {stage.label}
                     </span>
                   </div>
-                  {!isLast && (
-                    <ChevronRight
-                      size={13}
-                      className={clsx(
-                        "mx-0.5 shrink-0",
-                        dark ? "text-zinc-700" : "text-zinc-300",
-                      )}
-                    />
-                  )}
                 </div>
               );
             })}
