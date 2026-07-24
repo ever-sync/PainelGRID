@@ -1,0 +1,239 @@
+import { httpRequest } from "./http";
+import type { Event, EventStatus, LeadSource } from "../types";
+
+export type SaleSegment = "NOVO" | "SEMINOVO" | "VENDA_DIRETA" | "PCD";
+
+export type ApiEvent = {
+  id: string;
+  client_id: string;
+  participant_client_ids?: string[];
+  name: string;
+  event_type: string | null;
+  description: string | null;
+  launch_date: string | null;
+  event_date: string;
+  event_end_date: string | null;
+  location: string | null;
+  capacity: number | null;
+  sales_target: number | null;
+  require_wristband?: boolean;
+  status: EventStatus;
+  cover_image_url: string | null;
+  image_urls: string[];
+  event_days?: Array<{ start: string; end: string }> | null;
+  created_at: string;
+  updated_at: string;
+  leads_count?: number;
+  confirmed_count?: number;
+  checkin_count?: number;
+  _count?: { interested_leads: number };
+};
+
+export function listEvents(
+  params: { client_id?: string; status?: EventStatus } = {},
+  token: string,
+) {
+  const qs = new URLSearchParams();
+  if (params.client_id) qs.set("client_id", params.client_id);
+  if (params.status) qs.set("status", params.status);
+  return httpRequest<ApiEvent[]>(`/events?${qs.toString()}`, {
+    method: "GET",
+    token,
+  });
+}
+
+export function getEvent(eventId: string, token: string) {
+  return httpRequest<ApiEvent>(`/events/${eventId}`, { method: "GET", token });
+}
+
+export type CreateEventPayload = {
+  client_id?: string;
+  participant_client_ids?: string[];
+  name: string;
+  event_type?: string;
+  description?: string;
+  launch_date?: string;
+  event_date: string;
+  event_end_date?: string;
+  location?: string;
+  capacity?: number;
+  sales_target?: number;
+  require_wristband?: boolean;
+  status?: EventStatus;
+  cover_image_url?: string;
+  image_urls?: string[];
+  event_days?: Array<{ start: string; end: string }>;
+};
+
+export function createEvent(payload: CreateEventPayload, token: string) {
+  return httpRequest<ApiEvent>("/events", {
+    method: "POST",
+    token,
+    body: payload,
+  });
+}
+
+export type UpdateEventPayload = Partial<
+  Omit<CreateEventPayload, "client_id" | "sales_target">
+> & {
+  client_id?: string;
+  /** `null` limpa a meta de vendas; `undefined` mantém. */
+  sales_target?: number | null;
+};
+
+export function updateEvent(
+  eventId: string,
+  payload: UpdateEventPayload,
+  token: string,
+) {
+  return httpRequest<ApiEvent>(`/events/${eventId}`, {
+    method: "PATCH",
+    token,
+    body: payload,
+  });
+}
+
+export function deleteEvent(eventId: string, token: string) {
+  return httpRequest<{ id: string }>(`/events/${eventId}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
+// ── Dashboard TV ─────────────────────────────────────────────────────────────
+
+export type EventDashboardTvResponse = {
+  event: {
+    id: string;
+    name: string;
+    event_date: string;
+    event_end_date: string | null;
+    location: string | null;
+    capacity: number | null;
+    sales_target: number | null;
+    status: EventStatus;
+    participant_client_ids: string[];
+  };
+  funnel: {
+    leads: number;
+    scheduled: number;
+    confirmed: number;
+    checked_in: number;
+    sold: number;
+  };
+  vendors: Array<{
+    vendor_id: string;
+    vendor_name: string;
+    client_id: string | null;
+    team_id: string | null;
+    team_name: string | null;
+    leads: number;
+    scheduled: number;
+    confirmed: number;
+    checked_in: number;
+    sold: number;
+    points: number;
+  }>;
+  teams: Array<{
+    team_id: string;
+    team_name: string;
+    logo_url: string | null;
+    leads: number;
+    scheduled: number;
+    confirmed: number;
+    checked_in: number;
+    sold: number;
+    points: number;
+  }>;
+  cars: {
+    by_segment: Array<{ type: SaleSegment; count: number }>;
+    top_models: Array<{ model: string; count: number }>;
+    total_value: string;
+  };
+  daily: Array<{
+    date: string;
+    leads: number;
+    scheduled: number;
+    confirmed: number;
+    checked_in: number;
+    sold: number;
+  }>;
+  checkin_by_source: Array<{ source: LeadSource; count: number }>;
+  activeCalls?: Array<{
+    id: string;
+    lead_id: string;
+    lead_name: string;
+    vendor_id: string;
+    vendor_name: string;
+    team_name: string | null;
+    timestamp: string;
+  }>;
+  generated_at: string;
+};
+
+export function getEventDashboardTv(
+  eventId: string,
+  token: string,
+  signal?: AbortSignal,
+) {
+  return httpRequest<EventDashboardTvResponse>(
+    `/events/${eventId}/dashboard-tv`,
+    {
+      method: "GET",
+      token,
+      signal,
+    },
+  );
+}
+
+// ── Resumo de eventos ativos (card do dashboard geral) ──────────────────────
+
+export type ActiveEventSummary = {
+  id: string;
+  name: string;
+  event_date: string;
+  location: string | null;
+  funnel: {
+    leads: number;
+    scheduled: number;
+    confirmed: number;
+    checked_in: number;
+    sold: number;
+  };
+};
+
+export function getActiveEventsSummary(token: string, signal?: AbortSignal) {
+  return httpRequest<ActiveEventSummary[]>("/events/active-summary", {
+    method: "GET",
+    token,
+    signal,
+  });
+}
+
+export function mapApiEventToEvent(row: ApiEvent): Event {
+  const leadsCount = row._count?.interested_leads ?? 0;
+  return {
+    id: row.id,
+    client_id: row.client_id,
+    participant_client_ids: row.participant_client_ids ?? [],
+    name: row.name,
+    event_type: row.event_type ?? null,
+    description: row.description ?? "",
+    launch_date: row.launch_date ?? null,
+    event_date: row.event_date,
+    event_end_date: row.event_end_date ?? null,
+    location: row.location ?? "",
+    capacity: row.capacity,
+    sales_target: row.sales_target ?? null,
+    require_wristband: row.require_wristband ?? false,
+    status: row.status,
+    cover_image_url: row.cover_image_url,
+    image_urls: row.image_urls ?? [],
+    event_days: row.event_days ?? null,
+    leads_count: row.leads_count ?? leadsCount,
+    confirmed_count: row.confirmed_count ?? 0,
+    checkin_count: row.checkin_count ?? 0,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}

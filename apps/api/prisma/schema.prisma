@@ -1,0 +1,1220 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                           String            @id @default(uuid()) @db.Uuid
+  name                         String            @db.VarChar(255)
+  email                        String            @unique @db.VarChar(255)
+  password_hash                String            @db.VarChar(255)
+  role                         Role
+  avatar_url                   String?           @db.VarChar(500)
+  phone                        String?           @db.VarChar(20)
+  is_active                    Boolean           @default(true)
+  created_at                   DateTime          @default(now())
+  updated_at                   DateTime          @updatedAt
+  client_id                    String?           @db.Uuid
+  /// Token do gestor após OAuth Meta (uma conta para todos os clientes do gestor).
+  meta_gestor_access_token     String?
+  meta_gestor_token_expires_at DateTime?
+  meta_gestor_scopes           String[]          @default([])
+  meta_gestor_connected_at     DateTime?
+  vendor_category              VendorCategory?
+  vendor_categories            VendorCategory[]  @default([])
+  auth_provider_id             String?           @unique @db.VarChar(255)
+  /// Token do link publico de avaliacao de atendimento (somente vendedores).
+  rating_token                 String?           @unique @db.VarChar(64)
+  campaign_vendors             CampaignVendor[]
+  managed_clients              Client[]          @relation("GestorClients")
+  course_progress              CourseProgress[]
+  crm_changes                  CrmHistory[]
+  assigned_leads               Lead[]            @relation("VendorLeads")
+  attended_leads               Lead[]            @relation("LeadAttendantUser")
+  registered_leads             Lead[]            @relation("LeadRegisteredBy")
+  sold_leads                   Lead[]            @relation("LeadSoldByVendor")
+  sales                        Sale[]            @relation("VendorSales")
+  sales_team_memberships       SalesTeamMember[]
+  score_events                 ScoreEvent[]      @relation("VendorScoreEvents")
+  service_ratings              ServiceRating[]
+  client                       Client?           @relation("ClientStaff", fields: [client_id], references: [id])
+
+  @@index([client_id])
+  @@map("users")
+}
+
+model ServiceRating {
+  id            String   @id @default(uuid()) @db.Uuid
+  vendor_id     String   @db.Uuid
+  score         Int
+  comment       String?
+  customer_name String?  @db.VarChar(255)
+  event_id      String?  @db.Uuid
+  created_at    DateTime @default(now())
+  vendor        User     @relation(fields: [vendor_id], references: [id])
+  event         Event?   @relation(fields: [event_id], references: [id])
+
+  @@index([vendor_id])
+  @@index([event_id])
+  @@map("service_ratings")
+}
+
+model Client {
+  id                          String                     @id @default(uuid()) @db.Uuid
+  gestor_id                   String                     @db.Uuid
+  company_name                String                     @db.VarChar(255)
+  cnpj                        String?                    @db.VarChar(18)
+  logo_url                    String?                    @db.VarChar(500)
+  plan                        String                     @default("basic") @db.VarChar(50)
+  webhook_url_n8n             String?                    @db.VarChar(500)
+  facebook_page_id            String?                    @db.VarChar(100)
+  facebook_access_token       String?
+  whatsapp_number             String?                    @db.VarChar(20)
+  phone_number                String?                    @db.VarChar(20)
+  settings                    Json                       @default("{}")
+  created_at                  DateTime                   @default(now())
+  updated_at                  DateTime                   @updatedAt
+  agent_action_logs           AgentActionLog[]
+  idempotency_requests        ApiIdempotencyRequest[]
+  appointments                Appointment[]
+  campaigns                   Campaign[]
+  gestor                      User                       @relation("GestorClients", fields: [gestor_id], references: [id])
+  conversation_states         ConversationState[]
+  conversations               Conversation[]
+  crm_pipelines               CrmPipeline[]
+  crm_stages                  CrmStage[]
+  event_participations        EventParticipant[]
+  events                      Event[]
+  facebook_ad_accounts        FacebookAdAccount[]
+  leads                       Lead[]
+  meta_ad_sets                MetaAdSet[]
+  meta_ads                    MetaAd[]
+  meta_campaigns              MetaCampaign[]
+  meta_connections            MetaConnection[]
+  meta_creatives              MetaCreative[]
+  meta_daily_insights         MetaDailyInsight[]
+  meta_lead_forms             MetaLeadForm[]
+  meta_lead_imports           MetaLeadImport[]
+  meta_sync_jobs              MetaSyncJob[]
+  rubinho_agents              RubinhoAgent[]
+  sales                       Sale[]
+  sales_teams                 SalesTeam[]
+  score_events                ScoreEvent[]
+  staff_users                 User[]                     @relation("ClientStaff")
+  vehicles                    Vehicle[]
+  webhook_events              WebhookEvent[]
+  whatsapp_attribution_events WhatsAppAttributionEvent[]
+
+  @@index([gestor_id])
+  @@map("clients")
+}
+
+model Lead {
+  id                          String                     @id @default(uuid()) @db.Uuid
+  client_id                   String                     @db.Uuid
+  name                        String                     @db.VarChar(255)
+  email                       String?                    @db.VarChar(255)
+  phone                       String?                    @db.VarChar(20)
+  source                      LeadSource
+  crm_stage_id                String?                    @db.Uuid
+  tags                        String[]                   @default([])
+  event_interest_id           String?                    @db.Uuid
+  confirmation_status         ConfirmationStatus         @default(pending)
+  confirmation_date           DateTime?
+  store_visit_datetime        DateTime?
+  assigned_vendor_id          String?                    @db.Uuid
+  campaign_id                 String?                    @db.Uuid
+  notes                       String?
+  facebook_lead_id            String?                    @db.VarChar(100)
+  deleted_at                  DateTime?
+  created_at                  DateTime                   @default(now())
+  updated_at                  DateTime                   @updatedAt
+  crm_pipeline_id             String?                    @db.Uuid
+  checkin_token               String?                    @unique @db.VarChar(64)
+  cpf                         String?                    @db.VarChar(20)
+  wristband_number            String?                    @db.VarChar(50)
+  attendant_type              AppointmentActorType?
+  attendant_user_id           String?                    @db.Uuid
+  sold_by_vendor_id           String?                    @db.Uuid
+  team_id                     String?                    @db.Uuid
+  registered_by_id            String?                    @db.Uuid
+  external_ref                String?                    @db.VarChar(120)
+  vehicle_plate               String?                    @db.VarChar(20)
+  vehicle_model               String?                    @db.VarChar(100)
+  vehicle_year                String?                    @db.VarChar(50)
+  companions                  String?
+  description                 String?
+  first_name                  String?                    @db.VarChar(100)
+  last_name                   String?                    @db.VarChar(150)
+  birth_date                  DateTime?                  @db.Date
+  agent_action_logs           AgentActionLog[]
+  appointments                Appointment[]
+  conversation_states         ConversationState[]
+  conversations               Conversation[]
+  crm_history                 CrmHistory[]
+  lead_timeline               LeadTimeline[]
+  assigned_vendor             User?                      @relation("VendorLeads", fields: [assigned_vendor_id], references: [id])
+  attendant_user              User?                      @relation("LeadAttendantUser", fields: [attendant_user_id], references: [id])
+  campaign                    Campaign?                  @relation(fields: [campaign_id], references: [id])
+  client                      Client                     @relation(fields: [client_id], references: [id])
+  crm_pipeline                CrmPipeline?               @relation(fields: [crm_pipeline_id], references: [id])
+  crm_stage                   CrmStage?                  @relation(fields: [crm_stage_id], references: [id])
+  event_interest              Event?                     @relation(fields: [event_interest_id], references: [id])
+  registered_by               User?                      @relation("LeadRegisteredBy", fields: [registered_by_id], references: [id])
+  sold_by_vendor              User?                      @relation("LeadSoldByVendor", fields: [sold_by_vendor_id], references: [id])
+  sales_team                  SalesTeam?                 @relation(fields: [team_id], references: [id])
+  meta_lead_imports           MetaLeadImport[]
+  sales                       Sale[]
+  score_events                ScoreEvent[]
+  whatsapp_attribution_events WhatsAppAttributionEvent[]
+
+  @@unique([client_id, external_ref], map: "lead_client_external_ref")
+  @@index([client_id])
+  @@index([team_id])
+  @@index([assigned_vendor_id])
+  @@index([attendant_user_id])
+  @@index([sold_by_vendor_id])
+  @@index([crm_pipeline_id])
+  @@index([crm_stage_id])
+  @@index([source])
+  @@index([confirmation_status])
+  @@index([store_visit_datetime])
+  @@index([deleted_at])
+  @@index([registered_by_id])
+  @@index([campaign_id])
+  @@index([event_interest_id])
+  @@map("leads")
+}
+
+model Event {
+  id                            String              @id @default(uuid()) @db.Uuid
+  client_id                     String              @db.Uuid
+  name                          String              @db.VarChar(255)
+  description                   String?
+  event_date                    DateTime
+  location                      String?             @db.VarChar(500)
+  capacity                      Int?
+  status                        EventStatus         @default(draft)
+  cover_image_url               String?             @db.VarChar(500)
+  created_at                    DateTime            @default(now())
+  updated_at                    DateTime            @updatedAt
+  event_type                    String?             @db.VarChar(100)
+  launch_date                   DateTime?           @db.Date
+  event_end_date                DateTime?
+  image_urls                    String[]            @default([])
+  sales_target                  Int?
+  require_wristband             Boolean             @default(false)
+  event_days                    Json?
+  appointments                  Appointment[]
+  conversation_state_last_offer ConversationState[] @relation("ConversationStateLastOfferedEvent")
+  participants                  EventParticipant[]
+  client                        Client              @relation(fields: [client_id], references: [id])
+  interested_leads              Lead[]
+  rubinho_events                RubinhoAgentEvent[]
+  sales_teams                   SalesTeam[]
+  service_ratings               ServiceRating[]
+
+  @@index([client_id])
+  @@index([event_date])
+  @@index([status])
+  @@map("events")
+}
+
+model EventParticipant {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id   String   @db.Uuid
+  client_id  String   @db.Uuid
+  created_at DateTime @default(now())
+  client     Client   @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  event      Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@unique([event_id, client_id])
+  @@index([event_id])
+  @@index([client_id])
+  @@map("event_participants")
+}
+
+model CrmPipeline {
+  id          String     @id @default(uuid()) @db.Uuid
+  client_id   String     @db.Uuid
+  code        String     @unique @db.VarChar(40)
+  name        String     @db.VarChar(120)
+  description String?
+  is_active   Boolean    @default(true)
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+  client      Client     @relation(fields: [client_id], references: [id])
+  stages      CrmStage[]
+  leads       Lead[]
+
+  @@index([client_id])
+  @@index([is_active])
+  @@map("crm_pipelines")
+}
+
+model CrmStage {
+  id             String       @id @default(uuid()) @db.Uuid
+  client_id      String       @db.Uuid
+  name           String       @db.VarChar(100)
+  display_order  Int
+  color          String       @default("#6B7280") @db.VarChar(7)
+  is_final_stage Boolean      @default(false)
+  created_at     DateTime     @default(now())
+  pipeline_id    String       @db.Uuid
+  code           String       @unique @db.VarChar(40)
+  updated_at     DateTime     @updatedAt
+  history_from   CrmHistory[] @relation("FromStage")
+  history_to     CrmHistory[] @relation("ToStage")
+  client         Client       @relation(fields: [client_id], references: [id])
+  pipeline       CrmPipeline  @relation(fields: [pipeline_id], references: [id])
+  leads          Lead[]
+
+  @@unique([pipeline_id, display_order])
+  @@index([client_id])
+  @@index([pipeline_id])
+  @@map("crm_stages")
+}
+
+model CrmHistory {
+  id                 String    @id @default(uuid()) @db.Uuid
+  lead_id            String    @db.Uuid
+  from_stage_id      String?   @db.Uuid
+  to_stage_id        String    @db.Uuid
+  changed_by_user_id String    @db.Uuid
+  notes              String?
+  created_at         DateTime  @default(now())
+  changed_by         User      @relation(fields: [changed_by_user_id], references: [id])
+  from_stage         CrmStage? @relation("FromStage", fields: [from_stage_id], references: [id])
+  lead               Lead      @relation(fields: [lead_id], references: [id])
+  to_stage           CrmStage  @relation("ToStage", fields: [to_stage_id], references: [id])
+
+  @@index([lead_id])
+  @@index([created_at])
+  @@index([changed_by_user_id])
+  @@index([from_stage_id])
+  @@index([to_stage_id])
+  @@map("crm_history")
+}
+
+model LeadTimeline {
+  id            String                @id @default(uuid()) @db.Uuid
+  client_id     String                @db.Uuid
+  lead_id       String                @db.Uuid
+  event_type    LeadTimelineEventType
+  origin        LeadTimelineOrigin    @default(system)
+  from_stage_id String?               @db.Uuid
+  to_stage_id   String?               @db.Uuid
+  from_value    String?               @db.VarChar(160)
+  to_value      String?               @db.VarChar(160)
+  actor_id      String?               @db.Uuid
+  actor_label   String?               @db.VarChar(160)
+  notes         String?
+  metadata      Json?
+  occurred_at   DateTime              @default(now())
+  created_at    DateTime              @default(now())
+  lead          Lead                  @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+
+  @@index([lead_id, occurred_at])
+  @@index([client_id])
+  @@map("lead_timeline")
+}
+
+model Campaign {
+  id                  String             @id @default(uuid()) @db.Uuid
+  client_id           String             @db.Uuid
+  name                String             @db.VarChar(255)
+  lead_filter_rules   Json
+  distribution_method DistributionMethod
+  status              CampaignStatus     @default(draft)
+  created_at          DateTime           @default(now())
+  updated_at          DateTime           @updatedAt
+  vendors             CampaignVendor[]
+  client              Client             @relation(fields: [client_id], references: [id])
+  leads               Lead[]
+
+  @@index([client_id])
+  @@index([status])
+  @@map("campaigns")
+}
+
+model CampaignVendor {
+  id                   String   @id @default(uuid()) @db.Uuid
+  campaign_id          String   @db.Uuid
+  vendor_id            String   @db.Uuid
+  weight               Int      @default(1)
+  max_leads            Int?
+  leads_assigned_count Int      @default(0)
+  campaign             Campaign @relation(fields: [campaign_id], references: [id])
+  vendor               User     @relation(fields: [vendor_id], references: [id])
+
+  @@unique([campaign_id, vendor_id])
+  @@index([vendor_id])
+  @@map("campaign_vendors")
+}
+
+model Conversation {
+  id                       String                     @id @default(uuid()) @db.Uuid
+  client_id                String                     @db.Uuid
+  lead_id                  String                     @db.Uuid
+  channel                  ConversationChannel
+  last_message_at          DateTime?
+  created_at               DateTime                   @default(now())
+  agent_action_logs        AgentActionLog[]
+  appointments             Appointment[]
+  state                    ConversationState?
+  client                   Client                     @relation(fields: [client_id], references: [id])
+  lead                     Lead                       @relation(fields: [lead_id], references: [id])
+  messages                 Message[]
+  WhatsAppAttributionEvent WhatsAppAttributionEvent[]
+
+  @@index([client_id])
+  @@index([lead_id])
+  @@index([last_message_at])
+  @@map("conversations")
+}
+
+model Message {
+  id              String       @id @default(uuid()) @db.Uuid
+  conversation_id String       @db.Uuid
+  sender_type     SenderType
+  sender_id       String?      @db.Uuid
+  content         String
+  media_url       String?      @db.VarChar(500)
+  read_at         DateTime?
+  created_at      DateTime     @default(now())
+  external_id     String?      @unique @db.VarChar(191)
+  media_id        String?      @db.VarChar(191)
+  conversation    Conversation @relation(fields: [conversation_id], references: [id])
+
+  @@index([conversation_id])
+  @@index([created_at])
+  @@map("messages")
+}
+
+model Course {
+  id              String           @id @default(uuid()) @db.Uuid
+  name            String           @db.VarChar(255)
+  description     String?
+  price           Decimal          @default(0) @db.Decimal(10, 2)
+  category        String?          @db.VarChar(100)
+  cover_image_url String?          @db.VarChar(500)
+  is_published    Boolean          @default(false)
+  created_at      DateTime         @default(now())
+  updated_at      DateTime         @updatedAt
+  progress        CourseProgress[]
+  lessons         Lesson[]
+
+  @@map("courses")
+}
+
+model Lesson {
+  id               String           @id @default(uuid()) @db.Uuid
+  course_id        String           @db.Uuid
+  title            String           @db.VarChar(255)
+  video_url        String?          @db.VarChar(500)
+  content_text     String?
+  display_order    Int
+  duration_minutes Int              @default(0)
+  created_at       DateTime         @default(now())
+  progress         CourseProgress[]
+  course           Course           @relation(fields: [course_id], references: [id])
+
+  @@index([course_id])
+  @@map("lessons")
+}
+
+model CourseProgress {
+  id           String    @id @default(uuid()) @db.Uuid
+  vendor_id    String    @db.Uuid
+  course_id    String    @db.Uuid
+  lesson_id    String    @db.Uuid
+  completed    Boolean   @default(false)
+  completed_at DateTime?
+  score        Int?
+  course       Course    @relation(fields: [course_id], references: [id])
+  lesson       Lesson    @relation(fields: [lesson_id], references: [id])
+  vendor       User      @relation(fields: [vendor_id], references: [id])
+
+  @@unique([vendor_id, lesson_id])
+  @@index([vendor_id, course_id])
+  @@index([course_id])
+  @@index([lesson_id])
+  @@map("course_progress")
+}
+
+model WebhookEvent {
+  id              String    @id @default(uuid()) @db.Uuid
+  client_id       String    @db.Uuid
+  event_type      String    @db.VarChar(50)
+  payload         Json
+  destination_url String    @db.VarChar(500)
+  http_status     Int?
+  retries         Int       @default(0)
+  max_retries     Int       @default(5)
+  next_retry_at   DateTime?
+  sent_at         DateTime?
+  created_at      DateTime  @default(now())
+  client          Client    @relation(fields: [client_id], references: [id])
+
+  @@index([client_id])
+  @@index([event_type])
+  @@index([next_retry_at])
+  @@map("webhook_events")
+}
+
+model FacebookAdAccount {
+  id            String                @id @default(uuid()) @db.Uuid
+  client_id     String                @db.Uuid
+  ad_account_id String                @db.VarChar(100)
+  access_token  String
+  page_id       String                @db.VarChar(100)
+  status        FacebookAccountStatus @default(active)
+  last_sync_at  DateTime?
+  created_at    DateTime              @default(now())
+  client        Client                @relation(fields: [client_id], references: [id])
+
+  @@index([client_id])
+  @@map("facebook_ad_accounts")
+}
+
+model MetaConnection {
+  id               String                     @id @default(uuid()) @db.Uuid
+  client_id        String                     @db.Uuid
+  business_id      String                     @db.VarChar(100)
+  business_name    String                     @db.VarChar(255)
+  access_token     String
+  token_expires_at DateTime?
+  scopes           String[]                   @default([])
+  status           MetaConnectionStatus       @default(pending)
+  oauth_state      String?                    @unique @db.VarChar(120)
+  last_sync_at     DateTime?
+  created_at       DateTime                   @default(now())
+  updated_at       DateTime                   @updatedAt
+  ad_sets          MetaAdSet[]
+  ads              MetaAd[]
+  selected_assets  MetaAssetSelection[]
+  campaigns        MetaCampaign[]
+  client           Client                     @relation(fields: [client_id], references: [id])
+  creatives        MetaCreative[]
+  daily_insights   MetaDailyInsight[]
+  lead_forms       MetaLeadForm[]
+  lead_imports     MetaLeadImport[]
+  sync_jobs        MetaSyncJob[]
+  whatsapp_events  WhatsAppAttributionEvent[]
+
+  @@unique([client_id, business_id])
+  @@index([client_id])
+  @@index([status])
+  @@map("meta_connections")
+}
+
+model MetaAssetSelection {
+  id                 String         @id @default(uuid()) @db.Uuid
+  meta_connection_id String         @db.Uuid
+  ad_account_id      String?        @db.VarChar(100)
+  ad_account_name    String?        @db.VarChar(255)
+  page_id            String?        @db.VarChar(100)
+  page_name          String?        @db.VarChar(255)
+  form_id            String?        @db.VarChar(100)
+  form_name          String?        @db.VarChar(255)
+  waba_id            String?        @db.VarChar(100)
+  phone_number_id    String?        @db.VarChar(100)
+  is_primary         Boolean        @default(false)
+  created_at         DateTime       @default(now())
+  updated_at         DateTime       @updatedAt
+  meta_connection    MetaConnection @relation(fields: [meta_connection_id], references: [id])
+
+  @@index([meta_connection_id])
+  @@map("meta_asset_selections")
+}
+
+model MetaCampaign {
+  id                 String         @id @default(uuid()) @db.Uuid
+  client_id          String         @db.Uuid
+  meta_connection_id String         @db.Uuid
+  meta_campaign_id   String         @db.VarChar(100)
+  name               String         @db.VarChar(255)
+  status             String?        @db.VarChar(50)
+  objective          String?        @db.VarChar(100)
+  daily_budget       Decimal?       @db.Decimal(12, 2)
+  lifetime_budget    Decimal?       @db.Decimal(12, 2)
+  start_time         DateTime?
+  stop_time          DateTime?
+  raw_payload        Json?
+  created_at         DateTime       @default(now())
+  updated_at         DateTime       @updatedAt
+  client             Client         @relation(fields: [client_id], references: [id])
+  meta_connection    MetaConnection @relation(fields: [meta_connection_id], references: [id])
+
+  @@unique([meta_connection_id, meta_campaign_id])
+  @@index([client_id])
+  @@index([meta_connection_id])
+  @@map("meta_campaigns")
+}
+
+model MetaAdSet {
+  id                 String         @id @default(uuid()) @db.Uuid
+  client_id          String         @db.Uuid
+  meta_connection_id String         @db.Uuid
+  meta_campaign_id   String?        @db.VarChar(100)
+  meta_ad_set_id     String         @db.VarChar(100)
+  name               String         @db.VarChar(255)
+  status             String?        @db.VarChar(50)
+  daily_budget       Decimal?       @db.Decimal(12, 2)
+  lifetime_budget    Decimal?       @db.Decimal(12, 2)
+  raw_payload        Json?
+  created_at         DateTime       @default(now())
+  updated_at         DateTime       @updatedAt
+  client             Client         @relation(fields: [client_id], references: [id])
+  meta_connection    MetaConnection @relation(fields: [meta_connection_id], references: [id])
+
+  @@unique([meta_connection_id, meta_ad_set_id])
+  @@index([client_id])
+  @@index([meta_connection_id])
+  @@map("meta_ad_sets")
+}
+
+model MetaAd {
+  id                 String         @id @default(uuid()) @db.Uuid
+  client_id          String         @db.Uuid
+  meta_connection_id String         @db.Uuid
+  meta_campaign_id   String?        @db.VarChar(100)
+  meta_ad_set_id     String?        @db.VarChar(100)
+  meta_ad_id         String         @db.VarChar(100)
+  meta_creative_id   String?        @db.VarChar(100)
+  name               String         @db.VarChar(255)
+  status             String?        @db.VarChar(50)
+  effective_status   String?        @db.VarChar(50)
+  raw_payload        Json?
+  created_at         DateTime       @default(now())
+  updated_at         DateTime       @updatedAt
+  client             Client         @relation(fields: [client_id], references: [id])
+  meta_connection    MetaConnection @relation(fields: [meta_connection_id], references: [id])
+
+  @@unique([meta_connection_id, meta_ad_id])
+  @@index([client_id])
+  @@index([meta_connection_id])
+  @@map("meta_ads")
+}
+
+model MetaCreative {
+  id                 String         @id @default(uuid()) @db.Uuid
+  client_id          String         @db.Uuid
+  meta_connection_id String         @db.Uuid
+  meta_creative_id   String         @db.VarChar(100)
+  name               String?        @db.VarChar(255)
+  title              String?        @db.VarChar(255)
+  body               String?
+  image_url          String?        @db.VarChar(500)
+  video_id           String?        @db.VarChar(100)
+  url_tags           String?
+  object_story_id    String?        @db.VarChar(100)
+  raw_payload        Json?
+  created_at         DateTime       @default(now())
+  updated_at         DateTime       @updatedAt
+  client             Client         @relation(fields: [client_id], references: [id])
+  meta_connection    MetaConnection @relation(fields: [meta_connection_id], references: [id])
+
+  @@unique([meta_connection_id, meta_creative_id])
+  @@index([client_id])
+  @@index([meta_connection_id])
+  @@map("meta_creatives")
+}
+
+model MetaLeadForm {
+  id                 String         @id @default(uuid()) @db.Uuid
+  client_id          String         @db.Uuid
+  meta_connection_id String         @db.Uuid
+  page_id            String?        @db.VarChar(100)
+  meta_form_id       String         @db.VarChar(100)
+  name               String         @db.VarChar(255)
+  status             String?        @db.VarChar(50)
+  questions_payload  Json?
+  raw_payload        Json?
+  created_at         DateTime       @default(now())
+  updated_at         DateTime       @updatedAt
+  client             Client         @relation(fields: [client_id], references: [id])
+  meta_connection    MetaConnection @relation(fields: [meta_connection_id], references: [id])
+
+  @@unique([meta_connection_id, meta_form_id])
+  @@index([client_id])
+  @@index([meta_connection_id])
+  @@map("meta_lead_forms")
+}
+
+model MetaLeadImport {
+  id                 String         @id @default(uuid()) @db.Uuid
+  client_id          String         @db.Uuid
+  meta_connection_id String         @db.Uuid
+  lead_id            String?        @db.Uuid
+  meta_lead_id       String         @db.VarChar(100)
+  meta_form_id       String?        @db.VarChar(100)
+  meta_campaign_id   String?        @db.VarChar(100)
+  meta_ad_set_id     String?        @db.VarChar(100)
+  meta_ad_id         String?        @db.VarChar(100)
+  meta_creative_id   String?        @db.VarChar(100)
+  utm_campaign       String?        @db.VarChar(255)
+  utm_content        String?        @db.VarChar(255)
+  utm_term           String?        @db.VarChar(255)
+  referral_context   String?        @db.VarChar(255)
+  raw_payload        Json?
+  imported_at        DateTime       @default(now())
+  client             Client         @relation(fields: [client_id], references: [id])
+  lead               Lead?          @relation(fields: [lead_id], references: [id])
+  meta_connection    MetaConnection @relation(fields: [meta_connection_id], references: [id])
+
+  @@unique([meta_connection_id, meta_lead_id])
+  @@index([client_id])
+  @@index([meta_connection_id])
+  @@index([lead_id])
+  @@map("meta_lead_imports")
+}
+
+model MetaDailyInsight {
+  id                 String         @id @default(uuid()) @db.Uuid
+  client_id          String         @db.Uuid
+  meta_connection_id String         @db.Uuid
+  level              String         @db.VarChar(20)
+  entity_id          String         @db.VarChar(100)
+  entity_name        String?        @db.VarChar(255)
+  date               DateTime
+  spend              Decimal?       @db.Decimal(12, 2)
+  impressions        Int?
+  clicks             Int?
+  cpc                Decimal?       @db.Decimal(12, 4)
+  ctr                Decimal?       @db.Decimal(12, 4)
+  leads              Int?
+  reach              Int?
+  frequency          Decimal?       @db.Decimal(12, 4)
+  raw_payload        Json?
+  created_at         DateTime       @default(now())
+  updated_at         DateTime       @updatedAt
+  client             Client         @relation(fields: [client_id], references: [id])
+  meta_connection    MetaConnection @relation(fields: [meta_connection_id], references: [id])
+
+  @@unique([meta_connection_id, level, entity_id, date])
+  @@index([client_id])
+  @@index([meta_connection_id])
+  @@map("meta_daily_insights")
+}
+
+model WhatsAppAttributionEvent {
+  id                 String          @id @default(uuid()) @db.Uuid
+  client_id          String          @db.Uuid
+  meta_connection_id String?         @db.Uuid
+  lead_id            String?         @db.Uuid
+  conversation_id    String?         @db.Uuid
+  meta_lead_id       String?         @db.VarChar(100)
+  ctwa_clid          String?         @db.VarChar(255)
+  meta_campaign_id   String?         @db.VarChar(100)
+  meta_ad_set_id     String?         @db.VarChar(100)
+  meta_ad_id         String?         @db.VarChar(100)
+  event_type         String          @db.VarChar(50)
+  event_value        Decimal?        @db.Decimal(12, 2)
+  occurred_at        DateTime
+  raw_payload        Json?
+  created_at         DateTime        @default(now())
+  client             Client          @relation(fields: [client_id], references: [id])
+  conversation       Conversation?   @relation(fields: [conversation_id], references: [id])
+  lead               Lead?           @relation(fields: [lead_id], references: [id])
+  meta_connection    MetaConnection? @relation(fields: [meta_connection_id], references: [id])
+
+  @@index([client_id])
+  @@index([meta_connection_id])
+  @@index([lead_id])
+  @@index([conversation_id])
+  @@index([event_type])
+  @@map("whatsapp_attribution_events")
+}
+
+model MetaSyncJob {
+  id                 String            @id @default(uuid()) @db.Uuid
+  client_id          String            @db.Uuid
+  meta_connection_id String?           @db.Uuid
+  job_type           String            @db.VarChar(50)
+  status             MetaSyncJobStatus @default(pending)
+  started_at         DateTime?
+  finished_at        DateTime?
+  error_message      String?
+  context            Json?
+  created_at         DateTime          @default(now())
+  updated_at         DateTime          @updatedAt
+  client             Client            @relation(fields: [client_id], references: [id])
+  meta_connection    MetaConnection?   @relation(fields: [meta_connection_id], references: [id])
+
+  @@index([client_id])
+  @@index([meta_connection_id])
+  @@index([status])
+  @@map("meta_sync_jobs")
+}
+
+model Appointment {
+  id                              String               @id @default(uuid()) @db.Uuid
+  client_id                       String               @db.Uuid
+  lead_id                         String               @db.Uuid
+  event_id                        String               @db.Uuid
+  conversation_id                 String?              @db.Uuid
+  scheduled_at                    DateTime
+  timezone                        String               @default("America/Sao_Paulo") @db.VarChar(80)
+  status                          AppointmentStatus    @default(scheduled)
+  channel                         AppointmentChannel   @default(whatsapp)
+  source                          AppointmentSource    @default(n8n_ai_agent)
+  created_by_type                 AppointmentActorType @default(external_agent)
+  created_by_id                   String?              @db.Uuid
+  confirmed_at                    DateTime?
+  cancelled_at                    DateTime?
+  completed_at                    DateTime?
+  no_show_at                      DateTime?
+  rescheduled_from_appointment_id String?              @db.Uuid
+  notes                           String?
+  metadata                        Json                 @default("{}")
+  created_at                      DateTime             @default(now())
+  updated_at                      DateTime             @updatedAt
+  client                          Client               @relation(fields: [client_id], references: [id])
+  conversation                    Conversation?        @relation(fields: [conversation_id], references: [id])
+  event                           Event                @relation(fields: [event_id], references: [id])
+  lead                            Lead                 @relation(fields: [lead_id], references: [id])
+  rescheduled_from                Appointment?         @relation("AppointmentRescheduleChain", fields: [rescheduled_from_appointment_id], references: [id])
+  rescheduled_to                  Appointment[]        @relation("AppointmentRescheduleChain")
+  sale                            Sale?
+  score_events                    ScoreEvent[]
+
+  @@index([client_id])
+  @@index([lead_id])
+  @@index([event_id])
+  @@index([conversation_id])
+  @@index([scheduled_at])
+  @@index([status])
+  @@index([rescheduled_from_appointment_id])
+  @@map("appointments")
+}
+
+model Sale {
+  id             String       @id @default(uuid()) @db.Uuid
+  client_id      String       @db.Uuid
+  lead_id        String       @db.Uuid
+  appointment_id String       @unique @db.Uuid
+  vendor_id      String       @db.Uuid
+  type           SaleType
+  model          String       @db.VarChar(255)
+  value          Decimal      @db.Decimal(12, 2)
+  sold_at        DateTime     @default(now())
+  notes          String?
+  created_at     DateTime     @default(now())
+  updated_at     DateTime     @updatedAt
+  team_id        String?      @db.Uuid
+  appointment    Appointment  @relation(fields: [appointment_id], references: [id], onDelete: Cascade)
+  client         Client       @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  lead           Lead         @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+  sales_team     SalesTeam?   @relation(fields: [team_id], references: [id])
+  vendor         User         @relation("VendorSales", fields: [vendor_id], references: [id])
+  score_events   ScoreEvent[]
+
+  @@index([client_id])
+  @@index([lead_id])
+  @@index([team_id])
+  @@index([vendor_id])
+  @@index([sold_at])
+  @@map("sales")
+}
+
+model ScoreEvent {
+  id             String         @id @default(uuid()) @db.Uuid
+  client_id      String         @db.Uuid
+  vendor_id      String         @db.Uuid
+  lead_id        String         @db.Uuid
+  appointment_id String?        @db.Uuid
+  sale_id        String?        @db.Uuid
+  kind           ScoreEventKind
+  points         Int
+  earned_at      DateTime       @default(now())
+  created_at     DateTime       @default(now())
+  appointment    Appointment?   @relation(fields: [appointment_id], references: [id], onDelete: Cascade)
+  client         Client         @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  lead           Lead           @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+  sale           Sale?          @relation(fields: [sale_id], references: [id], onDelete: Cascade)
+  vendor         User           @relation("VendorScoreEvents", fields: [vendor_id], references: [id])
+
+  @@unique([appointment_id, kind])
+  @@unique([client_id, vendor_id, lead_id, kind])
+  @@index([client_id])
+  @@index([vendor_id])
+  @@index([lead_id])
+  @@index([sale_id])
+  @@index([earned_at])
+  @@index([client_id, earned_at(sort: Desc)], map: "idx_score_events_client_earned_at")
+  @@index([client_id, vendor_id, kind], map: "idx_score_events_client_vendor_kind")
+  @@map("score_events")
+}
+
+model ConversationState {
+  id                    String       @id @default(uuid()) @db.Uuid
+  conversation_id       String       @unique @db.Uuid
+  client_id             String       @db.Uuid
+  lead_id               String       @db.Uuid
+  current_intent        String?      @db.VarChar(120)
+  awaiting_confirmation Boolean      @default(false)
+  last_offered_event_id String?      @db.Uuid
+  last_offered_slot     DateTime?
+  last_agent_action     String?      @db.VarChar(120)
+  handoff_required      Boolean      @default(false)
+  handoff_reason        String?
+  state_payload         Json         @default("{}")
+  created_at            DateTime     @default(now())
+  updated_at            DateTime     @updatedAt
+  client                Client       @relation(fields: [client_id], references: [id])
+  conversation          Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  last_offered_event    Event?       @relation("ConversationStateLastOfferedEvent", fields: [last_offered_event_id], references: [id])
+  lead                  Lead         @relation(fields: [lead_id], references: [id])
+
+  @@index([client_id])
+  @@index([lead_id])
+  @@index([last_offered_event_id])
+  @@index([updated_at])
+  @@map("conversation_states")
+}
+
+model AgentActionLog {
+  id              String       @id @default(uuid()) @db.Uuid
+  client_id       String       @db.Uuid
+  lead_id         String       @db.Uuid
+  conversation_id String       @db.Uuid
+  provider        String?      @db.VarChar(80)
+  model           String?      @db.VarChar(120)
+  trigger_type    String       @db.VarChar(80)
+  decision_type   String       @db.VarChar(80)
+  confidence      Float?
+  input_summary   String?
+  output_summary  String?
+  action_payload  Json         @default("{}")
+  result_status   String       @db.VarChar(80)
+  error_message   String?
+  created_at      DateTime     @default(now())
+  client          Client       @relation(fields: [client_id], references: [id])
+  conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  lead            Lead         @relation(fields: [lead_id], references: [id])
+
+  @@index([client_id])
+  @@index([lead_id])
+  @@index([conversation_id, created_at])
+  @@index([decision_type])
+  @@index([result_status])
+  @@index([created_at])
+  @@map("agent_action_logs")
+}
+
+model ApiIdempotencyRequest {
+  id              String   @id @default(uuid()) @db.Uuid
+  client_id       String   @db.Uuid
+  endpoint        String   @db.VarChar(120)
+  idempotency_key String   @db.VarChar(120)
+  request_hash    String   @db.VarChar(64)
+  response        Json?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  client          Client   @relation(fields: [client_id], references: [id])
+
+  @@unique([client_id, endpoint, idempotency_key])
+  @@index([created_at])
+  @@map("api_idempotency_requests")
+}
+
+model SalesTeam {
+  id         String            @id @default(uuid()) @db.Uuid
+  client_id  String            @db.Uuid
+  name       String            @db.VarChar(255)
+  created_at DateTime          @default(now())
+  updated_at DateTime          @updatedAt
+  event_id   String?           @db.Uuid
+  logo_url   String?
+  leads      Lead[]
+  sales      Sale[]
+  members    SalesTeamMember[]
+  client     Client            @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  event      Event?            @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@index([client_id])
+  @@index([event_id])
+  @@map("sales_teams")
+}
+
+model SalesTeamMember {
+  team_id  String    @db.Uuid
+  user_id  String    @db.Uuid
+  added_at DateTime  @default(now())
+  team     SalesTeam @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([team_id, user_id])
+  @@index([user_id])
+  @@map("sales_team_members")
+}
+
+model RubinhoAgent {
+  id            String                 @id @default(uuid()) @db.Uuid
+  client_id     String                 @db.Uuid
+  name          String                 @db.VarChar(255)
+  status        Boolean                @default(true)
+  prompt        String
+  tone          String                 @default("Amigável") @db.VarChar(100)
+  delay_minutes Int                    @default(5)
+  created_at    DateTime               @default(now())
+  updated_at    DateTime               @updatedAt
+  documents     RubinhoAgentDocument[]
+  events        RubinhoAgentEvent[]
+  faqs          RubinhoAgentFaq[]
+  client        Client                 @relation(fields: [client_id], references: [id], onDelete: Cascade)
+
+  @@index([client_id])
+  @@map("rubinho_agents")
+}
+
+model RubinhoAgentEvent {
+  id               String       @id @default(uuid()) @db.Uuid
+  rubinho_agent_id String       @db.Uuid
+  event_id         String       @db.Uuid
+  created_at       DateTime     @default(now())
+  event            Event        @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  rubinho_agent    RubinhoAgent @relation(fields: [rubinho_agent_id], references: [id], onDelete: Cascade)
+
+  @@unique([rubinho_agent_id, event_id])
+  @@index([rubinho_agent_id])
+  @@index([event_id])
+  @@map("rubinho_agent_events")
+}
+
+model RubinhoAgentFaq {
+  id               String       @id @default(uuid()) @db.Uuid
+  rubinho_agent_id String       @db.Uuid
+  question         String
+  answer           String
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
+  rubinho_agent    RubinhoAgent @relation(fields: [rubinho_agent_id], references: [id], onDelete: Cascade)
+
+  @@index([rubinho_agent_id])
+  @@map("rubinho_agent_faqs")
+}
+
+model RubinhoAgentDocument {
+  id               String       @id @default(uuid()) @db.Uuid
+  rubinho_agent_id String       @db.Uuid
+  title            String       @db.VarChar(255)
+  content          String
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
+  rubinho_agent    RubinhoAgent @relation(fields: [rubinho_agent_id], references: [id], onDelete: Cascade)
+
+  @@index([rubinho_agent_id])
+  @@map("rubinho_agent_documents")
+}
+
+model Vehicle {
+  id                 String   @id @default(uuid()) @db.Uuid
+  client_id          String   @db.Uuid
+  brand              String   @db.VarChar(100)
+  model              String   @db.VarChar(150)
+  year_or_km         String   @db.VarChar(50)
+  price              String   @db.VarChar(100)
+  stores             String
+  status             Boolean  @default(true)
+  tags               String[] @default([])
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+  image_url          String?
+  gallery            String[] @default([])
+  category           String?  @db.VarChar(100)
+  condition          String?  @db.VarChar(50)
+  manufacturing_year String?  @db.VarChar(10)
+  model_year         String?  @db.VarChar(10)
+  km                 String?  @db.VarChar(50)
+  client             Client   @relation(fields: [client_id], references: [id], onDelete: Cascade)
+
+  @@index([client_id])
+  @@map("vehicles")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model leads_bitrix24 {
+  contact_id         BigInt
+  deal_id            BigInt
+  event_id           BigInt
+  nome               String?
+  sobrenome          String?
+  telefone           String?
+  email              String?
+  etapa              String?
+  rubinho_atendeu    Boolean?
+  quantidade_pessoas Int?
+  nome_acompanhantes String?
+  dia_escolhido      String?
+  carro_na_troca     Boolean?
+  placa              String?
+  modelo             String?
+  ano                Int?
+  status_agendamento String?
+  created_at         DateTime @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime @default(now()) @db.Timestamptz(6)
+  agendou            Boolean?
+  opt_out            Boolean?
+  etapa_nome         String?
+
+  @@id([contact_id, deal_id, event_id])
+}
+
+enum Role {
+  gestor
+  cliente
+  vendedor
+  recepcao
+}
+
+enum VendorCategory {
+  novo
+  semininovo
+  pdc
+  consorcio
+  assinatura
+}
+
+enum LeadSource {
+  facebook_ads
+  form_page
+  whatsapp
+  import_excel
+  manual
+}
+
+enum ConfirmationStatus {
+  pending
+  scheduled
+  confirmed
+  cancelled
+  checked_in
+  closed
+}
+
+enum EventStatus {
+  draft
+  active
+  completed
+  cancelled
+}
+
+enum AppointmentStatus {
+  proposed
+  scheduled
+  confirmed
+  cancelled
+  completed
+  no_show
+  rescheduled
+}
+
+enum AppointmentChannel {
+  whatsapp
+  internal
+  manual
+}
+
+enum AppointmentSource {
+  n8n_ai_agent
+  gestor
+  cliente
+  vendedor
+  recepcao
+  system
+}
+
+enum AppointmentActorType {
+  user
+  system
+  external_agent
+}
+
+enum DistributionMethod {
+  round_robin
+  weighted
+  manual
+}
+
+enum CampaignStatus {
+  draft
+  active
+  paused
+  completed
+}
+
+enum ConversationChannel {
+  whatsapp
+  internal
+}
+
+enum SenderType {
+  system
+  user
+  lead
+}
+
+enum FacebookAccountStatus {
+  active
+  expired
+  disconnected
+}
+
+enum MetaConnectionStatus {
+  pending
+  connected
+  expired
+  disconnected
+}
+
+enum MetaSyncJobStatus {
+  pending
+  running
+  completed
+  failed
+}
+
+enum SaleType {
+  NOVO
+  SEMINOVO
+  VENDA_DIRETA
+  PCD
+}
+
+enum ScoreEventKind {
+  scheduled
+  checked_in
+  sold
+  contacted
+}
+
+enum LeadTimelineEventType {
+  created
+  stage_moved
+  status_changed
+  assigned
+  unassigned
+  tag_added
+  tag_removed
+  note
+  message
+}
+
+enum LeadTimelineOrigin {
+  crm
+  whatsapp
+  vendor
+  gestor
+  automation
+  integration
+  n8n
+  system
+}

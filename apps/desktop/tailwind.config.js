@@ -1,0 +1,65 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  darkMode: 'class',
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  theme: {
+    extend: {
+      colors: {
+        ink: '#0b0b0b',
+        paper: '#f4f1ea',
+        surface: '#ffffff',
+        lime: {
+          50: '#f7fde0',
+          100: '#eefbc0',
+          200: '#e0f79a',
+          300: '#c8f04a',
+          400: '#b6e132',
+          500: '#97bc24',
+          600: '#76961d',
+          700: '#5d7419',
+          800: '#475915',
+          900: '#303b10',
+        },
+        /** Sobrescreve tons centrais de `blue` para a cor principal do produto (botões bg-blue-500, hover/active, rings). */
+        blue: {
+          300: '#f5aab8',
+          400: '#ed6b82',
+          500: 'rgb(229 24 56)',
+          600: 'rgb(200 21 49)',
+          700: 'rgb(165 17 41)',
+        },
+        /** Ponte para os tokens shadcn/ui (definidos como CSS vars em src/index.css). */
+        background: 'var(--background)',
+        foreground: 'var(--foreground)',
+        card: { DEFAULT: 'var(--card)', foreground: 'var(--card-foreground)' },
+        popover: { DEFAULT: 'var(--popover)', foreground: 'var(--popover-foreground)' },
+        primary: { DEFAULT: 'var(--primary)', foreground: 'var(--primary-foreground)' },
+        secondary: { DEFAULT: 'var(--secondary)', foreground: 'var(--secondary-foreground)' },
+        muted: { DEFAULT: 'var(--muted)', foreground: 'var(--muted-foreground)' },
+        accent: { DEFAULT: 'var(--accent)', foreground: 'var(--accent-foreground)' },
+        destructive: 'var(--destructive)',
+        border: 'var(--border)',
+        input: 'var(--input)',
+        ring: 'var(--ring)',
+        chart: {
+          1: 'var(--chart-1)',
+          2: 'var(--chart-2)',
+          3: 'var(--chart-3)',
+          4: 'var(--chart-4)',
+          5: 'var(--chart-5)',
+        },
+        sidebar: {
+          DEFAULT: 'var(--sidebar)',
+          foreground: 'var(--sidebar-foreground)',
+          primary: 'var(--sidebar-primary)',
+          'primary-foreground': 'var(--sidebar-primary-foreground)',
+          accent: 'var(--sidebar-accent)',
+          'accent-foreground': 'var(--sidebar-accent-foreground)',
+          border: 'var(--sidebar-border)',
+          ring: 'var(--sidebar-ring)',
+        },
+      },
+    },
+  },
+  plugins: [],
+};

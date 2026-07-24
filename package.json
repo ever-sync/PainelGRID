@@ -1,0 +1,49 @@
+{
+  "name": "leadflow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PainelGRID — Plataforma SaaS de gestão de leads, eventos e vendas",
+  "author": "EverSync",
+  "license": "UNLICENSED",
+  "packageManager": "npm@10.8.2",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/api",
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:desktop": "npm run dev --workspace=apps/desktop",
+    "dev:full": "concurrently -k -n api,web -c blue,magenta \"npm run dev:api\" \"npm run dev:desktop\"",
+    "mobile:build": "npm run mobile:build --workspace=apps/desktop",
+    "mobile:ios": "npm run cap:open:ios --workspace=apps/desktop",
+    "mobile:android": "npm run cap:open:android --workspace=apps/desktop",
+    "build": "npm run build --workspace=apps/api && node scripts/vercel-bundle-api.cjs",
+    "start": "npm run start --workspace=apps/api",
+    "lint": "npm run lint --workspaces --if-present",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "db:migrate": "npm run db:migrate --workspace=apps/api",
+    "db:migrate:deploy": "npm run db:migrate:prod --workspace=apps/api",
+    "db:generate": "npm run db:generate --workspace=apps/api",
+    "db:seed": "npm run db:seed --workspace=apps/api",
+    "db:studio": "npm run db:studio --workspace=apps/api",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "test": "npm run test --workspace=apps/api",
+    "test:integration": "npm run test:integration --workspace=apps/api",
+    "test:e2e": "npm run test:e2e --workspace=apps/api",
+    "test:e2e:ui": "playwright test -c e2e/playwright.config.ts"
+  },
+  "overrides": {
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

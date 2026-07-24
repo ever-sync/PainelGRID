@@ -1,0 +1,429 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&display=swap');
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    @apply border-border outline-ring;
+  }
+
+  html {
+    font-family: 'Manrope', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+      'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: #fafafa;
+    @apply font-sans;
+  }
+
+  body,
+  #root {
+    min-height: 100vh;
+  }
+
+  body {
+    @apply text-foreground;
+    background: #fafafa;
+  }
+
+  /* Evita zoom automático no iOS ao focar campos */
+  @media (max-width: 768px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+
+  ::selection {
+    background: rgba(200, 240, 74, 0.55);
+    color: #0b0b0b;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-200 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-300;
+  }
+  .theme {
+    --font-heading: var(--font-sans);
+    --font-sans: 'Inter Variable', sans-serif;
+  }
+  :root {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --radius: 0.625rem;
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.145 0 0);
+    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-accent-foreground: oklch(0.205 0 0);
+    --sidebar-border: oklch(0.922 0 0);
+    --sidebar-ring: oklch(0.708 0 0);
+  }
+  .dark {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
+  }
+}
+
+@layer utilities {
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+@layer components {
+  body.dashboard-dark-active {
+    background: #000 !important;
+  }
+
+  body.dashboard-dark-active #root {
+    background: #000 !important;
+  }
+
+  body.dashboard-dark-active .app-layout-root {
+    background: #000 !important;
+  }
+
+  .dashboard-dark {
+    background-color: #000 !important;
+    color: #e4e4e7;
+  }
+
+  .dashboard-dark .card-surface {
+    background: rgba(24, 24, 27, 0.94) !important;
+    border-color: rgba(63, 63, 70, 0.85) !important;
+    box-shadow: 0 18px 40px rgba(2, 6, 23, 0.45) !important;
+  }
+
+  .dashboard-dark .text-zinc-950,
+  .dashboard-dark .text-zinc-900 {
+    color: #f4f4f5 !important;
+  }
+
+  .dashboard-dark .text-zinc-700,
+  .dashboard-dark .text-zinc-600 {
+    color: #d4d4d8 !important;
+  }
+
+  .dashboard-dark .text-zinc-500,
+  .dashboard-dark .text-zinc-400 {
+    color: #a1a1aa !important;
+  }
+
+  .dashboard-dark .bg-zinc-50 {
+    background-color: #27272a !important;
+  }
+
+  .dashboard-dark .bg-zinc-100 {
+    background-color: #3f3f46 !important;
+  }
+
+  .dashboard-dark .border-zinc-100,
+  .dashboard-dark .border-zinc-200 {
+    border-color: #3f3f46 !important;
+  }
+
+  .dashboard-dark input,
+  .dashboard-dark select {
+    background-color: #18181b !important;
+    color: #f4f4f5 !important;
+    border-color: #3f3f46 !important;
+  }
+
+  /* Texto dos gráficos Recharts dentro de páginas com dashboard-dark */
+  .dashboard-dark .recharts-cartesian-axis-tick-value {
+    fill: #a1a1aa !important;
+  }
+
+  .dashboard-dark .recharts-pie-sector .recharts-text,
+  .dashboard-dark .recharts-polar-angle-axis-tick-value {
+    fill: #e4e4e7 !important;
+  }
+
+  .report-dark .report-card,
+  .report-dark .report-panel,
+  .report-dark .report-table {
+    background: #111111 !important;
+    border-color: #3f3f46 !important;
+    box-shadow: 0 18px 40px rgba(2, 6, 23, 0.45) !important;
+  }
+
+  .report-dark [class*='bg-[#fbf7f2]'] {
+    background-color: #181818 !important;
+  }
+
+  .report-dark [class*='border-[#eadfce]'],
+  .report-dark [class*='border-[#f0e7db]'] {
+    border-color: #2a2a2a !important;
+  }
+
+  .report-dark [class*='bg-[#f3eee6]'] {
+    background-color: #1f1f1f !important;
+  }
+
+  .report-dark [class*='bg-[#e9ecfb]'] {
+    background-color: rgba(61, 86, 162, 0.22) !important;
+    color: #a5b4fc !important;
+  }
+
+  .cliente-detail-dark {
+    background: #000 !important;
+    color: #e4e4e7;
+  }
+
+  .cliente-detail-dark .text-gray-900,
+  .cliente-detail-dark .text-gray-800 {
+    color: #f4f4f5 !important;
+  }
+
+  .cliente-detail-dark .text-gray-700,
+  .cliente-detail-dark .text-gray-600 {
+    color: #d4d4d8 !important;
+  }
+
+  .cliente-detail-dark .text-gray-500,
+  .cliente-detail-dark .text-gray-400,
+  .cliente-detail-dark .text-gray-300 {
+    color: #a1a1aa !important;
+  }
+
+  .cliente-detail-dark .border-gray-50,
+  .cliente-detail-dark .border-gray-100,
+  .cliente-detail-dark .border-gray-200,
+  .cliente-detail-dark .border-gray-300 {
+    border-color: #2f2f33 !important;
+  }
+
+  .cliente-detail-dark .bg-gray-50,
+  .cliente-detail-dark .bg-gray-100 {
+    background-color: #171717 !important;
+  }
+
+  .cliente-detail-dark [class*='bg-white'],
+  .cliente-detail-dark [class*='bg-[#fcfbf8]'],
+  .cliente-detail-dark [class*='bg-[#fffaf2]'],
+  .cliente-detail-dark [class*='bg-[#fff7ea]'],
+  .cliente-detail-dark [class*='bg-[#fffaf4]'],
+  .cliente-detail-dark [class*='bg-[#fff4e7]'],
+  .cliente-detail-dark [class*='bg-[linear-gradient(135deg,rgba(255,249,240,0.98),rgba(255,255,255,0.96))]'] {
+    background: #111111 !important;
+  }
+
+  .cliente-detail-dark [class*='border-white'],
+  .cliente-detail-dark [class*='border-[#eadfce]'],
+  .cliente-detail-dark [class*='border-[#eadfcb]'],
+  .cliente-detail-dark [class*='border-[#f1dfc6]'],
+  .cliente-detail-dark [class*='border-[#f0d2a8]'],
+  .cliente-detail-dark [class*='border-[#f1e6d8]'],
+  .cliente-detail-dark [class*='border-[#f0e4d4]'] {
+    border-color: #2f2f33 !important;
+  }
+
+  .cliente-detail-dark [class*='border-dashed'] {
+    border-color: #3f3f46 !important;
+  }
+
+  .cliente-detail-dark input,
+  .cliente-detail-dark select,
+  .cliente-detail-dark textarea {
+    background-color: #161616 !important;
+    color: #f4f4f5 !important;
+    border-color: #3f3f46 !important;
+  }
+
+  .cliente-detail-dark .hover\:bg-gray-50:hover,
+  .cliente-detail-dark .hover\:bg-gray-50\/60:hover,
+  .cliente-detail-dark .hover\:bg-gray-100:hover {
+    background-color: #1f1f1f !important;
+  }
+
+  .cliente-detail-dark .hover\:bg-blue-50\/40:hover {
+    background-color: rgba(59, 130, 246, 0.14) !important;
+  }
+
+  .cliente-detail-dark .bg-blue-100.text-blue-700 {
+    background-color: rgba(59, 130, 246, 0.22) !important;
+    color: #93c5fd !important;
+  }
+
+  @keyframes leadRowEnter {
+    0% {
+      opacity: 0;
+      transform: translate3d(0, 14px, 0) scale(0.995);
+    }
+    100% {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+  }
+
+  @keyframes leadRowNew {
+    0% {
+      opacity: 0.85;
+      transform: translate3d(0, 6px, 0);
+      background-color: rgba(74, 222, 128, 0.07);
+    }
+    55% {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+      background-color: rgba(74, 222, 128, 0.03);
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
+
+  @keyframes leadRowStageChange {
+    0% {
+      box-shadow: inset 0 0 0 rgba(0, 0, 0, 0);
+    }
+    20% {
+      box-shadow: inset 2px 0 0 rgba(251, 191, 36, 0.45);
+      background:
+        linear-gradient(90deg, rgba(251, 191, 36, 0.06), rgba(251, 191, 36, 0)),
+        transparent;
+    }
+    100% {
+      box-shadow: inset 0 0 0 rgba(0, 0, 0, 0);
+      background: transparent;
+    }
+  }
+
+  @keyframes leadRowUpdate {
+    0% {
+      background-color: rgba(96, 165, 250, 0.06);
+    }
+    60% {
+      background-color: rgba(96, 165, 250, 0.02);
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
+
+  .lead-row-motion {
+    animation: leadRowEnter 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    will-change: transform, opacity;
+  }
+
+  .lead-row-no-phone td {
+    background-image: linear-gradient(90deg, rgba(245, 158, 11, 0.045), transparent 28%);
+  }
+
+  .cliente-detail-dark .lead-row-no-phone td {
+    background-image: linear-gradient(90deg, rgba(245, 158, 11, 0.09), transparent 34%);
+  }
+
+  .lead-row-live-new {
+    animation: leadRowNew 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .lead-row-live-stage {
+    animation: leadRowStageChange 300ms ease-out;
+  }
+
+  .lead-row-live-update {
+    animation: leadRowUpdate 300ms ease-out;
+  }
+
+  /* Entrada escalonada dos cards do Kanban (sensação de board sendo organizado).
+     Usa `translate` (não `transform`) para não conflitar com o dnd-kit. */
+  @keyframes crmCardEnter {
+    from {
+      opacity: 0;
+      translate: 0 8px;
+    }
+    to {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+
+  .crm-card-enter {
+    animation: crmCardEnter 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lead-row-motion,
+    .lead-row-live-new,
+    .lead-row-live-stage,
+    .lead-row-live-update,
+    .crm-card-enter {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+}

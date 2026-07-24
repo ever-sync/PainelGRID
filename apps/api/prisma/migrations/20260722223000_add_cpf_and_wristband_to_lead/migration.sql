@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "leads" ADD COLUMN IF NOT EXISTS "cpf" VARCHAR(20),
+ADD COLUMN IF NOT EXISTS "wristband_number" VARCHAR(50);

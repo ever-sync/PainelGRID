@@ -1,0 +1,41 @@
+Rodar o stack local (API + Postgres + Redis + Desktop)
+=======================================================
+
+1) Banco e Redis (Docker)
+   docker compose up -d
+
+2) Variaveis
+   Na raiz do repo: copie .env.example para .env (se ainda nao existir).
+   Ajuste DATABASE_URL e REDIS_URL para localhost como no exemplo.
+
+3) Migracoes
+   npm run db:migrate:deploy
+
+4) Dados de teste (opcional)
+   npm run db:seed
+
+5) Porta 3000 livre
+   Se `npm run dev` der EADDRINUSE na 3000:
+   lsof -i :3000
+   kill <PID>
+   (ou feche o outro terminal que ja rodava a API.)
+
+6) Subir tudo de uma vez
+   npm run dev:full
+   - API: http://localhost:3000/api
+   - Front: http://localhost:5173  (proxy /api -> 3000)
+
+   OU em dois terminais:
+   npm run dev          (so API)
+   npm run dev:desktop  (so Vite)
+
+7) Login demo (apos seed)
+   gestor@leadflow.com / Leadflow@2026
+
+8) Conectar Meta (OAuth) — opcional
+   Sem app na Meta Developers, o botao de conectar retorna 503 com mensagem clara.
+   No .env defina pelo menos:
+   FACEBOOK_APP_ID=...   (ou META_APP_ID)
+   FACEBOOK_APP_SECRET=... (ou META_APP_SECRET)
+   Em dev, o redirect padrao e http://localhost:3000/api/meta/connect/callback/window
+   (cadastre essa URL no app Meta → OAuth redirects).

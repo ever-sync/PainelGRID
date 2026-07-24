@@ -1,0 +1,13 @@
+{
+    "parameters": {
+        "jsCode": "const etapaData = $('Consultar - ETAPA').item.json;\nconst eventoData = $('Consultar - EVENTO').item.json;\nconst rubinhoData = $('Consultar - RUBINHO').item.json;\n\nconst lead = (etapaData.items && etapaData.items[0]) ? etapaData.items[0] : (Array.isArray(etapaData) ? etapaData[0] : etapaData);\nconst event = Array.isArray(eventoData) ? eventoData[0] : eventoData;\nconst rubinho = Array.isArray(rubinhoData) ? rubinhoData[0] : rubinhoData;\n\nreturn {\n  lead: {\n    id: lead.id || null,\n    name: lead.name || null,\n    phone: lead.phone || null,\n    source: lead.source || null,\n    client_id: lead.client_id || null,\n    crm_stage_code: lead.crm_stage_code || null,\n    crm_stage_name: lead.crm_stage_name || null,\n    confirmation_status: lead.confirmation_status || null,\n    handoff_required: lead.handoff_required ?? false,\n    conversation_id: lead.conversation_id || null\n  },\n  event: {\n    id: event.id || null,\n    name: event.name || null,\n    event_type: event.event_type || null,\n    event_date: event.event_date || null,\n    location: event.location || null,\n    status: event.status || null\n  },\n  rubinho: {\n    agent_id: rubinho.agent_id || null,\n    name: rubinho.name || null,\n    tone: rubinho.tone || null,\n    delay_minutes: rubinho.delay_minutes || null,\n    system_prompt: rubinho.system_prompt || null\n  }\n};"
+    },
+    "id": "merge-lead-event-rubinho-code",
+    "name": "RESUMO DO LEAD/EVENTO/RUBINHO",
+    "type": "n8n-nodes-base.code",
+    "typeVersion": 2,
+    "position": [
+        800,
+        300
+    ]
+}

@@ -1,0 +1,16 @@
+{
+  "short_name": "GRID Recepção",
+  "name": "GRID Recepção - Check-in",
+  "icons": [
+    {
+      "src": "/logo-Dd199j6p.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/recepcao/check-in",
+  "background_color": "#09090b",
+  "theme_color": "#e51838",
+  "display": "standalone",
+  "orientation": "portrait"
+}

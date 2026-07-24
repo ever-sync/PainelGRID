@@ -1,0 +1,199 @@
+import { Injectable } from '@nestjs/common';
+import { ScoreEventKind } from '@prisma/client';
+import { PrismaService } from '../../config/prisma.service';
+
+const SCORE_POINTS: Record<ScoreEventKind, number> = {
+  contacted: 1,
+  scheduled: 2,
+  checked_in: 3,
+  sold: 7,
+};
+
+type ScoreTx = {
+  scoreEvent: PrismaService['scoreEvent'];
+};
+
+export type ScoreEventInput = {
+  client_id: string;
+  vendor_id: string;
+  lead_id: string;
+  appointment_id?: string | null;
+  sale_id?: string | null;
+  kind: ScoreEventKind;
+  earned_at?: Date;
+};
+
+export type VendorScoreRankingItem = {
+  vendor_id: string;
+  vendor_name: string;
+  total_points: number;
+  assigned: number;
+  visits: number;
+  sales: number;
+  contacted: { points: number; count: number };
+  scheduled: { points: number; count: number };
+  checked_in: { points: number; count: number };
+  sold: { points: number; count: number };
+};
+
+@Injectable()
+export class ScoreEventsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async award(input: ScoreEventInput) {
+    return this.awardWithTx(this.prisma, input);
+  }
+
+  async awardWithTx(tx: ScoreTx, input: ScoreEventInput) {
+    return tx.scoreEvent.upsert({
+      where: {
+        client_id_vendor_id_lead_id_kind: {
+          client_id: input.client_id,
+          vendor_id: input.vendor_id,
+          lead_id: input.lead_id,
+          kind: input.kind,
+        },
+      },
+      create: {
+        client_id: input.client_id,
+        vendor_id: input.vendor_id,
+        lead_id: input.lead_id,
+        appointment_id: input.appointment_id ?? null,
+        sale_id: input.sale_id ?? null,
+        kind: input.kind,
+        points: SCORE_POINTS[input.kind],
+        earned_at: input.earned_at ?? new Date(),
+      },
+      update: {
+        sale_id: input.sale_id ?? undefined,
+      },
+    });
+  }
+
+  async summaryForVendor(vendorId: string, clientId: string) {
+    const rows = await this.prisma.scoreEvent.groupBy({
+      by: ['kind'],
+      where: { vendor_id: vendorId, client_id: clientId },
+      _sum: { points: true },
+      _count: { _all: true },
+    });
+
+    const byKind = {
+      contacted: { points: 0, count: 0 },
+      scheduled: { points: 0, count: 0 },
+      checked_in: { points: 0, count: 0 },
+      sold: { points: 0, count: 0 },
+    };
+
+    rows.forEach((row) => {
+      byKind[row.kind] = {
+        points: row._sum.points ?? 0,
+        count: row._count._all,
+      };
+    });
+
+    return {
+      vendor_id: vendorId,
+      client_id: clientId,
+      total_points:
+        byKind.contacted.points +
+        byKind.scheduled.points +
+        byKind.checked_in.points +
+        byKind.sold.points,
+      contacted: byKind.contacted,
+      scheduled: byKind.scheduled,
+      checked_in: byKind.checked_in,
+      sold: byKind.sold,
+    };
+  }
+
+  async rankingForClient(params: {
+    clientId: string;
+    eventId?: string;
+    from?: Date;
+    to?: Date;
+    limit?: number;
+  }): Promise<VendorScoreRankingItem[]> {
+    const groupedRows = await this.prisma.scoreEvent.groupBy({
+      by: ['vendor_id', 'kind'],
+      where: {
+        client_id: params.clientId,
+        ...(params.eventId
+          ? {
+              appointment: {
+                event_id: params.eventId,
+              },
+            }
+          : {}),
+        earned_at: {
+          gte: params.from,
+          lte: params.to,
+        },
+      },
+      _sum: { points: true },
+      _count: { _all: true },
+    });
+
+    if (groupedRows.length === 0) return [];
+
+    const vendorIds = Array.from(new Set(groupedRows.map((row) => row.vendor_id)));
+    const [vendors, assignedCounts] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { id: { in: vendorIds } },
+        select: { id: true, name: true },
+      }),
+      this.prisma.lead.groupBy({
+        by: ['assigned_vendor_id'],
+        where: {
+          client_id: params.clientId,
+          deleted_at: null,
+          ...(params.eventId ? { event_interest_id: params.eventId } : {}),
+          assigned_vendor_id: { in: vendorIds },
+        },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const vendorNameById = new Map(vendors.map((vendor) => [vendor.id, vendor.name] as const));
+    const assignedByVendorId = new Map(
+      assignedCounts
+        .filter((row) => !!row.assigned_vendor_id)
+        .map((row) => [row.assigned_vendor_id as string, row._count._all] as const),
+    );
+
+    const byVendor = new Map<string, VendorScoreRankingItem>();
+    groupedRows.forEach((row) => {
+      const current = byVendor.get(row.vendor_id) ?? {
+        vendor_id: row.vendor_id,
+        vendor_name: vendorNameById.get(row.vendor_id) ?? 'Vendedor',
+        total_points: 0,
+        assigned: assignedByVendorId.get(row.vendor_id) ?? 0,
+        visits: 0,
+        sales: 0,
+        contacted: { points: 0, count: 0 },
+        scheduled: { points: 0, count: 0 },
+        checked_in: { points: 0, count: 0 },
+        sold: { points: 0, count: 0 },
+      };
+      const points = row._sum.points ?? 0;
+      const count = row._count._all;
+      current[row.kind].points = points;
+      current[row.kind].count = count;
+      current.total_points += points;
+      current.visits = current.checked_in.count;
+      current.sales = current.sold.count;
+      byVendor.set(row.vendor_id, current);
+    });
+
+    const ranking = Array.from(byVendor.values()).sort(
+      (a, b) =>
+        b.total_points - a.total_points ||
+        b.sold.count - a.sold.count ||
+        b.checked_in.count - a.checked_in.count ||
+        a.vendor_name.localeCompare(b.vendor_name),
+    );
+
+    const limit = params.limit ?? 20;
+    return ranking.slice(0, limit);
+  }
+}
