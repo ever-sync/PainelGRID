@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
-import { BullModule } from '@nestjs/bull';
+import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule } from '@nestjs/config';
-import Redis from 'ioredis';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { getApiEnvFilePaths } from './config/env-paths';
@@ -62,30 +61,16 @@ const envFilePaths = getApiEnvFilePaths();
         }
 
         return {
-          /**
-           * Cria clientes ioredis com tratamento explícito de erro e retries limitados.
-           * Sem isso, BullModule trava o cold-start na Vercel quando não há Redis disponível
-           * (emite 'error' sem handler → crash ou timeout da função serverless).
-           */
-          /**
-           * Bull exige config diferente por tipo de cliente:
-           * - 'client': pode ter maxRetriesPerRequest e enableOfflineQueue
-           * - 'bclient'/'subscriber': NÃO pode ter maxRetriesPerRequest nem enableReadyCheck
-           *   (uso de blocking commands — ver https://github.com/OptimalBits/bull/issues/1873)
-           */
-          createClient: (type: string) => {
-            const isBlocking = type === 'bclient' || type === 'subscriber';
-            const client = new Redis(redisUrl, {
-              ...(isBlocking
-                ? { enableReadyCheck: false, maxRetriesPerRequest: null }
-                : { maxRetriesPerRequest: 0, enableOfflineQueue: false }),
-              lazyConnect: true,
-              retryStrategy: () => null,
-            });
-            client.on('error', () => {});
-            const origConnect = client.connect.bind(client);
-            client.connect = (...args: any[]) => origConnect(...args).catch(() => {});
-            return client;
+          // BullMQ nao e compativel com as estruturas Redis do Bull. O prefixo
+          // separado impede que workers novos consumam jobs antigos.
+          prefix: process.env.BULLMQ_PREFIX || 'bullmq',
+          connection: {
+            url: redisUrl,
+            enableReadyCheck: false,
+            maxRetriesPerRequest: null,
+            enableOfflineQueue: false,
+            lazyConnect: true,
+            retryStrategy: () => null,
           },
         };
       },

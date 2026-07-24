@@ -46,16 +46,11 @@ describe('AuthController (integration)', () => {
     mockTtl.getRefreshJwtTtlSeconds.mockReturnValue(604800);
   });
 
-  it('POST /api/auth/login ignora header de plataforma e nunca expoe refresh no JSON', async () => {
+  it('POST /api/auth/login cria apenas desafio 2FA mesmo com header de plataforma', async () => {
     const svcBody = {
-      access_token: 'at',
-      refresh_token: 'rt',
-      user: {
-        id: 'aaaaaaaa-bbbb-4ccc-dddd-eeeeeeeeeeee',
-        email: 'gestor@demo.com',
-        name: 'Gestor',
-        role: 'gestor',
-      },
+      requires_2fa: true,
+      temp_token: '11111111-1111-4111-8111-111111111111',
+      message: 'Codigo enviado',
     };
     const mockAuth = { login: jest.fn().mockResolvedValue(svcBody) };
     const app = await createApp(mockAuth);
@@ -66,11 +61,8 @@ describe('AuthController (integration)', () => {
       .send({ email: 'gestor@demo.com', password: 'senha1234' });
 
     expect(res.status).toBe(201);
-    expect(res.body).toEqual({
-      user: svcBody.user,
-      access_token: 'at',
-    });
-    expect(String(res.headers['set-cookie'])).toContain(`${REFRESH_TOKEN_COOKIE_NAME}=rt`);
+    expect(res.body).toEqual(svcBody);
+    expect(res.headers['set-cookie']).toBeUndefined();
     expect(mockAuth.login).toHaveBeenCalledWith(
       expect.objectContaining({ email: 'gestor@demo.com', password: 'senha1234' }),
     );
@@ -78,16 +70,11 @@ describe('AuthController (integration)', () => {
     await app.close();
   });
 
-  it('POST /api/auth/mobile/login envia refresh no JSON sem criar cookie', async () => {
+  it('POST /api/auth/mobile/login cria apenas desafio 2FA', async () => {
     const svcBody = {
-      access_token: 'at',
-      refresh_token: 'rt',
-      user: {
-        id: 'aaaaaaaa-bbbb-4ccc-dddd-eeeeeeeeeeee',
-        email: 'gestor@demo.com',
-        name: 'Gestor',
-        role: 'gestor',
-      },
+      requires_2fa: true,
+      temp_token: '11111111-1111-4111-8111-111111111111',
+      message: 'Codigo enviado',
     };
     const mockAuth = { login: jest.fn().mockResolvedValue(svcBody) };
     const app = await createApp(mockAuth);
@@ -97,11 +84,7 @@ describe('AuthController (integration)', () => {
       .send({ email: 'gestor@demo.com', password: 'senha1234' });
 
     expect(res.status).toBe(201);
-    expect(res.body).toEqual({
-      user: svcBody.user,
-      access_token: 'at',
-      refresh_token: 'rt',
-    });
+    expect(res.body).toEqual(svcBody);
     expect(res.headers['set-cookie']).toBeUndefined();
 
     await app.close();
@@ -117,6 +100,65 @@ describe('AuthController (integration)', () => {
 
     expect(res.status).toBe(400);
     expect(mockAuth.login).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('POST /api/auth/2fa/verify envia refresh somente no cookie web', async () => {
+    const svcBody = {
+      access_token: 'at',
+      refresh_token: 'rt',
+      remember: true,
+      user: {
+        id: 'aaaaaaaa-bbbb-4ccc-dddd-eeeeeeeeeeee',
+        email: 'gestor@demo.com',
+        name: 'Gestor',
+        role: 'gestor',
+      },
+    };
+    const mockAuth = { verifyTwoFactor: jest.fn().mockResolvedValue(svcBody) };
+    const app = await createApp(mockAuth);
+
+    const res = await request(app.getHttpServer()).post('/api/auth/2fa/verify').send({
+      temp_token: '11111111-1111-4111-8111-111111111111',
+      code: '123456',
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ user: svcBody.user, access_token: 'at' });
+    expect(res.body.refresh_token).toBeUndefined();
+    expect(String(res.headers['set-cookie'])).toContain(`${REFRESH_TOKEN_COOKIE_NAME}=rt`);
+
+    await app.close();
+  });
+
+  it('POST /api/auth/mobile/2fa/verify envia refresh no JSON sem cookie', async () => {
+    const svcBody = {
+      access_token: 'at',
+      refresh_token: 'rt',
+      remember: true,
+      user: {
+        id: 'aaaaaaaa-bbbb-4ccc-dddd-eeeeeeeeeeee',
+        email: 'gestor@demo.com',
+        name: 'Gestor',
+        role: 'gestor',
+      },
+    };
+    const mockAuth = { verifyTwoFactor: jest.fn().mockResolvedValue(svcBody) };
+    const app = await createApp(mockAuth);
+
+    const res = await request(app.getHttpServer()).post('/api/auth/mobile/2fa/verify').send({
+      temp_token: '11111111-1111-4111-8111-111111111111',
+      code: '123456',
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({
+      user: svcBody.user,
+      access_token: 'at',
+      refresh_token: 'rt',
+    });
+    expect(res.headers['set-cookie']).toBeUndefined();
 
     await app.close();
   });

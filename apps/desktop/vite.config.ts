@@ -57,7 +57,7 @@ export default defineConfig({
           if (id.includes('socket.io-client')) {
             return 'realtime';
           }
-          if (id.includes('react-router-dom')) {
+          if (id.includes('react-router')) {
             return 'router';
           }
           if (id.includes('react') || id.includes('react-dom')) {

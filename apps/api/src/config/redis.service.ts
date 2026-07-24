@@ -67,6 +67,43 @@ export class ResilientRedisClient {
     }
   }
 
+  async consumeTwoFactorChallenge(
+    key: string,
+    codeHash: string,
+    maxAttempts: number,
+  ): Promise<{ status: 'valid'; payload: string } | { status: 'invalid' | 'locked' | 'missing' }> {
+    if (this.isFallbackActive) {
+      return this.fallback.consumeTwoFactorChallenge(key, codeHash, maxAttempts);
+    }
+    const script = `
+local raw = redis.call('GET', KEYS[1])
+if not raw then return nil end
+local data = cjson.decode(raw)
+if data.codeHash ~= ARGV[1] then
+  data.attempts = (data.attempts or 0) + 1
+  if data.attempts >= tonumber(ARGV[2]) then
+    redis.call('DEL', KEYS[1])
+    return '__LOCKED__'
+  end
+  redis.call('SET', KEYS[1], cjson.encode(data), 'KEEPTTL')
+  return '__INVALID__'
+end
+redis.call('DEL', KEYS[1])
+return raw
+`;
+    try {
+      const result = await this.redis.eval(script, 1, key, codeHash, maxAttempts.toString());
+      if (result === '__INVALID__') return { status: 'invalid' };
+      if (result === '__LOCKED__') return { status: 'locked' };
+      if (typeof result === 'string') return { status: 'valid', payload: result };
+      return { status: 'missing' };
+    } catch (err: any) {
+      this.isFallbackActive = true;
+      this.logger.error(`Erro ao validar 2FA no Redis, usando fallback: ${err.message}`);
+      return this.fallback.consumeTwoFactorChallenge(key, codeHash, maxAttempts);
+    }
+  }
+
   async scan(
     cursor: string | number,
     ...args: Array<string | number>
@@ -103,7 +140,7 @@ export class ResilientRedisClient {
 @Injectable()
 export class RedisService implements OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
-  public readonly client: Redis | InMemoryRedisClient | ResilientRedisClient;
+  public readonly client: InMemoryRedisClient | ResilientRedisClient;
 
   constructor(private readonly configService: ConfigService) {
     const isVercel = process.env.VERCEL === '1';
@@ -155,5 +192,9 @@ export class RedisService implements OnModuleDestroy {
   async onModuleDestroy() {
     await this.client.quit();
     this.logger.log('Desconectado do Redis');
+  }
+
+  consumeTwoFactorChallenge(key: string, codeHash: string, maxAttempts: number) {
+    return this.client.consumeTwoFactorChallenge(key, codeHash, maxAttempts);
   }
 }

@@ -1,12 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff, AlertTriangle, Loader2 } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, AlertTriangle, Loader2, ShieldCheck, ArrowLeft } from "lucide-react";
 import clsx from "clsx";
 import { Notice } from "../../components/ui/Notice";
 import type { UserRole } from "../../types";
 import gpLogo from "../../assets/logo.png";
 import loginCharacter from "../../assets/login-character.png";
-import { loginWithPassword, type AuthSession } from "../../services/auth";
+import { loginWithPassword, verifyTwoFactorCode, type AuthSession } from "../../services/auth";
 import { isNativePlatform } from "../../utils/platform";
 
 interface LoginPageProps {
@@ -47,6 +47,12 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [isSlideVisible, setIsSlideVisible] = useState(true);
   const [isCapsLockOn, setIsCapsLockOn] = useState(false);
 
+  // Estados do fluxo de 2FA obrigatório
+  const [step2fa, setStep2fa] = useState(false);
+  const [tempToken2fa, setTempToken2fa] = useState("");
+  const [code2fa, setCode2fa] = useState("");
+  const [devCodeHint, setDevCodeHint] = useState<string | undefined>();
+
   useEffect(() => {
     let timeoutId: number | undefined;
     const timer = window.setInterval(() => {
@@ -71,16 +77,41 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     try {
       /** WebView nativa nao tem "fechar o navegador": lembrar-me sempre vale ali. */
       const effectiveRemember = isNativePlatform() ? true : rememberMe;
-      const session = await loginWithPassword(
+      const result = await loginWithPassword(
         email,
         password,
         effectiveRemember,
       );
+
+      setStep2fa(true);
+      setTempToken2fa(result.tempToken);
+      setDevCodeHint(result.devCodeHint);
+    } catch (error) {
+      setLoginError(
+        error instanceof Error ? error.message : "Não foi possível entrar",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleVerify2fa = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!code2fa || code2fa.length < 6) {
+      setLoginError("Digite o código completo de 6 dígitos.");
+      return;
+    }
+    setLoginError("");
+    setIsSubmitting(true);
+
+    try {
+      const effectiveRemember = isNativePlatform() ? true : rememberMe;
+      const session = await verifyTwoFactorCode(tempToken2fa, code2fa);
       onLogin(session, effectiveRemember);
       navigate(roleRoutes[session.user.role]);
     } catch (error) {
       setLoginError(
-        error instanceof Error ? error.message : "Não foi possível entrar",
+        error instanceof Error ? error.message : "Código de verificação incorreto ou expirado.",
       );
     } finally {
       setIsSubmitting(false);
@@ -94,124 +125,203 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         <div className="flex flex-col max-w-sm mx-auto w-full">
           {/* Logo */}
           <div className="mb-8">
-            <div className="mb-6">
+            <div className="mb-6 flex items-center justify-between">
               <img src={gpLogo} alt="GP de Vendas" className="h-14 w-auto" />
+              {step2fa && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep2fa(false);
+                    setCode2fa("");
+                    setLoginError("");
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors"
+                >
+                  <ArrowLeft size={14} />
+                  <span>Voltar</span>
+                </button>
+              )}
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">
-              Bem-vindo de volta!
-            </h1>
-            <p className="text-sm text-gray-500">
-              Digite seu e-mail e senha para continuar.
-            </p>
+
+            {step2fa ? (
+              <div>
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-[#FF0636] border border-rose-100">
+                  <ShieldCheck size={14} />
+                  <span>Autenticação de 2 Fatores</span>
+                </div>
+                <h1 className="text-2xl font-bold text-gray-900 mb-1">
+                  Digite o código enviado
+                </h1>
+                <p className="text-sm text-gray-500">
+                  Enviamos um código de 6 dígitos para o e-mail <strong>{email}</strong>.
+                </p>
+                {devCodeHint && (
+                  <div className="mt-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                    💡 Modo Dev (Código em memória): <strong>{devCodeHint}</strong>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 mb-1">
+                  Bem-vindo de volta!
+                </h1>
+                <p className="text-sm text-gray-500">
+                  Digite seu e-mail e senha para continuar.
+                </p>
+              </div>
+            )}
           </div>
 
-          {/* Formulário */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* E-mail */}
-            <div className="relative">
-              <Mail
-                size={15}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-              />
-              <input
-                type="email"
-                name="email"
-                autoComplete="username"
-                placeholder="Digite seu endereço de e-mail"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-9 pr-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF0636] focus:border-transparent transition"
-              />
-            </div>
+          {/* Formulário de 2FA */}
+          {step2fa ? (
+            <form onSubmit={handleVerify2fa} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wider">
+                  Código de Verificação (6 dígitos)
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    autoFocus
+                    placeholder="0 0 0 0 0 0"
+                    value={code2fa}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, "");
+                      setCode2fa(val);
+                    }}
+                    className="w-full text-center text-2xl font-black tracking-[12px] py-3.5 rounded-xl border border-gray-200 text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-[#FF0636] focus:border-transparent transition font-mono"
+                  />
+                </div>
+              </div>
 
-            {/* Senha */}
-            <div>
+              <button
+                type="submit"
+                disabled={isSubmitting || code2fa.length < 6}
+                className="w-full text-white py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed shadow-sm"
+                style={{ backgroundColor: "#FF0636" }}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Verificando...</span>
+                  </>
+                ) : (
+                  "Confirmar Código"
+                )}
+              </button>
+
+              {loginError && (
+                <Notice tone="error" className="text-xs">
+                  {loginError}
+                </Notice>
+              )}
+            </form>
+          ) : (
+            /* Formulário Principal de Login */
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* E-mail */}
               <div className="relative">
-                <Lock
+                <Mail
                   size={15}
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
                 />
                 <input
-                  type={showPassword ? "text" : "password"}
-                  name="password"
-                  autoComplete="current-password"
-                  placeholder="Digite sua senha"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) =>
-                    setIsCapsLockOn(e.getModifierState("CapsLock"))
-                  }
-                  onKeyUp={(e) =>
-                    setIsCapsLockOn(e.getModifierState("CapsLock"))
-                  }
-                  className="w-full pl-9 pr-10 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF0636] focus:border-transparent transition"
+                  type="email"
+                  name="email"
+                  autoComplete="username"
+                  placeholder="Digite seu endereço de e-mail"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-9 pr-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF0636] focus:border-transparent transition"
                 />
+              </div>
+
+              {/* Senha */}
+              <div>
+                <div className="relative">
+                  <Lock
+                    size={15}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                  />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    autoComplete="current-password"
+                    placeholder="Digite sua senha"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={(e) =>
+                      setIsCapsLockOn(e.getModifierState("CapsLock"))
+                    }
+                    onKeyUp={(e) =>
+                      setIsCapsLockOn(e.getModifierState("CapsLock"))
+                    }
+                    className="w-full pl-9 pr-10 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF0636] focus:border-transparent transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+                {isCapsLockOn && (
+                  <div className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold text-amber-600">
+                    <AlertTriangle size={13} />
+                    <span>Atenção: Fixa (Caps Lock) ativada</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Lembrar-me + Esqueceu a senha */}
+              <div className="flex items-center justify-between pt-1">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-[#FF0636]"
+                  />
+                  <span className="text-sm text-gray-600">Lembrar-me</span>
+                </label>
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  onClick={() => navigate("/esqueci-senha")}
+                  className="text-sm font-semibold text-[#FF0636] hover:underline"
                 >
-                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  Esqueceu a senha?
                 </button>
               </div>
-              {isCapsLockOn && (
-                <div className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold text-amber-600">
-                  <AlertTriangle size={13} />
-                  <span>Atenção: Fixa (Caps Lock) ativada</span>
-                </div>
-              )}
-            </div>
 
-            {/* Lembrar-me + Esqueceu a senha */}
-            <div className="flex items-center justify-between pt-1">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-[#FF0636]"
-                />
-                <span className="text-sm text-gray-600">Lembrar-me</span>
-              </label>
+              {/* Entrar */}
               <button
-                type="button"
-                onClick={() => navigate("/esqueci-senha")}
-                className="text-sm font-semibold text-[#FF0636] hover:underline"
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full text-white py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed shadow-sm"
+                style={{ backgroundColor: "#FF0636" }}
               >
-                Esqueceu a senha?
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Entrando...</span>
+                  </>
+                ) : (
+                  "Entrar"
+                )}
               </button>
-            </div>
-
-            {/* Entrar */}
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full text-white py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed shadow-sm"
-              style={{ backgroundColor: "#FF0636" }}
-              onMouseOver={(e) =>
-                !isSubmitting &&
-                (e.currentTarget.style.backgroundColor = "#d90030")
-              }
-              onMouseOut={(e) =>
-                !isSubmitting &&
-                (e.currentTarget.style.backgroundColor = "#FF0636")
-              }
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  <span>Entrando...</span>
-                </>
-              ) : (
-                "Entrar"
+              {loginError && (
+                <Notice tone="error" className="text-xs">
+                  {loginError}
+                </Notice>
               )}
-            </button>
-            {loginError && (
-              <Notice tone="error" className="text-xs">
-                {loginError}
-              </Notice>
-            )}
-          </form>
+            </form>
+          )}
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { BullModule } from '@nestjs/bull';
+import { BullModule } from '@nestjs/bullmq';
 import { LeadTimelineModule } from '../lead-timeline/lead-timeline.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { ScoreEventsModule } from '../score-events/score-events.module';

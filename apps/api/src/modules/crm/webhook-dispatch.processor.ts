@@ -1,6 +1,6 @@
-import { Process, Processor } from '@nestjs/bull';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import { PrismaService } from '../../config/prisma.service';
 import { WebhookDispatchService } from './webhook-dispatch.service';
 
@@ -15,15 +15,27 @@ type IdempotencyCleanupJob = {
 const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000, 6 * 60 * 60_000];
 
 @Processor('webhook-dispatch')
-export class WebhookDispatchProcessor {
+export class WebhookDispatchProcessor extends WorkerHost {
   private readonly logger = new Logger(WebhookDispatchProcessor.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly webhookDispatchService: WebhookDispatchService,
-  ) {}
+  ) {
+    super();
+  }
 
-  @Process('dispatch')
+  async process(job: Job<WebhookDispatchJob | IdempotencyCleanupJob, void, string>) {
+    switch (job.name) {
+      case 'dispatch':
+        return this.handleDispatch(job as Job<WebhookDispatchJob>);
+      case 'cleanup-idempotency':
+        return this.handleCleanupIdempotency(job as Job<IdempotencyCleanupJob>);
+      default:
+        throw new Error(`Job de webhook desconhecido: ${job.name}`);
+    }
+  }
+
   async handleDispatch(job: Job<WebhookDispatchJob>) {
     const webhookEvent = await this.prisma.webhookEvent.findUnique({
       where: { id: job.data.webhookEventId },
@@ -89,7 +101,6 @@ export class WebhookDispatchProcessor {
     }
   }
 
-  @Process('cleanup-idempotency')
   async handleCleanupIdempotency(job: Job<IdempotencyCleanupJob>) {
     const olderThanHours = job.data.olderThanHours ?? 48;
     const cutoff = new Date(Date.now() - olderThanHours * 60 * 60 * 1000);

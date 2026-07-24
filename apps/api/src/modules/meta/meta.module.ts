@@ -1,4 +1,4 @@
-import { BullModule } from '@nestjs/bull';
+import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { CrmModule } from '../crm/crm.module';
 import { RealtimeModule } from '../realtime/realtime.module';

@@ -1,4 +1,4 @@
-import { InjectQueue } from '@nestjs/bull';
+import { InjectQueue } from '@nestjs/bullmq';
 import {
   BadRequestException,
   ForbiddenException,
@@ -12,7 +12,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Queue } from 'bull';
+import { Queue } from 'bullmq';
 import { ConversationChannel, Prisma, SenderType } from '@prisma/client';
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { normalizeBrazilianPhone, phoneDigits } from '../../common/phone.util';
@@ -77,7 +77,7 @@ export class MetaService implements OnModuleInit {
         'token-refresh',
         { thresholdDays: 7 },
         {
-          repeat: { cron: '0 4 * * *' },
+          repeat: { pattern: '0 4 * * *' },
           removeOnComplete: true,
           removeOnFail: false,
           jobId: 'meta-token-refresh-daily',

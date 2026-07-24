@@ -2,13 +2,16 @@ import { HttpException, ServiceUnavailableException, UnauthorizedException } fro
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
-import { randomUUID } from 'crypto';
+import { randomInt, randomUUID } from 'crypto';
+import { MailService } from '../../mail/mail.service';
 import { Role } from '../../common/types';
 import { RedisService } from '../../config/redis.service';
 import { UsersService } from '../users/users.service';
 import { AuthService } from './auth.service';
 
 jest.mock('crypto', () => ({
+  ...jest.requireActual('crypto'),
+  randomInt: jest.fn(),
   randomUUID: jest.fn(),
 }));
 
@@ -47,8 +50,10 @@ describe('AuthService', () => {
   let jwtService: jest.Mocked<JwtService>;
   let redisService: {
     client: { get: jest.Mock; set: jest.Mock; del: jest.Mock; scan: jest.Mock };
+    consumeTwoFactorChallenge: jest.Mock;
   };
   let configService: ConfigService;
+  let mailService: jest.Mocked<Pick<MailService, 'sendTwoFactorCode'>>;
 
   beforeEach(() => {
     usersService = {
@@ -73,7 +78,13 @@ describe('AuthService', () => {
         del: jest.fn(),
         scan: jest.fn(),
       },
+      consumeTwoFactorChallenge: jest.fn(),
     };
+    mailService = {
+      sendTwoFactorCode: jest.fn().mockResolvedValue(undefined),
+    };
+    (randomInt as jest.Mock).mockReturnValue(123456);
+    (randomUUID as jest.Mock).mockReturnValue('11111111-1111-4111-8111-111111111111');
 
     configService = {
       get: jest.fn((key: string, defaultValue?: string) => {
@@ -93,6 +104,7 @@ describe('AuthService', () => {
       jwtService,
       configService,
       redisService as unknown as RedisService,
+      mailService as unknown as MailService,
     );
   });
 
@@ -101,16 +113,16 @@ describe('AuthService', () => {
     (bcrypt.compare as jest.Mock).mockReset();
     (bcrypt.hash as jest.Mock).mockReset();
     (randomUUID as jest.Mock).mockReset();
+    (randomInt as jest.Mock).mockReset();
     process.env.NODE_ENV = originalNodeEnv;
   });
 
-  it('retorna tokens no login com credenciais validas', async () => {
+  it('cria desafio 2FA criptograficamente aleatorio no login valido', async () => {
     usersService.getEntityByEmail.mockResolvedValue(user);
-    jwtService.signAsync
-      .mockResolvedValueOnce('access-token')
-      .mockResolvedValueOnce('refresh-token');
     redisService.client.set.mockResolvedValue('OK');
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+    (randomUUID as jest.Mock).mockReturnValue('11111111-1111-4111-8111-111111111111');
+    (randomInt as jest.Mock).mockReturnValue(123456);
 
     const result = await service.login({
       email: user.email,
@@ -118,22 +130,50 @@ describe('AuthService', () => {
     });
 
     expect(result).toEqual({
-      user: expect.objectContaining({
-        id: user.id,
-        email: user.email,
-        role: user.role,
-      }),
-      remember: true,
-      access_token: 'access-token',
-      refresh_token: 'refresh-token',
+      requires_2fa: true,
+      temp_token: '11111111-1111-4111-8111-111111111111',
+      message: 'Código de verificação enviado para o seu e-mail.',
+      dev_code_hint: '123456',
     });
     expect(redisService.client.set).toHaveBeenCalledWith(
-      expect.stringContaining('auth:refresh:'),
-      user.id,
+      'auth:2fa:11111111-1111-4111-8111-111111111111',
+      expect.not.stringContaining('123456'),
       'EX',
-      604800,
+      600,
+    );
+    expect(mailService.sendTwoFactorCode).toHaveBeenCalledWith(
+      expect.objectContaining({ to: user.email, code: '123456' }),
     );
     expect(redisService.client.del).toHaveBeenCalledWith(`auth:login-fail:${user.email}`);
+  });
+
+  it('consome atomicamente um desafio 2FA valido e emite a sessao', async () => {
+    redisService.consumeTwoFactorChallenge.mockResolvedValue({
+      status: 'valid',
+      payload: JSON.stringify({ userId: user.id, rememberMe: true }),
+    });
+    usersService.getEntityById.mockResolvedValue(user);
+    jwtService.signAsync
+      .mockResolvedValueOnce('access-token')
+      .mockResolvedValueOnce('refresh-token');
+    redisService.client.set.mockResolvedValue('OK');
+
+    const result = await service.verifyTwoFactor(
+      '11111111-1111-4111-8111-111111111111',
+      '123456',
+    );
+
+    expect(redisService.consumeTwoFactorChallenge).toHaveBeenCalledWith(
+      'auth:2fa:11111111-1111-4111-8111-111111111111',
+      expect.stringMatching(/^[a-f0-9]{64}$/),
+      5,
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        access_token: 'access-token',
+        refresh_token: 'refresh-token',
+      }),
+    );
   });
 
   it('rotaciona o refresh token quando o token e valido', async () => {
@@ -281,17 +321,17 @@ describe('AuthService', () => {
   });
 
   it('remove registro Redis se JWT falhar apos gravar a allowlist', async () => {
-    usersService.getEntityByEmail.mockResolvedValue(user);
-    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+    redisService.consumeTwoFactorChallenge.mockResolvedValue({
+      status: 'valid',
+      payload: JSON.stringify({ userId: user.id, rememberMe: true }),
+    });
+    usersService.getEntityById.mockResolvedValue(user);
     (randomUUID as jest.Mock).mockReturnValue('jti-roll');
-    redisService.client.set.mockResolvedValueOnce('OK');
+    redisService.client.set.mockResolvedValue('OK');
     jwtService.signAsync.mockRejectedValue(new Error('falha ao assinar JWT'));
 
     await expect(
-      service.login({
-        email: user.email,
-        password: '12345678',
-      }),
+      service.verifyTwoFactor('11111111-1111-4111-8111-111111111111', '123456'),
     ).rejects.toThrow('falha ao assinar JWT');
 
     expect(redisService.client.del).toHaveBeenCalledWith('auth:refresh:jti-roll');

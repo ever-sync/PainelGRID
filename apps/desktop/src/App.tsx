@@ -356,12 +356,7 @@ export default function App() {
   const Router = isNativePlatform() ? HashRouter : BrowserRouter;
 
   return (
-    <Router
-      future={{
-        v7_startTransition: true,
-        v7_relativeSplatPath: true,
-      }}
-    >
+    <Router>
       <Suspense fallback={<RouteLoadingFallback />}>
         <Routes>
           {/* Auth */}

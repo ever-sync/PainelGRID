@@ -15,18 +15,27 @@ import {
   writeNativeRefreshToken,
 } from "./native-refresh-store";
 
-type LoginResponse = {
+export type LoginStepResult = {
+  requires2fa: true;
+  tempToken: string;
+  message: string;
+  devCodeHint?: string;
+};
+
+type LoginApiResponse = {
+  requires_2fa: true;
+  temp_token: string;
+  message: string;
+  dev_code_hint?: string;
+};
+
+type SessionApiResponse = {
   user: AuthApiUserPayload;
   access_token: string;
-  /** Presente apenas nos endpoints /auth/mobile/*. */
   refresh_token?: string;
 };
 
-type RefreshResponse = {
-  user: AuthApiUserPayload;
-  access_token: string;
-  refresh_token?: string;
-};
+type RefreshResponse = SessionApiResponse;
 
 export type AuthSession = PersistedAuthSession;
 
@@ -34,9 +43,9 @@ export async function loginWithPassword(
   email: string,
   password: string,
   rememberMe = true,
-): Promise<AuthSession> {
+): Promise<LoginStepResult> {
   const native = isNativePlatform();
-  const result = await httpRequest<LoginResponse>(
+  const result = await httpRequest<LoginApiResponse>(
     native ? "/auth/mobile/login" : "/auth/login",
     {
       method: "POST",
@@ -45,6 +54,30 @@ export async function loginWithPassword(
         password,
         remember_me: rememberMe,
       },
+    },
+  );
+
+  return {
+    requires2fa: true,
+    tempToken: result.temp_token,
+    message: result.message,
+    devCodeHint: result.dev_code_hint,
+  };
+}
+
+export async function verifyTwoFactorCode(
+  tempToken: string,
+  code: string,
+): Promise<AuthSession> {
+  const native = isNativePlatform();
+  const result = await httpRequest<SessionApiResponse>(
+    native ? "/auth/mobile/2fa/verify" : "/auth/2fa/verify",
+    {
+    method: "POST",
+    body: {
+      temp_token: tempToken,
+      code,
+    },
     },
   );
 
@@ -155,7 +188,7 @@ export function clearStoredSession() {
   clearPersistedSession();
 }
 
-function toSession(payload: LoginResponse | RefreshResponse): AuthSession {
+function toSession(payload: SessionApiResponse): AuthSession {
   return {
     user: mapAuthApiUser(payload.user),
     accessToken: payload.access_token,

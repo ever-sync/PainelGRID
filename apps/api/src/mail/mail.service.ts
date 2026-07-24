@@ -29,7 +29,7 @@ export class MailService {
         auth: { user, pass },
       });
       this.logger.log(
-        `SMTP configurado: host=${host} port=${port} secure=${secure} from=${this.from} user=${user} pass=${pass.slice(0, 8)}...`,
+        `SMTP configurado: host=${host} port=${port} secure=${secure} from=${this.from}`,
       );
     } else {
       this.logger.warn(
@@ -44,9 +44,7 @@ export class MailService {
     const html = this.buildWelcomeHtml({ name, email: to, password, loginUrl: this.frontendUrl });
 
     if (!this.transporter) {
-      this.logger.log(
-        `[DEV] Email de boas-vindas para ${to} — senha: ${password} — link: ${this.frontendUrl}`,
-      );
+      this.logger.warn(`Email de boas-vindas nao enviado para ${to}: SMTP nao configurado`);
       return;
     }
 
@@ -131,6 +129,58 @@ export class MailService {
         <p>PainelGRID · Gestão de Vendas</p>
       </div>
     </div>
+  </div>
+</body>
+</html>`;
+  }
+
+  async sendTwoFactorCode(params: { to: string; name: string; code: string }): Promise<void> {
+    const { to, name, code } = params;
+    const subject = `Código de Verificação PainelGRID: ${code}`;
+    const html = this.buildTwoFactorHtml({ name, code });
+
+    if (!this.transporter) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('SMTP nao configurado');
+      }
+      this.logger.log(
+        `[DEV 2FA CODE] Para ${to} (${name}) — Código 2FA: ${code}`,
+      );
+      return;
+    }
+
+    try {
+      const info = await this.transporter.sendMail({ from: this.from, to, subject, html });
+      this.logger.log(`Email de 2FA enviado para ${to} — messageId: ${info.messageId}`);
+    } catch (err) {
+      this.logger.error(
+        `Falha ao enviar email 2FA para ${to}: ${(err as Error).message}`,
+        (err as Error).stack,
+      );
+      throw err;
+    }
+  }
+
+  private buildTwoFactorHtml(p: { name: string; code: string }) {
+    const firstName = p.name.split(' ')[0];
+    return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Código de Autenticação — PainelGRID</title>
+</head>
+<body style="background:#f4f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;padding:40px 10px;">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:20px;padding:36px;box-shadow:0 4px 24px rgba(0,0,0,.08);text-align:center;">
+    <h1 style="color:#FF0636;font-size:24px;font-weight:800;margin:0 0 12px;">PainelGRID</h1>
+    <h2 style="font-size:18px;color:#111;margin:0 0 16px;">Código de Verificação de 2 Fatores</h2>
+    <p style="color:#555;font-size:14px;line-height:1.5;margin-bottom:24px;">
+      Olá ${firstName}, use o código de 6 dígitos abaixo para confirmar seu login no PainelGRID. Este código expira em 10 minutos.
+    </p>
+    <div style="background:#f8f8fa;border:2px dashed #FF0636;border-radius:14px;padding:18px 24px;display:inline-block;margin-bottom:24px;">
+      <span style="font-size:32px;font-weight:900;letter-spacing:10px;color:#FF0636;font-family:monospace;">${p.code}</span>
+    </div>
+    <p style="color:#888;font-size:12px;margin:0;">Se você não solicitou este acesso, por favor ignore este e-mail.</p>
   </div>
 </body>
 </html>`;

@@ -40,6 +40,39 @@ export class InMemoryRedisClient {
     return removed;
   }
 
+  async consumeTwoFactorChallenge(
+    key: string,
+    codeHash: string,
+    maxAttempts: number,
+  ): Promise<{ status: 'valid'; payload: string } | { status: 'invalid' | 'locked' | 'missing' }> {
+    const row = this.store.get(key);
+    if (!row || (row.expireAt !== null && Date.now() > row.expireAt)) {
+      this.store.delete(key);
+      return { status: 'missing' };
+    }
+
+    let data: { codeHash?: string; attempts?: number };
+    try {
+      data = JSON.parse(row.value) as { codeHash?: string; attempts?: number };
+    } catch {
+      this.store.delete(key);
+      return { status: 'missing' };
+    }
+
+    if (data.codeHash === codeHash) {
+      this.store.delete(key);
+      return { status: 'valid', payload: row.value };
+    }
+
+    data.attempts = (data.attempts ?? 0) + 1;
+    if (data.attempts >= maxAttempts) {
+      this.store.delete(key);
+      return { status: 'locked' };
+    }
+    this.store.set(key, { value: JSON.stringify(data), expireAt: row.expireAt });
+    return { status: 'invalid' };
+  }
+
   async scan(
     cursor: string | number,
     ...args: Array<string | number>

@@ -23,6 +23,8 @@ import { AuthService } from './auth.service';
 import { AuthenticatedUser } from './auth.types';
 import { REFRESH_TOKEN_COOKIE_NAME } from './auth-cookie.constants';
 
+import { VerifyTwoFactorDto } from './dto/verify-two-factor.dto';
+
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
@@ -34,20 +36,12 @@ export class AuthController {
   @ApiOperation({
     summary: 'Autentica usuario',
     description:
-      'Fluxo web: retorna access_token e user no JSON e envia o refresh_token somente em cookie httpOnly.',
+      'Fluxo web: valida credenciais e dispara codigo 2FA por e-mail se necessario.',
   })
-  @ApiResponse({ status: 201, description: 'Login realizado com sucesso' })
+  @ApiResponse({ status: 201, description: 'Login realizado ou codigo 2FA enviado com sucesso' })
   @ApiResponse({ status: 401, description: 'Credenciais invalidas' })
-  async login(
-    @Body() dto: LoginDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const result = await this.authService.login(dto);
-    this.setRefreshCookie(res, result.refresh_token, result.remember);
-    return {
-      user: result.user,
-      access_token: result.access_token,
-    };
+  async login(@Body() dto: LoginDto) {
+    return this.authService.login(dto);
   }
 
   @Public()
@@ -56,10 +50,42 @@ export class AuthController {
   @ApiOperation({
     summary: 'Autentica usuario no app mobile',
     description:
-      'Endpoint exclusivo do app nativo. Retorna o refresh_token no corpo para armazenamento nativo e nao emite cookie.',
+      'Endpoint exclusivo do app nativo. Dispara codigo 2FA por e-mail.',
   })
   async mobileLogin(@Body() dto: LoginDto) {
-    const result = await this.authService.login(dto);
+    return this.authService.login(dto);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('2fa/verify')
+  @ApiOperation({
+    summary: 'Valida o codigo de 6 digitos enviado por e-mail (2FA)',
+    description: 'Valida o codigo 2FA e emite a sessao final com JWT.',
+  })
+  @ApiResponse({ status: 201, description: 'Sessao iniciada com sucesso' })
+  @ApiResponse({ status: 401, description: 'Codigo 2FA incorreto ou expirado' })
+  async verifyTwoFactor(
+    @Body() dto: VerifyTwoFactorDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.verifyTwoFactor(dto.temp_token, dto.code);
+    this.setRefreshCookie(res, result.refresh_token, result.remember);
+    return {
+      user: result.user,
+      access_token: result.access_token,
+    };
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('mobile/2fa/verify')
+  @ApiOperation({
+    summary: 'Valida o codigo 2FA no app mobile',
+    description: 'Emite os tokens no corpo para armazenamento seguro nativo e nao cria cookie.',
+  })
+  async verifyMobileTwoFactor(@Body() dto: VerifyTwoFactorDto) {
+    const result = await this.authService.verifyTwoFactor(dto.temp_token, dto.code);
     return {
       user: result.user,
       access_token: result.access_token,

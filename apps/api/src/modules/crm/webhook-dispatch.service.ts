@@ -1,6 +1,6 @@
-import { InjectQueue } from '@nestjs/bull';
+import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Queue } from 'bull';
+import { Queue } from 'bullmq';
 
 type WebhookDispatchJob = { webhookEventId: string };
 type IdempotencyCleanupJob = { olderThanHours: number };
@@ -18,7 +18,7 @@ export class WebhookDispatchService implements OnModuleInit {
         'cleanup-idempotency',
         { olderThanHours: 48 },
         {
-          repeat: { cron: '0 3 * * *' },
+          repeat: { pattern: '0 3 * * *' },
           removeOnComplete: true,
           removeOnFail: false,
           jobId: 'cleanup-idempotency-daily',

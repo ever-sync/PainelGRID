@@ -11,12 +11,13 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import { randomUUID } from 'crypto';
+import { createHmac, randomInt, randomUUID } from 'crypto';
 import { BCRYPT_SALT_ROUNDS } from '../../common/constants/bcrypt.constants';
 import { parseDurationToSeconds } from '../../common/utils/parse-duration-to-seconds';
 import { Role } from '../../common/types';
 import { RedisService } from '../../config/redis.service';
 import { UsersService } from '../users/users.service';
+import { MailService } from '../../mail/mail.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
@@ -27,6 +28,8 @@ import { AuthTokenPayload, AuthenticatedUser } from './auth.types';
 export class AuthService {
   private static readonly loginRateLimitMaxAttempts = 5;
   private static readonly loginRateLimitWindowSeconds = 15 * 60;
+  private static readonly twoFactorTtlSeconds = 10 * 60;
+  private static readonly twoFactorMaxAttempts = 5;
   private readonly logger = new Logger(AuthService.name);
 
   private readonly accessTokenSecret: string;
@@ -39,6 +42,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly redisService: RedisService,
+    private readonly mailService: MailService,
   ) {
     this.accessTokenSecret = this.configService.get<string>('JWT_SECRET', 'leadflow_access_secret');
     this.accessTokenExpiresIn = this.configService.get<string>('JWT_EXPIRES_IN', '15m');
@@ -68,7 +72,87 @@ export class AuthService {
     }
 
     await this.clearFailedLoginAttempts(normalizedEmail);
-    return this.buildAuthResponse(user, dto.remember_me ?? true);
+
+    const twoFactorCode = randomInt(100000, 1_000_000).toString();
+    const tempToken = randomUUID();
+
+    const twoFactorData = {
+      userId: user.id,
+      codeHash: this.hashTwoFactorCode(tempToken, twoFactorCode),
+      attempts: 0,
+      rememberMe: dto.remember_me ?? true,
+    };
+
+    const redisKey = this.getTwoFactorKey(tempToken);
+    try {
+      await this.redisService.client.set(
+        redisKey,
+        JSON.stringify(twoFactorData),
+        'EX',
+        AuthService.twoFactorTtlSeconds,
+      );
+    } catch {
+      throw new ServiceUnavailableException(
+        'Nao foi possivel iniciar a verificacao em duas etapas. Tente novamente.',
+      );
+    }
+
+    try {
+      await this.mailService.sendTwoFactorCode({
+        to: user.email,
+        name: user.name,
+        code: twoFactorCode,
+      });
+    } catch {
+      await this.redisService.client.del(redisKey);
+      throw new ServiceUnavailableException(
+        'Nao foi possivel enviar o codigo de verificacao. Tente novamente.',
+      );
+    }
+
+    return {
+      requires_2fa: true,
+      temp_token: tempToken,
+      message: 'Código de verificação enviado para o seu e-mail.',
+      dev_code_hint: process.env.NODE_ENV !== 'production' ? twoFactorCode : undefined,
+    };
+  }
+
+  async verifyTwoFactor(tempToken: string, code: string) {
+    const redisKey = this.getTwoFactorKey(tempToken);
+    const result = await this.redisService.consumeTwoFactorChallenge(
+      redisKey,
+      this.hashTwoFactorCode(tempToken, code.trim()),
+      AuthService.twoFactorMaxAttempts,
+    );
+
+    if (result.status !== 'valid') {
+      throw new UnauthorizedException('Código de verificação expirado ou inválido.');
+    }
+
+    let parsed: { userId: string; rememberMe: boolean };
+    try {
+      parsed = JSON.parse(result.payload) as { userId: string; rememberMe: boolean };
+    } catch {
+      throw new UnauthorizedException('Código de verificação expirado ou inválido.');
+    }
+
+    const user = await this.usersService.getEntityById(parsed.userId);
+    if (!user || !user.is_active) {
+      throw new UnauthorizedException('Usuário inativo ou inexistente.');
+    }
+
+    return this.buildAuthResponse(user, parsed.rememberMe);
+  }
+
+  private getTwoFactorKey(tempToken: string): string {
+    return `auth:2fa:${tempToken}`;
+  }
+
+  private hashTwoFactorCode(tempToken: string, code: string): string {
+    return createHmac('sha256', this.refreshTokenSecret)
+      .update(`${tempToken}:${code}`)
+      .digest('hex');
   }
 
   /** TTL do refresh em segundos (ex.: max-age do cookie httpOnly). */
