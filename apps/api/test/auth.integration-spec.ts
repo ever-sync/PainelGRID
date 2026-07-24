@@ -46,38 +46,7 @@ describe('AuthController (integration)', () => {
     mockTtl.getRefreshJwtTtlSeconds.mockReturnValue(604800);
   });
 
-  it('POST /api/auth/login envia refresh em cookie httpOnly e omite do JSON web', async () => {
-    const svcBody = {
-      access_token: 'at',
-      refresh_token: 'rt',
-      user: {
-        id: 'aaaaaaaa-bbbb-4ccc-dddd-eeeeeeeeeeee',
-        email: 'gestor@demo.com',
-        name: 'Gestor',
-        role: 'gestor',
-      },
-    };
-    const mockAuth = { login: jest.fn().mockResolvedValue(svcBody) };
-    const app = await createApp(mockAuth);
-
-    const res = await request(app.getHttpServer())
-      .post('/api/auth/login')
-      .send({ email: 'gestor@demo.com', password: 'senha1234' });
-
-    expect(res.status).toBe(201);
-    expect(res.body).toEqual({
-      user: svcBody.user,
-      access_token: 'at',
-    });
-    expect(String(res.headers['set-cookie'])).toContain(`${REFRESH_TOKEN_COOKIE_NAME}=rt`);
-    expect(mockAuth.login).toHaveBeenCalledWith(
-      expect.objectContaining({ email: 'gestor@demo.com', password: 'senha1234' }),
-    );
-
-    await app.close();
-  });
-
-  it('POST /api/auth/login envia refresh no JSON para cliente Capacitor', async () => {
+  it('POST /api/auth/login ignora header de plataforma e nunca expoe refresh no JSON', async () => {
     const svcBody = {
       access_token: 'at',
       refresh_token: 'rt',
@@ -100,9 +69,40 @@ describe('AuthController (integration)', () => {
     expect(res.body).toEqual({
       user: svcBody.user,
       access_token: 'at',
-      refresh_token: 'rt',
     });
     expect(String(res.headers['set-cookie'])).toContain(`${REFRESH_TOKEN_COOKIE_NAME}=rt`);
+    expect(mockAuth.login).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'gestor@demo.com', password: 'senha1234' }),
+    );
+
+    await app.close();
+  });
+
+  it('POST /api/auth/mobile/login envia refresh no JSON sem criar cookie', async () => {
+    const svcBody = {
+      access_token: 'at',
+      refresh_token: 'rt',
+      user: {
+        id: 'aaaaaaaa-bbbb-4ccc-dddd-eeeeeeeeeeee',
+        email: 'gestor@demo.com',
+        name: 'Gestor',
+        role: 'gestor',
+      },
+    };
+    const mockAuth = { login: jest.fn().mockResolvedValue(svcBody) };
+    const app = await createApp(mockAuth);
+
+    const res = await request(app.getHttpServer())
+      .post('/api/auth/mobile/login')
+      .send({ email: 'gestor@demo.com', password: 'senha1234' });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({
+      user: svcBody.user,
+      access_token: 'at',
+      refresh_token: 'rt',
+    });
+    expect(res.headers['set-cookie']).toBeUndefined();
 
     await app.close();
   });
@@ -121,7 +121,7 @@ describe('AuthController (integration)', () => {
     await app.close();
   });
 
-  it('POST /api/auth/refresh delega string e omite refresh do JSON web', async () => {
+  it('POST /api/auth/refresh rejeita refresh enviado no corpo sem cookie', async () => {
     const svcRefresh = {
       access_token: 'novo-token',
       refresh_token: 'novo-rt',
@@ -139,18 +139,13 @@ describe('AuthController (integration)', () => {
       .post('/api/auth/refresh')
       .send({ refreshToken: 'refresh-demo-token-123' });
 
-    expect(res.status).toBe(201);
-    expect(res.body).toEqual({
-      user: svcRefresh.user,
-      access_token: 'novo-token',
-    });
-    expect(String(res.headers['set-cookie'])).toContain(`${REFRESH_TOKEN_COOKIE_NAME}=novo-rt`);
-    expect(mockAuth.refresh).toHaveBeenCalledWith('refresh-demo-token-123');
+    expect(res.status).toBe(401);
+    expect(mockAuth.refresh).not.toHaveBeenCalled();
 
     await app.close();
   });
 
-  it('POST /api/auth/refresh envia token rotacionado no JSON para Capacitor', async () => {
+  it('POST /api/auth/mobile/refresh envia token rotacionado no JSON sem cookie', async () => {
     const svcRefresh = {
       access_token: 'novo-token',
       refresh_token: 'novo-rt',
@@ -165,8 +160,7 @@ describe('AuthController (integration)', () => {
     const app = await createApp(mockAuth);
 
     const res = await request(app.getHttpServer())
-      .post('/api/auth/refresh')
-      .set('X-Client-Platform', 'capacitor')
+      .post('/api/auth/mobile/refresh')
       .send({ refreshToken: 'refresh-demo-token-123' });
 
     expect(res.status).toBe(201);
@@ -175,7 +169,7 @@ describe('AuthController (integration)', () => {
       access_token: 'novo-token',
       refresh_token: 'novo-rt',
     });
-    expect(String(res.headers['set-cookie'])).toContain(`${REFRESH_TOKEN_COOKIE_NAME}=novo-rt`);
+    expect(res.headers['set-cookie']).toBeUndefined();
     expect(mockAuth.refresh).toHaveBeenCalledWith('refresh-demo-token-123');
 
     await app.close();
@@ -201,6 +195,14 @@ describe('AuthController (integration)', () => {
       .send({});
 
     expect(res.status).toBe(201);
+    expect(res.body).toEqual({
+      user: svcRefresh.user,
+      access_token: 'novo-token',
+    });
+    expect(res.body.refresh_token).toBeUndefined();
+    expect(String(res.headers['set-cookie'])).toContain(
+      `${REFRESH_TOKEN_COOKIE_NAME}=rotated`,
+    );
     expect(mockAuth.refresh).toHaveBeenCalledWith('cookie-refresh-jwt');
 
     await app.close();
@@ -235,6 +237,22 @@ describe('AuthController (integration)', () => {
       : String(res.headers['set-cookie'] ?? '');
     expect(cleared).toContain(`${REFRESH_TOKEN_COOKIE_NAME}=`);
     expect(cleared.toLowerCase()).toMatch(/max-age=0|expires=.*1970/);
+
+    await app.close();
+  });
+
+  it('POST /api/auth/mobile/logout revoga token do corpo sem manipular cookie', async () => {
+    const mockAuth = { logout: jest.fn().mockResolvedValue({ message: 'ok' }) };
+    const app = await createApp(mockAuth);
+
+    const res = await request(app.getHttpServer())
+      .post('/api/auth/mobile/logout')
+      .send({ refreshToken: 'refresh-demo-token-123' });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ message: 'Logout realizado com sucesso' });
+    expect(res.headers['set-cookie']).toBeUndefined();
+    expect(mockAuth.logout).toHaveBeenCalledWith('refresh-demo-token-123');
 
     await app.close();
   });

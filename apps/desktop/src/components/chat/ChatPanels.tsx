@@ -351,17 +351,22 @@ function MessageBubble({
             (outboundStatus === "sent" ||
               outboundStatus === "delivered" ||
               outboundStatus === "read") && (
-              <CheckCheck
-                size={14}
-                className={clsx(
-                  "shrink-0 transition-colors",
-                  outboundStatus === "read" ? "text-cyan-300" : "text-white/80",
-                )}
-                aria-hidden
+              <span
                 title={
                   outboundStatus === "read" ? "Lida pelo cliente" : "Entregue"
                 }
-              />
+              >
+                <CheckCheck
+                  size={14}
+                  className={clsx(
+                    "shrink-0 transition-colors",
+                    outboundStatus === "read"
+                      ? "text-cyan-300"
+                      : "text-white/80",
+                  )}
+                  aria-hidden
+                />
+              </span>
             )}
         </div>
       </article>

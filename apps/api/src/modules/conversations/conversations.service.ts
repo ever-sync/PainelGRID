@@ -35,6 +35,22 @@ export class ConversationsService {
     throw new ForbiddenException('Sem permissao');
   }
 
+  private async assertConversationAccess(
+    user: AuthenticatedUser,
+    conversation: {
+      client_id: string;
+      lead?: { assigned_vendor_id: string | null } | null;
+    },
+  ) {
+    await this.assertClientRead(user, conversation.client_id);
+    if (
+      user.role === Role.VENDEDOR &&
+      conversation.lead?.assigned_vendor_id !== user.sub
+    ) {
+      throw new ForbiddenException('Conversa nao atribuida a este vendedor');
+    }
+  }
+
   async findAll(user: AuthenticatedUser, query: FindConversationsQueryDto) {
     await this.assertClientRead(user, query.client_id);
 
@@ -85,10 +101,13 @@ export class ConversationsService {
         client_id: dto.client_id,
         deleted_at: null,
       },
-      select: { id: true },
+      select: { id: true, assigned_vendor_id: true },
     });
     if (!lead) {
       throw new NotFoundException('Lead nao encontrado para este cliente');
+    }
+    if (user.role === Role.VENDEDOR && lead.assigned_vendor_id !== user.sub) {
+      throw new ForbiddenException('Lead nao atribuido a este vendedor');
     }
 
     let conversation = await this.prisma.conversation.findFirst({
@@ -148,11 +167,14 @@ export class ConversationsService {
   }
 
   async findMessages(user: AuthenticatedUser, conversationId: string) {
-    const conv = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
+    const conv = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: { lead: { select: { assigned_vendor_id: true } } },
+    });
     if (!conv) {
       throw new NotFoundException('Conversa nao encontrada');
     }
-    await this.assertClientRead(user, conv.client_id);
+    await this.assertConversationAccess(user, conv);
 
     return this.prisma.message.findMany({
       where: { conversation_id: conversationId },
@@ -163,12 +185,16 @@ export class ConversationsService {
   async downloadMessageMedia(user: AuthenticatedUser, messageId: string) {
     const msg = await this.prisma.message.findUnique({
       where: { id: messageId },
-      include: { conversation: true },
+      include: {
+        conversation: {
+          include: { lead: { select: { assigned_vendor_id: true } } },
+        },
+      },
     });
     if (!msg) {
       throw new NotFoundException('Mensagem nao encontrada');
     }
-    await this.assertClientRead(user, msg.conversation.client_id);
+    await this.assertConversationAccess(user, msg.conversation);
 
     if (!msg.media_id && !msg.media_url) {
       throw new NotFoundException('Mensagem sem midia');
@@ -181,11 +207,14 @@ export class ConversationsService {
   }
 
   async findAgentActions(user: AuthenticatedUser, conversationId: string) {
-    const conv = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
+    const conv = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: { lead: { select: { assigned_vendor_id: true } } },
+    });
     if (!conv) {
       throw new NotFoundException('Conversa nao encontrada');
     }
-    await this.assertClientRead(user, conv.client_id);
+    await this.assertConversationAccess(user, conv);
 
     const logs = await this.prisma.agentActionLog.findMany({
       where: { conversation_id: conversationId },
@@ -211,17 +240,20 @@ export class ConversationsService {
   }
 
   async addMessage(user: AuthenticatedUser, conversationId: string, dto: CreateMessageDto) {
-    const conv = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
+    const conv = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: { lead: { select: { assigned_vendor_id: true } } },
+    });
     if (!conv) {
       throw new NotFoundException('Conversa nao encontrada');
     }
-    await this.assertClientRead(user, conv.client_id);
+    await this.assertConversationAccess(user, conv);
 
     const senderType: SenderType =
       user.role === Role.VENDEDOR || user.role === Role.CLIENTE || user.role === Role.GESTOR
         ? SenderType.user
         : SenderType.system;
-    const senderId = dto.sender_id ?? user.sub;
+    const senderId = user.sub;
     const content = dto.content.trim();
     let externalId: string | null = null;
 
@@ -311,11 +343,14 @@ export class ConversationsService {
     conversationId: string,
     args: { fileBuffer: Buffer; filename: string; mimeType: string; caption?: string },
   ) {
-    const conv = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
+    const conv = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: { lead: { select: { assigned_vendor_id: true } } },
+    });
     if (!conv) {
       throw new NotFoundException('Conversa nao encontrada');
     }
-    await this.assertClientRead(user, conv.client_id);
+    await this.assertConversationAccess(user, conv);
 
     const senderType: SenderType =
       user.role === Role.VENDEDOR || user.role === Role.CLIENTE || user.role === Role.GESTOR

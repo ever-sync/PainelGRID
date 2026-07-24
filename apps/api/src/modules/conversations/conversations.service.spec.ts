@@ -15,6 +15,7 @@ const makeConv = (channel = 'whatsapp') => ({
   channel,
   last_message_at: new Date(),
   created_at: new Date(),
+  lead: { assigned_vendor_id: 'v1' },
 });
 
 const makeMsg = (overrides: Partial<Record<string, unknown>> = {}) => ({
@@ -140,6 +141,21 @@ describe('ConversationsService', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
+    it('VENDEDOR: bloqueia conversa atribuida a outro vendedor', async () => {
+      prisma.conversation.findUnique.mockResolvedValue({
+        ...makeConv(),
+        lead: { assigned_vendor_id: 'outro-vendedor' },
+      });
+
+      await expect(
+        service.findMessages(
+          { sub: 'v1', role: Role.VENDEDOR, client_id: clientId } as any,
+          convId,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.message.findMany).not.toHaveBeenCalled();
+    });
+
     it('retorna mensagens quando autorizado', async () => {
       const msgs = [makeMsg({ id: 'msg-1' }), makeMsg({ id: 'msg-2' })];
       prisma.conversation.findUnique.mockResolvedValue(makeConv());
@@ -244,6 +260,26 @@ describe('ConversationsService', () => {
       expect(realtimeEvents.emitNewMessage).toHaveBeenCalledWith(
         clientId,
         expect.objectContaining({ conversation_id: convId }),
+      );
+    });
+
+    it('ignora sender_id fornecido e registra o usuario autenticado', async () => {
+      prisma.conversation.findUnique.mockResolvedValue(makeConv('web'));
+      prisma.message.create.mockResolvedValue(
+        makeMsg({ sender_type: SenderType.user, sender_id: 'g1' }),
+      );
+      prisma.conversation.update.mockResolvedValue({});
+
+      await service.addMessage(
+        { sub: 'g1', role: Role.GESTOR } as any,
+        convId,
+        { content: 'ola', sender_id: 'usuario-forjado' } as any,
+      );
+
+      expect(prisma.message.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ sender_id: 'g1' }),
+        }),
       );
     });
 

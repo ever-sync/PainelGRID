@@ -161,6 +161,27 @@ describe('LeadsService', () => {
     expect(result).toEqual({ imported: 1, skipped: 0, errors: [] });
   });
 
+  it('rejeita arquivo com extensao XLSX sem assinatura ZIP', async () => {
+    await expect(
+      service.importCsv(
+        {
+          sub: gestorId,
+          role: Role.GESTOR,
+          name: 'Gestor',
+          email: 'gestor@teste.com',
+          client_id: null,
+        },
+        { client_id: clientId },
+        {
+          buffer: Buffer.from('conteudo falso'),
+          originalname: 'leads.xlsx',
+          mimetype:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        },
+      ),
+    ).rejects.toThrow('Arquivo XLSX invalido');
+  });
+
   it('importa CSV ignorando linhas com telefone ja existente (bulk dedup)', async () => {
     prisma.lead.findMany.mockResolvedValue([{ phone: '+5511911111111' }]);
     prisma.lead.createMany.mockResolvedValue({ count: 1 });

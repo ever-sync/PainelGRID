@@ -17,7 +17,7 @@ import { CurrentUser, Public } from '../../common/decorators';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { MobileRefreshTokenDto } from './dto/mobile-refresh-token.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthService } from './auth.service';
 import { AuthenticatedUser } from './auth.types';
@@ -34,14 +34,11 @@ export class AuthController {
   @ApiOperation({
     summary: 'Autentica usuario',
     description:
-      'Retorna access_token e user no JSON. O refresh_token e enviado em cookie httpOnly ' +
-      '(PainelGRID) e, apenas quando o header X-Client-Platform: capacitor esta presente ' +
-      '(app mobile, onde o cookie cross-site nao e confiavel), tambem no corpo da resposta.',
+      'Fluxo web: retorna access_token e user no JSON e envia o refresh_token somente em cookie httpOnly.',
   })
   @ApiResponse({ status: 201, description: 'Login realizado com sucesso' })
   @ApiResponse({ status: 401, description: 'Credenciais invalidas' })
   async login(
-    @Req() req: Request,
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ) {
@@ -50,7 +47,23 @@ export class AuthController {
     return {
       user: result.user,
       access_token: result.access_token,
-      ...(this.isNativeClient(req) ? { refresh_token: result.refresh_token } : {}),
+    };
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Post('mobile/login')
+  @ApiOperation({
+    summary: 'Autentica usuario no app mobile',
+    description:
+      'Endpoint exclusivo do app nativo. Retorna o refresh_token no corpo para armazenamento nativo e nao emite cookie.',
+  })
+  async mobileLogin(@Body() dto: LoginDto) {
+    const result = await this.authService.login(dto);
+    return {
+      user: result.user,
+      access_token: result.access_token,
+      refresh_token: result.refresh_token,
     };
   }
 
@@ -58,18 +71,15 @@ export class AuthController {
   @Post('refresh')
   @ApiOperation({
     summary: 'Renova access token',
-    description:
-      'Usa cookie httpOnly com refresh ou, em transicao, refreshToken no corpo. Rotaciona o cookie ' +
-      'e, para o app mobile (header X-Client-Platform: capacitor), tambem o refresh_token no corpo.',
+    description: 'Fluxo web: usa e rotaciona exclusivamente o cookie httpOnly.',
   })
   @ApiResponse({ status: 201, description: 'Tokens renovados' })
   @ApiResponse({ status: 401, description: 'Refresh invalido ou expirado' })
   async refresh(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-    @Body() dto: RefreshTokenDto,
   ) {
-    const token = this.extractRefreshFromRequest(req, dto);
+    const token = this.extractRefreshCookie(req);
     if (!token) {
       throw new UnauthorizedException('Sessao invalida ou expirada');
     }
@@ -78,7 +88,22 @@ export class AuthController {
     return {
       user: result.user,
       access_token: result.access_token,
-      ...(this.isNativeClient(req) ? { refresh_token: result.refresh_token } : {}),
+    };
+  }
+
+  @Public()
+  @Post('mobile/refresh')
+  @ApiOperation({
+    summary: 'Renova tokens no app mobile',
+    description:
+      'Recebe o refresh token no corpo e retorna sua versao rotacionada. Nao le nem emite cookies.',
+  })
+  async mobileRefresh(@Body() dto: MobileRefreshTokenDto) {
+    const result = await this.authService.refresh(dto.refreshToken.trim());
+    return {
+      user: result.user,
+      access_token: result.access_token,
+      refresh_token: result.refresh_token,
     };
   }
 
@@ -92,9 +117,8 @@ export class AuthController {
   async logout(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-    @Body() dto: RefreshTokenDto,
   ) {
-    const token = this.extractRefreshFromRequest(req, dto);
+    const token = this.extractRefreshCookie(req);
     if (token) {
       try {
         await this.authService.logout(token);
@@ -103,6 +127,21 @@ export class AuthController {
       }
     }
     this.clearRefreshCookie(res);
+    return { message: 'Logout realizado com sucesso' };
+  }
+
+  @Public()
+  @Post('mobile/logout')
+  @ApiOperation({
+    summary: 'Encerra sessao no app mobile',
+    description: 'Revoga o refresh token enviado no corpo e nao manipula cookies.',
+  })
+  async mobileLogout(@Body() dto: MobileRefreshTokenDto) {
+    try {
+      await this.authService.logout(dto.refreshToken.trim());
+    } catch {
+      /* best-effort: o cliente ainda deve apagar o token armazenado */
+    }
     return { message: 'Logout realizado com sucesso' };
   }
 
@@ -149,18 +188,10 @@ export class AuthController {
     return this.authService.changePassword(user, dto);
   }
 
-  /** App mobile (Capacitor) envia este header pois o cookie httpOnly cross-site nao e confiavel na WebView nativa. */
-  private isNativeClient(req: Request): boolean {
-    return req.header('X-Client-Platform') === 'capacitor';
-  }
-
-  private extractRefreshFromRequest(req: Request, dto: RefreshTokenDto): string | null {
+  private extractRefreshCookie(req: Request): string | null {
     const fromCookie = req.cookies?.[REFRESH_TOKEN_COOKIE_NAME];
     if (typeof fromCookie === 'string' && fromCookie.trim()) {
       return fromCookie.trim();
-    }
-    if (dto.refreshToken?.trim()) {
-      return dto.refreshToken.trim();
     }
     return null;
   }

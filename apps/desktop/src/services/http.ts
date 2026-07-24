@@ -18,11 +18,6 @@ import {
 } from "./native-refresh-store";
 import { isNativePlatform } from "../utils/platform";
 
-/** Sinaliza ao backend que o pedido vem do app nativo (cookie httpOnly cross-site nao e confiavel na WebView). */
-function nativeClientHeaders(): Record<string, string> {
-  return isNativePlatform() ? { "X-Client-Platform": "capacitor" } : {};
-}
-
 function normalizeApiBaseUrl(raw: string): string {
   const base = raw.trim().replace(/\/+$/, "");
   if (/\/api$/i.test(base)) {
@@ -126,13 +121,15 @@ function refreshAccessTokenSingleFlight(): Promise<string | null> {
 
 async function clearServerSessionCookie(): Promise<void> {
   if (!API_BASE) return;
-  const nativeRefreshToken = isNativePlatform()
-    ? await readNativeRefreshToken()
-    : null;
+  const native = isNativePlatform();
   try {
-    await fetch(`${API_BASE}/auth/logout`, {
+    const nativeRefreshToken = native ? await readNativeRefreshToken() : null;
+    if (native && !nativeRefreshToken) {
+      return;
+    }
+    await fetch(`${API_BASE}${native ? "/auth/mobile/logout" : "/auth/logout"}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...nativeClientHeaders() },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
         nativeRefreshToken ? { refreshToken: nativeRefreshToken } : {},
       ),
@@ -141,22 +138,28 @@ async function clearServerSessionCookie(): Promise<void> {
   } catch {
     /* noop */
   } finally {
-    if (isNativePlatform()) {
-      await clearNativeRefreshToken();
+    if (native) {
+      try {
+        await clearNativeRefreshToken();
+      } catch {
+        /* o armazenamento nativo pode estar indisponivel enquanto o dispositivo esta bloqueado */
+      }
     }
   }
 }
 
 async function doRefreshSession(): Promise<string | null> {
-  const url = `${API_BASE}/auth/refresh`;
-  const nativeRefreshToken = isNativePlatform()
-    ? await readNativeRefreshToken()
-    : null;
+  const native = isNativePlatform();
+  const url = `${API_BASE}${native ? "/auth/mobile/refresh" : "/auth/refresh"}`;
   let response: Response;
   try {
+    const nativeRefreshToken = native ? await readNativeRefreshToken() : null;
+    if (native && !nativeRefreshToken) {
+      return null;
+    }
     response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...nativeClientHeaders() },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
         nativeRefreshToken ? { refreshToken: nativeRefreshToken } : {},
       ),
@@ -189,15 +192,13 @@ async function doRefreshSession(): Promise<string | null> {
     return null;
   }
 
-  if (isNativePlatform() && typeof p.refresh_token === "string") {
+  if (native && typeof p.refresh_token === "string") {
     await writeNativeRefreshToken(p.refresh_token);
   }
 
   const session: PersistedAuthSession = {
     user: mapAuthApiUser(userRaw as AuthApiUserPayload),
     accessToken: access_token,
-    refreshToken:
-      typeof p.refresh_token === "string" ? p.refresh_token : undefined,
   };
   writePersistedSession(session, isSessionRemembered());
   notifyAuthSessionUpdated(session);
@@ -224,7 +225,6 @@ export async function httpRequest<T>(
       headers: {
         "Content-Type": "application/json",
         ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
-        ...nativeClientHeaders(),
       },
       body: options.body ? JSON.stringify(options.body) : undefined,
       signal: options.signal,

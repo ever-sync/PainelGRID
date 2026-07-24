@@ -95,6 +95,15 @@ describe("auth-session", () => {
     expect(readPersistedSession()).toBeNull();
   });
 
+  it("descarta refresh token legado ao ler a sessao do navegador", () => {
+    localStorage.setItem(
+      AUTH_STORAGE_KEY,
+      JSON.stringify({ ...session, refreshToken: "nao-deve-ser-recuperado" }),
+    );
+
+    expect(readPersistedSession()).toEqual(session);
+  });
+
   it("limpa as duas formas de persistencia", () => {
     localStorage.setItem(AUTH_STORAGE_KEY, "local");
     sessionStorage.setItem(AUTH_STORAGE_KEY, "session");

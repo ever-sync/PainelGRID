@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppointmentStatus, ConfirmationStatus, Lead, Prisma } from '@prisma/client';
-import * as XLSX from 'xlsx';
+import { readSheet } from 'read-excel-file/node';
 import {
   looksLikeJwtCompact,
   signCheckinVoucher,
@@ -116,6 +116,8 @@ const leadSelect = {
 type LeadWithRelations = Prisma.LeadGetPayload<{ select: typeof leadSelect }>;
 
 const CHECKIN_VOUCHER_TTL_SEC = 90 * 24 * 60 * 60;
+const MAX_IMPORT_ROWS = 10_000;
+const MAX_IMPORT_COLUMNS = 100;
 
 @Injectable()
 export class LeadsService {
@@ -344,7 +346,7 @@ export class LeadsService {
     }
 
     const targetClientId = await this.resolveImportClientId(user, dto.client_id);
-    const rows = this.parseImportRows(file);
+    const rows = await this.parseImportRows(file);
     if (rows.length === 0) {
       throw new BadRequestException('Arquivo vazio.');
     }
@@ -2285,7 +2287,11 @@ export class LeadsService {
     return rows.filter((r) => r.some((value) => value.trim().length > 0));
   }
 
-  private parseImportRows(file: { buffer: Buffer; originalname?: string; mimetype?: string }) {
+  private async parseImportRows(file: {
+    buffer: Buffer;
+    originalname?: string;
+    mimetype?: string;
+  }): Promise<string[][]> {
     const lowerName = (file.originalname ?? '').toLowerCase();
     const mime = (file.mimetype ?? '').toLowerCase();
     const isXlsx =
@@ -2294,22 +2300,46 @@ export class LeadsService {
       mime.includes('application/vnd.ms-excel');
 
     if (isXlsx) {
-      const workbook = XLSX.read(file.buffer, { type: 'buffer' });
-      const firstSheetName = workbook.SheetNames[0];
-      if (!firstSheetName) {
-        return [];
+      if (
+        file.buffer.length < 4 ||
+        file.buffer[0] !== 0x50 ||
+        file.buffer[1] !== 0x4b ||
+        file.buffer[2] !== 0x03 ||
+        file.buffer[3] !== 0x04
+      ) {
+        throw new BadRequestException('Arquivo XLSX invalido.');
       }
-      const worksheet = workbook.Sheets[firstSheetName];
-      const rows = XLSX.utils.sheet_to_json<string[]>(worksheet, {
-        header: 1,
-        raw: false,
-        defval: '',
-      });
-      return rows.map((row) => row.map((cell) => String(cell ?? '')));
+      const sheet = await readSheet(file.buffer);
+      if (sheet.length > MAX_IMPORT_ROWS + 1) {
+        throw new BadRequestException(
+          `A planilha excede o limite de ${MAX_IMPORT_ROWS} linhas.`,
+        );
+      }
+      if (sheet.some((row) => row.length > MAX_IMPORT_COLUMNS)) {
+        throw new BadRequestException(
+          `A planilha excede o limite de ${MAX_IMPORT_COLUMNS} colunas.`,
+        );
+      }
+      return sheet.map((row) =>
+        row.map((cell) =>
+          cell instanceof Date ? cell.toISOString() : String(cell ?? ''),
+        ),
+      );
     }
 
     const text = file.buffer.toString('utf8');
-    return this.parseCsv(text);
+    const rows = this.parseCsv(text);
+    if (rows.length > MAX_IMPORT_ROWS + 1) {
+      throw new BadRequestException(
+        `O CSV excede o limite de ${MAX_IMPORT_ROWS} linhas.`,
+      );
+    }
+    if (rows.some((row) => row.length > MAX_IMPORT_COLUMNS)) {
+      throw new BadRequestException(
+        `O CSV excede o limite de ${MAX_IMPORT_COLUMNS} colunas.`,
+      );
+    }
+    return rows;
   }
 
   private normalizeSource(value: string): Lead['source'] | null {

@@ -26,6 +26,7 @@ import { FindLeadsQueryDto } from './dto/find-leads-query.dto';
 import { ImportLeadsDto } from './dto/import-leads.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
 import { LeadsService } from './leads.service';
+import { spreadsheetUploadOptions } from '../../common/upload-options';
 
 @ApiTags('leads')
 @ApiBearerAuth()
@@ -52,7 +53,7 @@ export class LeadsController {
 
   @Post('import')
   @Roles(Role.GESTOR, Role.CLIENTE, Role.VENDEDOR, Role.RECEPCAO)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', spreadsheetUploadOptions))
   @ApiOperation({ summary: 'Importa leads via arquivo CSV ou XLSX' })
   @ApiResponse({ status: 201, description: 'Importação processada' })
   @ApiResponse({ status: 400, description: 'Arquivo inválido ou ausente' })

@@ -21,6 +21,7 @@ import { ConversationsService } from './conversations.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { EnsureConversationDto } from './dto/ensure-conversation.dto';
 import { FindConversationsQueryDto } from './dto/find-conversations-query.dto';
+import { chatMediaUploadOptions } from '../../common/upload-options';
 
 @ApiTags('chat')
 @ApiBearerAuth()
@@ -100,7 +101,7 @@ export class ConversationsController {
 
   @Post(':id/media')
   @Roles(Role.GESTOR, Role.CLIENTE, Role.VENDEDOR)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', chatMediaUploadOptions))
   @ApiOperation({ summary: 'Envia arquivo/foto/video em uma conversa WhatsApp' })
   @ApiResponse({ status: 201, description: 'Mídia enviada com sucesso' })
   addMediaMessage(

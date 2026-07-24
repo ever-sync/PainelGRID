@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, AlertTriangle, Loader2 } from "lucide-react";
 import clsx from "clsx";
 import { Notice } from "../../components/ui/Notice";
 import type { UserRole } from "../../types";
@@ -45,6 +45,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [loginError, setLoginError] = useState("");
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isSlideVisible, setIsSlideVisible] = useState(true);
+  const [isCapsLockOn, setIsCapsLockOn] = useState(false);
 
   useEffect(() => {
     let timeoutId: number | undefined;
@@ -114,6 +115,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               />
               <input
                 type="email"
+                name="email"
+                autoComplete="username"
                 placeholder="Digite seu endereço de e-mail"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -122,25 +125,41 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             </div>
 
             {/* Senha */}
-            <div className="relative">
-              <Lock
-                size={15}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-              />
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="Digite sua senha"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-9 pr-10 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF0636] focus:border-transparent transition"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
+            <div>
+              <div className="relative">
+                <Lock
+                  size={15}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  autoComplete="current-password"
+                  placeholder="Digite sua senha"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) =>
+                    setIsCapsLockOn(e.getModifierState("CapsLock"))
+                  }
+                  onKeyUp={(e) =>
+                    setIsCapsLockOn(e.getModifierState("CapsLock"))
+                  }
+                  className="w-full pl-9 pr-10 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF0636] focus:border-transparent transition"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+              {isCapsLockOn && (
+                <div className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold text-amber-600">
+                  <AlertTriangle size={13} />
+                  <span>Atenção: Fixa (Caps Lock) ativada</span>
+                </div>
+              )}
             </div>
 
             {/* Lembrar-me + Esqueceu a senha */}
@@ -167,16 +186,25 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full text-white py-3 rounded-xl text-sm font-semibold transition-colors"
+              className="w-full text-white py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed shadow-sm"
               style={{ backgroundColor: "#FF0636" }}
               onMouseOver={(e) =>
+                !isSubmitting &&
                 (e.currentTarget.style.backgroundColor = "#d90030")
               }
               onMouseOut={(e) =>
+                !isSubmitting &&
                 (e.currentTarget.style.backgroundColor = "#FF0636")
               }
             >
-              {isSubmitting ? "Entrando..." : "Entrar"}
+              {isSubmitting ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Entrando...</span>
+                </>
+              ) : (
+                "Entrar"
+              )}
             </button>
             {loginError && (
               <Notice tone="error" className="text-xs">

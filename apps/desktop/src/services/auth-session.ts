@@ -6,7 +6,6 @@ export const AUTH_STORAGE_KEY = "painelgrid.auth.session";
 export type PersistedAuthSession = {
   user: User;
   accessToken: string;
-  refreshToken?: string;
 };
 
 /** Mesmo nome de evento usado para sincronizar React após refresh no `http.ts`. */
@@ -21,7 +20,6 @@ function readFromStorage(storage: Storage): PersistedAuthSession | null {
     return {
       user: parsed.user,
       accessToken: parsed.accessToken,
-      refreshToken: parsed.refreshToken,
     };
   } catch {
     return null;

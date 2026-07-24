@@ -20,6 +20,17 @@ import type { Campaign, Client, Event, Lead, LeadSource } from "../../types";
 import { readStoredSession } from "../../services/auth";
 import { listClients, mapApiClientToClient } from "../../services/clients";
 import {
+  getCrmStageCounts,
+  listCrmPipelines,
+  listPipelineStages,
+} from "../../services/crm";
+import {
+  apiStagesToColumns,
+  defaultKanbanStages,
+  pickDefaultPipeline,
+  type KanbanColumn,
+} from "../../lib/crm-kanban";
+import {
   listCampaigns,
   mapApiCampaignToCampaign,
 } from "../../services/campaigns";
@@ -116,16 +127,6 @@ const reportPanelClass =
   "report-panel rounded-[28px] border border-white/85 bg-white/95 p-5 shadow-[0_16px_40px_rgba(15,23,42,0.06)]";
 const reportTableClass =
   "report-table overflow-hidden rounded-[24px] border border-[#eadfce] bg-white/95 shadow-[0_12px_32px_rgba(15,23,42,0.05)]";
-const chartGridColor = "#ebe4d8";
-const chartAxisColor = "#c8b9a3";
-const chartTickColor = "#8c7d6a";
-const chartTooltipStyle = {
-  backgroundColor: "#fffdf8",
-  borderColor: "#eadfce",
-  borderRadius: 16,
-  color: "#18181b",
-};
-
 const sourceLabels: Record<LeadSource, string> = {
   facebook_ads: "Facebook Ads",
   whatsapp: "WhatsApp",
@@ -463,11 +464,10 @@ export function RelatorioGestorPage() {
   const [campaignsForClient, setCampaignsForClient] = useState<Campaign[]>([]);
   const [eventsForClient, setEventsForClient] = useState<Event[]>([]);
   const [activeTab, setActiveTab] = useState<ReportTabId>("visao-geral");
-  const [campaignFilter, setCampaignFilter] = useState("");
-  const [contentFilter, setContentFilter] = useState("");
-  const [audienceFilter, setAudienceFilter] = useState("");
-  const [termFilter, setTermFilter] = useState("");
   const [apiReports, setApiReports] = useState<Record<string, ReportBase>>({});
+  const [loadError, setLoadError] = useState("");
+  const [pipelineStages, setPipelineStages] = useState<KanbanColumn[]>([]);
+  const [stageCounts, setStageCounts] = useState<Record<string, number>>({});
   const selectedClientId = gestorClientId;
   const chartGridColor = isDarkMode ? "#2a2a2a" : "#ebe4d8";
   const chartAxisColor = isDarkMode ? "#3f3f46" : "#c8b9a3";
@@ -512,23 +512,33 @@ export function RelatorioGestorPage() {
   useEffect(() => {
     const t = readStoredSession()?.accessToken;
     if (!t) return;
-    void listClients(t).then((rows) => {
-      const mapped = rows.map(mapApiClientToClient);
-      setClients(mapped);
-      if (selectedClientId && mapped.some((c) => c.id === selectedClientId))
-        return;
-      if (mapped[0]?.id) {
-        setGestorClientId(mapped[0].id);
-      }
-    });
+    void listClients(t)
+      .then((rows) => {
+        const mapped = rows.map(mapApiClientToClient);
+        setClients(mapped);
+        if (selectedClientId && mapped.some((c) => c.id === selectedClientId))
+          return;
+        if (mapped[0]?.id) {
+          setGestorClientId(mapped[0].id);
+        }
+      })
+      .catch(() =>
+        setLoadError(
+          "Não foi possível carregar a lista de clientes. Atualize a página.",
+        ),
+      );
   }, [selectedClientId, setGestorClientId]);
 
   const refreshAllLeads = useCallback(() => {
     const t = readStoredSession()?.accessToken;
     if (!t) return;
-    void listLeads({}, t).then((rows) =>
-      setAllLeads(rows.map(mapApiLeadToLead)),
-    );
+    void listLeads({}, t)
+      .then((rows) => setAllLeads(rows.map(mapApiLeadToLead)))
+      .catch(() =>
+        setLoadError(
+          "Não foi possível carregar os leads. Atualize a página.",
+        ),
+      );
   }, []);
 
   useEffect(() => {
@@ -543,10 +553,49 @@ export function RelatorioGestorPage() {
     void Promise.all([
       listCampaigns(selectedClientId, t),
       listEvents({ client_id: selectedClientId }, t),
-    ]).then(([camps, evs]) => {
-      setCampaignsForClient(camps.map(mapApiCampaignToCampaign));
-      setEventsForClient(evs.map(mapApiEventToEvent));
-    });
+    ])
+      .then(([camps, evs]) => {
+        setCampaignsForClient(camps.map(mapApiCampaignToCampaign));
+        setEventsForClient(evs.map(mapApiEventToEvent));
+      })
+      .catch(() =>
+        setLoadError(
+          "Não foi possível carregar campanhas/eventos. Atualize a página.",
+        ),
+      );
+  }, [selectedClientId]);
+
+  useEffect(() => {
+    const t = readStoredSession()?.accessToken;
+    if (!t || !selectedClientId) {
+      setPipelineStages([]);
+      setStageCounts({});
+      return;
+    }
+
+    let active = true;
+
+    void (async () => {
+      try {
+        const pipelines = await listCrmPipelines(selectedClientId, t);
+        const pipeline = pickDefaultPipeline(pipelines, selectedClientId);
+        const stages = pipeline
+          ? (pipeline.stages ?? (await listPipelineStages(pipeline.id, t)))
+          : defaultKanbanStages();
+        const countsResponse = await getCrmStageCounts(selectedClientId, t);
+        if (!active) return;
+        setPipelineStages(apiStagesToColumns(stages));
+        setStageCounts(countsResponse.counts);
+      } catch {
+        if (!active) return;
+        setPipelineStages([]);
+        setStageCounts({});
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
   }, [selectedClientId]);
 
   const selectedClient =
@@ -615,21 +664,7 @@ export function RelatorioGestorPage() {
     return totals;
   }, [reportBase.records]);
 
-  const filteredRecords = useMemo(() => {
-    return reportBase.records.filter((record) => {
-      if (campaignFilter && record.campaign !== campaignFilter) return false;
-      if (contentFilter && record.content !== contentFilter) return false;
-      if (audienceFilter && record.audience !== audienceFilter) return false;
-      if (termFilter && record.term !== termFilter) return false;
-      return true;
-    });
-  }, [
-    audienceFilter,
-    campaignFilter,
-    contentFilter,
-    reportBase.records,
-    termFilter,
-  ]);
+  const filteredRecords = reportBase.records;
 
   const attributed = useMemo(
     () => attributedSpend(filteredRecords, reportBase.costs, campaignTotals),
@@ -654,7 +689,7 @@ export function RelatorioGestorPage() {
 
   const taxaAgendamento =
     metaLeadsAttributed > 0
-      ? (filteredRecords.length / metaLeadsAttributed) * 100
+      ? Math.min(100, (filteredRecords.length / metaLeadsAttributed) * 100)
       : 0;
 
   const segmentedRecords = filteredRecords.filter(
@@ -713,7 +748,8 @@ export function RelatorioGestorPage() {
     const checkedIn = eventLeads.filter(
       (lead) => lead.confirmation_status === "checked_in",
     ).length;
-    const attendanceRate = confirmed > 0 ? (checkedIn / confirmed) * 100 : 0;
+    const attendanceRate =
+      confirmed > 0 ? Math.min(100, (checkedIn / confirmed) * 100) : 0;
 
     return {
       id: event.id,
@@ -723,6 +759,7 @@ export function RelatorioGestorPage() {
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
+        timeZone: "UTC",
       }).format(new Date(event.event_date)),
       location: event.location ?? "Local nao informado",
       leads: eventLeads.length,
@@ -1206,141 +1243,24 @@ export function RelatorioGestorPage() {
   );
 
   const funnelStageRows = useMemo(() => {
-    const scopedLeads = qualityScopedLeads;
-    const totalBase = Math.max(scopedLeads.length, 1);
-    const notesWithText = (lead: Lead) => lead.notes.trim().length > 0;
-    const hasRescheduleHint = (lead: Lead) =>
-      /reagend|remarc|retorn/i.test(lead.notes) ||
-      lead.tags.some((tag) => /reagend|retorn/i.test(tag));
+    const totalBase = Math.max(
+      pipelineStages.reduce(
+        (sum, stage) => sum + (stageCounts[stage.id] ?? 0),
+        0,
+      ),
+      1,
+    );
 
-    const rows = [
-      {
-        label: "Novo Lead",
-        count: scopedLeads.filter(
-          (lead) => lead.crm_stage === "novo" && !notesWithText(lead),
-        ).length,
-        color: "#718096",
-      },
-      {
-        label: "Landing Page",
-        count: scopedLeads.filter((lead) => lead.source === "form_page").length,
-        color: "#718096",
-      },
-      {
-        label: "Avaliar",
-        count: scopedLeads.filter(
-          (lead) => lead.crm_stage === "novo" && notesWithText(lead),
-        ).length,
-        color: "#8b5cf6",
-      },
-      {
-        label: "Tentativa contato",
-        count: scopedLeads.filter(
-          (lead) =>
-            lead.crm_stage === "novo" &&
-            (lead.source === "whatsapp" || lead.source === "manual"),
-        ).length,
-        color: "#f59e0b",
-      },
-      {
-        label: "Em contato",
-        count: scopedLeads.filter((lead) => lead.crm_stage === "contactado")
-          .length,
-        color: "#3b82f6",
-      },
-      {
-        label: "Agendado",
-        count: scopedLeads.filter((lead) => lead.crm_stage === "agendado")
-          .length,
-        color: "#22c55e",
-      },
-      {
-        label: "Enviar confirm.",
-        count: scopedLeads.filter(
-          (lead) =>
-            lead.crm_stage === "agendado" &&
-            lead.confirmation_status === "pending",
-        ).length,
-        color: "#22d3ee",
-      },
-      {
-        label: "Agend. Confirmados",
-        count: scopedLeads.filter(
-          (lead) =>
-            lead.crm_stage === "agendado" &&
-            (lead.confirmation_status === "confirmed" ||
-              lead.confirmation_status === "checked_in"),
-        ).length,
-        color: "#38bdf8",
-      },
-      {
-        label: "Reagendado",
-        count: scopedLeads.filter((lead) => hasRescheduleHint(lead)).length,
-        color: "#f59e0b",
-      },
-      {
-        label: "Cancelado",
-        count: scopedLeads.filter(
-          (lead) => lead.confirmation_status === "cancelled",
-        ).length,
-        color: "#ef4444",
-      },
-      {
-        label: "Perdido Cadencia",
-        count: scopedLeads.filter(
-          (lead) => lead.crm_stage === "novo" && !notesWithText(lead),
-        ).length,
-        color: "#ef4444",
-      },
-      {
-        label: "Desinteresse",
-        count: scopedLeads.filter((lead) => lead.crm_stage === "perdido")
-          .length,
-        color: "#ef4444",
-      },
-      {
-        label: "Aguardando",
-        count: scopedLeads.filter(
-          (lead) =>
-            lead.crm_stage === "contactado" &&
-            lead.store_visit_datetime == null,
-        ).length,
-        color: "#718096",
-      },
-      {
-        label: "Confirmado",
-        count: scopedLeads.filter(
-          (lead) =>
-            lead.confirmation_status === "confirmed" ||
-            lead.confirmation_status === "checked_in",
-        ).length,
-        color: "#22c55e",
-      },
-      {
-        label: "Perdido",
-        count: scopedLeads.filter(
-          (lead) =>
-            lead.crm_stage === "perdido" &&
-            lead.confirmation_status !== "cancelled",
-        ).length,
-        color: "#ef4444",
-      },
-      {
-        label: "Ausente",
-        count: scopedLeads.filter(
-          (lead) =>
-            lead.confirmation_status === "confirmed" &&
-            lead.crm_stage === "perdido",
-        ).length,
-        color: "#f97316",
-      },
-    ];
-
-    return rows.map((row) => ({
-      ...row,
-      pct: (row.count / totalBase) * 100,
-    }));
-  }, [qualityScopedLeads]);
+    return pipelineStages.map((stage) => {
+      const count = stageCounts[stage.id] ?? 0;
+      return {
+        label: stage.label,
+        count,
+        color: stage.color,
+        pct: (count / totalBase) * 100,
+      };
+    });
+  }, [pipelineStages, stageCounts]);
 
   const funnelMaxCount = useMemo(
     () => Math.max(...funnelStageRows.map((row) => row.count), 1),
@@ -1440,13 +1360,6 @@ export function RelatorioGestorPage() {
     selectedClientCompanyName,
   ]);
 
-  const clearFilters = () => {
-    setCampaignFilter("");
-    setContentFilter("");
-    setAudienceFilter("");
-    setTermFilter("");
-  };
-
   const handleExport = () => {
     const safeClientName = selectedClientCompanyName
       .toLowerCase()
@@ -1517,10 +1430,14 @@ export function RelatorioGestorPage() {
       <div
         className={clsx(
           "flex min-h-[240px] items-center justify-center text-sm",
-          isDarkMode ? "bg-black text-zinc-400" : "text-zinc-500",
+          loadError
+            ? "text-red-600"
+            : isDarkMode
+              ? "bg-black text-zinc-400"
+              : "text-zinc-500",
         )}
       >
-        Carregando clientes...
+        {loadError || "Carregando clientes..."}
       </div>
     );
   }
@@ -1554,10 +1471,7 @@ export function RelatorioGestorPage() {
           <FilterSelect
             label="Cliente"
             value={selectedClientId}
-            onChange={(value) => {
-              setGestorClientId(value);
-              clearFilters();
-            }}
+            onChange={(value) => setGestorClientId(value)}
             options={clients.map((client) => ({
               label: client.company_name,
               value: client.id,
@@ -1566,6 +1480,19 @@ export function RelatorioGestorPage() {
           />
         }
       />
+
+      {loadError && (
+        <div
+          className={clsx(
+            "rounded-2xl border px-4 py-3 text-sm font-medium",
+            isDarkMode
+              ? "border-red-900 bg-red-950/40 text-red-300"
+              : "border-red-200 bg-red-50 text-red-700",
+          )}
+        >
+          {loadError}
+        </div>
+      )}
 
       <div
         className={clsx(
@@ -1878,7 +1805,7 @@ export function RelatorioGestorPage() {
                     {creativeRows.map((row) => (
                       <tr
                         key={row.creative}
-                        className="border-t border-[#f0e7db] text-zinc-800"
+                        className={clsx("border-t border-[#f0e7db]", isDarkMode ? "text-zinc-200" : "text-zinc-800")}
                       >
                         <td className="px-4 py-3 font-semibold">
                           {row.creative}
@@ -1950,7 +1877,7 @@ export function RelatorioGestorPage() {
                         ...chartTooltipStyle,
                       }}
                     />
-                    <Legend wrapperStyle={{ color: "#8c7d6a" }} />
+                    <Legend wrapperStyle={{ color: chartTickColor }} />
                     <Bar dataKey="total" fill="#c7ced9" radius={[4, 4, 0, 0]} />
                     <Bar
                       dataKey="engajados"
@@ -2050,7 +1977,7 @@ export function RelatorioGestorPage() {
                         ...chartTooltipStyle,
                       }}
                     />
-                    <Legend wrapperStyle={{ color: "#8c7d6a" }} />
+                    <Legend wrapperStyle={{ color: chartTickColor }} />
                     <Bar
                       dataKey="agendados"
                       stackId="a"
@@ -2171,7 +2098,7 @@ export function RelatorioGestorPage() {
                     {eventDashboardRows.map((row) => (
                       <tr
                         key={row.id}
-                        className="border-t border-[#f0e7db] text-zinc-800"
+                        className={clsx("border-t border-[#f0e7db]", isDarkMode ? "text-zinc-200" : "text-zinc-800")}
                       >
                         <td className="px-4 py-3 font-semibold">{row.name}</td>
                         <td className="px-4 py-3">

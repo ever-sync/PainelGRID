@@ -18,7 +18,7 @@ import {
 type LoginResponse = {
   user: AuthApiUserPayload;
   access_token: string;
-  /** Presente apenas para o app nativo (ver X-Client-Platform no http.ts). */
+  /** Presente apenas nos endpoints /auth/mobile/*. */
   refresh_token?: string;
 };
 
@@ -35,16 +35,20 @@ export async function loginWithPassword(
   password: string,
   rememberMe = true,
 ): Promise<AuthSession> {
-  const result = await httpRequest<LoginResponse>("/auth/login", {
-    method: "POST",
-    body: {
-      email,
-      password,
-      remember_me: rememberMe,
+  const native = isNativePlatform();
+  const result = await httpRequest<LoginResponse>(
+    native ? "/auth/mobile/login" : "/auth/login",
+    {
+      method: "POST",
+      body: {
+        email,
+        password,
+        remember_me: rememberMe,
+      },
     },
-  });
+  );
 
-  if (isNativePlatform() && result.refresh_token) {
+  if (native && result.refresh_token) {
     await writeNativeRefreshToken(result.refresh_token);
   }
 
@@ -52,15 +56,17 @@ export async function loginWithPassword(
 }
 
 export async function refreshAuthSession(): Promise<AuthSession> {
-  const nativeRefreshToken = isNativePlatform()
-    ? await readNativeRefreshToken()
-    : null;
-  const result = await httpRequest<RefreshResponse>("/auth/refresh", {
-    method: "POST",
-    body: nativeRefreshToken ? { refreshToken: nativeRefreshToken } : {},
-  });
+  const native = isNativePlatform();
+  const nativeRefreshToken = native ? await readNativeRefreshToken() : null;
+  const result = await httpRequest<RefreshResponse>(
+    native ? "/auth/mobile/refresh" : "/auth/refresh",
+    {
+      method: "POST",
+      body: nativeRefreshToken ? { refreshToken: nativeRefreshToken } : {},
+    },
+  );
 
-  if (isNativePlatform() && result.refresh_token) {
+  if (native && result.refresh_token) {
     await writeNativeRefreshToken(result.refresh_token);
   }
 
@@ -77,16 +83,24 @@ export async function fetchMe(accessToken: string): Promise<User> {
 }
 
 export async function logoutSession() {
-  const nativeRefreshToken = isNativePlatform()
-    ? await readNativeRefreshToken()
-    : null;
+  const native = isNativePlatform();
+  let nativeRefreshToken: string | null = null;
   try {
-    await httpRequest<{ message: string }>("/auth/logout", {
-      method: "POST",
-      body: nativeRefreshToken ? { refreshToken: nativeRefreshToken } : {},
-    });
+    if (native) {
+      nativeRefreshToken = await readNativeRefreshToken();
+      if (!nativeRefreshToken) {
+        return;
+      }
+    }
+    await httpRequest<{ message: string }>(
+      native ? "/auth/mobile/logout" : "/auth/logout",
+      {
+        method: "POST",
+        body: nativeRefreshToken ? { refreshToken: nativeRefreshToken } : {},
+      },
+    );
   } finally {
-    if (isNativePlatform()) {
+    if (native) {
       await clearNativeRefreshToken();
     }
   }
@@ -145,7 +159,6 @@ function toSession(payload: LoginResponse | RefreshResponse): AuthSession {
   return {
     user: mapAuthApiUser(payload.user),
     accessToken: payload.access_token,
-    refreshToken: payload.refresh_token,
   };
 }
 

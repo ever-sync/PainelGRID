@@ -196,7 +196,12 @@ export interface Campaign {
 export type ConversationChannel = "whatsapp" | "internal";
 
 /** Envio próprio no painel: relógio (sending), checks (servidor confirmou), falha opcional */
-export type MessageSendStatus = "sending" | "sent" | "failed";
+export type MessageSendStatus =
+  | "sending"
+  | "sent"
+  | "delivered"
+  | "read"
+  | "failed";
 
 export interface Message {
   id: string;
