@@ -8,6 +8,7 @@ import {
 } from "react-router-dom";
 import type { User } from "./types";
 import { isNativePlatform } from "./utils/platform";
+import { isProtectedRoutePath } from "./routing/route-policy";
 
 import { RoleGuard } from "./routing/RoleGuard";
 import {
@@ -269,9 +270,7 @@ export default function App() {
               ? window.location.hash.replace(/^#/, "")
               : window.location.pathname
             : "";
-        const isProtectedArea =
-          /^\/(gestor|cliente|vendedor|recepcao)(\/|$)/.test(routePath);
-        if (isProtectedArea) {
+        if (isProtectedRoutePath(routePath)) {
           try {
             const refreshed = await refreshAuthSession();
             if (!active) return;

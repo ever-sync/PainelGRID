@@ -9,7 +9,6 @@ import {
   Clock3,
   Download,
   ImageIcon,
-  Layers3,
   MapPin,
   Mail,
   MessageSquareMore,
@@ -77,11 +76,6 @@ import { listUsers, type StaffUser } from "../../services/users";
 import { dataUrlByteSize, resizeImageToDataUrl } from "../../utils/image";
 import { saveOrShareBlob } from "../../utils/nativeDownload";
 import {
-  getVendorScoreRanking,
-  type VendorScoreRankingItem,
-} from "../../services/vendorScore";
-import { EventReportTab } from "../../components/events/EventReportTab";
-import {
   DASHBOARD_DARK_CHANGE_EVENT,
   readDashboardDarkEnabled,
 } from "../../lib/dashboard-dark-mode";
@@ -89,8 +83,7 @@ import type { AppOutletContext } from "../../layouts/AppLayout";
 import { useOutletContext } from "react-router-dom";
 import type { ConfirmationStatus, LeadSource } from "../../types";
 
-type EventDetailTab =
-  "dashboard" | "dados" | "leads" | "time" | "relatorio" | "configuracoes";
+type EventDetailTab = "dados" | "leads" | "time" | "configuracoes";
 type LeadDrawerTab = "historico" | "dados";
 
 type EventDeleteAction =
@@ -113,12 +106,26 @@ const EVENT_TABS: Array<{
   label: string;
   icon: JSX.Element;
 }> = [
-  { id: "dashboard", label: "Dashboard", icon: <Layers3 size={14} /> },
   { id: "dados", label: "Dados", icon: <CalendarDays size={14} /> },
   { id: "leads", label: "Leads", icon: <ArrowUpRight size={14} /> },
   { id: "time", label: "Time", icon: <Users size={14} /> },
-  { id: "relatorio", label: "Relatório", icon: <TrendingUp size={14} /> },
   { id: "configuracoes", label: "Configurações", icon: <Settings size={14} /> },
+];
+
+const FIXED_TEAMS: Array<{ name: string; logoUrl: string }> = [
+  { name: "Blue Line Racing", logoUrl: "/team-logos/blue-line-racing.png" },
+  { name: "Blue Thunder", logoUrl: "/team-logos/blue-thunder.png" },
+  { name: "Carbon Fire", logoUrl: "/team-logos/carbon-fire.png" },
+  { name: "Gold Rush", logoUrl: "/team-logos/gold-rush.png" },
+  { name: "Laranja Apex", logoUrl: "/team-logos/laranja-apex.png" },
+  { name: "Neon Track", logoUrl: "/team-logos/neon-track.png" },
+  {
+    name: "Scuderia Rosso Sprint",
+    logoUrl: "/team-logos/scuderia-rosso-sprint.png",
+  },
+  { name: "Silver Ring", logoUrl: "/team-logos/silver-ring.png" },
+  { name: "Silver Volt", logoUrl: "/team-logos/silver-volt.png" },
+  { name: "Veloce Union", logoUrl: "/team-logos/veloce-union.png" },
 ];
 
 const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
@@ -256,7 +263,7 @@ export function EventDetailPage() {
   const [client, setClient] = useState<Client | null>(null);
   const [allClients, setAllClients] = useState<Client[]>([]);
   const [teams, setTeams] = useState<SalesTeam[]>([]);
-  const [staff, setStaff] = useState<StaffUser[]>([]);
+  const [allStaffRaw, setAllStaffRaw] = useState<StaffUser[]>([]);
   const [eventLeads, setEventLeads] = useState<Lead[]>([]);
   const [leadsLoading, setLeadsLoading] = useState(false);
   const [leadSearch, setLeadSearch] = useState("");
@@ -282,7 +289,7 @@ export function EventDetailPage() {
   const [leadHistoryLoading, setLeadHistoryLoading] = useState(false);
   const [leadRowSavingId, setLeadRowSavingId] = useState<string | null>(null);
   const [exportingLeads, setExportingLeads] = useState(false);
-  const [activeTab, setActiveTab] = useState<EventDetailTab>("dashboard");
+  const [activeTab, setActiveTab] = useState<EventDetailTab>("dados");
   const [refreshing, setRefreshing] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsDeleting, setSettingsDeleting] = useState(false);
@@ -295,7 +302,6 @@ export function EventDetailPage() {
     useState(false);
   const [participantDraftId, setParticipantDraftId] = useState("");
   const [participantSaving, setParticipantSaving] = useState(false);
-  const [newTeamName, setNewTeamName] = useState("");
   const [teamCreating, setTeamCreating] = useState(false);
   const [teamDeleting, setTeamDeleting] = useState<string | null>(null);
   const [addMemberTeamId, setAddMemberTeamId] = useState<string | null>(null);
@@ -317,12 +323,7 @@ export function EventDetailPage() {
   const [formSalesTarget, setFormSalesTarget] = useState("");
   const [formStatus, setFormStatus] = useState<Event["status"]>("draft");
   const [formRequireWristband, setFormRequireWristband] = useState(false);
-  const [formCoverImageUrl, setFormCoverImageUrl] = useState("");
-  const [formImageUrls, setFormImageUrls] = useState<string[]>([""]);
   const [formExtraClientIds, setFormExtraClientIds] = useState<string[]>([]);
-  const [rankingData, setRankingData] = useState<VendorScoreRankingItem[]>([]);
-  const [rankingLoading, setRankingLoading] = useState(false);
-  const [rankingUpdatedAt, setRankingUpdatedAt] = useState<Date | null>(null);
 
   useEffect(() => {
     setIsDarkMode(readDashboardDarkEnabled(user.id));
@@ -360,8 +361,6 @@ export function EventDetailPage() {
     );
     setFormStatus(nextEvent.status);
     setFormRequireWristband(nextEvent.require_wristband ?? false);
-    setFormCoverImageUrl(nextEvent.cover_image_url ?? "");
-    setFormImageUrls(nextEvent.image_urls.length ? nextEvent.image_urls : [""]);
     setFormExtraClientIds(
       nextEvent.participant_client_ids.filter(
         (clientId) => clientId !== nextEvent.participant_client_ids[0],
@@ -387,7 +386,6 @@ export function EventDetailPage() {
       setLoading(true);
     }
     setLeadsLoading(true);
-    setRankingLoading(true);
     setError("");
     setSettingsError("");
     setSettingsSuccess("");
@@ -397,48 +395,24 @@ export function EventDetailPage() {
       const mappedEvent = mapApiEventToEvent(apiEvent);
       const participantClientIds = mappedEvent.participant_client_ids;
 
-      const [
-        apiClient,
-        apiClients,
-        apiTeams,
-        apiStaff,
-        rankingGroups,
-        leadGroups,
-      ] = await Promise.all([
-        getClient(
-          participantClientIds[0] ?? mappedEvent.client_id,
-          session.accessToken,
-        ).catch(() => null),
-        listClients(session.accessToken).catch(() => []),
-        listSalesTeams(session.accessToken, mappedEvent.id).catch(() => []),
-        listUsers(session.accessToken).catch(() => []),
-        participantClientIds.length > 0
-          ? Promise.all(
-              participantClientIds.map((cid) =>
-                getVendorScoreRanking(session.accessToken, {
-                  client_id: cid,
-                  event_id: mappedEvent.id,
-                  limit: 100,
-                }).catch(() => [] as VendorScoreRankingItem[]),
-              ),
-            )
-          : Promise.resolve([[] as VendorScoreRankingItem[]]),
-        Promise.all(
-          participantClientIds.map((clientId) =>
-            fetchAllLeads({ client_id: clientId }, session.accessToken).catch(
-              () => [],
+      const [apiClient, apiClients, apiTeams, apiStaff, leadGroups] =
+        await Promise.all([
+          getClient(
+            participantClientIds[0] ?? mappedEvent.client_id,
+            session.accessToken,
+          ).catch(() => null),
+          listClients(session.accessToken).catch(() => []),
+          listSalesTeams(session.accessToken, mappedEvent.id).catch(() => []),
+          listUsers(session.accessToken).catch(() => []),
+          Promise.all(
+            participantClientIds.map((clientId) =>
+              fetchAllLeads(
+                { client_id: clientId },
+                session.accessToken,
+              ).catch(() => []),
             ),
           ),
-        ),
-      ]);
-
-      // Merge rankings from all participant clients (each vendor belongs to one client so no duplicates)
-      const apiRankingMerged: VendorScoreRankingItem[] = rankingGroups
-        .flat()
-        .sort(
-          (a, b) =>
-            b.total_points - a.total_points || b.sold.count - a.sold.count,
-        );
+        ]);
 
       const apiLeads = leadGroups.flat();
 
@@ -446,22 +420,12 @@ export function EventDetailPage() {
       setClient(apiClient ? mapApiClientToClient(apiClient) : null);
       setAllClients(apiClients.map(mapApiClientToClient));
       setTeams(apiTeams);
-      setStaff(
-        apiStaff.filter(
-          (member) =>
-            member.role === "vendedor" &&
-            member.is_active &&
-            !!member.client_id &&
-            participantClientIds.includes(member.client_id),
-        ),
-      );
+      setAllStaffRaw(apiStaff);
       setEventLeads(
         apiLeads
           .map(mapApiLeadToLead)
           .filter((lead) => lead.event_id === mappedEvent.id),
       );
-      setRankingData(apiRankingMerged);
-      setRankingUpdatedAt(new Date());
       hydrateForm(mappedEvent);
       setAddMemberTeamId(null);
       setAddMemberSelectionId("");
@@ -471,7 +435,6 @@ export function EventDetailPage() {
       );
     } finally {
       setLeadsLoading(false);
-      setRankingLoading(false);
       if (showSpinner) {
         setLoading(false);
       }
@@ -483,44 +446,17 @@ export function EventDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
-  // Auto-refresh ranking every 30s while on the relatório tab
-  useEffect(() => {
-    if (activeTab !== "relatorio") return;
-    const session = readStoredSession();
-    if (!session?.accessToken || !event) return;
-
-    const tick = async () => {
-      const participantClientIds = event.participant_client_ids;
-      if (participantClientIds.length === 0) return;
-      try {
-        const groups = await Promise.all(
-          participantClientIds.map((cid) =>
-            getVendorScoreRanking(session.accessToken, {
-              client_id: cid,
-              event_id: event.id,
-              limit: 100,
-            }).catch(() => []),
-          ),
-        );
-        const merged = groups
-          .flat()
-          .sort(
-            (a, b) =>
-              b.total_points - a.total_points || b.sold.count - a.sold.count,
-          );
-        setRankingData(merged);
-        setRankingUpdatedAt(new Date());
-      } catch {
-        // silent — don't disrupt UX for a background refresh
-      }
-    };
-
-    const interval = setInterval(() => {
-      void tick();
-    }, 30_000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, event?.id]);
+  const staff = useMemo(
+    () =>
+      allStaffRaw.filter(
+        (member) =>
+          member.role === "vendedor" &&
+          member.is_active &&
+          !!member.client_id &&
+          (event?.participant_client_ids.includes(member.client_id) ?? false),
+      ),
+    [allStaffRaw, event?.participant_client_ids],
+  );
 
   const assignedVendorIds = useMemo(
     () =>
@@ -673,10 +609,10 @@ export function EventDetailPage() {
     0,
   );
   const leadConfirmationRate = event?.leads_count
-    ? Math.round((event.confirmed_count / event.leads_count) * 100)
+    ? Math.min(100, Math.round((event.confirmed_count / event.leads_count) * 100))
     : 0;
   const checkinRate = event?.leads_count
-    ? Math.round((event.checkin_count / event.leads_count) * 100)
+    ? Math.min(100, Math.round((event.checkin_count / event.leads_count) * 100))
     : 0;
   const capacityUsage = event?.capacity
     ? Math.min(100, Math.round((event.leads_count / event.capacity) * 100))
@@ -758,8 +694,33 @@ export function EventDetailPage() {
       setEvent(mapped);
       hydrateForm(mapped);
       setParticipantDraftId("");
+      setClient(
+        allClients.find(
+          (item) => item.id === (nextParticipantIds[0] ?? mapped.client_id),
+        ) ?? null,
+      );
       setSettingsSuccess("Participantes do evento atualizados com sucesso.");
-      await loadPage(false);
+
+      setLeadsLoading(true);
+      try {
+        const leadGroups = await Promise.all(
+          nextParticipantIds.map((clientId) =>
+            fetchAllLeads(
+              { client_id: clientId },
+              session.accessToken,
+            ).catch(() => []),
+          ),
+        );
+        setEventLeads(
+          leadGroups
+            .flat()
+            .map(mapApiLeadToLead)
+            .filter((lead) => lead.event_id === mapped.id),
+        );
+      } finally {
+        setLeadsLoading(false);
+      }
+
       setTimeout(() => setSettingsSuccess(""), 3000);
     } catch (participantError) {
       setSettingsError(
@@ -849,7 +810,10 @@ export function EventDetailPage() {
         selectedLead.id,
         {
           confirmation_status: leadDrawerStatus,
-          assigned_vendor_id: leadDrawerVendorId || null,
+          assigned_vendor_id:
+            leadDrawerVendorId && leadDrawerVendorId !== "none"
+              ? leadDrawerVendorId
+              : null,
         },
         session.accessToken,
       );
@@ -953,8 +917,11 @@ export function EventDetailPage() {
     }
   }
 
-  async function handleCreateTeam() {
-    if (!event?.id || !newTeamName.trim()) return;
+  async function handleSelectFixedTeam(fixedTeam: {
+    name: string;
+    logoUrl: string;
+  }) {
+    if (!event?.id) return;
     const session = readStoredSession();
     if (!session?.accessToken) return;
 
@@ -964,13 +931,19 @@ export function EventDetailPage() {
       const created = await createSalesTeam(
         session.accessToken,
         event.id,
-        newTeamName.trim(),
+        fixedTeam.name,
       );
-      setTeams((current) => [...current, created]);
-      setNewTeamName("");
+      const absoluteLogoUrl = new URL(
+        fixedTeam.logoUrl,
+        window.location.origin,
+      ).toString();
+      const withLogo = await updateSalesTeam(session.accessToken, created.id, {
+        logo_url: absoluteLogoUrl,
+      });
+      setTeams((current) => [...current, { ...created, ...withLogo }]);
     } catch (teamError) {
       setSettingsError(
-        getErrorMessage(teamError, "Não foi possível criar o time."),
+        getErrorMessage(teamError, "Não foi possível adicionar o time."),
       );
     } finally {
       setTeamCreating(false);
@@ -1219,8 +1192,6 @@ export function EventDetailPage() {
           sales_target: hasSalesTarget ? salesTargetNumber : null,
           status: formStatus,
           require_wristband: formRequireWristband,
-          cover_image_url: formCoverImageUrl.trim() || undefined,
-          image_urls: formImageUrls.map((url) => url.trim()).filter(Boolean),
           participant_client_ids: [
             event?.participant_client_ids[0] ?? client?.id ?? "",
             ...formExtraClientIds,
@@ -1307,17 +1278,21 @@ export function EventDetailPage() {
         actions={
           <>
             <Button
-              variant="secondary"
-              icon={<Tv size={16} />}
+              variant="ghost"
+              size="icon"
+              title="Modo TV"
+              aria-label="Modo TV"
               onClick={() =>
                 window.open(`/eventos/${event.id}/tv`, "_blank", "noopener")
               }
             >
-              Modo TV
+              <Tv size={16} />
             </Button>
             <Button
-              variant="secondary"
-              icon={<Tv size={16} />}
+              variant="ghost"
+              size="icon"
+              title="Fila modo TV"
+              aria-label="Fila modo TV"
               onClick={() =>
                 window.open(
                   `/eventos/${event.id}/tv-fila`,
@@ -1326,15 +1301,17 @@ export function EventDetailPage() {
                 )
               }
             >
-              Fila modo TV
+              <Tv size={16} />
             </Button>
             <Button
-              variant="secondary"
-              icon={<RefreshCcw size={16} />}
+              variant="ghost"
+              size="icon"
+              title="Atualizar"
+              aria-label="Atualizar"
               loading={refreshing}
               onClick={() => void handleRefresh()}
             >
-              Atualizar
+              <RefreshCcw size={16} />
             </Button>
             {!eventIsPublished ? (
               <Button
@@ -1342,7 +1319,7 @@ export function EventDetailPage() {
                 loading={settingsSaving}
                 onClick={() => void handleQuickStatusChange("active")}
               >
-                Publicar evento
+                Publicar
               </Button>
             ) : (
               <Button
@@ -1351,265 +1328,131 @@ export function EventDetailPage() {
                 loading={settingsSaving}
                 onClick={() => void handleQuickStatusChange("completed")}
               >
-                Arquivar evento
+                Arquivar
               </Button>
             )}
             <Button
               variant="ghost"
-              icon={<ArrowLeft size={16} />}
+              size="icon"
+              title="Voltar"
+              aria-label="Voltar"
               onClick={() => navigate("/gestor/eventos")}
             >
-              Voltar
+              <ArrowLeft size={16} />
             </Button>
           </>
         }
       />
 
-      <div
+      <Card
         className={clsx(
-          "relative overflow-hidden rounded-[32px] border shadow-[0_24px_60px_rgba(15,23,42,0.12)]",
-          isDarkMode
-            ? "border-zinc-800 bg-[#0f0f0f]"
-            : "border-white/80 bg-white",
+          "rounded-[28px] border",
+          isDarkMode ? "border-zinc-800 bg-[#0f0f0f]" : "border-white/80",
         )}
+        padding="lg"
       >
-        <div className="absolute inset-0 bg-gradient-to-br from-[#FF0636]/20 via-transparent to-[#3D56A2]/20" />
-        <div className="relative grid gap-0 lg:grid-cols-[1.3fr_0.9fr]">
-          <div className="p-6 lg:p-8">
-            <div className="flex flex-wrap items-center gap-3">
-              <EventStatusBadge status={event.status} />
-              <Badge>
-                {daysToEvent >= 0
-                  ? `${daysToEvent} dias para o evento`
-                  : "Evento passado"}
-              </Badge>
-            </div>
-            <h2
-              className={clsx(
-                "mt-4 text-3xl font-black tracking-tight",
-                isDarkMode ? "text-zinc-100" : "text-zinc-950",
-              )}
-            >
-              {event.name}
-            </h2>
-            <div className="mt-2">
-              <CopyableId value={event.id} label="event_id" dark={isDarkMode} />
-            </div>
-            <p
-              className={clsx(
-                "mt-3 max-w-2xl text-sm leading-6",
-                isDarkMode ? "text-zinc-300" : "text-zinc-600",
-              )}
-            >
-              {event.description ||
-                "Sem descrição cadastrada. Use a aba Configurações para enriquecer o contexto do evento."}
-            </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <EventStatusBadge status={event.status} />
+          <Badge>
+            {daysToEvent >= 0
+              ? `${daysToEvent} dias para o evento`
+              : "Evento passado"}
+          </Badge>
+        </div>
 
-            <div className="mt-6 flex flex-wrap gap-3 text-sm">
-              <div
-                className={clsx(
-                  "inline-flex items-center gap-2 rounded-full px-4 py-2",
-                  isDarkMode
-                    ? "bg-zinc-900 text-zinc-200"
-                    : "bg-zinc-100 text-zinc-700",
-                )}
-              >
-                <CalendarDays size={16} className="text-[#FF0636]" />
-                {formatDateTime(event.event_date)}
-              </div>
-              <div
-                className={clsx(
-                  "inline-flex items-center gap-2 rounded-full px-4 py-2",
-                  isDarkMode
-                    ? "bg-zinc-900 text-zinc-200"
-                    : "bg-zinc-100 text-zinc-700",
-                )}
-              >
-                <MapPin size={16} className="text-[#3D56A2]" />
-                {event.location || "Local não informado"}
-              </div>
-              <div
-                className={clsx(
-                  "inline-flex items-center gap-2 rounded-full px-4 py-2",
-                  isDarkMode
-                    ? "bg-zinc-900 text-zinc-200"
-                    : "bg-zinc-100 text-zinc-700",
-                )}
-              >
-                <Building2 size={16} className="text-[#FBBB49]" />
-                {selectedClient?.company_name ?? "Cliente"}
-              </div>
-            </div>
+        <h2
+          className={clsx(
+            "mt-3 text-2xl font-black tracking-tight",
+            isDarkMode ? "text-zinc-100" : "text-zinc-950",
+          )}
+        >
+          {event.name}
+        </h2>
 
-            <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard
-                title="Leads"
-                value={event.leads_count}
-                helper="Leads vinculados ao evento"
-                tone="rose"
-                dark={isDarkMode}
-              />
-              <MetricCard
-                title="Confirmados"
-                value={event.confirmed_count}
-                helper={`${leadConfirmationRate}% de confirmação`}
-                tone="blue"
-                dark={isDarkMode}
-              />
-              <MetricCard
-                title="Check-ins"
-                value={event.checkin_count}
-                helper={`${checkinRate}% com presença`}
-                tone="amber"
-                dark={isDarkMode}
-              />
-              <MetricCard
-                title="Time"
-                value={totalMembers}
-                helper={`${teams.length} time${teams.length !== 1 ? "s" : ""} criado${teams.length !== 1 ? "s" : ""}`}
-                tone="emerald"
-                dark={isDarkMode}
-              />
-            </div>
-          </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <CopyableId value={event.id} label="event_id" dark={isDarkMode} />
+        </div>
 
+
+        <div className="mt-5 flex flex-wrap gap-2 text-sm">
           <div
             className={clsx(
-              "border-t lg:border-t-0 lg:border-l",
-              isDarkMode ? "border-zinc-800" : "border-zinc-100",
+              "inline-flex items-center gap-2 rounded-full px-3.5 py-1.5",
+              isDarkMode
+                ? "bg-[#171717] text-zinc-300"
+                : "bg-zinc-100 text-zinc-700",
             )}
           >
-            <div className="h-full p-4 lg:p-5">
-              <div
-                className={clsx(
-                  "flex h-full min-h-[280px] flex-col justify-between rounded-[28px] p-5",
-                  isDarkMode
-                    ? "bg-[#101010]"
-                    : "bg-gradient-to-br from-zinc-50 to-white",
-                )}
-              >
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-400">
-                        Resumo rápido
-                      </p>
-                      <p
-                        className={clsx(
-                          "mt-1 text-lg font-black tracking-tight",
-                          isDarkMode ? "text-zinc-100" : "text-zinc-950",
-                        )}
-                      >
-                        Painel de operação
-                      </p>
-                    </div>
-                    <Settings size={20} className="text-zinc-400" />
-                  </div>
-
-                  <div className="space-y-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={
-                          isDarkMode ? "text-zinc-400" : "text-zinc-500"
-                        }
-                      >
-                        Capacidade
-                      </span>
-                      <span
-                        className={
-                          isDarkMode ? "text-zinc-100" : "text-zinc-900"
-                        }
-                      >
-                        {event.capacity != null
-                          ? `${event.capacity} lugares`
-                          : "Não informada"}
-                      </span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-zinc-200/70">
-                      <div
-                        className="h-full rounded-full bg-[#FF0636]"
-                        style={{ width: `${capacityUsage}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={
-                          isDarkMode ? "text-zinc-400" : "text-zinc-500"
-                        }
-                      >
-                        Taxa de confirmação
-                      </span>
-                      <span
-                        className={
-                          isDarkMode ? "text-zinc-100" : "text-zinc-900"
-                        }
-                      >
-                        {leadConfirmationRate}%
-                      </span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-zinc-200/70">
-                      <div
-                        className="h-full rounded-full bg-[#3D56A2]"
-                        style={{ width: `${leadConfirmationRate}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={
-                          isDarkMode ? "text-zinc-400" : "text-zinc-500"
-                        }
-                      >
-                        Taxa de check-in
-                      </span>
-                      <span
-                        className={
-                          isDarkMode ? "text-zinc-100" : "text-zinc-900"
-                        }
-                      >
-                        {checkinRate}%
-                      </span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-zinc-200/70">
-                      <div
-                        className="h-full rounded-full bg-[#FBBB49]"
-                        style={{ width: `${checkinRate}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  className={clsx(
-                    "mt-6 rounded-[22px] border p-4",
-                    isDarkMode
-                      ? "border-zinc-800 bg-[#0b0b0b]"
-                      : "border-zinc-200 bg-white",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                        Time do evento
-                      </p>
-                      <p
-                        className={clsx(
-                          "mt-1 text-sm font-semibold",
-                          isDarkMode ? "text-zinc-100" : "text-zinc-900",
-                        )}
-                      >
-                        {teams.length} time{teams.length !== 1 ? "s" : ""} ·{" "}
-                        {totalMembers} membro
-                        {totalMembers !== 1 ? "s" : ""}
-                      </p>
-                    </div>
-                    <ArrowUpRight size={18} className="text-zinc-400" />
-                  </div>
-                </div>
-              </div>
-            </div>
+            <CalendarDays size={14} className="text-[#FF0636]" />
+            {formatDateTime(event.event_date)}
           </div>
+          <div
+            className={clsx(
+              "inline-flex items-center gap-2 rounded-full px-3.5 py-1.5",
+              isDarkMode
+                ? "bg-[#171717] text-zinc-300"
+                : "bg-zinc-100 text-zinc-700",
+            )}
+          >
+            <MapPin size={14} className="text-[#3D56A2]" />
+            {event.location || "Local não informado"}
+          </div>
+          <div
+            className={clsx(
+              "inline-flex items-center gap-2 rounded-full px-3.5 py-1.5",
+              isDarkMode
+                ? "bg-[#171717] text-zinc-300"
+                : "bg-zinc-100 text-zinc-700",
+            )}
+          >
+            <Building2 size={14} className="text-[#FBBB49]" />
+            {selectedClient?.company_name ?? "Cliente"}
+          </div>
+          {event.capacity != null && (
+            <div
+              className={clsx(
+                "inline-flex items-center gap-2 rounded-full px-3.5 py-1.5",
+                isDarkMode
+                  ? "bg-[#171717] text-zinc-300"
+                  : "bg-zinc-100 text-zinc-700",
+              )}
+            >
+              <Users size={14} className="text-emerald-500" />
+              {event.leads_count}/{event.capacity} lugares ({capacityUsage}%)
+            </div>
+          )}
         </div>
-      </div>
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            title="Leads"
+            value={event.leads_count}
+            tone="rose"
+            dark={isDarkMode}
+          />
+          <MetricCard
+            title="Confirmados"
+            value={event.confirmed_count}
+            helper={`${leadConfirmationRate}%`}
+            tone="blue"
+            dark={isDarkMode}
+          />
+          <MetricCard
+            title="Check-ins"
+            value={event.checkin_count}
+            helper={`${checkinRate}%`}
+            tone="amber"
+            dark={isDarkMode}
+          />
+          <MetricCard
+            title="Time"
+            value={totalMembers}
+            helper={`${teams.length} time${teams.length !== 1 ? "s" : ""}`}
+            tone="emerald"
+            dark={isDarkMode}
+          />
+        </div>
+      </Card>
 
       <Tabs
         tabs={EVENT_TABS}
@@ -1619,502 +1462,6 @@ export function EventDetailPage() {
 
       {settingsError && <Notice tone="error">{settingsError}</Notice>}
       {settingsSuccess && <Notice tone="success">{settingsSuccess}</Notice>}
-
-      {activeTab === "dashboard" && (
-        <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
-          <Card
-            className={clsx(
-              "rounded-[28px] border",
-              isDarkMode ? "border-zinc-800 bg-[#111111]" : "border-zinc-100",
-            )}
-            padding="lg"
-          >
-            <h3
-              className={clsx(
-                "text-lg font-black tracking-tight",
-                isDarkMode ? "text-zinc-100" : "text-zinc-950",
-              )}
-            >
-              Visão geral do evento
-            </h3>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              <div
-                className={clsx(
-                  "rounded-[22px] p-4",
-                  isDarkMode ? "bg-[#0b0b0b]" : "bg-zinc-50",
-                )}
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                  Cliente
-                </p>
-                <p
-                  className={clsx(
-                    "mt-2 text-sm font-semibold",
-                    isDarkMode ? "text-zinc-100" : "text-zinc-900",
-                  )}
-                >
-                  {selectedClient?.company_name ?? "Cliente não encontrado"}
-                </p>
-                <p
-                  className={clsx(
-                    "mt-1 text-xs",
-                    isDarkMode ? "text-zinc-500" : "text-zinc-500",
-                  )}
-                >
-                  {selectedClient?.plan ?? "Plano não identificado"}
-                </p>
-              </div>
-              <div
-                className={clsx(
-                  "rounded-[22px] p-4",
-                  isDarkMode ? "bg-[#0b0b0b]" : "bg-zinc-50",
-                )}
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                  Data de lançamento
-                </p>
-                <p
-                  className={clsx(
-                    "mt-2 text-sm font-semibold",
-                    isDarkMode ? "text-zinc-100" : "text-zinc-900",
-                  )}
-                >
-                  {formatDateTime(event.launch_date)}
-                </p>
-                <p
-                  className={clsx(
-                    "mt-1 text-xs",
-                    isDarkMode ? "text-zinc-500" : "text-zinc-500",
-                  )}
-                >
-                  Primeira comunicação do evento
-                </p>
-              </div>
-              <div
-                className={clsx(
-                  "rounded-[22px] p-4",
-                  isDarkMode ? "bg-[#0b0b0b]" : "bg-zinc-50",
-                )}
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                  Data final
-                </p>
-                <p
-                  className={clsx(
-                    "mt-2 text-sm font-semibold",
-                    isDarkMode ? "text-zinc-100" : "text-zinc-900",
-                  )}
-                >
-                  {formatDateTime(event.event_end_date)}
-                </p>
-                <p
-                  className={clsx(
-                    "mt-1 text-xs",
-                    isDarkMode ? "text-zinc-500" : "text-zinc-500",
-                  )}
-                >
-                  Encerramento ou término previsto
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-4 xl:grid-cols-[1.08fr_0.92fr]">
-              <div className="space-y-4">
-                <div
-                  className={clsx(
-                    "rounded-[22px] border p-4",
-                    isDarkMode
-                      ? "border-zinc-800 bg-[#0b0b0b]"
-                      : "border-zinc-100 bg-white",
-                  )}
-                >
-                  <p className="text-sm font-semibold text-zinc-400">
-                    Leads e presença
-                  </p>
-                  <div className="mt-4 space-y-4">
-                    <div>
-                      <div className="mb-2 flex items-center justify-between text-xs text-zinc-500">
-                        <span>Confirmação</span>
-                        <span>{leadConfirmationRate}%</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-zinc-200/70">
-                        <div
-                          className="h-full rounded-full bg-[#3D56A2]"
-                          style={{ width: `${leadConfirmationRate}%` }}
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <div className="mb-2 flex items-center justify-between text-xs text-zinc-500">
-                        <span>Check-in</span>
-                        <span>{checkinRate}%</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-zinc-200/70">
-                        <div
-                          className="h-full rounded-full bg-[#FBBB49]"
-                          style={{ width: `${checkinRate}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  className={clsx(
-                    "rounded-[22px] border p-4",
-                    isDarkMode
-                      ? "border-zinc-800 bg-[#0b0b0b]"
-                      : "border-zinc-100 bg-white",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-zinc-400">
-                        Operação por empresa
-                      </p>
-                      <p
-                        className={clsx(
-                          "mt-1 text-sm",
-                          isDarkMode ? "text-zinc-300" : "text-zinc-600",
-                        )}
-                      >
-                        Abra a visão operacional de cada empresa participante
-                        para distribuir leads e acompanhar o placar no contexto
-                        do evento.
-                      </p>
-                    </div>
-                    <ArrowUpRight size={18} className="text-zinc-400" />
-                  </div>
-
-                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                    {eventOperationsClients.map((clientItem) => (
-                      <div
-                        key={clientItem.id}
-                        className={clsx(
-                          "rounded-[20px] border p-4",
-                          isDarkMode
-                            ? "border-zinc-800 bg-[#101010]"
-                            : "border-zinc-50 bg-zinc-50",
-                        )}
-                      >
-                        <div className="flex h-full flex-col justify-between gap-4">
-                          <div>
-                            <p
-                              className={clsx(
-                                "text-sm font-semibold",
-                                isDarkMode ? "text-zinc-100" : "text-zinc-900",
-                              )}
-                            >
-                              {clientItem.company_name}
-                            </p>
-                            <p className="mt-1 text-xs text-zinc-500">
-                              Empresa participante do evento
-                            </p>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            icon={<ArrowUpRight size={14} />}
-                            className="self-start"
-                            onClick={() =>
-                              navigate(
-                                `/gestor/eventos/${event.id}/operacao/${clientItem.id}`,
-                              )
-                            }
-                          >
-                            Abrir operação
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div
-                className={clsx(
-                  "rounded-[22px] border p-4",
-                  isDarkMode
-                    ? "border-zinc-800 bg-[#0b0b0b]"
-                    : "border-zinc-100 bg-white",
-                )}
-              >
-                <p className="text-sm font-semibold text-zinc-400">
-                  Time de vendas
-                </p>
-                <div className="mt-4 grid grid-cols-3 gap-3">
-                  <div className="rounded-[18px] bg-zinc-50 p-3 text-center">
-                    <p className="text-xl font-black text-[#FF0636]">
-                      {teams.length}
-                    </p>
-                    <p className="mt-1 text-[11px] text-zinc-500">Times</p>
-                  </div>
-                  <div className="rounded-[18px] bg-zinc-50 p-3 text-center">
-                    <p className="text-xl font-black text-[#3D56A2]">
-                      {totalMembers}
-                    </p>
-                    <p className="mt-1 text-[11px] text-zinc-500">Membros</p>
-                  </div>
-                  <div className="rounded-[18px] bg-zinc-50 p-3 text-center">
-                    <p className="text-xl font-black text-[#FBBB49]">
-                      {availableVendors.length}
-                    </p>
-                    <p className="mt-1 text-[11px] text-zinc-500">
-                      Disponíveis
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-5 space-y-3">
-                  <div
-                    className={clsx(
-                      "rounded-[18px] border p-4",
-                      isDarkMode
-                        ? "border-zinc-800 bg-[#101010]"
-                        : "border-zinc-50 bg-zinc-50",
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p
-                        className={clsx(
-                          "text-sm font-semibold",
-                          isDarkMode ? "text-zinc-100" : "text-zinc-900",
-                        )}
-                      >
-                        Times ativos
-                      </p>
-                      <span className="text-xs text-zinc-500">
-                        Resumo rápido
-                      </span>
-                    </div>
-                    <div className="mt-3 space-y-2">
-                      {teams.length === 0 ? (
-                        <p className="text-sm text-zinc-500">
-                          Nenhum time criado ainda.
-                        </p>
-                      ) : (
-                        teams.slice(0, 4).map((team) => (
-                          <div
-                            key={team.id}
-                            className="flex items-center justify-between rounded-2xl bg-white/70 px-3 py-2 text-sm"
-                          >
-                            <span
-                              className={clsx(
-                                "font-medium",
-                                isDarkMode ? "text-zinc-200" : "text-zinc-700",
-                              )}
-                            >
-                              {team.name}
-                            </span>
-                            <span className="text-xs text-zinc-500">
-                              {team.members.length} membro
-                              {team.members.length !== 1 ? "s" : ""}
-                            </span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                  <div
-                    className={clsx(
-                      "rounded-[18px] border p-4",
-                      isDarkMode
-                        ? "border-zinc-800 bg-[#101010]"
-                        : "border-zinc-50 bg-zinc-50",
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p
-                        className={clsx(
-                          "text-sm font-semibold",
-                          isDarkMode ? "text-zinc-100" : "text-zinc-900",
-                        )}
-                      >
-                        Vendedores disponíveis
-                      </p>
-                      <span className="text-xs text-zinc-500">
-                        {availableVendors.length}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm text-zinc-500">
-                      {availableVendors.length === 0
-                        ? "Nenhum vendedor livre no momento."
-                        : "Prontos para entrar em um time ou serem atribuídos à operação."}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          <Card
-            className={clsx(
-              "rounded-[28px] border",
-              isDarkMode
-                ? "border-zinc-800 bg-[#111111]"
-                : "border-zinc-100 bg-white",
-            )}
-            padding="lg"
-          >
-            <h3
-              className={clsx(
-                "text-lg font-black tracking-tight",
-                isDarkMode ? "text-zinc-100" : "text-zinc-950",
-              )}
-            >
-              Resumo operacional
-            </h3>
-            <div className="mt-5 space-y-4">
-              <div
-                className={clsx(
-                  "rounded-[22px] border p-4",
-                  isDarkMode
-                    ? "border-zinc-800 bg-[#0b0b0b]"
-                    : "border-zinc-100 bg-zinc-50",
-                )}
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                  Status
-                </p>
-                <div className="mt-2">
-                  <EventStatusBadge status={event.status} />
-                </div>
-              </div>
-              <div
-                className={clsx(
-                  "rounded-[22px] border p-4",
-                  isDarkMode
-                    ? "border-zinc-800 bg-[#0b0b0b]"
-                    : "border-zinc-100 bg-zinc-50",
-                )}
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                  Capacidade
-                </p>
-                <p
-                  className={clsx(
-                    "mt-2 text-lg font-black",
-                    isDarkMode ? "text-zinc-100" : "text-zinc-950",
-                  )}
-                >
-                  {event.capacity != null
-                    ? `${event.capacity} lugares`
-                    : "Não configurada"}
-                </p>
-                <p className="mt-1 text-xs text-zinc-500">
-                  {event.capacity != null
-                    ? `${event.leads_count} leads ocupando ${capacityUsage}% da capacidade`
-                    : "Defina a capacidade para acompanhar ocupação."}
-                </p>
-              </div>
-              <div
-                className={clsx(
-                  "rounded-[22px] border p-4",
-                  isDarkMode
-                    ? "border-zinc-800 bg-[#0b0b0b]"
-                    : "border-zinc-100 bg-zinc-50",
-                )}
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                  Base do evento
-                </p>
-                <p
-                  className={clsx(
-                    "mt-2 text-sm font-semibold",
-                    isDarkMode ? "text-zinc-100" : "text-zinc-900",
-                  )}
-                >
-                  {event.event_type || "Tipo não definido"}
-                </p>
-                <p className="mt-1 text-xs text-zinc-500">
-                  {event.location || "Local ainda não informado"}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                    Linha do tempo
-                  </p>
-                  <h4
-                    className={clsx(
-                      "mt-1 text-base font-black tracking-tight",
-                      isDarkMode ? "text-zinc-100" : "text-zinc-950",
-                    )}
-                  >
-                    Ciclo do evento
-                  </h4>
-                </div>
-                <Clock3 size={18} className="text-zinc-400" />
-              </div>
-
-              <div className="mt-4 space-y-3">
-                {[
-                  {
-                    label: "Evento criado",
-                    value: formatDateTime(event.created_at),
-                    color: "rose",
-                  },
-                  {
-                    label: "Lançamento",
-                    value: formatDateTime(event.launch_date),
-                    color: "blue",
-                  },
-                  {
-                    label: "Data do evento",
-                    value: formatDateTime(event.event_date),
-                    color: "amber",
-                  },
-                  {
-                    label: "Encerramento",
-                    value: formatDateTime(event.event_end_date),
-                    color: "emerald",
-                  },
-                  {
-                    label: "Atualizado em",
-                    value: formatDateTime(event.updated_at),
-                    color: "blue",
-                  },
-                ].map((item) => (
-                  <div
-                    key={item.label}
-                    className={clsx(
-                      "flex items-start gap-3 rounded-[20px] border px-4 py-3",
-                      isDarkMode
-                        ? "border-zinc-800 bg-[#0b0b0b]"
-                        : "border-zinc-100 bg-zinc-50",
-                    )}
-                  >
-                    <span
-                      className={clsx(
-                        "mt-1 h-2.5 w-2.5 rounded-full",
-                        item.color === "rose"
-                          ? "bg-[#FF0636]"
-                          : item.color === "blue"
-                            ? "bg-[#3D56A2]"
-                            : item.color === "amber"
-                              ? "bg-[#FBBB49]"
-                              : "bg-emerald-500",
-                      )}
-                    />
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-zinc-900">
-                        {item.label}
-                      </p>
-                      <p className="mt-0.5 text-xs text-zinc-500">
-                        {item.value}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
 
       {activeTab === "dados" && (
         <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
@@ -2138,19 +1485,6 @@ export function EventDetailPage() {
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                  Nome
-                </p>
-                <p
-                  className={clsx(
-                    "text-sm font-semibold",
-                    isDarkMode ? "text-zinc-100" : "text-zinc-900",
-                  )}
-                >
-                  {event.name}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
                   Tipo
                 </p>
                 <p
@@ -2160,32 +1494,6 @@ export function EventDetailPage() {
                   )}
                 >
                   {event.event_type || "Não informado"}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                  Início
-                </p>
-                <p
-                  className={clsx(
-                    "text-sm font-semibold",
-                    isDarkMode ? "text-zinc-100" : "text-zinc-900",
-                  )}
-                >
-                  {formatDateTime(event.event_date)}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                  Término
-                </p>
-                <p
-                  className={clsx(
-                    "text-sm font-semibold",
-                    isDarkMode ? "text-zinc-100" : "text-zinc-900",
-                  )}
-                >
-                  {formatDateTime(event.event_end_date)}
                 </p>
               </div>
               <div className="space-y-1">
@@ -2203,7 +1511,7 @@ export function EventDetailPage() {
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                  Capacidade
+                  Término
                 </p>
                 <p
                   className={clsx(
@@ -2211,12 +1519,36 @@ export function EventDetailPage() {
                     isDarkMode ? "text-zinc-100" : "text-zinc-900",
                   )}
                 >
-                  {event.capacity != null
-                    ? `${event.capacity} lugares`
-                    : "Não informada"}
+                  {formatDateTime(event.event_end_date)}
                 </p>
               </div>
-              <div className="sm:col-span-2 space-y-1">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                  Criado em
+                </p>
+                <p
+                  className={clsx(
+                    "text-sm font-semibold",
+                    isDarkMode ? "text-zinc-100" : "text-zinc-900",
+                  )}
+                >
+                  {formatDateTime(event.created_at)}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                  Atualizado em
+                </p>
+                <p
+                  className={clsx(
+                    "text-sm font-semibold",
+                    isDarkMode ? "text-zinc-100" : "text-zinc-900",
+                  )}
+                >
+                  {formatDateTime(event.updated_at)}
+                </p>
+              </div>
+              <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
                   Descrição
                 </p>
@@ -2242,73 +1574,6 @@ export function EventDetailPage() {
               )}
               padding="lg"
             >
-              <div className="flex items-center justify-between">
-                <h3
-                  className={clsx(
-                    "text-lg font-black tracking-tight",
-                    isDarkMode ? "text-zinc-100" : "text-zinc-950",
-                  )}
-                >
-                  Participação do evento
-                </h3>
-                <Building2 size={18} className="text-zinc-400" />
-              </div>
-              <p
-                className={clsx(
-                  "mt-4 text-sm",
-                  isDarkMode ? "text-zinc-300" : "text-zinc-600",
-                )}
-              >
-                O evento é independente e reúne várias empresas participantes. A
-                empresa âncora técnica usada internamente hoje é{" "}
-                {selectedClient?.company_name ?? "não identificada"}.
-              </p>
-              <div className="mt-4 grid gap-2 text-sm">
-                <div
-                  className={clsx(
-                    "flex items-center justify-between rounded-2xl px-3 py-2",
-                    isDarkMode
-                      ? "bg-[#0b0b0b] text-zinc-300"
-                      : "bg-zinc-50 text-zinc-600",
-                  )}
-                >
-                  <span>Empresas participantes</span>
-                  <span>{participantClients.length}</span>
-                </div>
-                <div
-                  className={clsx(
-                    "flex items-center justify-between rounded-2xl px-3 py-2",
-                    isDarkMode
-                      ? "bg-[#0b0b0b] text-zinc-300"
-                      : "bg-zinc-50 text-zinc-600",
-                  )}
-                >
-                  <span>Criado em</span>
-                  <span>{formatDateTime(event.created_at)}</span>
-                </div>
-                <div
-                  className={clsx(
-                    "flex items-center justify-between rounded-2xl px-3 py-2",
-                    isDarkMode
-                      ? "bg-[#0b0b0b] text-zinc-300"
-                      : "bg-zinc-50 text-zinc-600",
-                  )}
-                >
-                  <span>Atualizado em</span>
-                  <span>{formatDateTime(event.updated_at)}</span>
-                </div>
-              </div>
-            </Card>
-
-            <Card
-              className={clsx(
-                "rounded-[28px] border",
-                isDarkMode
-                  ? "border-zinc-800 bg-[#111111]"
-                  : "border-zinc-100 bg-white",
-              )}
-              padding="lg"
-            >
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <h3
@@ -2319,10 +1584,6 @@ export function EventDetailPage() {
                   >
                     Clientes participantes
                   </h3>
-                  <p className="mt-1 text-sm text-zinc-500">
-                    As empresas daqui liberam seus vendedores para criação e
-                    manutenção dos times.
-                  </p>
                 </div>
                 <div className="w-full max-w-sm">
                   <div className="flex gap-2">
@@ -2718,43 +1979,65 @@ export function EventDetailPage() {
                 isDarkMode ? "text-zinc-100" : "text-zinc-950",
               )}
             >
-              Criar time
+              Adicionar time
             </h3>
-            <p
+            {(() => {
+              const usedNames = new Set(teams.map((team) => team.name));
+              const remainingTeams = FIXED_TEAMS.filter(
+                (fixedTeam) => !usedNames.has(fixedTeam.name),
+              );
+              return remainingTeams.length === 0 ? (
+                <p
+                  className={clsx(
+                    "mt-4 text-sm",
+                    isDarkMode ? "text-zinc-400" : "text-zinc-500",
+                  )}
+                >
+                  Todos os times já foram adicionados a este evento.
+                </p>
+              ) : (
+                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {remainingTeams.map((fixedTeam) => (
+                    <button
+                      key={fixedTeam.name}
+                      type="button"
+                      disabled={teamCreating}
+                      onClick={() => void handleSelectFixedTeam(fixedTeam)}
+                      className={clsx(
+                        "flex flex-col items-center gap-2 rounded-2xl border p-3 text-center transition-colors disabled:opacity-50",
+                        isDarkMode
+                          ? "border-zinc-800 bg-[#0b0b0b] hover:border-zinc-700 hover:bg-[#141414]"
+                          : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 hover:bg-white",
+                      )}
+                    >
+                      <img
+                        src={fixedTeam.logoUrl}
+                        alt={fixedTeam.name}
+                        className="h-10 w-10 rounded-full object-cover"
+                      />
+                      <span
+                        className={clsx(
+                          "text-xs font-medium leading-tight",
+                          isDarkMode ? "text-zinc-200" : "text-zinc-700",
+                        )}
+                      >
+                        {fixedTeam.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+            <div
               className={clsx(
-                "mt-2 text-sm",
-                isDarkMode ? "text-zinc-400" : "text-zinc-500",
+                "mt-4 flex items-center justify-between rounded-2xl px-4 py-2.5 text-sm",
+                isDarkMode
+                  ? "bg-[#0b0b0b] text-zinc-300"
+                  : "bg-zinc-50 text-zinc-600",
               )}
             >
-              Estruture os vendedores do evento em grupos menores.
-            </p>
-            <div className="mt-5 flex gap-2">
-              <input
-                type="text"
-                value={newTeamName}
-                onChange={(e) => setNewTeamName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && void handleCreateTeam()}
-                placeholder="Nome do time"
-                className={clsx(
-                  "flex-1 rounded-2xl border px-4 py-3 text-sm outline-none focus:border-[#FF0636]",
-                  isDarkMode
-                    ? "border-zinc-700 bg-[#0b0b0b] text-zinc-100 placeholder:text-zinc-500"
-                    : "border-zinc-200 bg-white text-zinc-950 placeholder:text-zinc-400",
-                )}
-              />
-              <Button
-                loading={teamCreating}
-                onClick={() => void handleCreateTeam()}
-                icon={<Plus size={16} />}
-              >
-                Criar
-              </Button>
-            </div>
-            <div className="mt-5 rounded-2xl border border-dashed border-zinc-200 px-4 py-4 text-sm text-zinc-500">
-              {availableVendors.length} membro
-              {availableVendors.length !== 1 ? "s" : ""} disponível
-              {availableVendors.length !== 1 ? "eis" : ""}
-              para alocação.
+              <span>Disponíveis</span>
+              <span className="font-semibold">{availableVendors.length}</span>
             </div>
             {availableVendorsByParticipant.length > 0 ? (
               <div className="mt-4 space-y-2">
@@ -2828,13 +2111,21 @@ export function EventDetailPage() {
                     )}
                     padding="none"
                   >
-                    <div className="flex items-center justify-between gap-3 border-b border-zinc-100 px-5 py-4">
+                    <div
+                      className={clsx(
+                        "flex items-center justify-between gap-3 border-b px-5 py-4",
+                        isDarkMode ? "border-zinc-800" : "border-zinc-100",
+                      )}
+                    >
                       <div className="flex items-center gap-2">
                         {team.logo_url ? (
                           <img
                             src={team.logo_url}
                             alt={team.name}
-                            className="h-7 w-7 rounded-full object-cover ring-1 ring-zinc-200"
+                            className={clsx(
+                              "h-7 w-7 rounded-full object-cover ring-1",
+                              isDarkMode ? "ring-zinc-700" : "ring-zinc-200",
+                            )}
                           />
                         ) : (
                           <Users size={16} className="text-[#FF0636]" />
@@ -2847,14 +2138,26 @@ export function EventDetailPage() {
                         >
                           {team.name}
                         </p>
-                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-600">
+                        <span
+                          className={clsx(
+                            "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                            isDarkMode
+                              ? "bg-[#1a1a1a] text-zinc-300"
+                              : "bg-zinc-100 text-zinc-600",
+                          )}
+                        >
                           {team.members.length} membro
                           {team.members.length !== 1 ? "s" : ""}
                         </span>
                         <button
                           type="button"
                           onClick={() => handleEditTeam(team)}
-                          className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+                          className={clsx(
+                            "rounded-lg p-1.5 text-zinc-400 transition-colors",
+                            isDarkMode
+                              ? "hover:bg-[#1a1a1a] hover:text-zinc-200"
+                              : "hover:bg-zinc-100 hover:text-zinc-700",
+                          )}
                           title="Editar nome e logo do time"
                         >
                           <Pencil size={13} />
@@ -2872,13 +2175,25 @@ export function EventDetailPage() {
                                 nextOpen ? (available[0]?.id ?? "") : "",
                               );
                             }}
-                            className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+                            className={clsx(
+                              "inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                              isDarkMode
+                                ? "border-zinc-700 bg-[#111111] text-zinc-300 hover:bg-[#1a1a1a]"
+                                : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50",
+                            )}
                           >
                             <Plus size={12} />
                             Adicionar membro
                           </button>
                         ) : (
-                          <span className="rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] font-medium text-zinc-500">
+                          <span
+                            className={clsx(
+                              "rounded-full px-3 py-1.5 text-[11px] font-medium",
+                              isDarkMode
+                                ? "bg-[#1a1a1a] text-zinc-400"
+                                : "bg-zinc-100 text-zinc-500",
+                            )}
+                          >
                             Sem membros disponíveis
                           </span>
                         )}
@@ -2886,7 +2201,12 @@ export function EventDetailPage() {
                           type="button"
                           disabled={teamDeleting === team.id}
                           onClick={() => void handleDeleteTeam(team)}
-                          className="rounded-xl p-2 text-zinc-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
+                          className={clsx(
+                            "rounded-xl p-2 text-zinc-400 transition-colors disabled:opacity-40",
+                            isDarkMode
+                              ? "hover:bg-red-500/10 hover:text-red-400"
+                              : "hover:bg-red-50 hover:text-red-500",
+                          )}
                           title="Excluir time"
                         >
                           <Trash2 size={14} />
@@ -2949,7 +2269,12 @@ export function EventDetailPage() {
                         Nenhum membro neste time ainda.
                       </p>
                     ) : (
-                      <div className="divide-y divide-zinc-100">
+                      <div
+                        className={clsx(
+                          "divide-y",
+                          isDarkMode ? "divide-zinc-800" : "divide-zinc-100",
+                        )}
+                      >
                         {membersByParticipant.map(([clientId, members]) => (
                           <div
                             key={`${team.id}-${clientId}`}
@@ -2969,7 +2294,12 @@ export function EventDetailPage() {
                               {members.map((member) => (
                                 <div
                                   key={member.user_id}
-                                  className="flex items-center justify-between rounded-2xl border border-zinc-100 px-4 py-3"
+                                  className={clsx(
+                                    "flex items-center justify-between rounded-2xl border px-4 py-3",
+                                    isDarkMode
+                                      ? "border-zinc-800"
+                                      : "border-zinc-100",
+                                  )}
                                 >
                                   <div className="flex items-center gap-3">
                                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">
@@ -3022,10 +2352,7 @@ export function EventDetailPage() {
       )}
 
       {activeTab === "configuracoes" && (
-        <form
-          onSubmit={(e) => void handleSaveSettings(e)}
-          className="grid gap-6 lg:grid-cols-[1fr_0.8fr]"
-        >
+        <form onSubmit={(e) => void handleSaveSettings(e)} className="grid gap-6">
           <Card
             className={clsx(
               "rounded-[28px] border",
@@ -3045,14 +2372,6 @@ export function EventDetailPage() {
                 >
                   Configurações do evento
                 </h3>
-                <p
-                  className={clsx(
-                    "mt-1 text-sm",
-                    isDarkMode ? "text-zinc-400" : "text-zinc-500",
-                  )}
-                >
-                  Edite os dados principais, imagem e vínculos do evento.
-                </p>
               </div>
               <Pencil size={18} className="text-zinc-400" />
             </div>
@@ -3167,62 +2486,6 @@ export function EventDetailPage() {
                   ]}
                 />
               </div>
-              <div>
-                <Input
-                  dark={isDarkMode}
-                  label="Imagem de capa"
-                  value={formCoverImageUrl}
-                  onChange={(e) => setFormCoverImageUrl(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <div className="mb-3 flex items-center gap-2">
-                <ImageIcon size={16} className="text-zinc-400" />
-                <p className="text-sm font-semibold text-zinc-500">
-                  Galeria de imagens
-                </p>
-              </div>
-              <div className="space-y-3">
-                {formImageUrls.map((url, index) => (
-                  <div key={`image-${index}`} className="flex gap-2">
-                    <Input
-                      dark={isDarkMode}
-                      value={url}
-                      onChange={(e) =>
-                        setFormImageUrls((current) =>
-                          current.map((item, i) =>
-                            i === index ? e.target.value : item,
-                          ),
-                        )
-                      }
-                      placeholder={`Imagem ${index + 1}`}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() =>
-                        setFormImageUrls((current) =>
-                          current.filter((_, i) => i !== index),
-                        )
-                      }
-                    >
-                      Remover
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  icon={<Plus size={16} />}
-                  onClick={() =>
-                    setFormImageUrls((current) => [...current, ""])
-                  }
-                >
-                  Adicionar imagem
-                </Button>
-              </div>
             </div>
 
             <div className="mt-6">
@@ -3276,108 +2539,56 @@ export function EventDetailPage() {
             </div>
           </Card>
 
-          <Card
-            className={clsx(
-              "rounded-[28px] border",
-              isDarkMode
-                ? "border-zinc-800 bg-[#111111]"
-                : "border-zinc-100 bg-white",
-            )}
-            padding="lg"
-          >
-            <h3
-              className={clsx(
-                "text-lg font-black tracking-tight",
-                isDarkMode ? "text-zinc-100" : "text-zinc-950",
-              )}
+          <div className="fixed right-6 top-1/2 z-40 flex -translate-y-1/2 flex-col gap-2">
+            <Button
+              type="submit"
+              size="icon"
+              title="Salvar alterações"
+              aria-label="Salvar alterações"
+              loading={settingsSaving}
+              className="rounded-full shadow-lg"
             >
-              Ações
-            </h3>
-            <p
-              className={clsx(
-                "mt-2 text-sm",
-                isDarkMode ? "text-zinc-400" : "text-zinc-500",
-              )}
-            >
-              Salve as alterações ou remova o evento definitivamente.
-            </p>
-
-            <div className="mt-5 space-y-3">
-              <Button
-                type="submit"
-                loading={settingsSaving}
-                icon={<Pencil size={16} />}
-              >
-                Salvar alterações
-              </Button>
-              {eventIsArchived && (
-                <Button
-                  type="button"
-                  loading={settingsSaving}
-                  onClick={() => void handleQuickStatusChange("active")}
-                  icon={<ArrowUpRight size={16} />}
-                >
-                  Reativar evento
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant="destructive"
-                loading={settingsDeleting}
-                onClick={() => void handleDeleteEvent()}
-                icon={<Trash2 size={16} />}
-              >
-                Excluir evento
-              </Button>
+              <Pencil size={16} />
+            </Button>
+            {eventIsArchived && (
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => navigate("/gestor/eventos")}
-                icon={<ArrowLeft size={16} />}
+                size="icon"
+                title="Reativar evento"
+                aria-label="Reativar evento"
+                loading={settingsSaving}
+                onClick={() => void handleQuickStatusChange("active")}
+                className="rounded-full shadow-lg"
               >
-                Voltar à lista
+                <ArrowUpRight size={16} />
               </Button>
-            </div>
-          </Card>
+            )}
+            <Button
+              type="button"
+              variant="destructive"
+              size="icon"
+              title="Excluir evento"
+              aria-label="Excluir evento"
+              loading={settingsDeleting}
+              onClick={() => void handleDeleteEvent()}
+              className="rounded-full shadow-lg"
+            >
+              <Trash2 size={16} />
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon"
+              title="Voltar à lista"
+              aria-label="Voltar à lista"
+              onClick={() => navigate("/gestor/eventos")}
+              className="rounded-full shadow-lg"
+            >
+              <ArrowLeft size={16} />
+            </Button>
+          </div>
         </form>
-      )}
-
-      {activeTab === "relatorio" && event && (
-        <EventReportTab
-          event={event}
-          leads={eventLeads}
-          rankingData={rankingData}
-          teams={teams}
-          isDarkMode={isDarkMode}
-          loading={rankingLoading}
-          lastUpdatedAt={rankingUpdatedAt}
-          onExportCsv={() => {
-            const leadsByVendor: Record<string, number> = {};
-            for (const lead of eventLeads) {
-              const key = lead.registered_by_id ?? lead.assigned_vendor_id;
-              if (key) leadsByVendor[key] = (leadsByVendor[key] ?? 0) + 1;
-            }
-            const rows: string[][] = [
-              [
-                "Vendedor",
-                "Leads Cadastrados",
-                "Agendamentos",
-                "Check-ins",
-                "Vendas",
-                "Pontos",
-              ],
-              ...rankingData.map((v) => [
-                v.vendor_name,
-                String(leadsByVendor[v.vendor_id] ?? 0),
-                String(v.scheduled.count),
-                String(v.checked_in.count),
-                String(v.sold.count),
-                String(v.total_points),
-              ]),
-            ];
-            downloadCsv(`relatorio-${event.name}.csv`, rows);
-          }}
-        />
       )}
 
       <Modal

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import {
   Bell,
@@ -13,10 +14,9 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import {
-  Area,
+  Bar,
+  BarChart,
   CartesianGrid,
-  ComposedChart,
-  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -50,18 +50,18 @@ type CalendarEvent = {
 type CampaignChartPoint = {
   day: string;
   totalLeads: number;
+  scheduledLeads: number;
   confirmedLeads: number;
-  noResponseLeads: number;
-  lostLeads: number;
-  scheduledUnconfirmed: number;
+  cancelledLeads: number;
+  checkedInLeads: number;
 };
 
 type CampaignMetricKey =
   | "totalLeads"
+  | "scheduledLeads"
   | "confirmedLeads"
-  | "noResponseLeads"
-  | "lostLeads"
-  | "scheduledUnconfirmed";
+  | "cancelledLeads"
+  | "checkedInLeads";
 
 const campaignMetrics: Array<{
   key: CampaignMetricKey;
@@ -73,43 +73,43 @@ const campaignMetrics: Array<{
 }> = [
   {
     key: "totalLeads",
-    label: "Total de contatos",
-    stroke: "#E11D48",
-    areaFrom: "rgba(225, 29, 72, 0.30)",
-    areaTo: "rgba(225, 29, 72, 0.03)",
-    chipStyle: "bg-rose-50 text-rose-700",
+    label: "Quantidade de lead",
+    stroke: "#FF0636",
+    areaFrom: "rgba(255, 6, 54, 0.35)",
+    areaTo: "rgba(255, 6, 54, 0.02)",
+    chipStyle: "bg-rose-50 text-rose-600 font-semibold border border-rose-200/70",
+  },
+  {
+    key: "scheduledLeads",
+    label: "Agendados",
+    stroke: "#3B82F6",
+    areaFrom: "rgba(59, 130, 246, 0.30)",
+    areaTo: "rgba(59, 130, 246, 0.02)",
+    chipStyle: "bg-blue-50 text-blue-600 font-semibold border border-blue-200/70",
   },
   {
     key: "confirmedLeads",
     label: "Confirmados",
-    stroke: "#2563EB",
-    areaFrom: "rgba(37, 99, 235, 0.26)",
-    areaTo: "rgba(37, 99, 235, 0.03)",
-    chipStyle: "bg-blue-50 text-blue-700",
+    stroke: "#8B5CF6",
+    areaFrom: "rgba(139, 92, 246, 0.30)",
+    areaTo: "rgba(139, 92, 246, 0.02)",
+    chipStyle: "bg-purple-50 text-purple-600 font-semibold border border-purple-200/70",
   },
   {
-    key: "noResponseLeads",
-    label: "Sem resposta",
-    stroke: "#D97706",
-    areaFrom: "rgba(217, 119, 6, 0.24)",
-    areaTo: "rgba(217, 119, 6, 0.03)",
-    chipStyle: "bg-amber-50 text-amber-700",
+    key: "cancelledLeads",
+    label: "Cancelados",
+    stroke: "#EF4444",
+    areaFrom: "rgba(239, 68, 68, 0.30)",
+    areaTo: "rgba(239, 68, 68, 0.02)",
+    chipStyle: "bg-red-50 text-red-600 font-semibold border border-red-200/70",
   },
   {
-    key: "lostLeads",
-    label: "Perdidos",
-    stroke: "#71717A",
-    areaFrom: "rgba(113, 113, 122, 0.22)",
-    areaTo: "rgba(113, 113, 122, 0.02)",
-    chipStyle: "bg-zinc-100 text-zinc-700",
-  },
-  {
-    key: "scheduledUnconfirmed",
-    label: "Agendados sem confirmacao",
-    stroke: "#7C3AED",
-    areaFrom: "rgba(124, 58, 237, 0.24)",
-    areaTo: "rgba(124, 58, 237, 0.03)",
-    chipStyle: "bg-violet-50 text-violet-700",
+    key: "checkedInLeads",
+    label: "Presença confirmada",
+    stroke: "#10B981",
+    areaFrom: "rgba(16, 185, 129, 0.30)",
+    areaTo: "rgba(16, 185, 129, 0.02)",
+    chipStyle: "bg-emerald-50 text-emerald-600 font-semibold border border-emerald-200/70",
   },
 ];
 
@@ -243,6 +243,7 @@ function buildCampaignChartData(
   eventId: string,
   allLeads: Lead[],
   eventDateIso?: string,
+  periodDays: 7 | 15 | 30 = 7,
 ): CampaignChartPoint[] {
   const relevantLeads = allLeads.filter((lead) => lead.event_id === eventId);
   const endDate = eventDateIso ? new Date(eventDateIso) : new Date();
@@ -250,11 +251,11 @@ function buildCampaignChartData(
     Date.UTC(
       endDate.getUTCFullYear(),
       endDate.getUTCMonth(),
-      endDate.getUTCDate() - 6,
+      endDate.getUTCDate() - (periodDays - 1),
     ),
   );
 
-  return Array.from({ length: 7 }, (_, index) => {
+  return Array.from({ length: periodDays }, (_, index) => {
     const currentDate = new Date(
       Date.UTC(
         startDate.getUTCFullYear(),
@@ -272,23 +273,24 @@ function buildCampaignChartData(
     return {
       day: formatShortDate(currentDate),
       totalLeads: leadsUntilDay.length,
+      scheduledLeads: leadsUntilDay.filter(
+        (lead) =>
+          lead.confirmation_status === "scheduled" ||
+          lead.crm_stage === "agendado" ||
+          Boolean(lead.active_appointment?.scheduled_at),
+      ).length,
       confirmedLeads: leadsUntilDay.filter(
         (lead) =>
-          lead.confirmation_status === "confirmed" ||
-          lead.confirmation_status === "checked_in",
+          lead.confirmation_status === "confirmed",
       ).length,
-      noResponseLeads: leadsUntilDay.filter(
-        (lead) =>
-          lead.confirmation_status === "pending" &&
-          (lead.crm_stage === "novo" || lead.crm_stage === "contactado"),
-      ).length,
-      lostLeads: leadsUntilDay.filter(
+      cancelledLeads: leadsUntilDay.filter(
         (lead) =>
           lead.confirmation_status === "cancelled" ||
           lead.crm_stage === "perdido",
       ).length,
-      scheduledUnconfirmed: leadsUntilDay.filter(
-        (lead) => lead.confirmation_status === "scheduled",
+      checkedInLeads: leadsUntilDay.filter(
+        (lead) =>
+          lead.confirmation_status === "checked_in",
       ).length,
     };
   });
@@ -448,7 +450,13 @@ function MetricCard({
   );
 }
 
-function ActiveEventFunnelCard({ event }: { event: ActiveEventSummary }) {
+function ActiveEventFunnelCard({
+  event,
+  isTopPerformer,
+}: {
+  event: ActiveEventSummary;
+  isTopPerformer?: boolean;
+}) {
   const stages = [
     { label: "Leads", value: event.funnel.leads },
     { label: "Agend.", value: event.funnel.scheduled },
@@ -457,24 +465,41 @@ function ActiveEventFunnelCard({ event }: { event: ActiveEventSummary }) {
     { label: "Vend.", value: event.funnel.sold },
   ];
   const maxValue = Math.max(event.funnel.leads, 1);
+  const conversionRate = Math.round((event.funnel.sold / maxValue) * 100);
+  const isExpired = new Date(event.event_date).getTime() < new Date().setHours(0,0,0,0);
 
   return (
-    <Card className="w-[420px] shrink-0 rounded-3xl">
-      <div className="flex items-start justify-between gap-3">
+    <Card className="w-[420px] shrink-0 rounded-3xl relative overflow-hidden">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-zinc-950">
-            {event.name}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-semibold text-zinc-950">
+              {event.name}
+            </p>
+            {isTopPerformer && conversionRate > 0 && (
+              <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 border border-amber-200 flex items-center gap-1 shadow-sm">
+                👑 Maior Conversão
+              </span>
+            )}
+          </div>
           <p className="text-xs text-zinc-500">
             {new Intl.DateTimeFormat("pt-BR", {
               day: "2-digit",
               month: "short",
+              year: "numeric",
             }).format(new Date(event.event_date))}
           </p>
         </div>
-        <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-700">
-          Ativo
-        </span>
+
+        {isExpired ? (
+          <span className="shrink-0 rounded-full bg-amber-100/80 px-2.5 py-1 text-[11px] font-bold text-amber-800 border border-amber-300/60">
+            ⚠️ Finalização Pendente
+          </span>
+        ) : (
+          <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+            Ativo
+          </span>
+        )}
       </div>
 
       <div className="mt-5 grid grid-cols-5 gap-1">
@@ -493,13 +518,13 @@ function ActiveEventFunnelCard({ event }: { event: ActiveEventSummary }) {
       <div className="mt-4">
         <div className="mb-1 flex items-center justify-between text-xs text-zinc-500">
           <span>Conversão (vendidos / leads)</span>
-          <span>{Math.round((event.funnel.sold / maxValue) * 100)}%</span>
+          <span className="font-bold text-zinc-900">{conversionRate}%</span>
         </div>
         <div className="h-1.5 rounded-full bg-zinc-100">
           <div
-            className="h-1.5 rounded-full bg-[#FF0636]"
+            className="h-1.5 rounded-full bg-[#FF0636] transition-all duration-500"
             style={{
-              width: `${Math.round((event.funnel.sold / maxValue) * 100)}%`,
+              width: `${conversionRate}%`,
             }}
           />
         </div>
@@ -526,6 +551,7 @@ function SectionTitle({
 }
 
 export function DashboardGestorPage() {
+  const navigate = useNavigate();
   const { user } = useGestorClient();
   const today = new Date();
   const todayKey = toDateKey(today);
@@ -716,6 +742,23 @@ export function DashboardGestorPage() {
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [activeMetricKey, setActiveMetricKey] =
     useState<CampaignMetricKey>("totalLeads");
+  const [periodDays, setPeriodDays] = useState<7 | 15 | 30>(7);
+
+  const topPerformerEventId = activeEventsSummary.reduce<string | null>(
+    (topId, current) => {
+      if (!current.funnel.leads) return topId;
+      const currentRate = (current.funnel.sold / current.funnel.leads) * 100;
+      if (currentRate <= 0) return topId;
+      if (!topId) return current.id;
+      const topEvent = activeEventsSummary.find((e) => e.id === topId);
+      const topRate = topEvent
+        ? (topEvent.funnel.sold / Math.max(topEvent.funnel.leads, 1)) * 100
+        : 0;
+      return currentRate > topRate ? current.id : topId;
+    },
+    null,
+  );
+
   const selectedEventForChart =
     events.find((e) => e.id === selectedCampaignId) ?? events[0];
   const selectedCampaign =
@@ -736,14 +779,15 @@ export function DashboardGestorPage() {
     selectedCampaign?.id ?? "",
     leads,
     selectedEventForChart?.event_date,
+    periodDays,
   );
   const campaignSummary = campaignChartData[campaignChartData.length - 1] ?? {
     day: "--",
     totalLeads: 0,
+    scheduledLeads: 0,
     confirmedLeads: 0,
-    noResponseLeads: 0,
-    lostLeads: 0,
-    scheduledUnconfirmed: 0,
+    cancelledLeads: 0,
+    checkedInLeads: 0,
   };
   const activeMetric =
     campaignMetrics.find((metric) => metric.key === activeMetricKey) ??
@@ -823,8 +867,37 @@ export function DashboardGestorPage() {
 
         <div
           ref={notificationsRef}
-          className="relative flex items-center gap-2"
+          className="relative flex flex-wrap items-center gap-2"
         >
+          <button
+            type="button"
+            onClick={() => navigate("/gestor/crm")}
+            className={clsx(
+              "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-semibold shadow-sm transition-all hover:scale-[1.02]",
+              isDarkMode
+                ? "border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+                : "border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50",
+            )}
+          >
+            <Sparkles size={14} className="text-[#FF0636]" />
+            <span>CRM & Leads</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const firstActive = events.find((e) => e.status === "active");
+              if (firstActive) {
+                window.open(`/eventos/${firstActive.id}/tv`, "_blank");
+              } else {
+                navigate("/gestor/eventos");
+              }
+            }}
+            className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-zinc-900 to-zinc-800 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-95 hover:scale-[1.02]"
+          >
+            <span>📺 Painel TV</span>
+          </button>
+
           <div ref={calendarRef} className="relative">
             <button
               type="button"
@@ -1200,7 +1273,17 @@ export function DashboardGestorPage() {
             title="Alertas criticos"
             value={String(criticalAlerts)}
             subtitle="Eventos ativos vencidos"
-            icon={<CheckCircle2 size={18} className="text-[#FF0636]" />}
+            icon={
+              <div className="relative flex items-center justify-center">
+                <CheckCircle2 size={18} className="text-[#FF0636]" />
+                {criticalAlerts > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-2.5 w-2.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#FF0636]" />
+                  </span>
+                )}
+              </div>
+            }
             accent="bg-[#FF0636]/10"
           />
         </div>
@@ -1211,7 +1294,11 @@ export function DashboardGestorPage() {
             <SectionTitle title="Eventos ativos" />
             <div className="-mx-1 flex gap-4 overflow-x-auto px-1 pb-2">
               {activeEventsSummary.map((event) => (
-                <ActiveEventFunnelCard key={event.id} event={event} />
+                <ActiveEventFunnelCard
+                  key={event.id}
+                  event={event}
+                  isTopPerformer={event.id === topPerformerEventId}
+                />
               ))}
             </div>
           </div>
@@ -1374,13 +1461,30 @@ export function DashboardGestorPage() {
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-3">
                 <SectionTitle
-                  title="Contatos por campanha - ultimos 7 dias"
+                  title={`Contatos por campanha - últimos ${periodDays} dias`}
                   action={
                     <span className="rounded-full bg-[#FF0636]/10 px-3 py-1 text-xs font-semibold text-[#FF0636]">
                       Meta selecionada
                     </span>
                   }
                 />
+                <div className="flex items-center gap-1 rounded-2xl border border-zinc-200 bg-zinc-50 p-1 text-xs font-semibold">
+                  {([7, 15, 30] as const).map((days) => (
+                    <button
+                      key={days}
+                      type="button"
+                      onClick={() => setPeriodDays(days)}
+                      className={clsx(
+                        "rounded-xl px-3 py-1 transition-all",
+                        periodDays === days
+                          ? "bg-white text-zinc-950 shadow-sm"
+                          : "text-zinc-500 hover:text-zinc-950",
+                      )}
+                    >
+                      {days} dias
+                    </button>
+                  ))}
+                </div>
               </div>
               <p className="text-xs text-zinc-500">
                 {selectedCampaign?.campaignName} -{" "}
@@ -1458,31 +1562,16 @@ export function DashboardGestorPage() {
             >
               <div className="h-[330px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart
+                  <BarChart
                     data={campaignChartData}
-                    margin={{ top: 18, right: 16, left: 8, bottom: 8 }}
+                    margin={{ top: 20, right: 16, left: 8, bottom: 8 }}
+                    barGap={6}
+                    barCategoryGap="18%"
                   >
-                    <defs>
-                      {campaignMetrics.map((metric) => (
-                        <linearGradient
-                          key={`area-${metric.key}`}
-                          id={`area-${metric.key}`}
-                          x1="0"
-                          y1="0"
-                          x2="0"
-                          y2="1"
-                        >
-                          <stop offset="0%" stopColor={metric.areaFrom} />
-                          <stop offset="100%" stopColor={metric.areaTo} />
-                        </linearGradient>
-                      ))}
-                    </defs>
-
                     <CartesianGrid
                       vertical={false}
-                      stroke="#e4e4e7"
-                      strokeDasharray="4 6"
-                      strokeOpacity={0.8}
+                      stroke={isDarkMode ? "#27272a" : "#f4f4f5"}
+                      strokeDasharray="4 4"
                     />
                     <XAxis
                       dataKey="day"
@@ -1490,7 +1579,7 @@ export function DashboardGestorPage() {
                       tickLine={false}
                       tickMargin={12}
                       tick={{
-                        fill: "#a1a1aa",
+                        fill: isDarkMode ? "#a1a1aa" : "#71717a",
                         fontSize: 12,
                         fontWeight: 600,
                       }}
@@ -1500,83 +1589,71 @@ export function DashboardGestorPage() {
                       tickLine={false}
                       allowDecimals={false}
                       tick={{
-                        fill: "#a1a1aa",
+                        fill: isDarkMode ? "#a1a1aa" : "#71717a",
                         fontSize: 11,
                         fontWeight: 600,
                       }}
                       width={28}
                     />
                     <Tooltip
-                      cursor={{ stroke: "#d4d4d8", strokeDasharray: "4 4" }}
+                      cursor={{
+                        fill: isDarkMode
+                          ? "rgba(255,255,255,0.04)"
+                          : "rgba(0,0,0,0.03)",
+                      }}
                       content={<CampaignChartTooltip dark={isDarkMode} />}
                     />
-
-                    {campaignMetrics.map((metric) => (
-                      <Area
-                        key={`area-${metric.key}`}
-                        type="monotone"
-                        dataKey={metric.key}
-                        fill={`url(#area-${metric.key})`}
-                        stroke="none"
-                        fillOpacity={metric.key === activeMetricKey ? 1 : 0}
-                        isAnimationActive={false}
-                      />
-                    ))}
 
                     {campaignMetrics.map((metric) => {
                       const isActive = metric.key === activeMetricKey;
                       return (
-                        <Line
-                          key={`line-${metric.key}`}
-                          type="monotone"
+                        <Bar
+                          key={`bar-${metric.key}`}
                           dataKey={metric.key}
-                          stroke={metric.stroke}
-                          strokeWidth={isActive ? 3.2 : 2}
-                          strokeOpacity={isActive ? 1 : 0.3}
-                          dot={{
-                            r: isActive ? 4 : 2,
-                            fill: metric.stroke,
-                            stroke: "#fff",
-                            strokeWidth: 2,
-                          }}
-                          activeDot={{
-                            r: 6,
-                            fill: metric.stroke,
-                            stroke: "#fff",
-                            strokeWidth: 2,
-                          }}
-                          isAnimationActive={false}
+                          name={metric.label}
+                          fill={metric.stroke}
+                          radius={[6, 6, 0, 0]}
+                          maxBarSize={24}
+                          fillOpacity={isActive ? 1 : 0.45}
                         />
                       );
                     })}
-                  </ComposedChart>
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
           </div>
 
-          <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-            {campaignMetrics.map((metric) => (
-              <div
-                key={`kpi-${metric.key}`}
-                className={clsx(
-                  "rounded-2xl border px-3 py-2",
-                  isDarkMode
-                    ? "border-zinc-700 bg-[#15161b]"
-                    : "border-zinc-100 bg-white",
-                )}
-              >
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                  {metric.label}
-                </p>
-                <p
-                  className="mt-1 text-base font-bold"
-                  style={{ color: metric.stroke }}
+          <div className="mt-5 grid gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-5">
+            {campaignMetrics.map((metric) => {
+              const isActive = metric.key === activeMetricKey;
+              return (
+                <div
+                  key={`kpi-${metric.key}`}
+                  onClick={() => setActiveMetricKey(metric.key)}
+                  className={clsx(
+                    "cursor-pointer rounded-2xl border p-3.5 transition-all hover:scale-[1.02]",
+                    isActive
+                      ? isDarkMode
+                        ? "border-zinc-500 bg-zinc-800/90 shadow-md ring-2 ring-white/20"
+                        : "border-zinc-300 bg-zinc-50/90 shadow-md ring-2 ring-black/10"
+                      : isDarkMode
+                      ? "border-zinc-800 bg-[#15161b] opacity-85 hover:opacity-100"
+                      : "border-zinc-100 bg-white opacity-85 hover:opacity-100",
+                  )}
                 >
-                  {campaignSummary[metric.key]}
-                </p>
-              </div>
-            ))}
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400">
+                    {metric.label}
+                  </p>
+                  <p
+                    className="mt-1.5 text-2xl font-black tracking-tight"
+                    style={{ color: metric.stroke }}
+                  >
+                    {campaignSummary[metric.key]}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </Card>
       </div>

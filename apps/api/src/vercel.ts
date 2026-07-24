@@ -7,6 +7,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express from 'express';
+import helmet from 'helmet';
 import type { Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
@@ -27,6 +28,23 @@ async function bootstrap(): Promise<express.Express> {
    * FRONTEND_URL vem do mesmo env que o ConfigModule (variáveis do projeto na Vercel).
    */
   server.use(cookieParser());
+  server.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          baseUri: ["'self'"],
+          objectSrc: ["'none'"],
+          frameAncestors: ["'none'"],
+          imgSrc: ["'self'", 'data:', 'https:'],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          connectSrc: ["'self'", 'https:', 'wss:'],
+        },
+      },
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
   server.use(
     cors({
       origin: createCorsOriginDelegate(process.env.FRONTEND_URL, 'http://localhost:5173'),

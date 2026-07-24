@@ -23,8 +23,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: any): Promise<AuthenticatedUser> {
+  async validate(payload: { sub?: unknown; type?: unknown }): Promise<AuthenticatedUser> {
     if (payload.type !== 'access') {
+      throw new UnauthorizedException('Token de acesso invalido');
+    }
+    if (typeof payload.sub !== 'string' || !payload.sub) {
       throw new UnauthorizedException('Token de acesso invalido');
     }
 

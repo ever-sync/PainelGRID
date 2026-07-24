@@ -5,6 +5,7 @@ import { AuthenticatedUser } from '../auth/auth.types';
 import { Role } from '../../common/types';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class VehiclesService {
@@ -57,7 +58,7 @@ export class VehiclesService {
   ) {
     await this.assertGestorClientAccess(user, clientId);
 
-    const where: any = { client_id: clientId };
+    const where: Prisma.VehicleWhereInput = { client_id: clientId };
 
     if (filters?.status !== undefined) {
       where.status = filters.status;

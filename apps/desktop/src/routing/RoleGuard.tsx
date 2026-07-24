@@ -13,11 +13,18 @@ export function roleHome(role: UserRole): string {
   return ROLE_HOME[role] ?? "/login";
 }
 
+export function isRoleAllowed(
+  role: UserRole,
+  allow: UserRole | UserRole[],
+): boolean {
+  const allowed = Array.isArray(allow) ? allow : [allow];
+  return allowed.includes(role);
+}
+
 export function RoleGuard({ allow }: { allow: UserRole | UserRole[] }) {
   const context = useOutletContext<AppOutletContext>();
   const { user } = context;
-  const allowed = Array.isArray(allow) ? allow : [allow];
-  if (!allowed.includes(user.role)) {
+  if (!isRoleAllowed(user.role, allow)) {
     return <Navigate to={roleHome(user.role)} replace />;
   }
   return <Outlet context={context} />;

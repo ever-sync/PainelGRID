@@ -616,6 +616,16 @@ export function ClienteDetailPage() {
   const [apiClient, setApiClient] = useState<Client | null>(null);
   const [clientLoading, setClientLoading] = useState(false);
   const [clientFetchError, setClientFetchError] = useState("");
+  const [companyEditOpen, setCompanyEditOpen] = useState(false);
+  const [companyEditLoading, setCompanyEditLoading] = useState(false);
+  const [companyEditError, setCompanyEditError] = useState("");
+  const [companyEditName, setCompanyEditName] = useState("");
+  const [companyEditCnpj, setCompanyEditCnpj] = useState("");
+  const [companyEditEmail, setCompanyEditEmail] = useState("");
+  const [companyEditPhone, setCompanyEditPhone] = useState("");
+  const [companyEditWhatsapp, setCompanyEditWhatsapp] = useState("");
+  const [companyEditAddress, setCompanyEditAddress] = useState("");
+  const [companyEditWebhook, setCompanyEditWebhook] = useState("");
   const [detailLeads, setDetailLeads] = useState<Lead[] | null>(null);
   const [leadSearch, setLeadSearch] = useState("");
   const [leadSourceFilter, setLeadSourceFilter] =
@@ -2180,6 +2190,57 @@ export function ClienteDetailPage() {
     }
   }
 
+  function handleOpenCompanyEdit() {
+    if (!client) return;
+    setCompanyEditName(client.company_name);
+    setCompanyEditCnpj(client.cnpj);
+    setCompanyEditEmail(client.contact_email);
+    setCompanyEditPhone(client.phone_number ?? "");
+    setCompanyEditWhatsapp(client.whatsapp_number ?? "");
+    setCompanyEditAddress(client.address);
+    setCompanyEditWebhook(client.webhook_url_n8n ?? "");
+    setCompanyEditError("");
+    setCompanyEditOpen(true);
+  }
+
+  async function handleSaveCompanyEdit() {
+    if (!isUuid(resolvedId)) return;
+    const session = readStoredSession();
+    if (!session?.accessToken) {
+      setCompanyEditError("Faça login novamente para editar a empresa.");
+      return;
+    }
+
+    if (!companyEditName.trim()) {
+      setCompanyEditError("Informe o nome da empresa.");
+      return;
+    }
+
+    setCompanyEditLoading(true);
+    setCompanyEditError("");
+    try {
+      const row = await updateClient(resolvedId, session.accessToken, {
+        company_name: companyEditName.trim(),
+        cnpj: companyEditCnpj.trim() || undefined,
+        contact_email: companyEditEmail.trim() || undefined,
+        phone_number: companyEditPhone.trim() || undefined,
+        whatsapp_number: companyEditWhatsapp.trim() || undefined,
+        address: companyEditAddress.trim() || undefined,
+        webhook_url_n8n: companyEditWebhook.trim() || undefined,
+      });
+      setApiClient(mapApiClientToClient(row));
+      setCompanyEditOpen(false);
+    } catch (error) {
+      setCompanyEditError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar as alterações.",
+      );
+    } finally {
+      setCompanyEditLoading(false);
+    }
+  }
+
   async function performDeleteClient() {
     if (!isUuid(resolvedId)) return;
     const session = readStoredSession();
@@ -2235,15 +2296,6 @@ export function ClienteDetailPage() {
           <h1 className="text-2xl font-bold text-gray-900">
             {client.company_name}
           </h1>
-          <p className="text-sm text-gray-500">{client.cnpj}</p>
-          <div className="mt-1.5">
-            <CopyableId value={client.id} label="client_id" />
-          </div>
-          {defaultPipelineCode && (
-            <div className="mt-1.5">
-              <CopyableId value={defaultPipelineCode} label="pipeline_code" />
-            </div>
-          )}
         </div>
         <div className="ml-2">
           <PlanBadge plan={client.plan} />
@@ -2321,18 +2373,16 @@ export function ClienteDetailPage() {
                 : "Inativo"}
           </span>
         </div>
-        <Button
-          variant="destructive"
-          icon={<Trash2 size={14} />}
-          className={clsx(
-            "rounded-full px-4 py-2 text-sm font-semibold shadow-[0_10px_22px_rgba(229,24,56,0.28)]",
-            isDarkMode ? "bg-[#E51838] text-white hover:bg-[#c01530]" : "",
-          )}
+        <button
+          type="button"
           onClick={() => void handleDeleteClient()}
-          loading={deleteLoading}
+          disabled={deleteLoading}
+          aria-label="Excluir cliente"
+          title="Excluir cliente"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#E51838] text-white shadow-[0_10px_22px_rgba(229,24,56,0.28)] transition-colors hover:bg-[#c01530] disabled:opacity-60"
         >
-          Excluir cliente
-        </Button>
+          <Trash2 size={16} />
+        </button>
       </div>
 
       <ConfirmationModal
@@ -2395,6 +2445,103 @@ export function ClienteDetailPage() {
         }
       />
 
+      <Modal
+        open={companyEditOpen}
+        onClose={() => (companyEditLoading ? null : setCompanyEditOpen(false))}
+        title="Editar informações da empresa"
+        size="md"
+        dark={isDarkMode}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setCompanyEditOpen(false)}
+              disabled={companyEditLoading}
+              className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSaveCompanyEdit()}
+              disabled={companyEditLoading}
+              className="rounded-full bg-[#FF0636] px-4 py-2 text-sm font-semibold text-white hover:bg-[#e1002d] disabled:opacity-60"
+            >
+              {companyEditLoading ? "Salvando..." : "Salvar alterações"}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <p className="mb-1 text-sm text-gray-500">Razão Social</p>
+            <input
+              value={companyEditName}
+              onChange={(event) => setCompanyEditName(event.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="mb-1 text-sm text-gray-500">CNPJ</p>
+              <input
+                value={companyEditCnpj}
+                onChange={(event) => setCompanyEditCnpj(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
+            <div>
+              <p className="mb-1 text-sm text-gray-500">Telefone</p>
+              <input
+                value={companyEditPhone}
+                onChange={(event) => setCompanyEditPhone(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="mb-1 text-sm text-gray-500">WhatsApp</p>
+              <input
+                value={companyEditWhatsapp}
+                onChange={(event) =>
+                  setCompanyEditWhatsapp(event.target.value)
+                }
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
+            <div>
+              <p className="mb-1 text-sm text-gray-500">E-mail de Contato</p>
+              <input
+                type="email"
+                value={companyEditEmail}
+                onChange={(event) => setCompanyEditEmail(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
+          </div>
+          <div>
+            <p className="mb-1 text-sm text-gray-500">Endereço</p>
+            <input
+              value={companyEditAddress}
+              onChange={(event) => setCompanyEditAddress(event.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </div>
+          <div>
+            <p className="mb-1 text-sm text-gray-500">Webhook n8n</p>
+            <input
+              value={companyEditWebhook}
+              onChange={(event) => setCompanyEditWebhook(event.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </div>
+          {companyEditError ? (
+            <Notice tone="error">{companyEditError}</Notice>
+          ) : null}
+        </div>
+      </Modal>
+
       <Tabs
         tabs={TABS}
         active={activeTab}
@@ -2404,9 +2551,20 @@ export function ClienteDetailPage() {
 
       {activeTab === "perfil" && (
         <Card>
-          <h3 className="mb-4 text-base font-semibold text-gray-900">
-            Informações da Empresa
-          </h3>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 className="text-base font-semibold text-gray-900">
+              Informações da Empresa
+            </h3>
+            <button
+              type="button"
+              onClick={handleOpenCompanyEdit}
+              aria-label="Editar informações da empresa"
+              title="Editar informações da empresa"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900"
+            >
+              <Pencil size={14} />
+            </button>
+          </div>
           <div className="flex gap-6">
             <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100">
               {client.logo_url ? (
@@ -2464,6 +2622,15 @@ export function ClienteDetailPage() {
                   </p>
                 </div>
               ) : null}
+              <div className="col-span-2 flex flex-wrap items-center gap-2 pt-1">
+                <CopyableId value={client.id} label="client_id" />
+                {defaultPipelineCode && (
+                  <CopyableId
+                    value={defaultPipelineCode}
+                    label="pipeline_code"
+                  />
+                )}
+              </div>
             </div>
           </div>
         </Card>

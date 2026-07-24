@@ -14,9 +14,11 @@ import {
   Phone,
   Search,
   UserRound,
+  Sparkles,
 } from "lucide-react";
 import type { Client, Conversation, Lead, Message } from "../../types";
 import { fetchConversationMessageMediaCached } from "../../services/conversations";
+import type { ApiCrmStage } from "../../services/crm";
 
 type ViewFilter = "all" | "unread" | "whatsapp" | "internal";
 
@@ -72,59 +74,64 @@ function ConversationRow({
       type="button"
       onClick={onClick}
       className={clsx(
-        "group flex w-full items-center gap-3 px-3 py-3 text-left transition-colors",
+        "group flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-all duration-200 border-b",
         dark
           ? selected
-            ? "bg-[#1f1f1f]"
-            : "bg-[#0f0f0f] hover:bg-[#171717]"
+            ? "bg-zinc-800/80 border-zinc-700/60"
+            : "bg-transparent border-zinc-900 hover:bg-zinc-900/60"
           : selected
-            ? "bg-[#f0f2f5]"
-            : "bg-white hover:bg-[#f5f6f6]",
+            ? "bg-rose-50/70 border-rose-100"
+            : "bg-transparent border-zinc-100 hover:bg-zinc-50/80",
       )}
     >
       <div
         className={clsx(
-          "flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold",
-          dark ? "bg-[#1d1d1d] text-[#d7d7d7]" : "bg-[#dfe5e7] text-[#3b4a54]",
+          "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xs font-black shadow-sm transition-transform group-hover:scale-105",
+          selected
+            ? "bg-[#FF0636] text-white ring-2 ring-[#FF0636]/30"
+            : dark
+              ? "bg-zinc-800 text-zinc-200 border border-zinc-700/60"
+              : "bg-zinc-100 text-zinc-700 border border-zinc-200/80",
         )}
       >
         {getInitials(conversation.lead_name)}
       </div>
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center justify-between gap-2">
           <p
             className={clsx(
-              "truncate text-[16px] font-medium leading-none",
-              dark ? "text-[#f1f1f1]" : "text-[#111b21]",
+              "truncate text-sm font-semibold tracking-tight",
+              dark ? "text-zinc-100" : "text-zinc-900",
+              selected && !dark && "text-[#FF0636]",
             )}
           >
             {conversation.lead_name}
           </p>
           <span
             className={clsx(
-              "text-xs",
-              dark ? "text-[#9a9a9a]" : "text-[#667781]",
+              "text-[11px] font-medium shrink-0",
+              dark ? "text-zinc-400" : "text-zinc-400",
             )}
           >
             {formatTime(conversation.last_message_time)}
           </span>
         </div>
 
-        <div className="mt-1 flex items-center gap-2">
-          {conversation.unread_count > 0 && (
-            <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#25d366] px-1.5 text-[11px] font-semibold text-[#0b141a]">
-              {conversation.unread_count}
-            </span>
-          )}
+        <div className="mt-1 flex items-center justify-between gap-2">
           <p
             className={clsx(
-              "truncate text-[15px]",
-              dark ? "text-[#9a9a9a]" : "text-[#667781]",
+              "truncate text-xs leading-normal",
+              dark ? "text-zinc-400" : "text-zinc-500",
             )}
           >
             {conversation.last_message}
           </p>
+          {conversation.unread_count > 0 && (
+            <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#FF0636] px-1.5 text-[10px] font-extrabold text-white shadow-sm shrink-0">
+              {conversation.unread_count}
+            </span>
+          )}
         </div>
       </div>
     </button>
@@ -178,11 +185,11 @@ function MediaAttachment({
     return (
       <div
         className={clsx(
-          "mt-2 rounded-md px-3 py-2 text-[13px]",
-          dark ? "bg-[#151515] text-[#a6a6a6]" : "bg-black/5 text-[#54656f]",
+          "mt-2 rounded-xl px-3 py-2 text-xs font-medium",
+          dark ? "bg-zinc-800 text-zinc-400" : "bg-zinc-100 text-zinc-600",
         )}
       >
-        Midia indisponivel. Tente reenviar ou aguarde a proxima mensagem.
+        Mídia indisponível. Tente reenviar ou aguarde a próxima mensagem.
       </div>
     );
   }
@@ -191,8 +198,8 @@ function MediaAttachment({
     return (
       <div
         className={clsx(
-          "mt-2 h-24 animate-pulse rounded-md",
-          dark ? "bg-[#151515]" : "bg-black/10",
+          "mt-2 h-28 animate-pulse rounded-xl",
+          dark ? "bg-zinc-800" : "bg-zinc-200",
         )}
       />
     );
@@ -213,13 +220,13 @@ function MediaAttachment({
         target="_blank"
         rel="noreferrer"
         className={clsx(
-          "mt-2 block overflow-hidden rounded-md border",
-          dark ? "border-white/10" : "border-black/10",
+          "mt-2 block overflow-hidden rounded-2xl border shadow-sm transition-transform hover:scale-[1.01]",
+          dark ? "border-zinc-700" : "border-zinc-200",
         )}
       >
         <img
           src={objectUrl}
-          alt="Imagem enviada no WhatsApp"
+          alt="Imagem enviada no chat"
           loading="lazy"
           className="max-h-72 w-full object-cover"
         />
@@ -242,7 +249,7 @@ function MediaAttachment({
       <video
         controls
         src={objectUrl}
-        className="mt-2 block max-h-72 w-[320px] max-w-full rounded-md bg-black"
+        className="mt-2 block max-h-72 w-[320px] max-w-full rounded-2xl bg-black"
       />
     );
   }
@@ -253,8 +260,10 @@ function MediaAttachment({
       target="_blank"
       rel="noreferrer"
       className={clsx(
-        "mt-2 block rounded-md px-3 py-2 text-[13px] font-medium underline",
-        dark ? "bg-[#151515] text-[#d7d7d7]" : "bg-black/5 text-[#005c4b]",
+        "mt-2 inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold shadow-sm transition-colors",
+        dark
+          ? "bg-zinc-800 text-zinc-100 hover:bg-zinc-700"
+          : "bg-zinc-100 text-zinc-900 hover:bg-zinc-200",
       )}
     >
       Abrir arquivo
@@ -280,8 +289,10 @@ function MessageBubble({
       <div className="flex justify-center py-2">
         <span
           className={clsx(
-            "rounded-md px-3 py-1 text-xs shadow-sm",
-            dark ? "bg-[#151515] text-[#a6a6a6]" : "bg-white/80 text-[#54656f]",
+            "rounded-full px-4 py-1 text-[11px] font-semibold shadow-sm border",
+            dark
+              ? "border-zinc-800 bg-zinc-900 text-zinc-400"
+              : "border-zinc-200 bg-white/90 text-zinc-500",
           )}
         >
           {message.text}
@@ -291,54 +302,55 @@ function MessageBubble({
   }
 
   return (
-    <div className={clsx("flex", isVendor ? "justify-end" : "justify-start")}>
+    <div className={clsx("flex my-1", isVendor ? "justify-end" : "justify-start")}>
       <article
         className={clsx(
-          "w-fit max-w-[88%] rounded-lg px-3.5 py-2 text-[15px] leading-relaxed shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] sm:max-w-[78%] lg:max-w-[68%] xl:max-w-[62%]",
+          "w-fit max-w-[85%] px-4 py-2.5 text-sm leading-relaxed shadow-sm sm:max-w-[75%] lg:max-w-[65%]",
           isVendor
-            ? dark
-              ? "rounded-tr-sm bg-[#1f1f1f] text-[#f1f1f1]"
-              : "rounded-tr-sm bg-[#d9fdd3] text-[#111b21]"
+            ? "rounded-2xl rounded-tr-xs bg-[#FF0636] text-white"
             : dark
-              ? "rounded-tl-sm bg-[#121212] text-[#f1f1f1]"
-              : "rounded-tl-sm bg-white text-[#111b21]",
+              ? "rounded-2xl rounded-tl-xs bg-[#181920] text-zinc-100 border border-zinc-800"
+              : "rounded-2xl rounded-tl-xs bg-zinc-100 text-zinc-900 border border-zinc-200/60",
         )}
-        style={{ contentVisibility: "auto", containIntrinsicSize: "1px 160px" }}
       >
         {((!message.media_url && !message.media_id) ||
           !isMediaPlaceholder(message.text)) && (
-          <p className="whitespace-pre-line break-words">{message.text}</p>
+          <p className="whitespace-pre-line break-words font-medium">{message.text}</p>
         )}
         {(message.media_url || message.media_id) && (
           <MediaAttachment message={message} token={token} dark={dark} />
         )}
         <div
           className={clsx(
-            "mt-1 flex items-center justify-end gap-1 text-[11px]",
-            dark ? "text-[#9a9a9a]" : "text-[#667781]",
+            "mt-1.5 flex items-center justify-end gap-1.5 text-[10px] font-semibold tracking-wide",
+            isVendor
+              ? "text-white/80"
+              : dark
+                ? "text-zinc-400"
+                : "text-zinc-400",
           )}
         >
           {isVendor && outboundStatus === "sending" && (
             <Clock3
-              size={13}
+              size={12}
               strokeWidth={2}
               aria-hidden
-              className="shrink-0 text-[#667781]"
+              className="shrink-0 text-white/70"
             />
           )}
           {isVendor && outboundStatus === "failed" && (
             <AlertCircle
-              size={13}
+              size={12}
               strokeWidth={2}
               aria-hidden
-              className="shrink-0 text-red-500/90 dark:text-red-400/90"
+              className="shrink-0 text-white"
             />
           )}
           <span>{formatTime(message.timestamp)}</span>
           {isVendor && outboundStatus === "sent" && (
             <CheckCheck
-              size={13}
-              className="shrink-0 text-[#53bdeb]"
+              size={14}
+              className="shrink-0 text-white"
               aria-hidden
             />
           )}
@@ -378,134 +390,126 @@ export function ConversationSidebar({
   return (
     <aside
       className={clsx(
-        "flex min-h-0 flex-col",
-        dark ? "border-r border-[#242424] bg-[#000000]" : "bg-white",
+        "flex h-full w-full lg:w-[320px] xl:w-[340px] shrink-0 min-h-0 flex-col border-r",
+        dark
+          ? "border-zinc-800/80 bg-[#111217]"
+          : "border-zinc-200/80 bg-white",
       )}
     >
       <div
         className={clsx(
-          "flex items-center justify-between px-4 py-3",
-          dark ? "border-b border-[#242424] bg-[#0f0f0f]" : "bg-[#f0f2f5]",
+          "flex items-center justify-between px-5 py-4 border-b",
+          dark ? "border-zinc-800/80 bg-[#15161b]" : "border-zinc-100 bg-zinc-50/60",
         )}
       >
-        <h1
-          className={clsx(
-            "text-[30px] font-semibold tracking-[-0.02em] sm:text-[32px]",
-            dark ? "text-[#f1f1f1]" : "text-[#111b21]",
-          )}
-        >
-          Conversas
-        </h1>
-        <button
-          type="button"
-          className={clsx(
-            "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
-            dark
-              ? "text-[#c7c7c7] hover:bg-white/10"
-              : "text-[#54656f] hover:bg-[#e9edef]",
-          )}
-          aria-label="Nova conversa"
-        >
-          <UserRound size={20} />
-        </button>
+        <div className="flex items-center gap-2">
+          <h1
+            className={clsx(
+              "text-xl font-bold tracking-tight",
+              dark ? "text-zinc-100" : "text-zinc-950",
+            )}
+          >
+            Conversas
+          </h1>
+          <span className="rounded-full bg-[#FF0636]/10 px-2.5 py-0.5 text-xs font-bold text-[#FF0636]">
+            {filteredConversations.length}
+          </span>
+        </div>
       </div>
 
-      <div
-        className={clsx(
-          "space-y-3 px-4 pb-4 pt-3",
-          dark ? "bg-[#000000]" : "bg-white",
-        )}
-      >
-        <div
-          className={clsx(
-            "rounded-lg px-3 py-2",
-            dark ? "bg-[#121212]" : "bg-[#f0f2f5]",
-          )}
-        >
-          <label htmlFor="client-select" className="sr-only">
-            Cliente
-          </label>
+      <div className="space-y-3 p-4">
+        {clients.length > 0 && (
           <div
             className={clsx(
-              "flex items-center gap-2 text-xs uppercase tracking-[0.1em]",
-              dark ? "text-[#9a9a9a]" : "text-[#667781]",
+              "rounded-2xl border px-3.5 py-2 transition-all",
+              dark
+                ? "border-zinc-800 bg-zinc-900/60 focus-within:border-zinc-700"
+                : "border-zinc-200 bg-zinc-50 focus-within:border-zinc-300",
             )}
           >
-            Cliente
-            <ChevronDown size={14} />
+            <label htmlFor="client-select" className="sr-only">
+              Cliente
+            </label>
+            <div
+              className={clsx(
+                "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em]",
+                dark ? "text-zinc-400" : "text-zinc-400",
+              )}
+            >
+              <span>Cliente Selecionado</span>
+              <ChevronDown size={12} />
+            </div>
+            <select
+              id="client-select"
+              value={selectedClientId}
+              onChange={(event) => onSelectClientId(event.target.value)}
+              className={clsx(
+                "mt-0.5 w-full bg-transparent text-xs font-semibold outline-none cursor-pointer",
+                dark ? "text-zinc-100" : "text-zinc-900",
+              )}
+            >
+              {clients.map((client) => (
+                <option key={client.id} value={client.id} className={dark ? "bg-zinc-900 text-zinc-100" : ""}>
+                  {client.company_name}
+                </option>
+              ))}
+            </select>
           </div>
-          <select
-            id="client-select"
-            value={selectedClientId}
-            onChange={(event) => onSelectClientId(event.target.value)}
-            className={clsx(
-              "mt-1 w-full bg-transparent text-sm font-medium outline-none",
-              dark ? "text-[#f1f1f1]" : "text-[#111b21]",
-            )}
-          >
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.company_name}
-              </option>
-            ))}
-          </select>
-        </div>
+        )}
 
         <div className="relative">
           <Search
-            size={18}
+            size={16}
             className={clsx(
-              "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2",
-              dark ? "text-[#9a9a9a]" : "text-[#667781]",
+              "pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2",
+              dark ? "text-zinc-400" : "text-zinc-400",
             )}
           />
           <input
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Pesquisar"
+            placeholder="Pesquisar conversa ou lead..."
             className={clsx(
-              "w-full rounded-lg py-2.5 pl-10 pr-3 text-[16px] outline-none transition-colors",
+              "w-full rounded-2xl border py-2.5 pl-10 pr-3.5 text-xs font-medium outline-none transition-all",
               dark
-                ? "bg-[#121212] text-[#f1f1f1] placeholder:text-[#9a9a9a] focus:bg-[#1a1a1a]"
-                : "bg-[#f0f2f5] text-[#111b21] focus:bg-[#e9edef]",
+                ? "border-zinc-800 bg-zinc-900/60 text-zinc-100 placeholder:text-zinc-400 focus:border-[#FF0636]"
+                : "border-zinc-200 bg-zinc-50 text-zinc-900 placeholder:text-zinc-400 focus:border-[#FF0636] focus:bg-white",
             )}
           />
         </div>
 
-        <div className="flex flex-wrap gap-1 text-xs">
+        <div className="flex flex-wrap gap-1.5 text-xs">
           {(
             [
               { id: "all", label: "Todos" },
-              { id: "unread", label: "Nao lidas" },
+              { id: "unread", label: "Não lidas" },
               { id: "whatsapp", label: "WhatsApp" },
               { id: "internal", label: "Interno" },
             ] as const
-          ).map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onViewFilterChange(item.id)}
-              className={clsx(
-                "rounded-full px-3 py-1.5 font-medium transition-colors",
-                viewFilter === item.id
-                  ? "bg-[#d9fdd3] text-[#025144]"
-                  : dark
-                    ? "bg-[#121212] text-[#9a9a9a] hover:bg-[#1a1a1a]"
-                    : "bg-[#f0f2f5] text-[#667781] hover:bg-[#e9edef]",
-              )}
-            >
-              {item.label}
-            </button>
-          ))}
+          ).map((item) => {
+            const isActive = viewFilter === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onViewFilterChange(item.id)}
+                className={clsx(
+                  "rounded-xl px-3 py-1.5 text-xs font-bold transition-all",
+                  isActive
+                    ? "bg-[#FF0636] text-white shadow-sm"
+                    : dark
+                      ? "bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 border border-zinc-800"
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900 border border-zinc-200/60",
+                )}
+              >
+                {item.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div
-        className={clsx(
-          "min-h-0 flex-1 overflow-y-auto",
-          dark ? "bg-[#000000]" : "bg-white",
-        )}
-      >
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {filteredConversations.length > 0 ? (
           filteredConversations.map((conversation) => (
             <MemoConversationRow
@@ -519,11 +523,11 @@ export function ConversationSidebar({
         ) : (
           <div
             className={clsx(
-              "px-6 py-16 text-center text-sm",
-              dark ? "text-[#9a9a9a]" : "text-[#667781]",
+              "px-6 py-16 text-center text-xs font-medium",
+              dark ? "text-zinc-400" : "text-zinc-400",
             )}
           >
-            Nenhuma conversa encontrada com estes filtros.
+            Nenhuma conversa encontrada.
           </div>
         )}
       </div>
@@ -533,18 +537,24 @@ export function ConversationSidebar({
 
 interface ChatThreadProps {
   conversation: Conversation | null;
+  profileLead?: Lead | null;
+  pipelineStages?: ApiCrmStage[];
   token: string;
   dark: boolean;
   scrollRef: MutableRefObject<HTMLElement | null>;
   onOpenLeadDrawer: () => void;
+  onQuickChangeStage?: (stageId: string) => void;
 }
 
 export function ChatThread({
   conversation,
+  profileLead,
+  pipelineStages,
   token,
   dark,
   scrollRef,
   onOpenLeadDrawer,
+  onQuickChangeStage,
 }: ChatThreadProps) {
   const [windowSize, setWindowSize] = useState(120);
 
@@ -559,15 +569,42 @@ export function ChatThread({
     return conversation.messages.slice(-windowSize);
   }, [conversation, windowSize]);
 
+  const lastLeadMessage = useMemo(() => {
+    if (!conversation) return null;
+    const leadMsgs = conversation.messages.filter((m) => m.sender === "lead");
+    return leadMsgs[leadMsgs.length - 1] ?? null;
+  }, [conversation]);
+
+  const window24hStatus = useMemo(() => {
+    if (!lastLeadMessage) return { isOpen: false, text: "Janela 24h Expirada", hoursLeft: 0 };
+    const leadTime = new Date(lastLeadMessage.timestamp).getTime();
+    const now = Date.now();
+    const diffMs = now - leadTime;
+    const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+    if (diffMs < twentyFourHoursMs) {
+      const hoursLeft = Math.max(1, Math.floor((twentyFourHoursMs - diffMs) / (60 * 60 * 1000)));
+      return { isOpen: true, text: `Janela 24h Aberta (${hoursLeft}h)`, hoursLeft };
+    }
+    return { isOpen: false, text: "Janela 24h Expirada", hoursLeft: 0 };
+  }, [lastLeadMessage]);
+
   if (!conversation) {
     return (
-      <div
-        className={clsx(
-          "flex h-full items-center justify-center text-sm",
-          dark ? "text-[#9a9a9a]" : "text-[#667781]",
-        )}
-      >
-        Selecione uma conversa
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <div className={clsx(
+          "flex h-16 w-16 items-center justify-center rounded-3xl border shadow-sm",
+          dark ? "border-zinc-800 bg-zinc-900 text-zinc-400" : "border-zinc-200 bg-zinc-50 text-zinc-400"
+        )}>
+          <Sparkles size={28} className="text-[#FF0636]" />
+        </div>
+        <div>
+          <p className={clsx("text-base font-bold tracking-tight", dark ? "text-zinc-200" : "text-zinc-900")}>
+            Selecione uma conversa
+          </p>
+          <p className={clsx("mt-1 text-xs", dark ? "text-zinc-400" : "text-zinc-500")}>
+            Escolha um lead na barra lateral para visualizar as mensagens e interagir.
+          </p>
+        </div>
       </div>
     );
   }
@@ -576,111 +613,117 @@ export function ChatThread({
     <>
       <header
         className={clsx(
-          "flex items-center justify-between gap-3 px-4 py-3",
-          dark ? "border-b border-[#242424] bg-[#0f0f0f]" : "bg-[#f0f2f5]",
+          "flex items-center justify-between gap-3 px-6 py-4 border-b",
+          dark ? "border-zinc-800/80 bg-[#15161b]" : "border-zinc-100 bg-white/90",
         )}
       >
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3.5">
           <div
             className={clsx(
-              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
-              dark
-                ? "bg-[#1d1d1d] text-[#d7d7d7]"
-                : "bg-[#dfe5e7] text-[#3b4a54]",
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xs font-black text-white shadow-sm bg-[#FF0636]",
             )}
           >
             {getInitials(conversation.lead_name)}
           </div>
           <div className="min-w-0">
-            <p
-              className={clsx(
-                "truncate text-[17px] font-medium",
-                dark ? "text-[#f1f1f1]" : "text-[#111b21]",
+            <div className="flex items-center gap-2">
+              <p
+                className={clsx(
+                  "truncate text-base font-bold tracking-tight",
+                  dark ? "text-zinc-100" : "text-zinc-950",
+                )}
+              >
+                {conversation.lead_name}
+              </p>
+              {window24hStatus.isOpen ? (
+                <span className="shrink-0 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 text-[10px] font-extrabold flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  {window24hStatus.text}
+                </span>
+              ) : (
+                <span className="shrink-0 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2.5 py-0.5 text-[10px] font-extrabold flex items-center gap-1" title="Janela de 24h da Meta expirada. Requer envio de Template HSM para retomar contato.">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  {window24hStatus.text}
+                </span>
               )}
-            >
-              {conversation.lead_name}
-            </p>
+            </div>
             <p
               className={clsx(
-                "truncate text-[13px]",
-                dark ? "text-[#9a9a9a]" : "text-[#667781]",
+                "truncate text-xs font-medium",
+                dark ? "text-zinc-400" : "text-zinc-400",
               )}
             >
               {conversation.last_message_time
-                ? `visto por ultimo hoje as ${formatTime(conversation.last_message_time)}`
-                : "visto recentemente"}
+                ? `Visto por último hoje às ${formatTime(conversation.last_message_time)}`
+                : "Visto recentemente"}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            className={clsx(
-              "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
-              dark
-                ? "text-[#c7c7c7] hover:bg-white/10"
-                : "text-[#54656f] hover:bg-[#e9edef]",
-            )}
-            aria-label="Ligacao"
-          >
-            <Phone size={20} />
-          </button>
+        <div className="flex items-center gap-2">
+          {pipelineStages && pipelineStages.length > 0 && profileLead && (
+            <div className="relative">
+              <select
+                value={profileLead.crm_stage_id ?? ""}
+                onChange={(e) => onQuickChangeStage?.(e.target.value)}
+                className={clsx(
+                  "rounded-2xl border px-3 py-2 text-xs font-bold transition-all cursor-pointer outline-none shadow-xs",
+                  dark
+                    ? "border-zinc-700 bg-zinc-800 text-[#FF0636] focus:border-[#FF0636]"
+                    : "border-rose-200 bg-rose-50 text-[#FF0636] focus:border-[#FF0636]",
+                )}
+              >
+                <option value="">Sem Etapa CRM</option>
+                {pipelineStages.map((stage) => (
+                  <option key={stage.id} value={stage.id} className={dark ? "bg-zinc-900 text-zinc-100" : "bg-white text-zinc-900"}>
+                    📍 {stage.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={onOpenLeadDrawer}
             className={clsx(
-              "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
+              "inline-flex items-center gap-1.5 rounded-2xl border px-3.5 py-2 text-xs font-bold shadow-sm transition-all hover:scale-[1.02]",
               dark
-                ? "text-[#c7c7c7] hover:bg-white/10"
-                : "text-[#54656f] hover:bg-[#e9edef]",
+                ? "border-zinc-700 bg-zinc-800/80 text-zinc-100 hover:bg-zinc-800"
+                : "border-zinc-200 bg-zinc-50 text-zinc-800 hover:bg-zinc-100",
             )}
-            aria-label="Abrir ficha do lead"
           >
-            <UserRound size={20} />
+            <UserRound size={15} className="text-[#FF0636]" />
+            <span>Ficha do Lead</span>
           </button>
         </div>
       </header>
 
       <section
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-2 py-4 sm:px-3 sm:py-5 lg:px-4 xl:px-5"
-        style={
-          dark
-            ? {
-                backgroundColor: "#000000",
-                backgroundImage:
-                  "radial-gradient(rgba(255,255,255,0.05) 1.2px, transparent 1.2px), radial-gradient(rgba(255,255,255,0.05) 1.2px, #000000 1.2px)",
-                backgroundSize: "32px 32px",
-                backgroundPosition: "0 0, 16px 16px",
-              }
-            : {
-                backgroundColor: "#efeae2",
-                backgroundImage:
-                  "radial-gradient(rgba(211, 205, 193, 0.45) 1.2px, transparent 1.2px), radial-gradient(rgba(211, 205, 193, 0.45) 1.2px, #efeae2 1.2px)",
-                backgroundSize: "32px 32px",
-                backgroundPosition: "0 0, 16px 16px",
-              }
-        }
+        className={clsx(
+          "flex-1 overflow-y-auto px-4 py-5 sm:px-6",
+          dark ? "bg-[#0b0c10]" : "bg-zinc-50/50",
+        )}
       >
         {conversation.messages.length > visibleMessages.length && (
-          <div className="mb-3 flex justify-center">
+          <div className="mb-4 flex justify-center">
             <button
               type="button"
               onClick={() => setWindowSize((current) => current + 120)}
               className={clsx(
-                "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                "rounded-full px-4 py-1.5 text-xs font-bold shadow-sm transition-all border",
                 dark
-                  ? "bg-[#151515] text-[#d7d7d7] hover:bg-[#1d1d1d]"
-                  : "bg-white text-[#54656f] hover:bg-[#f0f2f5]",
+                  ? "border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                  : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100",
               )}
             >
-              Carregar anteriores
+              Carregar mensagens anteriores
             </button>
           </div>
         )}
 
-        <div className="flex w-full flex-col gap-2">
+        <div className="flex w-full flex-col gap-1.5">
           {visibleMessages.map((message) => (
             <MemoMessageBubble
               key={message.id}
@@ -694,3 +737,5 @@ export function ChatThread({
     </>
   );
 }
+
+export default ChatThread;

@@ -460,19 +460,38 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
         </button>
       </header>
 
-      <div className="h-screen overflow-y-auto pt-[calc(4rem+env(safe-area-inset-top))] pb-24 md:pb-0 md:pl-28 md:pt-0">
+      <div
+        className={clsx(
+          "h-screen md:pl-[112px] md:pr-4 md:py-4",
+          isImmersiveChatRoute
+            ? "overflow-hidden p-2 md:p-0"
+            : "overflow-y-auto pt-[calc(4rem+env(safe-area-inset-top))] pb-24 md:pb-0 md:pt-0",
+        )}
+      >
         <main
           className={clsx(
-            "min-w-0",
-            isImmersiveChatRoute ? "h-full p-0" : "p-4 md:p-6 xl:p-8",
+            "h-full min-w-0",
+            isImmersiveChatRoute ? "p-0" : "p-4 md:p-6 xl:p-8",
           )}
         >
           <Outlet context={{ user, gestorClientId, setGestorClientId }} />
         </main>
       </div>
 
-      <aside className="fixed bottom-4 left-4 top-4 z-50 hidden w-20 flex-col items-center overflow-visible rounded-[28px] bg-white py-5 shadow-[0_8px_30px_rgba(15,23,42,0.08)] ring-1 ring-[#dfdfdf]/50 md:flex">
-        <div className="mb-6 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-zinc-900">
+      <aside
+        className={clsx(
+          "fixed bottom-4 left-4 top-4 z-50 hidden w-20 flex-col items-center overflow-visible rounded-[28px] py-5 shadow-xl transition-all border md:flex",
+          dashboardDark
+            ? "border-zinc-800/80 bg-[#0f1015] text-zinc-100"
+            : "border-zinc-200/80 bg-white ring-1 ring-[#dfdfdf]/50 text-zinc-900",
+        )}
+      >
+        <div
+          className={clsx(
+            "mb-6 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-colors",
+            dashboardDark ? "bg-zinc-800/80 text-white border border-zinc-700/50" : "bg-zinc-900 text-white",
+          )}
+        >
           <img
             src={sidebarLogo}
             alt="Logo"
@@ -481,27 +500,44 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
         </div>
 
         <nav className="flex min-h-0 w-full flex-1 flex-col items-center gap-1.5 overflow-y-auto">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.href}
-              to={item.href}
-              title={item.label}
-              aria-label={item.label}
-              className={({ isActive }) =>
-                clsx(
-                  "flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors",
-                  isActive
-                    ? "bg-zinc-900 text-white"
-                    : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700",
-                )
-              }
-            >
-              {item.icon}
-            </NavLink>
-          ))}
+          {navItems.map((item) => {
+            const isChat = item.href.endsWith("/chat");
+            return (
+              <NavLink
+                key={item.href}
+                to={item.href}
+                title={item.label}
+                aria-label={item.label}
+                className={({ isActive }) =>
+                  clsx(
+                    "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-all",
+                    isActive
+                      ? dashboardDark
+                        ? "bg-[#FF0636] text-white shadow-md"
+                        : "bg-zinc-900 text-white"
+                      : dashboardDark
+                        ? "text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-200"
+                        : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700",
+                  )
+                }
+              >
+                {item.icon}
+                {isChat && (
+                  <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#FF0636] px-1 text-[9px] font-black text-white shadow-sm ring-2 ring-white dark:ring-[#0f1015] animate-pulse">
+                    3
+                  </span>
+                )}
+              </NavLink>
+            );
+          })}
         </nav>
 
-        <div className="mt-4 flex w-full shrink-0 flex-col items-center gap-1.5 border-t border-zinc-100 pt-4">
+        <div
+          className={clsx(
+            "mt-4 flex w-full shrink-0 flex-col items-center gap-1.5 border-t pt-4",
+            dashboardDark ? "border-zinc-800" : "border-zinc-100",
+          )}
+        >
           <button
             type="button"
             onClick={() => {
@@ -509,7 +545,12 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
               applyDashboardDarkEnabled(user.id, next);
               setDashboardDark(next);
             }}
-            className="flex h-11 w-11 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
+            className={clsx(
+              "flex h-11 w-11 items-center justify-center rounded-full transition-colors",
+              dashboardDark
+                ? "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700",
+            )}
             title="Alternar modo escuro"
             aria-label="Alternar modo escuro"
           >
@@ -520,16 +561,45 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
           <div className="group relative flex h-11 w-11 items-center justify-center">
             <button
               type="button"
-              className="flex h-11 w-11 select-none items-center justify-center rounded-full bg-zinc-100 text-xs font-bold text-zinc-700 transition-colors hover:bg-zinc-200"
+              className={clsx(
+                "flex h-11 w-11 select-none items-center justify-center rounded-full text-xs font-bold transition-colors",
+                dashboardDark
+                  ? "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+                  : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200",
+              )}
               aria-label="Abrir menu de perfil"
             >
               {initials}
             </button>
 
-            <div className="pointer-events-none absolute bottom-0 left-[calc(100%+12px)] z-[200] w-56 rounded-2xl border border-zinc-100 bg-white opacity-0 shadow-xl transition-all duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
-              <div className="absolute -left-1.5 bottom-3 h-3 w-3 rotate-45 border-b border-l border-zinc-100 bg-white" />
-              <div className="border-b border-zinc-100 px-3 py-2.5">
-                <p className="truncate text-sm font-semibold text-zinc-900">
+            <div
+              className={clsx(
+                "pointer-events-none absolute bottom-0 left-[calc(100%+12px)] z-[200] w-56 rounded-2xl border opacity-0 shadow-xl transition-all duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100",
+                dashboardDark
+                  ? "border-zinc-800 bg-[#15161b] text-zinc-100"
+                  : "border-zinc-100 bg-white text-zinc-900",
+              )}
+            >
+              <div
+                className={clsx(
+                  "absolute -left-1.5 bottom-3 h-3 w-3 rotate-45 border-b border-l",
+                  dashboardDark
+                    ? "border-zinc-800 bg-[#15161b]"
+                    : "border-zinc-100 bg-white",
+                )}
+              />
+              <div
+                className={clsx(
+                  "border-b px-3 py-2.5",
+                  dashboardDark ? "border-zinc-800" : "border-zinc-100",
+                )}
+              >
+                <p
+                  className={clsx(
+                    "truncate text-sm font-semibold",
+                    dashboardDark ? "text-zinc-100" : "text-zinc-900",
+                  )}
+                >
                   {user.name}
                 </p>
                 <p className="mt-0.5 text-[11px] text-zinc-400">
@@ -539,14 +609,24 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
               <button
                 type="button"
                 onClick={() => navigate(settingsPath)}
-                className="flex w-full items-center px-3 py-2 text-left text-sm text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900"
+                className={clsx(
+                  "flex w-full items-center px-3 py-2 text-left text-sm transition-colors",
+                  dashboardDark
+                    ? "text-zinc-300 hover:bg-zinc-800/80 hover:text-white"
+                    : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900",
+                )}
               >
                 Configuração
               </button>
               <button
                 type="button"
                 onClick={handleLogout}
-                className="flex w-full items-center px-3 py-2 text-left text-sm text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900"
+                className={clsx(
+                  "flex w-full items-center px-3 py-2 text-left text-sm transition-colors",
+                  dashboardDark
+                    ? "text-zinc-300 hover:bg-zinc-800/80 hover:text-white"
+                    : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900",
+                )}
               >
                 Sair
               </button>

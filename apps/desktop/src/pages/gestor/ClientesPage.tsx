@@ -29,6 +29,7 @@ import {
   lookupCompanyByCnpj,
   mapApiClientToClient,
 } from "../../services/clients";
+import { listEvents } from "../../services/events";
 
 function formatPhoneBr(raw: string) {
   const digits = raw.replace(/\D/g, "");
@@ -53,7 +54,19 @@ export function ClientesPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState("");
+  const [clientIdsWithActiveEvent, setClientIdsWithActiveEvent] = useState<
+    Set<string>
+  >(new Set());
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "active" | "inactive"
+  >("active");
+  const [facebookFilter, setFacebookFilter] = useState<
+    "all" | "connected" | "pending"
+  >("all");
+  const [planFilter, setPlanFilter] = useState<
+    "all" | Client["plan"]
+  >("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -113,6 +126,19 @@ export function ClientesPage() {
       })
       .catch(() => setListError("Não foi possível carregar os clientes."))
       .finally(() => setListLoading(false));
+
+    listEvents({ status: "active" }, session.accessToken)
+      .then((rows) => {
+        const clientIds = new Set<string>();
+        rows.forEach((event) => {
+          clientIds.add(event.client_id);
+          (event.participant_client_ids ?? []).forEach((id) =>
+            clientIds.add(id),
+          );
+        });
+        setClientIdsWithActiveEvent(clientIds);
+      })
+      .catch(() => setClientIdsWithActiveEvent(new Set()));
   }, []);
 
   async function handleCreateClient() {
@@ -270,11 +296,32 @@ export function ClientesPage() {
           client.contact_email.toLowerCase().includes(query) ||
           client.address.toLowerCase().includes(query);
 
-        const matchesStatus = client.status === "active";
-        return matchesSearch && matchesStatus;
+        const matchesStatus =
+          statusFilter === "all" || client.status === statusFilter;
+
+        const hasFacebook = Boolean(
+          client.facebook_page_id || client.facebook_ad_account_id,
+        );
+        const matchesFacebook =
+          facebookFilter === "all" ||
+          (facebookFilter === "connected" ? hasFacebook : !hasFacebook);
+
+        const matchesPlan =
+          planFilter === "all" || client.plan === planFilter;
+
+        return (
+          matchesSearch && matchesStatus && matchesFacebook && matchesPlan
+        );
       })
       .sort((a, b) => b.leads_count - a.leads_count);
-  }, [clients, search]);
+  }, [clients, search, statusFilter, facebookFilter, planFilter]);
+
+  const resetClientFilters = () => {
+    setSearch("");
+    setStatusFilter("active");
+    setFacebookFilter("all");
+    setPlanFilter("all");
+  };
 
   const fieldClass = clsx(
     "w-full rounded-2xl border py-3 pl-11 pr-4 text-sm outline-none transition-colors focus:border-[#FF0636]",
@@ -282,6 +329,17 @@ export function ClientesPage() {
       ? "border-zinc-700 bg-[#111111] text-zinc-100 placeholder:text-zinc-500"
       : "border-zinc-200 bg-white text-zinc-950 placeholder:text-zinc-400",
   );
+  const selectFieldClass = clsx(
+    "rounded-2xl border py-2.5 pl-3 pr-8 text-xs font-semibold outline-none transition-colors focus:border-[#FF0636]",
+    isDarkMode
+      ? "border-zinc-700 bg-[#111111] text-zinc-200"
+      : "border-zinc-200 bg-white text-zinc-700",
+  );
+  const hasActiveClientFilters =
+    Boolean(search) ||
+    statusFilter !== "active" ||
+    facebookFilter !== "all" ||
+    planFilter !== "all";
   const modalInputClass = clsx(
     "w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#FF0636]",
     isDarkMode
@@ -295,12 +353,7 @@ export function ClientesPage() {
 
   return (
     <div className={clsx("space-y-6", isDarkMode && "dashboard-dark bg-black")}>
-      <PageHeader
-        title="Clientes"
-        subtitle="Visao Geral"
-        breadcrumbs={[{ label: "Gestor" }, { label: "Clientes" }]}
-        dark={isDarkMode}
-      />
+      <PageHeader title="Clientes" dark={isDarkMode} />
 
       {listError ? (
         <Card
@@ -330,42 +383,81 @@ export function ClientesPage() {
       ) : null}
       <div className="space-y-6">
         <div className="space-y-6">
-          <Card
-            className={clsx(
-              "rounded-[30px] border shadow-[0_18px_45px_rgba(15,23,42,0.07)]",
-              isDarkMode ? "border-zinc-800 bg-[#0f0f0f]" : "border-white/80",
-            )}
-            padding="lg"
-          >
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="relative w-full lg:max-w-xl">
-                <Search
-                  size={16}
-                  className={clsx(
-                    "pointer-events-none absolute left-4 top-1/2 -translate-y-1/2",
-                    isDarkMode ? "text-zinc-500" : "text-zinc-400",
-                  )}
-                />
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar por nome, CNPJ ou e-mail..."
-                  className={fieldClass}
-                />
-              </div>
-
-              <span
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="relative w-full lg:max-w-xl">
+              <Search
+                size={16}
                 className={clsx(
-                  "inline-flex w-fit items-center rounded-full px-4 py-2 text-xs font-semibold",
-                  isDarkMode
-                    ? "bg-[#1c1c1c] text-zinc-300"
-                    : "bg-zinc-100 text-zinc-700",
+                  "pointer-events-none absolute left-4 top-1/2 -translate-y-1/2",
+                  isDarkMode ? "text-zinc-500" : "text-zinc-400",
                 )}
-              >
-                Mostrando somente clientes ativos
-              </span>
+              />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar por nome, CNPJ ou e-mail..."
+                className={fieldClass}
+              />
             </div>
-          </Card>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(
+                    event.target.value as "all" | "active" | "inactive",
+                  )
+                }
+                className={selectFieldClass}
+              >
+                <option value="all">Todos os status</option>
+                <option value="active">Ativos</option>
+                <option value="inactive">Inativos</option>
+              </select>
+
+              <select
+                value={facebookFilter}
+                onChange={(event) =>
+                  setFacebookFilter(
+                    event.target.value as "all" | "connected" | "pending",
+                  )
+                }
+                className={selectFieldClass}
+              >
+                <option value="all">Facebook: todos</option>
+                <option value="connected">Facebook conectado</option>
+                <option value="pending">Facebook pendente</option>
+              </select>
+
+              <select
+                value={planFilter}
+                onChange={(event) =>
+                  setPlanFilter(event.target.value as "all" | Client["plan"])
+                }
+                className={selectFieldClass}
+              >
+                <option value="all">Todos os planos</option>
+                <option value="starter">Starter</option>
+                <option value="pro">Pro</option>
+                <option value="enterprise">Enterprise</option>
+              </select>
+
+              {hasActiveClientFilters && (
+                <button
+                  type="button"
+                  onClick={resetClientFilters}
+                  className={clsx(
+                    "rounded-full px-3 py-2 text-xs font-semibold transition-colors",
+                    isDarkMode
+                      ? "bg-[#1c1c1c] text-zinc-300 hover:bg-[#262626]"
+                      : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200",
+                  )}
+                >
+                  Limpar
+                </button>
+              )}
+            </div>
+          </div>
 
           {filteredClients.length === 0 ? (
             <Card
@@ -404,7 +496,7 @@ export function ClientesPage() {
               padding="none"
             >
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] border-collapse text-sm">
+                <table className="w-full min-w-[900px] border-collapse text-sm">
                   <thead>
                     <tr
                       className={clsx(
@@ -425,6 +517,9 @@ export function ClientesPage() {
                       </th>
                       <th className="px-3 py-3 text-right font-semibold">
                         Eventos
+                      </th>
+                      <th className="px-3 py-3 font-semibold">
+                        Evento ativo
                       </th>
                       <th className="px-5 py-3 text-right font-semibold">
                         Ações
@@ -517,6 +612,20 @@ export function ClientesPage() {
                             )}
                           >
                             {client.events_count}
+                          </td>
+                          <td className="px-3 py-3">
+                            <Badge
+                              variant={
+                                clientIdsWithActiveEvent.has(client.id)
+                                  ? "green"
+                                  : "gray"
+                              }
+                              dot
+                            >
+                              {clientIdsWithActiveEvent.has(client.id)
+                                ? "Evento ativo"
+                                : "Sem evento ativo"}
+                            </Badge>
                           </td>
                           <td className="px-5 py-3">
                             <div className="flex items-center justify-end gap-1.5">

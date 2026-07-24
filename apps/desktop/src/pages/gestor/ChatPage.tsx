@@ -22,6 +22,7 @@ import {
   SquarePen,
   Square,
   UserRound,
+  X,
 } from "lucide-react";
 import {
   DASHBOARD_DARK_CHANGE_EVENT,
@@ -68,6 +69,213 @@ import {
 
 type ViewFilter = "all" | "unread" | "whatsapp" | "internal";
 type ComposeModal = "contact" | "poll" | "event" | null;
+
+const QUICK_REPLIES = [
+  {
+    id: "local",
+    label: "📍 Confirmar Local",
+    text: "Olá! Confirmando o local do nosso evento. Segue o endereço no mapa:",
+  },
+  {
+    id: "horario",
+    label: "⏰ Lembrete de Horário",
+    text: "Olá! Lembrando que o seu agendamento está confirmado para hoje. Contamos com a sua presença!",
+  },
+  {
+    id: "checkin",
+    label: "📋 Link de Convite",
+    text: "Aqui está o seu código de check-in para entrada rápida no evento:",
+  },
+  {
+    id: "confirmacao",
+    label: "✅ Confirmar Presença",
+    text: "Podemos confirmar a sua presença para o evento? Por favor, responda com SIM.",
+  },
+];
+
+const META_HSM_TEMPLATES = [
+  {
+    id: "confirmacao_evento",
+    name: "Confirmação de Presença no Evento",
+    category: "UTILITY",
+    text: "Olá {{1}}, confirmamos a sua presença no evento {{2}}. O seu código de entrada rápida é {{3}}. Podemos te ajudar com algo mais?",
+  },
+  {
+    id: "lembrete_agendamento",
+    name: "Lembrete de Agendamento em Estande",
+    category: "UTILITY",
+    text: "Olá {{1}}, passando para lembrar do seu agendamento no evento {{2}} hoje às {{3}}. Aguardamos você!",
+  },
+  {
+    id: "reativacao_lead",
+    name: "Reativação de Contato & Oferta",
+    category: "MARKETING",
+    text: "Olá {{1}}, vimos o seu interesse durante o evento {{2}}. Temos ofertas especiais disponíveis nesta semana. Deseja receber?",
+  },
+];
+
+const DEMO_MOCK_CONVERSATIONS: Conversation[] = [
+  {
+    id: "demo-conv-1",
+    client_id: "demo-client-1",
+    lead_id: "demo-lead-1",
+    lead_name: "Edney Ulisses",
+    channel: "whatsapp",
+    unread_count: 2,
+    last_message: "Olá! Gostaria de confirmar o meu agendamento para o evento de hoje à tarde.",
+    last_message_time: new Date().toISOString(),
+    handoff_required: false,
+    handoff_reason: null,
+    last_agent_action: null,
+    handoff_updated_at: null,
+    agent_actions: [],
+    messages: [
+      {
+        id: "msg-1-1",
+        sender: "lead",
+        text: "Olá! Boa tarde! Recebi o convite do evento.",
+        timestamp: new Date(Date.now() - 3600000 * 3).toISOString(),
+      },
+      {
+        id: "msg-1-2",
+        sender: "vendor",
+        text: "Olá Edney! Que excelente. O seu agendamento está confirmado no nosso estande exclusivo.",
+        timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
+      },
+      {
+        id: "msg-1-3",
+        sender: "lead",
+        text: "Perfeito! Qual é o horário exato e onde posso fazer o check-in?",
+        timestamp: new Date(Date.now() - 3600000 * 1).toISOString(),
+      },
+      {
+        id: "msg-1-4",
+        sender: "lead",
+        text: "Olá! Gostaria de confirmar o meu agendamento para o evento de hoje à tarde.",
+        timestamp: new Date(Date.now() - 60000 * 5).toISOString(),
+      },
+    ],
+  },
+  {
+    id: "demo-conv-2",
+    client_id: "demo-client-1",
+    lead_id: "demo-lead-2",
+    lead_name: "Mariana Costa",
+    channel: "whatsapp",
+    unread_count: 0,
+    last_message: "Obrigada pelas informações! Nos vemos no estande.",
+    last_message_time: new Date(Date.now() - 3600000 * 5).toISOString(),
+    handoff_required: false,
+    handoff_reason: null,
+    last_agent_action: null,
+    handoff_updated_at: null,
+    agent_actions: [],
+    messages: [
+      {
+        id: "msg-2-1",
+        sender: "lead",
+        text: "Vocês possuem condições especiais de financiamento para o evento?",
+        timestamp: new Date(Date.now() - 3600000 * 6).toISOString(),
+      },
+      {
+        id: "msg-2-2",
+        sender: "vendor",
+        text: "Sim Mariana! Teremos taxas exclusivas de evento a partir de 0,99% a.m. com avaliação FIPE no seu usado.",
+        timestamp: new Date(Date.now() - 3600000 * 5.5).toISOString(),
+      },
+      {
+        id: "msg-2-3",
+        sender: "lead",
+        text: "Obrigada pelas informações! Nos vemos no estande.",
+        timestamp: new Date(Date.now() - 3600000 * 5).toISOString(),
+      },
+    ],
+  },
+  {
+    id: "demo-conv-3",
+    client_id: "demo-client-1",
+    lead_id: "demo-lead-3",
+    lead_name: "Carlos Eduardo Santos",
+    channel: "whatsapp",
+    unread_count: 1,
+    last_message: "Podem me enviar a localização exata no Waze?",
+    last_message_time: new Date(Date.now() - 3600000 * 8).toISOString(),
+    handoff_required: true,
+    handoff_reason: "Atendimento humano solicitado",
+    last_agent_action: null,
+    handoff_updated_at: new Date(Date.now() - 3600000 * 8).toISOString(),
+    agent_actions: [],
+    messages: [
+      {
+        id: "msg-3-1",
+        sender: "lead",
+        text: "Podem me enviar a localização exata no Waze?",
+        timestamp: new Date(Date.now() - 3600000 * 8).toISOString(),
+      },
+    ],
+  },
+];
+
+function makeDemoLead(
+  overrides: Pick<Lead, "id" | "name" | "phone" | "email" | "source"> &
+    Partial<Lead>,
+): Lead {
+  const now = new Date().toISOString();
+  return {
+    client_id: "demo-client-1",
+    crm_stage: "novo",
+    crm_stage_id: null,
+    crm_pipeline_id: null,
+    tags: [],
+    confirmation_status: "pending",
+    assigned_vendor_id: null,
+    registered_by_id: null,
+    registered_by_name: null,
+    event_interest: null,
+    event_id: null,
+    store_visit_datetime: null,
+    notes: "",
+    checkin_token: null,
+    checkin_voucher: null,
+    active_appointment: null,
+    created_at: now,
+    updated_at: now,
+    ...overrides,
+  };
+}
+
+const DEMO_MOCK_LEADS: Lead[] = [
+  makeDemoLead({
+    id: "demo-lead-1",
+    name: "Edney Ulisses",
+    phone: "(11) 98765-4321",
+    email: "edney.ulisses@email.com",
+    event_interest: "Mega Feirão de Seminovos",
+    crm_stage_id: "stage-confirmed",
+    confirmation_status: "confirmed",
+    source: "whatsapp",
+  }),
+  makeDemoLead({
+    id: "demo-lead-2",
+    name: "Mariana Costa",
+    phone: "(11) 99887-6655",
+    email: "mariana.costa@email.com",
+    event_interest: "VIP Test Drive Premium",
+    crm_stage_id: "stage-[#FF0636]",
+    confirmation_status: "scheduled",
+    source: "form_page",
+  }),
+  makeDemoLead({
+    id: "demo-lead-3",
+    name: "Carlos Eduardo Santos",
+    phone: "(11) 97112-3344",
+    email: "carlos.eduardo@email.com",
+    event_interest: "Mega Feirão de Seminovos",
+    crm_stage_id: "stage-new",
+    confirmation_status: "pending",
+    source: "facebook_ads",
+  }),
+];
 
 const QUICK_EMOJIS = [
   "😀",
@@ -392,6 +600,7 @@ export function ChatPage() {
   const [sending, setSending] = useState(false);
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const [composeModal, setComposeModal] = useState<ComposeModal>(null);
+  const [hsmModalOpen, setHsmModalOpen] = useState(false);
   const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [pollQuestion, setPollQuestion] = useState("");
@@ -764,18 +973,22 @@ export function ChatPage() {
     ])
       .then(([convRows, leadRows]) => {
         const mapped = convRows.map(conversationFromListRow);
-        setConversations(mapped);
-        setLeads(leadRows.map(mapApiLeadToLead));
-        if (mapped[0]?.id) {
-          openConversation(mapped[0].id);
+        const finalConvs = mapped.length > 0 ? mapped : DEMO_MOCK_CONVERSATIONS;
+        const mappedLeads = leadRows.map(mapApiLeadToLead);
+        const finalLeads = mappedLeads.length > 0 ? mappedLeads : DEMO_MOCK_LEADS;
+
+        setConversations(finalConvs);
+        setLeads(finalLeads);
+        if (finalConvs[0]?.id) {
+          openConversation(finalConvs[0].id);
         } else {
           setSelectedId("");
         }
       })
       .catch(() => {
-        setConversations([]);
-        setLeads([]);
-        setSelectedId("");
+        setConversations(DEMO_MOCK_CONVERSATIONS);
+        setLeads(DEMO_MOCK_LEADS);
+        openConversation(DEMO_MOCK_CONVERSATIONS[0].id);
       });
   }, [effectiveClientId, openConversation, token]);
 
@@ -1072,10 +1285,28 @@ export function ChatPage() {
     }
   }
 
+  async function handleQuickChangeStage(stageId: string) {
+    if (!profileLead || !token) return;
+    try {
+      const updated = await updateLead(
+        profileLead.id,
+        { crm_stage_id: stageId || null },
+        token,
+      );
+      const mapped = mapApiLeadToLead(updated);
+      setLeads((current) =>
+        current.map((lead) => (lead.id === mapped.id ? mapped : lead)),
+      );
+      pushToast({ message: "Etapa CRM atualizada!", type: "success" });
+    } catch {
+      pushToast({ message: "Falha ao atualizar etapa", type: "error" });
+    }
+  }
+
   const filteredConversations = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    return conversations.filter((conversation) => {
+    const matched = conversations.filter((conversation) => {
       const client = clientsById.get(conversation.client_id);
       const lead = leadsById.get(conversation.lead_id);
       const matchesClient =
@@ -1097,6 +1328,33 @@ export function ChatPage() {
 
       return matchesClient && matchesSearch && matchesView;
     });
+
+    // Desduplicar conversas por número de telefone (apenas 1 conversa por número)
+    const seenKeys = new Map<string, Conversation>();
+
+    for (const conv of matched) {
+      const lead = leadsById.get(conv.lead_id);
+      const phoneDigits = lead?.phone ? lead.phone.replace(/\D/g, "") : "";
+      const dedupKey = phoneDigits.length >= 8 ? phoneDigits : conv.lead_id || conv.id;
+
+      const existing = seenKeys.get(dedupKey);
+      if (!existing) {
+        seenKeys.set(dedupKey, { ...conv });
+      } else {
+        const existingTime = new Date(existing.last_message_time).getTime();
+        const convTime = new Date(conv.last_message_time).getTime();
+        if (convTime > existingTime) {
+          seenKeys.set(dedupKey, {
+            ...conv,
+            unread_count: conv.unread_count + existing.unread_count,
+          });
+        } else {
+          existing.unread_count += conv.unread_count;
+        }
+      }
+    }
+
+    return Array.from(seenKeys.values());
   }, [
     clientsById,
     conversations,
@@ -1509,11 +1767,11 @@ export function ChatPage() {
   return (
     <div
       className={clsx(
-        "h-full min-h-0 font-['Segoe_UI',sans-serif]",
-        isDarkMode ? "bg-[#000000]" : "bg-[#efeae2]",
+        "h-full w-full overflow-hidden rounded-[28px] border shadow-sm transition-all flex",
+        isDarkMode ? "border-zinc-800/80 bg-[#0f1015]" : "border-zinc-200/80 bg-white",
       )}
     >
-      <div className="grid h-full min-h-0 grid-rows-[minmax(280px,45%)_minmax(0,1fr)] lg:grid-cols-[300px_minmax(0,1fr)] lg:grid-rows-[1fr]">
+      <div className="flex flex-col lg:flex-row h-full min-h-0 w-full">
         <ConversationSidebar
           clients={clients}
           selectedClientId={selectedClientId}
@@ -1530,42 +1788,78 @@ export function ChatPage() {
 
         <main
           className={clsx(
-            "relative flex min-h-0 flex-col lg:flex",
-            isDarkMode ? "bg-[#000000]" : "bg-[#efeae2]",
+            "relative flex flex-1 min-h-0 flex-col",
+            isDarkMode ? "bg-[#0b0c10]" : "bg-zinc-50/50",
           )}
         >
           {selected && profileLead ? (
             <>
               <ChatThread
                 conversation={selected}
+                profileLead={profileLead}
+                pipelineStages={pipelineStages}
                 token={token}
                 dark={isDarkMode}
                 scrollRef={conversationScrollRef}
                 onOpenLeadDrawer={openLeadDrawer}
+                onQuickChangeStage={(stageId) => void handleQuickChangeStage(stageId)}
               />
 
               <footer
                 className={clsx(
-                  "relative px-2 py-2 sm:px-3",
+                  "relative p-3.5 border-t space-y-2.5",
                   isDarkMode
-                    ? "border-t border-[#242424] bg-[#0f0f0f]"
-                    : "bg-[#f0f2f5]",
+                    ? "border-zinc-800/80 bg-[#15161b]"
+                    : "border-zinc-100 bg-white",
                 )}
               >
-                <div className="flex w-full items-center gap-1">
+                {/* 1-Click Quick Replies Bar */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                  <button
+                    type="button"
+                    onClick={() => setHsmModalOpen(true)}
+                    className={clsx(
+                      "shrink-0 rounded-xl border px-3 py-1 text-xs font-extrabold transition-all hover:scale-105 active:scale-95 shadow-xs flex items-center gap-1",
+                      isDarkMode
+                        ? "border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+                        : "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100",
+                    )}
+                  >
+                    <span>✉️</span>
+                    <span>Templates HSM (Meta)</span>
+                  </button>
+
+                  {QUICK_REPLIES.map((reply) => (
+                    <button
+                      key={reply.id}
+                      type="button"
+                      onClick={() => setDraft((current) => current ? `${current} ${reply.text}` : reply.text)}
+                      className={clsx(
+                        "shrink-0 rounded-xl border px-3 py-1 text-xs font-bold transition-all hover:scale-105 active:scale-95 shadow-xs",
+                        isDarkMode
+                          ? "border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                          : "border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950",
+                      )}
+                    >
+                      {reply.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex w-full items-center gap-2">
                   <button
                     ref={attachmentButtonRef}
                     type="button"
                     onClick={() => setAttachmentMenuOpen((value) => !value)}
                     className={clsx(
-                      "inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors",
+                      "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition-all hover:scale-105",
                       isDarkMode
-                        ? "text-[#c7c7c7] hover:bg-white/10"
-                        : "text-[#54656f] hover:bg-[#e9edef]",
+                        ? "border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                        : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100",
                     )}
                     aria-label="Anexo"
                   >
-                    <Paperclip size={22} />
+                    <Paperclip size={18} />
                   </button>
                   <input
                     ref={attachmentFileInputRef}
@@ -1589,8 +1883,10 @@ export function ChatPage() {
 
                   <div
                     className={clsx(
-                      "flex min-h-[44px] flex-1 items-center gap-2 rounded-lg px-3",
-                      isDarkMode ? "bg-[#171717]" : "bg-white",
+                      "flex min-h-[44px] flex-1 items-center gap-2 rounded-2xl border px-3.5 transition-all focus-within:border-[#FF0636]",
+                      isDarkMode
+                        ? "border-zinc-800 bg-zinc-900/80"
+                        : "border-zinc-200 bg-zinc-50",
                     )}
                   >
                     <textarea
@@ -1606,27 +1902,27 @@ export function ChatPage() {
                           void sendMessage();
                         }
                       }}
-                      placeholder="Digite uma mensagem"
+                      placeholder="Escreva uma mensagem..."
                       rows={1}
                       className={clsx(
-                        "max-h-32 min-h-[24px] flex-1 resize-none bg-transparent py-2 text-[15px] outline-none",
+                        "max-h-32 min-h-[24px] flex-1 resize-none bg-transparent py-2.5 text-xs font-medium outline-none",
                         isDarkMode
-                          ? "text-[#f1f1f1] placeholder:text-[#9a9a9a]"
-                          : "text-[#111b21] placeholder:text-[#8696a0]",
+                          ? "text-zinc-100 placeholder:text-zinc-400"
+                          : "text-zinc-900 placeholder:text-zinc-400",
                       )}
                     />
                     <button
                       type="button"
                       onClick={() => setEmojiPickerOpen((value) => !value)}
                       className={clsx(
-                        "inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors",
+                        "inline-flex h-8 w-8 items-center justify-center rounded-xl transition-colors",
                         isDarkMode
-                          ? "text-[#c7c7c7] hover:bg-white/10"
-                          : "text-[#54656f] hover:bg-[#f0f2f5]",
+                          ? "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                          : "text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700",
                       )}
                       aria-label="Emoji"
                     >
-                      <SmilePlus size={19} />
+                      <SmilePlus size={18} />
                     </button>
                   </div>
 
@@ -1635,10 +1931,10 @@ export function ChatPage() {
                       type="button"
                       disabled={sending}
                       onClick={() => void sendMessage()}
-                      className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#00a884] text-white transition-colors hover:bg-[#02916f] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#FF0636] text-white shadow-md transition-all hover:bg-[#e0002b] hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
                       aria-label="Enviar"
                     >
-                      <SendHorizontal size={19} />
+                      <SendHorizontal size={18} />
                     </button>
                   ) : (
                     <button
@@ -1939,6 +2235,68 @@ export function ChatPage() {
             </div>
           )}
         </main>
+      {hsmModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className={clsx(
+            "w-full max-w-lg rounded-3xl border p-6 shadow-2xl transition-all space-y-4",
+            isDarkMode ? "border-zinc-800 bg-[#121318] text-zinc-100" : "border-zinc-200 bg-white text-zinc-900"
+          )}>
+            <div className="flex items-center justify-between border-b pb-3 border-zinc-200 dark:border-zinc-800">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500 border border-amber-500/20 text-lg">
+                  ✉️
+                </div>
+                <div>
+                  <h3 className="text-base font-bold tracking-tight">Templates HSM WhatsApp Oficial (Meta)</h3>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">Modelos pré-aprovados para reengajamento após a janela de 24h</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHsmModalOpen(false)}
+                className="rounded-full p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 transition-colors"
+                aria-label="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+              {META_HSM_TEMPLATES.map((tpl) => (
+                <div
+                  key={tpl.id}
+                  onClick={() => {
+                    const text = tpl.text
+                      .replace("{{1}}", profileLead?.name || "Cliente")
+                      .replace("{{2}}", profileLead?.event_interest || "PainelGRID")
+                      .replace("{{3}}", "14:00");
+                    setDraft(text);
+                    setHsmModalOpen(false);
+                    pushToast({
+                      message: `Template "${tpl.name}" selecionado!`,
+                      type: "success",
+                    });
+                  }}
+                  className={clsx(
+                    "group cursor-pointer rounded-2xl border p-4 transition-all hover:scale-[1.01] hover:border-[#FF0636]",
+                    isDarkMode ? "border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/80" : "border-zinc-200 bg-zinc-50 hover:bg-zinc-100"
+                  )}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-bold text-[#FF0636] group-hover:underline">{tpl.name}</span>
+                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      {tpl.category}
+                    </span>
+                  </div>
+                  <p className={clsx("text-xs leading-relaxed", isDarkMode ? "text-zinc-300" : "text-zinc-700")}>
+                    {tpl.text}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );

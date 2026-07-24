@@ -343,7 +343,6 @@ export class EventsService {
   }
 
   async update(user: AuthenticatedUser, id: string, dto: UpdateEventDto) {
-    console.log('Update method received DTO:', JSON.stringify(dto, null, 2));
     const existing = await this.prisma.event.findUnique({
       where: { id },
       include: {
