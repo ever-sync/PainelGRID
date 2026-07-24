@@ -347,13 +347,22 @@ function MessageBubble({
             />
           )}
           <span>{formatTime(message.timestamp)}</span>
-          {isVendor && outboundStatus === "sent" && (
-            <CheckCheck
-              size={14}
-              className="shrink-0 text-white"
-              aria-hidden
-            />
-          )}
+          {isVendor &&
+            (outboundStatus === "sent" ||
+              outboundStatus === "delivered" ||
+              outboundStatus === "read") && (
+              <CheckCheck
+                size={14}
+                className={clsx(
+                  "shrink-0 transition-colors",
+                  outboundStatus === "read" ? "text-cyan-300" : "text-white/80",
+                )}
+                aria-hidden
+                title={
+                  outboundStatus === "read" ? "Lida pelo cliente" : "Entregue"
+                }
+              />
+            )}
         </div>
       </article>
     </div>

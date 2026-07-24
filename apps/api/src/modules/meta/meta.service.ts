@@ -29,181 +29,30 @@ import { MetaCallbackQueryDto } from './dto/meta-callback-query.dto';
 import { SelectMetaAssetsDto } from './dto/select-meta-assets.dto';
 import { StartMetaConnectDto } from './dto/start-meta-connect.dto';
 import { TriggerMetaSyncDto } from './dto/trigger-meta-sync.dto';
-
-type StringMap = Record<string, string | number | undefined>;
-
-interface GraphErrorPayload {
-  error?: {
-    message?: string;
-    type?: string;
-    code?: number;
-    error_subcode?: number;
-  };
-}
-
-interface GraphListResponse<T> extends GraphErrorPayload {
-  data?: T[];
-  paging?: {
-    next?: string;
-  };
-}
-
-interface MetaBusinessSummary {
-  id: string;
-  name?: string;
-}
-
-interface MetaAdAccountSummary {
-  id: string;
-  account_id?: string;
-  name?: string;
-}
-
-interface MetaPageSummary {
-  id: string;
-  name?: string;
-  access_token?: string;
-}
-
-interface MetaWhatsappBusinessSummary {
-  id: string;
-  name?: string;
-}
-
-interface MetaPhoneNumberSummary {
-  id: string;
-  display_phone_number?: string;
-}
-
-interface MetaLeadFormSummary {
-  id: string;
-  page_id?: string;
-  name?: string;
-  status?: string;
-  questions?: unknown[];
-}
-
-interface WhatsappSendMessageResponse {
-  messages?: Array<{ id?: string }>;
-}
-
-interface WhatsappExtractedMessagePayload {
-  content: string;
-  mediaId: string | null;
-  mediaUrl: string | null;
-}
-
-interface WhatsappUploadMediaResponse {
-  id?: string;
-}
-
-interface MetaOauthStateCache {
-  /** Novo fluxo: gestor conecta uma vez. Legado: só clientId. */
-  kind?: 'client' | 'gestor';
-  clientId?: string;
-  gestorId?: string;
-  createdAt: string;
-}
-
-interface MetaOauthSessionCache {
-  id: string;
-  clientId: string;
-  state: string;
-  accessToken: string;
-  tokenType?: string;
-  expiresIn?: number;
-  tokenExpiresAt?: string;
-  scopes: string[];
-  businesses: MetaBusinessSummary[];
-  createdAt: string;
-}
-
-/** Sessão efêmera (Redis) ou token persistido do gestor. */
-interface MetaSelectionSession {
-  accessToken: string;
-  scopes: string[];
-  tokenExpiresAt?: string | null;
-  state: string | null;
-  businesses: MetaBusinessSummary[];
-}
-
-interface MetaCampaignPayload {
-  id: string;
-  name?: string;
-  status?: string;
-  objective?: string;
-  daily_budget?: string;
-  lifetime_budget?: string;
-  start_time?: string;
-  stop_time?: string;
-}
-
-interface MetaAdSetPayload {
-  id: string;
-  name?: string;
-  status?: string;
-  campaign_id?: string;
-  daily_budget?: string;
-  lifetime_budget?: string;
-}
-
-interface MetaAdPayload {
-  id: string;
-  name?: string;
-  status?: string;
-  effective_status?: string;
-  campaign_id?: string;
-  adset_id?: string;
-  creative?: {
-    id?: string;
-    name?: string;
-  };
-}
-
-interface MetaCreativePayload {
-  id: string;
-  name?: string;
-  title?: string;
-  body?: string;
-  image_url?: string;
-  video_id?: string;
-  url_tags?: string;
-  object_story_id?: string;
-}
-
-interface MetaInsightPayload {
-  campaign_id?: string;
-  campaign_name?: string;
-  date_start?: string;
-  spend?: string;
-  impressions?: string;
-  clicks?: string;
-  cpc?: string;
-  ctr?: string;
-  reach?: string;
-  frequency?: string;
-  actions?: Array<{ action_type?: string; value?: string }>;
-}
-
-interface MetaLeadPayload {
-  id?: string;
-  created_time?: string;
-  field_data?: Array<{
-    name?: string;
-    values?: string[];
-  }>;
-  form_id?: string;
-  ad_id?: string;
-  adgroup_id?: string;
-  campaign_id?: string;
-  is_organic?: boolean;
-}
-
-interface InitialSyncResult {
-  status: 'completed' | 'failed' | 'queued';
-  message?: string;
-  summary?: Record<string, unknown>;
-}
+import {
+  type GraphErrorPayload,
+  type GraphListResponse,
+  type InitialSyncResult,
+  type MetaAdAccountSummary,
+  type MetaAdPayload,
+  type MetaAdSetPayload,
+  type MetaBusinessSummary,
+  type MetaCampaignPayload,
+  type MetaCreativePayload,
+  type MetaInsightPayload,
+  type MetaLeadFormSummary,
+  type MetaLeadPayload,
+  type MetaOauthSessionCache,
+  type MetaOauthStateCache,
+  type MetaPageSummary,
+  type MetaPhoneNumberSummary,
+  type MetaSelectionSession,
+  type MetaWhatsappBusinessSummary,
+  type StringMap,
+  type WhatsappExtractedMessagePayload,
+  type WhatsappSendMessageResponse,
+  type WhatsappUploadMediaResponse,
+} from './meta.types';
 
 @Injectable()
 export class MetaService implements OnModuleInit {

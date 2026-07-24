@@ -57,7 +57,7 @@ import {
   SourceBadge,
   StageBadge,
 } from "../../components/ui/Badge";
-import type { Client, CrmStage, Lead, User } from "../../types";
+import type { Client, Lead, User } from "../../types";
 import { readStoredSession } from "../../services/auth";
 import { listClients, mapApiClientToClient } from "../../services/clients";
 import {
@@ -100,131 +100,22 @@ import {
   DASHBOARD_DARK_CHANGE_EVENT,
   readDashboardDarkEnabled,
 } from "../../lib/dashboard-dark-mode";
+import {
+  CRM_SOURCE_LABELS as SOURCE_LABELS,
+  CRM_SOURCE_OPTIONS as SOURCE_OPTIONS,
+  LEGACY_STAGES as STAGES,
+  formatCrmDate as formatDate,
+  formatStageLeadCount,
+  isUuid,
+  removeLeadFromBoard,
+  upsertLeadInBoard,
+} from "./crm-page.model";
 
 type ViewMode = "kanban" | "compact" | "list";
 type StageFilter = "all" | string;
 type ConfirmationFilter = "all" | Lead["confirmation_status"];
 type LeadMotionKind = "new" | "stage-change" | "update";
 type StageMotionKind = LeadMotionKind;
-
-function formatStageLeadCount(count: number) {
-  if (count > 999) return "999+";
-  return String(count);
-}
-
-function removeLeadFromBoard(board: Record<string, Lead[]>, leadId: string) {
-  const next = { ...board };
-  for (const stageId of Object.keys(next)) {
-    const currentStageLeads = next[stageId] ?? [];
-    const filtered = currentStageLeads.filter((lead) => lead.id !== leadId);
-    if (filtered.length !== currentStageLeads.length) {
-      next[stageId] = filtered;
-    }
-  }
-  return next;
-}
-
-function upsertLeadInBoard(
-  board: Record<string, Lead[]>,
-  lead: Lead,
-  stages: ApiCrmStage[],
-) {
-  const next = removeLeadFromBoard(board, lead.id);
-  const fallbackStageId = stages[0]?.id ?? null;
-  const targetStageId =
-    lead.crm_stage_id && next[lead.crm_stage_id] !== undefined
-      ? lead.crm_stage_id
-      : fallbackStageId;
-
-  if (!targetStageId) {
-    return next;
-  }
-
-  next[targetStageId] = [...(next[targetStageId] ?? []), lead];
-  return next;
-}
-
-const STAGES: Array<{
-  id: CrmStage;
-  label: string;
-  color: string;
-  accent: string;
-  chip: string;
-  emptyIcon: string;
-}> = [
-  {
-    id: "novo",
-    label: "Novo",
-    color: "#FF0636",
-    accent: "from-[#FF0636] to-[#FBBB49]",
-    chip: "bg-[#FF0636]/10 text-[#FF0636]",
-    emptyIcon: "✦",
-  },
-  {
-    id: "contactado",
-    label: "Contactado",
-    color: "#3D56A2",
-    accent: "from-[#3D56A2] to-[#7c3aed]",
-    chip: "bg-[#3D56A2]/10 text-[#3D56A2]",
-    emptyIcon: "◎",
-  },
-  {
-    id: "nao_responde",
-    label: "Não responde",
-    color: "#F97316",
-    accent: "from-[#F97316] to-[#FBBB49]",
-    chip: "bg-orange-100 text-orange-700",
-    emptyIcon: "◌",
-  },
-  {
-    id: "agendado",
-    label: "Agendado",
-    color: "#FBBB49",
-    accent: "from-[#FBBB49] to-[#FF0636]",
-    chip: "bg-[#FBBB49]/20 text-[#8a5a00]",
-    emptyIcon: "◈",
-  },
-  {
-    id: "checkin",
-    label: "Check-in",
-    color: "#8B5CF6",
-    accent: "from-[#8B5CF6] to-[#3D56A2]",
-    chip: "bg-purple-100 text-purple-700",
-    emptyIcon: "◇",
-  },
-  {
-    id: "convertido",
-    label: "Convertido",
-    color: "#10B981",
-    accent: "from-emerald-500 to-[#3D56A2]",
-    chip: "bg-emerald-500/10 text-emerald-700",
-    emptyIcon: "◆",
-  },
-  {
-    id: "perdido",
-    label: "Perdido",
-    color: "#6B7280",
-    accent: "from-zinc-500 to-[#FF0636]",
-    chip: "bg-zinc-100 text-zinc-700",
-    emptyIcon: "○",
-  },
-];
-
-const SOURCE_OPTIONS = [
-  { value: "all", label: "Todas as fontes" },
-  { value: "facebook_ads", label: "Facebook Ads" },
-  { value: "whatsapp", label: "WhatsApp" },
-  { value: "manual", label: "Manual" },
-  { value: "form_page", label: "Formulario" },
-] as const;
-
-function formatDate(date: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(date));
-}
 
 type Toast = {
   id: number;
@@ -266,20 +157,6 @@ function ToastStack({
     </div>
   );
 }
-
-function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value,
-  );
-}
-
-const SOURCE_LABELS: Record<string, string> = {
-  facebook_ads: "Facebook Ads",
-  whatsapp: "WhatsApp",
-  manual: "Manual",
-  form_page: "Formulário",
-  import_excel: "Importação Excel",
-};
 
 const CONFIRMATION_LABELS: Record<string, string> = {
   pending: "Pendente",

@@ -38,6 +38,11 @@ import { IntegrationPatchLeadDto } from './dto/integration-patch-lead.dto';
 import { ReconcileLeadsDto } from './dto/reconcile-leads.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
 import { RedisService } from '../../config/redis.service';
+import {
+  buildLeadPhoneCandidates,
+  isLeadEmailUniqueViolation,
+  isLeadPhoneUniqueViolation,
+} from './lead-identity.util';
 
 // Otimização: carregamos apenas o último appointment + somente os campos
 // realmente consumidos por `toResponse` (evita transferir colunas grandes
@@ -136,89 +141,6 @@ export class LeadsService {
     return this.config.get<string>('JWT_SECRET', 'leadflow_access_secret');
   }
 
-  private buildPhoneCandidates(raw?: string | null) {
-    const trimmed = raw?.trim();
-    if (!trimmed) {
-      return null;
-    }
-
-    const normalized = normalizeBrazilianPhone(trimmed);
-    const digits = phoneDigits(trimmed);
-    const candidates = new Set<string>([trimmed, normalized]);
-
-    if (digits) {
-      candidates.add(digits);
-      candidates.add(`+${digits}`);
-      if (digits.length >= 10) {
-        candidates.add(digits.slice(-10));
-      }
-      if (digits.length >= 11) {
-        candidates.add(`+55${digits.slice(-11)}`);
-      }
-    }
-
-    return { trimmed, normalized, digits, candidates: Array.from(candidates).filter(Boolean) };
-  }
-
-  private isLeadPhoneUniqueViolation(error: unknown): boolean {
-    const prismaError = this.asPrismaKnownRequestError(error);
-    if (!prismaError || prismaError.code !== 'P2002') {
-      return false;
-    }
-    const targetRaw = prismaError.meta?.target;
-    const targetList = Array.isArray(targetRaw)
-      ? targetRaw.map((item) => String(item).toLowerCase())
-      : targetRaw
-        ? [String(targetRaw).toLowerCase()]
-        : [];
-    const containsFields = targetList.some(
-      (entry) => entry.includes('client_id') && entry.includes('phone'),
-    );
-    const containsConstraintName = targetList.some((entry) =>
-      entry.includes('leads_client_id_phone_active_unique'),
-    );
-    return containsFields || containsConstraintName;
-  }
-
-  private isLeadEmailUniqueViolation(error: unknown): boolean {
-    const prismaError = this.asPrismaKnownRequestError(error);
-    if (!prismaError || prismaError.code !== 'P2002') {
-      return false;
-    }
-    const targetRaw = prismaError.meta?.target;
-    const targetList = Array.isArray(targetRaw)
-      ? targetRaw.map((item) => String(item).toLowerCase())
-      : targetRaw
-        ? [String(targetRaw).toLowerCase()]
-        : [];
-    const containsFields = targetList.some(
-      (entry) => entry.includes('client_id') && entry.includes('email'),
-    );
-    const containsConstraintName = targetList.some((entry) =>
-      entry.includes('leads_client_id_email_active_unique'),
-    );
-    return containsFields || containsConstraintName;
-  }
-
-  private asPrismaKnownRequestError(
-    error: unknown,
-  ): Pick<Prisma.PrismaClientKnownRequestError, 'code' | 'meta'> | null {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      return error;
-    }
-    if (!error || typeof error !== 'object') {
-      return null;
-    }
-    const candidate = error as { code?: unknown; meta?: unknown };
-    if (typeof candidate.code !== 'string') {
-      return null;
-    }
-    return {
-      code: candidate.code,
-      meta: candidate.meta as Prisma.PrismaClientKnownRequestError['meta'],
-    };
-  }
-
   private async findLeadByEmail(clientId: string, email?: string | null, excludeLeadId?: string) {
     const normalized = email?.toLowerCase().trim();
     if (!normalized) {
@@ -239,7 +161,7 @@ export class LeadsService {
   }
 
   private async findLeadByPhone(clientId: string, phone?: string | null, excludeLeadId?: string) {
-    const candidateSet = this.buildPhoneCandidates(phone);
+    const candidateSet = buildLeadPhoneCandidates(phone);
     if (!candidateSet) {
       return null;
     }
@@ -664,7 +586,7 @@ export class LeadsService {
         select: leadSelect,
       })) as LeadWithRelations;
     } catch (error) {
-      if (this.isLeadPhoneUniqueViolation(error)) {
+      if (isLeadPhoneUniqueViolation(error)) {
         throw new BadRequestException('Telefone ja cadastrado para este cliente');
       }
       throw error;
@@ -1450,14 +1372,14 @@ export class LeadsService {
         select: leadSelect,
       })) as LeadWithRelations;
     } catch (error) {
-      if (this.isLeadPhoneUniqueViolation(error)) {
+      if (isLeadPhoneUniqueViolation(error)) {
         const existingByPhone = phone ? await this.findLeadByPhone(dto.client_id, phone) : null;
         if (existingByPhone) {
           return { ...this.toResponse(existingByPhone), already_existed: true };
         }
         throw new BadRequestException('Telefone ja cadastrado para este cliente');
       }
-      if (this.isLeadEmailUniqueViolation(error)) {
+      if (isLeadEmailUniqueViolation(error)) {
         const existingByEmail = email ? await this.findLeadByEmail(dto.client_id, email) : null;
         if (existingByEmail) {
           return { ...this.toResponse(existingByEmail), already_existed: true };

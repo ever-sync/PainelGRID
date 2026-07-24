@@ -259,6 +259,7 @@ export function EventDetailPage() {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadWarning, setLoadWarning] = useState("");
   const [event, setEvent] = useState<Event | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [allClients, setAllClients] = useState<Client[]>([]);
@@ -287,7 +288,6 @@ export function EventDetailPage() {
   const [leadDrawerMessage, setLeadDrawerMessage] = useState("");
   const [leadHistory, setLeadHistory] = useState<ApiCrmHistoryItem[]>([]);
   const [leadHistoryLoading, setLeadHistoryLoading] = useState(false);
-  const [leadRowSavingId, setLeadRowSavingId] = useState<string | null>(null);
   const [exportingLeads, setExportingLeads] = useState(false);
   const [activeTab, setActiveTab] = useState<EventDetailTab>("dados");
   const [refreshing, setRefreshing] = useState(false);
@@ -387,6 +387,7 @@ export function EventDetailPage() {
     }
     setLeadsLoading(true);
     setError("");
+    setLoadWarning("");
     setSettingsError("");
     setSettingsSuccess("");
 
@@ -395,24 +396,47 @@ export function EventDetailPage() {
       const mappedEvent = mapApiEventToEvent(apiEvent);
       const participantClientIds = mappedEvent.participant_client_ids;
 
+      const failedParts: string[] = [];
+
       const [apiClient, apiClients, apiTeams, apiStaff, leadGroups] =
         await Promise.all([
           getClient(
             participantClientIds[0] ?? mappedEvent.client_id,
             session.accessToken,
-          ).catch(() => null),
-          listClients(session.accessToken).catch(() => []),
-          listSalesTeams(session.accessToken, mappedEvent.id).catch(() => []),
-          listUsers(session.accessToken).catch(() => []),
+          ).catch(() => {
+            failedParts.push("dados do cliente");
+            return null;
+          }),
+          listClients(session.accessToken).catch(() => {
+            failedParts.push("lista de clientes");
+            return [];
+          }),
+          listSalesTeams(session.accessToken, mappedEvent.id).catch(() => {
+            failedParts.push("times");
+            return [];
+          }),
+          listUsers(session.accessToken).catch(() => {
+            failedParts.push("vendedores");
+            return [];
+          }),
           Promise.all(
             participantClientIds.map((clientId) =>
-              fetchAllLeads(
-                { client_id: clientId },
-                session.accessToken,
-              ).catch(() => []),
+              fetchAllLeads({ client_id: clientId }, session.accessToken).catch(
+                () => {
+                  failedParts.push("leads");
+                  return [];
+                },
+              ),
             ),
           ),
         ]);
+
+      if (failedParts.length > 0) {
+        const uniqueParts = Array.from(new Set(failedParts));
+        setLoadWarning(
+          `Não foi possível carregar: ${uniqueParts.join(", ")}. Tente atualizar a página.`,
+        );
+      }
 
       const apiLeads = leadGroups.flat();
 
@@ -833,49 +857,6 @@ export function EventDetailPage() {
       );
     } finally {
       setLeadDrawerSaving(false);
-    }
-  }
-
-  async function handleQuickLeadStatusChange(lead: Lead) {
-    const session = readStoredSession();
-    if (!session?.accessToken) return;
-
-    const nextStatus: ConfirmationStatus =
-      lead.confirmation_status === "pending"
-        ? "scheduled"
-        : lead.confirmation_status === "scheduled"
-          ? "confirmed"
-          : lead.confirmation_status === "confirmed"
-            ? "checked_in"
-            : lead.confirmation_status === "checked_in"
-              ? "pending"
-              : "pending";
-
-    setLeadRowSavingId(lead.id);
-    try {
-      const updated = await updateLead(
-        lead.id,
-        { confirmation_status: nextStatus },
-        session.accessToken,
-      );
-      const mapped = mapApiLeadToLead(updated);
-      setEventLeads((current) =>
-        current.map((item) => (item.id === mapped.id ? mapped : item)),
-      );
-      if (selectedLead?.id === mapped.id) {
-        setSelectedLead(mapped);
-        setLeadDrawerStatus(mapped.confirmation_status);
-        setLeadDrawerVendorId(mapped.assigned_vendor_id ?? "");
-      }
-    } catch (statusError) {
-      setSettingsError(
-        getErrorMessage(
-          statusError,
-          "Não foi possível atualizar o status do lead.",
-        ),
-      );
-    } finally {
-      setLeadRowSavingId(null);
     }
   }
 
@@ -1460,6 +1441,7 @@ export function EventDetailPage() {
         onChange={(tab) => setActiveTab(tab as EventDetailTab)}
       />
 
+      {loadWarning && <Notice tone="error">{loadWarning}</Notice>}
       {settingsError && <Notice tone="error">{settingsError}</Notice>}
       {settingsSuccess && <Notice tone="success">{settingsSuccess}</Notice>}
 
@@ -1485,6 +1467,25 @@ export function EventDetailPage() {
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                  Nome
+                </p>
+                <p
+                  className={clsx(
+                    "text-sm font-semibold",
+                    isDarkMode ? "text-zinc-100" : "text-zinc-900",
+                  )}
+                >
+                  {event.name}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                  Status
+                </p>
+                <EventStatusBadge status={event.status} />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
                   Tipo
                 </p>
                 <p
@@ -1494,6 +1495,75 @@ export function EventDetailPage() {
                   )}
                 >
                   {event.event_type || "Não informado"}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                  Local
+                </p>
+                <p
+                  className={clsx(
+                    "text-sm font-semibold",
+                    isDarkMode ? "text-zinc-100" : "text-zinc-900",
+                  )}
+                >
+                  {event.location || "Não informado"}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                  Capacidade
+                </p>
+                <p
+                  className={clsx(
+                    "text-sm font-semibold",
+                    isDarkMode ? "text-zinc-100" : "text-zinc-900",
+                  )}
+                >
+                  {event.capacity != null
+                    ? `${event.capacity} lugares`
+                    : "Não informada"}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                  Meta de vendas
+                </p>
+                <p
+                  className={clsx(
+                    "text-sm font-semibold",
+                    isDarkMode ? "text-zinc-100" : "text-zinc-900",
+                  )}
+                >
+                  {event.sales_target != null
+                    ? event.sales_target
+                    : "Não informada"}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                  Pulseira obrigatória
+                </p>
+                <p
+                  className={clsx(
+                    "text-sm font-semibold",
+                    isDarkMode ? "text-zinc-100" : "text-zinc-900",
+                  )}
+                >
+                  {event.require_wristband ? "Sim" : "Não"}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                  Data do evento
+                </p>
+                <p
+                  className={clsx(
+                    "text-sm font-semibold",
+                    isDarkMode ? "text-zinc-100" : "text-zinc-900",
+                  )}
+                >
+                  {formatDateTime(event.event_date)}
                 </p>
               </div>
               <div className="space-y-1">
@@ -1548,7 +1618,7 @@ export function EventDetailPage() {
                   {formatDateTime(event.updated_at)}
                 </p>
               </div>
-              <div className="space-y-1">
+              <div className="sm:col-span-2 space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
                   Descrição
                 </p>
@@ -1658,55 +1728,6 @@ export function EventDetailPage() {
                   ))}
                 </div>
               )}
-            </Card>
-
-            <Card
-              className={clsx(
-                "rounded-[28px] border",
-                isDarkMode
-                  ? "border-zinc-800 bg-[#111111]"
-                  : "border-zinc-100 bg-white",
-              )}
-              padding="lg"
-            >
-              <h3
-                className={clsx(
-                  "text-lg font-black tracking-tight",
-                  isDarkMode ? "text-zinc-100" : "text-zinc-950",
-                )}
-              >
-                Galeria
-              </h3>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {event.image_urls.filter(Boolean).length === 0 ? (
-                  <div
-                    className={clsx(
-                      "rounded-2xl border border-dashed px-4 py-10 text-center text-sm",
-                      isDarkMode
-                        ? "border-zinc-700 text-zinc-500"
-                        : "border-zinc-200 text-zinc-500",
-                    )}
-                  >
-                    Nenhuma imagem cadastrada.
-                  </div>
-                ) : (
-                  event.image_urls
-                    .filter(Boolean)
-                    .slice(0, 4)
-                    .map((url, index) => (
-                      <div
-                        key={`${url}-${index}`}
-                        className="overflow-hidden rounded-2xl border border-zinc-100 bg-zinc-50"
-                      >
-                        <img
-                          src={url}
-                          alt={`Imagem do evento ${index + 1}`}
-                          className="h-36 w-full object-cover"
-                        />
-                      </div>
-                    ))
-                )}
-              </div>
             </Card>
           </div>
         </div>
@@ -1916,27 +1937,6 @@ export function EventDetailPage() {
                           </td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex justify-end gap-2">
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                loading={leadRowSavingId === lead.id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void handleQuickLeadStatusChange(lead);
-                                }}
-                              >
-                                {lead.confirmation_status === "pending"
-                                  ? "Agendar"
-                                  : lead.confirmation_status === "scheduled"
-                                    ? "Confirmar"
-                                    : lead.confirmation_status === "confirmed"
-                                      ? "Check-in"
-                                      : lead.confirmation_status ===
-                                          "checked_in"
-                                        ? "Reabrir"
-                                        : "Ativar"}
-                              </Button>
                               <Button
                                 type="button"
                                 variant="ghost"
@@ -2488,55 +2488,6 @@ export function EventDetailPage() {
               </div>
             </div>
 
-            <div className="mt-6">
-              <div className="mb-3 flex items-center gap-2">
-                <Users size={16} className="text-zinc-400" />
-                <p className="text-sm font-semibold text-zinc-500">
-                  Clientes participantes
-                </p>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {allClients
-                  .filter(
-                    (item) =>
-                      item.id !==
-                      (event?.participant_client_ids[0] ?? client?.id),
-                  )
-                  .map((item) => {
-                    const checked = formExtraClientIds.includes(item.id);
-                    return (
-                      <label
-                        key={item.id}
-                        className={clsx(
-                          "flex cursor-pointer items-center gap-3 rounded-2xl border px-3 py-3 text-sm",
-                          checked
-                            ? "border-[#E51838] bg-[#E51838]/5 text-[#E51838]"
-                            : isDarkMode
-                              ? "border-zinc-800 bg-[#0b0b0b] text-zinc-300"
-                              : "border-zinc-200 bg-zinc-50 text-zinc-700",
-                        )}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() =>
-                            setFormExtraClientIds((current) =>
-                              checked
-                                ? current.filter((id) => id !== item.id)
-                                : [...current, item.id],
-                            )
-                          }
-                          className="h-4 w-4 rounded border-zinc-300 text-[#E51838] focus:ring-[#E51838]"
-                        />
-                        <div>
-                          <p className="font-medium">{item.company_name}</p>
-                          <p className="text-[11px] opacity-70">{item.plan}</p>
-                        </div>
-                      </label>
-                    );
-                  })}
-              </div>
-            </div>
           </Card>
 
           <div className="fixed right-6 top-1/2 z-40 flex -translate-y-1/2 flex-col gap-2">

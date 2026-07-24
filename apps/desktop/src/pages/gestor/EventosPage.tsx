@@ -4,7 +4,6 @@ import clsx from "clsx";
 import {
   CalendarDays,
   ChevronDown,
-  Eye,
   MapPin,
   PencilLine,
   Plus,
@@ -500,13 +499,6 @@ export function EventosPage() {
       setFormCepLoading(false);
     }
   }
-
-  const handleEdit = (event: Event) => {
-    setEditingEvent(event);
-    setEventError("");
-    resetFormState(event);
-    setShowModal(true);
-  };
 
   const handleOpenCreate = () => {
     setEditingEvent(null);
@@ -1056,20 +1048,6 @@ export function EventosPage() {
                           <button
                             type="button"
                             onClick={() => handleOpenEventPanel(event)}
-                            aria-label={`Ver ${event.name}`}
-                            title="Ver"
-                            className={clsx(
-                              "inline-flex h-8 w-8 items-center justify-center rounded-full border transition-colors",
-                              isDarkMode
-                                ? "border-zinc-700 bg-[#171717] text-zinc-300 hover:bg-[#212121]"
-                                : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50",
-                            )}
-                          >
-                            <Eye size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleEdit(event)}
                             aria-label={`Editar ${event.name}`}
                             title="Editar"
                             className={clsx(
