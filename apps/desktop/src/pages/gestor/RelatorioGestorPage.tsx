@@ -141,6 +141,24 @@ export function RelatorioGestorPage() {
     setExpandedAdSets((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const expandAllCampaigns = () => {
+    const campAcc: Record<string, boolean> = {};
+    const adSetAcc: Record<string, boolean> = {};
+    campaignTreeData.forEach((c) => {
+      campAcc[c.id] = true;
+      c.adSets.forEach((a) => {
+        adSetAcc[a.id] = true;
+      });
+    });
+    setExpandedCampaigns(campAcc);
+    setExpandedAdSets(adSetAcc);
+  };
+
+  const collapseAllCampaigns = () => {
+    setExpandedCampaigns({});
+    setExpandedAdSets({});
+  };
+
   // Dados estruturados em árvore para a Aba de Campanhas (Campanha -> Conjunto -> Anúncio)
   const campaignTreeData = useMemo(() => {
     return [
@@ -268,6 +286,31 @@ export function RelatorioGestorPage() {
       },
     ];
   }, []);
+
+  // Totais consolidados para o cabeçalho da Aba Campanhas
+  const campaignTotals = useMemo(() => {
+    let investido = 0;
+    let leadsCount = 0;
+    let conversasCount = 0;
+    let impressoesCount = 0;
+
+    campaignTreeData.forEach((c) => {
+      investido += c.valorInvestido;
+      leadsCount += c.quantidadeLeads;
+      conversasCount += c.numeroConversas;
+      impressoesCount += c.impressoes;
+    });
+
+    const cplMedio = leadsCount > 0 ? investido / leadsCount : 0;
+
+    return {
+      investido,
+      leadsCount,
+      conversasCount,
+      impressoesCount,
+      cplMedio,
+    };
+  }, [campaignTreeData]);
 
   useEffect(() => {
     setIsDarkMode(readDashboardDarkEnabled(user.id));
@@ -1310,18 +1353,68 @@ export function RelatorioGestorPage() {
       {/* ── ABA 3: CAMPANHAS ── */}
       {activeTab === "campanhas" && (
         <div className="space-y-6">
-          {/* Card de Métricas Globais da Campanha */}
+          {/* Summary KPI Cards da Aba Campanhas */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatsCard
+              title="Investimento Total (Ads)"
+              value={formatCurrency(campaignTotals.investido)}
+              icon={<TrendingUp size={20} />}
+              subtitle="Meta Ads"
+              iconColor="bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400"
+            />
+            <StatsCard
+              title="Total Leads Captados"
+              value={formatNumber(campaignTotals.leadsCount)}
+              icon={<Users size={20} />}
+              subtitle="Origem Anúncios"
+              iconColor="bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
+            />
+            <StatsCard
+              title="Custo Por Lead (CPL Médio)"
+              value={formatCurrency(campaignTotals.cplMedio)}
+              icon={<Target size={20} />}
+              subtitle="Custo Médio"
+              iconColor="bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400"
+            />
+            <StatsCard
+              title="Conversas de WhatsApp"
+              value={formatNumber(campaignTotals.conversasCount)}
+              icon={<Megaphone size={20} />}
+              subtitle="Iniciadas"
+              iconColor="bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
+            />
+          </div>
+
+          {/* Tabela Hierárquica de Campanhas */}
           <Card>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 border-b border-gray-100 dark:border-zinc-800/80 pb-3">
               <div>
-                <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">
-                  Desempenho Hierárquico de Campanhas Meta Ads
+                <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100 flex items-center gap-2">
+                  <Megaphone size={18} className="text-[#FF0636]" />
+                  <span>Desempenho Hierárquico de Campanhas Meta Ads</span>
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-zinc-400">
-                  Clique na linha para expandir e visualizar os Conjuntos de Anúncios e Anúncios individuais
+                  Clique na linha da campanha ou do conjunto para expandir/recolher a estrutura de anúncios
                 </p>
               </div>
-              <Megaphone size={18} className="text-[#FF0636]" />
+
+              {/* Botões de Ação Rápida */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={expandAllCampaigns}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-700 dark:text-zinc-300 transition-colors"
+                >
+                  Expandir Tudo
+                </button>
+                <button
+                  type="button"
+                  onClick={collapseAllCampaigns}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-700 dark:text-zinc-300 transition-colors"
+                >
+                  Recolher Tudo
+                </button>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -1329,13 +1422,13 @@ export function RelatorioGestorPage() {
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-zinc-800 text-gray-500 dark:text-zinc-400 font-semibold uppercase tracking-wider">
                     <th className="pb-3 px-3">Nome (Campanha / Conjunto / Anúncio)</th>
-                    <th className="pb-3 px-3">Valor Investido</th>
-                    <th className="pb-3 px-3">Quantidade Leads</th>
-                    <th className="pb-3 px-3">Custo por Lead</th>
-                    <th className="pb-3 px-3">Impressões</th>
-                    <th className="pb-3 px-3">Nº Conversas</th>
-                    <th className="pb-3 px-3">Custo / Conversa</th>
-                    <th className="pb-3 px-3">Contas Alcançadas</th>
+                    <th className="pb-3 px-3 text-right">Valor Investido</th>
+                    <th className="pb-3 px-3 text-right">Quantidade Leads</th>
+                    <th className="pb-3 px-3 text-right">Custo por Lead</th>
+                    <th className="pb-3 px-3 text-right">Impressões</th>
+                    <th className="pb-3 px-3 text-right">Nº Conversas</th>
+                    <th className="pb-3 px-3 text-right">Custo / Conversa</th>
+                    <th className="pb-3 px-3 text-right">Contas Alcançadas</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-zinc-800/60">
@@ -1358,25 +1451,25 @@ export function RelatorioGestorPage() {
                             </span>
                             <span>{camp.name}</span>
                           </td>
-                          <td className="py-3 px-3 text-amber-600 dark:text-amber-400 font-bold font-mono">
+                          <td className="py-3 px-3 text-right text-amber-600 dark:text-amber-400 font-bold font-mono">
                             {formatCurrency(camp.valorInvestido)}
                           </td>
-                          <td className="py-3 px-3 font-bold text-gray-800 dark:text-zinc-200">
+                          <td className="py-3 px-3 text-right font-bold text-gray-800 dark:text-zinc-200">
                             {camp.quantidadeLeads}
                           </td>
-                          <td className="py-3 px-3 text-rose-600 dark:text-rose-400 font-bold font-mono">
+                          <td className="py-3 px-3 text-right text-rose-600 dark:text-rose-400 font-bold font-mono">
                             {formatCurrency(camp.custoPorLead)}
                           </td>
-                          <td className="py-3 px-3 text-gray-600 dark:text-zinc-400 font-mono">
+                          <td className="py-3 px-3 text-right text-gray-600 dark:text-zinc-400 font-mono">
                             {formatNumber(camp.impressoes)}
                           </td>
-                          <td className="py-3 px-3 text-blue-600 font-bold">
+                          <td className="py-3 px-3 text-right text-blue-600 font-bold">
                             {camp.numeroConversas}
                           </td>
-                          <td className="py-3 px-3 text-blue-700 dark:text-blue-400 font-mono">
+                          <td className="py-3 px-3 text-right text-blue-700 dark:text-blue-400 font-mono">
                             {formatCurrency(camp.custoConversasIniciadas)}
                           </td>
-                          <td className="py-3 px-3 text-gray-600 dark:text-zinc-400 font-mono">
+                          <td className="py-3 px-3 text-right text-gray-600 dark:text-zinc-400 font-mono">
                             {formatNumber(camp.contasAlcancadas)}
                           </td>
                         </tr>
@@ -1401,25 +1494,25 @@ export function RelatorioGestorPage() {
                                     </span>
                                     <span>{adSet.name}</span>
                                   </td>
-                                  <td className="py-2.5 px-3 text-amber-600 dark:text-amber-400 font-mono">
+                                  <td className="py-2.5 px-3 text-right text-amber-600 dark:text-amber-400 font-mono">
                                     {formatCurrency(adSet.valorInvestido)}
                                   </td>
-                                  <td className="py-2.5 px-3 font-semibold text-gray-800 dark:text-zinc-200">
+                                  <td className="py-2.5 px-3 text-right font-semibold text-gray-800 dark:text-zinc-200">
                                     {adSet.quantidadeLeads}
                                   </td>
-                                  <td className="py-2.5 px-3 text-rose-600 dark:text-rose-400 font-mono">
+                                  <td className="py-2.5 px-3 text-right text-rose-600 dark:text-rose-400 font-mono">
                                     {formatCurrency(adSet.custoPorLead)}
                                   </td>
-                                  <td className="py-2.5 px-3 text-gray-500 font-mono">
+                                  <td className="py-2.5 px-3 text-right text-gray-500 font-mono">
                                     {formatNumber(adSet.impressoes)}
                                   </td>
-                                  <td className="py-2.5 px-3 text-blue-600 font-semibold">
+                                  <td className="py-2.5 px-3 text-right text-blue-600 font-semibold">
                                     {adSet.numeroConversas}
                                   </td>
-                                  <td className="py-2.5 px-3 text-blue-700 dark:text-blue-400 font-mono">
+                                  <td className="py-2.5 px-3 text-right text-blue-700 dark:text-blue-400 font-mono">
                                     {formatCurrency(adSet.custoConversasIniciadas)}
                                   </td>
-                                  <td className="py-2.5 px-3 text-gray-500 font-mono">
+                                  <td className="py-2.5 px-3 text-right text-gray-500 font-mono">
                                     {formatNumber(adSet.contasAlcancadas)}
                                   </td>
                                 </tr>
@@ -1438,17 +1531,17 @@ export function RelatorioGestorPage() {
                                         </span>
                                         <span>{ad.name}</span>
                                       </td>
-                                      <td className="py-2 px-3 font-mono">{formatCurrency(ad.valorInvestido)}</td>
-                                      <td className="py-2 px-3 font-medium text-gray-700 dark:text-zinc-300">
+                                      <td className="py-2 px-3 text-right font-mono">{formatCurrency(ad.valorInvestido)}</td>
+                                      <td className="py-2 px-3 text-right font-medium text-gray-700 dark:text-zinc-300">
                                         {ad.quantidadeLeads}
                                       </td>
-                                      <td className="py-2 px-3 font-mono text-rose-600 dark:text-rose-400">
+                                      <td className="py-2 px-3 text-right font-mono text-rose-600 dark:text-rose-400">
                                         {formatCurrency(ad.custoPorLead)}
                                       </td>
-                                      <td className="py-2 px-3 font-mono">{formatNumber(ad.impressoes)}</td>
-                                      <td className="py-2 px-3 text-blue-600 font-medium">{ad.numeroConversas}</td>
-                                      <td className="py-2 px-3 font-mono">{formatCurrency(ad.custoConversasIniciadas)}</td>
-                                      <td className="py-2 px-3 font-mono">{formatNumber(ad.contasAlcancadas)}</td>
+                                      <td className="py-2 px-3 text-right font-mono">{formatNumber(ad.impressoes)}</td>
+                                      <td className="py-2 px-3 text-right text-blue-600 font-medium">{ad.numeroConversas}</td>
+                                      <td className="py-2 px-3 text-right font-mono">{formatCurrency(ad.custoConversasIniciadas)}</td>
+                                      <td className="py-2 px-3 text-right font-mono">{formatNumber(ad.contasAlcancadas)}</td>
                                     </tr>
                                   ))}
                               </Fragment>
