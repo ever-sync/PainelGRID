@@ -27,6 +27,9 @@ export class MailService {
         port,
         secure,
         auth: { user, pass },
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 15_000,
       });
       this.logger.log(`SMTP configurado na porta ${port} (secure=${secure})`);
     } else {

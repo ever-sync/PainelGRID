@@ -39,22 +39,46 @@ type RefreshResponse = SessionApiResponse;
 
 export type AuthSession = PersistedAuthSession;
 
+const AUTH_REQUEST_TIMEOUT_MS = 20_000;
+
+async function withAuthRequestTimeout<T>(
+  request: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), AUTH_REQUEST_TIMEOUT_MS);
+  try {
+    return await request(controller.signal);
+  } catch (error) {
+    if (controller.signal.aborted && error instanceof Error && error.name === "AbortError") {
+      throw new Error(
+        "O servidor demorou para responder. Tente novamente; se persistir, verifique o serviço de e-mail.",
+      );
+    }
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeout);
+  }
+}
+
 export async function loginWithPassword(
   email: string,
   password: string,
   rememberMe = true,
 ): Promise<LoginStepResult> {
   const native = isNativePlatform();
-  const result = await httpRequest<LoginApiResponse>(
-    native ? "/auth/mobile/login" : "/auth/login",
-    {
-      method: "POST",
-      body: {
-        email,
-        password,
-        remember_me: rememberMe,
+  const result = await withAuthRequestTimeout((signal) =>
+    httpRequest<LoginApiResponse>(
+      native ? "/auth/mobile/login" : "/auth/login",
+      {
+        method: "POST",
+        body: {
+          email,
+          password,
+          remember_me: rememberMe,
+        },
+        signal,
       },
-    },
+    ),
   );
 
   return {
@@ -70,15 +94,18 @@ export async function verifyTwoFactorCode(
   code: string,
 ): Promise<AuthSession> {
   const native = isNativePlatform();
-  const result = await httpRequest<SessionApiResponse>(
-    native ? "/auth/mobile/2fa/verify" : "/auth/2fa/verify",
-    {
-    method: "POST",
-    body: {
-      temp_token: tempToken,
-      code,
-    },
-    },
+  const result = await withAuthRequestTimeout((signal) =>
+    httpRequest<SessionApiResponse>(
+      native ? "/auth/mobile/2fa/verify" : "/auth/2fa/verify",
+      {
+        method: "POST",
+        body: {
+          temp_token: tempToken,
+          code,
+        },
+        signal,
+      },
+    ),
   );
 
   if (native && result.refresh_token) {
