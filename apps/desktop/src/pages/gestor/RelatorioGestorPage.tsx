@@ -63,6 +63,14 @@ const RELATORIO_TABS = [
 
 const PIE_COLORS = ["#FF0636", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#64748b"];
 
+function formatCurrency(val: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    maximumFractionDigits: 0,
+  }).format(val);
+}
+
 export function RelatorioGestorPage() {
   const { user } = useOutletContext<AppOutletContext>();
   const [isDarkMode, setIsDarkMode] = useState(() =>
@@ -320,8 +328,16 @@ export function RelatorioGestorPage() {
       const audienceProgressPercent =
         audienceTarget > 0 ? Math.min(100, Math.round((evCheckins / audienceTarget) * 100)) : 0;
 
+      // Estimativas Financeiras e CAC do Evento
+      const valorInvestido = (ev.capacity || 100) * 150; // Orçamento alocado (ex: R$ 15.000)
+      const ticketMedio = 75000;
+      const valorTotalVendas = evVendas * ticketMedio;
+      const cac = evVendas > 0 ? Math.round(valorInvestido / evVendas) : 0;
+      const nomeResumido = ev.name.length > 20 ? `${ev.name.slice(0, 20)}...` : ev.name;
+
       return {
         ...ev,
+        nomeResumido,
         totalLeads: evLeads.length,
         totalCheckins: evCheckins,
         totalVendas: evVendas,
@@ -329,6 +345,9 @@ export function RelatorioGestorPage() {
         audienceTarget,
         salesProgressPercent,
         audienceProgressPercent,
+        valorInvestido,
+        valorTotalVendas,
+        cac,
       };
     });
   }, [availableEvents, leads]);
@@ -873,37 +892,41 @@ export function RelatorioGestorPage() {
                   <tr className="border-b border-gray-100 dark:border-zinc-800 text-gray-500 dark:text-zinc-400 font-semibold uppercase tracking-wider">
                     <th className="pb-3 px-3">Evento</th>
                     <th className="pb-3 px-3">Data</th>
-                    <th className="pb-3 px-3">Leads Totais</th>
-                    <th className="pb-3 px-3">Check-ins (Pessoas)</th>
-                    <th className="pb-3 px-3">Meta Público</th>
-                    <th className="pb-3 px-3">Vendas</th>
-                    <th className="pb-3 px-3">Meta Vendas</th>
-                    <th className="pb-3 px-3">Atingimento Vendas</th>
+                    <th className="pb-3 px-3">Valor Investido</th>
+                    <th className="pb-3 px-3">Leads Total</th>
+                    <th className="pb-3 px-3">Check-ins</th>
+                    <th className="pb-3 px-3">Quantas Compraram</th>
+                    <th className="pb-3 px-3">Valor Total Vendas</th>
+                    <th className="pb-3 px-3">CAC</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-zinc-800/60">
                   {eventMetrics.map((ev) => (
                     <tr key={ev.id} className="hover:bg-gray-50/50 dark:hover:bg-zinc-900/50">
-                      <td className="py-3 px-3 font-semibold text-gray-900 dark:text-zinc-100">
-                        {ev.name}
+                      <td className="py-3 px-3 font-semibold text-gray-900 dark:text-zinc-100" title={ev.name}>
+                        {ev.nomeResumido}
                       </td>
-                      <td className="py-3 px-3 text-gray-600 dark:text-zinc-400">
+                      <td className="py-3 px-3 text-gray-600 dark:text-zinc-400 font-mono">
                         {new Date(ev.event_date).toLocaleDateString("pt-BR")}
+                      </td>
+                      <td className="py-3 px-3 text-amber-600 dark:text-amber-400 font-semibold font-mono">
+                        {formatCurrency(ev.valorInvestido)}
                       </td>
                       <td className="py-3 px-3 font-bold text-gray-800 dark:text-zinc-200">
                         {ev.totalLeads}
                       </td>
-                      <td className="py-3 px-3 text-purple-600 font-bold">{ev.totalCheckins}</td>
-                      <td className="py-3 px-3 text-gray-600 dark:text-zinc-400">
-                        {ev.audienceTarget || "-"} ({ev.audienceProgressPercent}%)
+                      <td className="py-3 px-3 text-purple-600 font-bold">
+                        {ev.totalCheckins}
                       </td>
-                      <td className="py-3 px-3 text-emerald-600 font-bold">{ev.totalVendas}</td>
-                      <td className="py-3 px-3 text-gray-600 dark:text-zinc-400">
-                        {ev.salesTarget || "-"}
+                      <td className="py-3 px-3 text-emerald-600 font-bold">
+                        {ev.totalVendas}
                       </td>
-                      <td className="py-3 px-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900">
-                          {ev.salesProgressPercent}%
+                      <td className="py-3 px-3 text-emerald-700 dark:text-emerald-400 font-bold font-mono">
+                        {formatCurrency(ev.valorTotalVendas)}
+                      </td>
+                      <td className="py-3 px-3 font-mono">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900">
+                          {ev.cac > 0 ? formatCurrency(ev.cac) : "—"}
                         </span>
                       </td>
                     </tr>
