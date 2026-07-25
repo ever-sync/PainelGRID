@@ -21,6 +21,7 @@ import {
   Award,
   Ticket,
   UserCheck,
+  Trophy,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { StatsCard } from "../../components/shared/StatsCard";
@@ -305,20 +306,43 @@ export function RelatorioGestorPage() {
           l.event_id === ev.id ||
           ev.participant_client_ids?.includes(l.client_id),
       );
-      const evCheckins = evLeads.filter((l) => l.crm_stage === "checkin" || l.crm_stage === "convertido").length;
+      const evCheckins = evLeads.filter(
+        (l) => l.crm_stage === "checkin" || l.crm_stage === "convertido",
+      ).length;
       const evVendas = evLeads.filter((l) => l.crm_stage === "convertido").length;
-      const target = ev.sales_target || 1;
-      const progressPercent = Math.min(100, Math.round((evVendas / target) * 100));
+
+      const salesTarget = ev.sales_target || 0;
+      const audienceTarget = ev.capacity || 0;
+
+      const salesProgressPercent =
+        salesTarget > 0 ? Math.min(100, Math.round((evVendas / salesTarget) * 100)) : 0;
+
+      const audienceProgressPercent =
+        audienceTarget > 0 ? Math.min(100, Math.round((evCheckins / audienceTarget) * 100)) : 0;
 
       return {
         ...ev,
         totalLeads: evLeads.length,
         totalCheckins: evCheckins,
         totalVendas: evVendas,
-        progressPercent,
+        salesTarget,
+        audienceTarget,
+        salesProgressPercent,
+        audienceProgressPercent,
       };
     });
   }, [availableEvents, leads]);
+
+  // Eventos destaques (Campeões de Venda e Público)
+  const topSalesEvent = useMemo(() => {
+    if (eventMetrics.length === 0) return null;
+    return [...eventMetrics].sort((a, b) => b.totalVendas - a.totalVendas)[0];
+  }, [eventMetrics]);
+
+  const topAttendanceEvent = useMemo(() => {
+    if (eventMetrics.length === 0) return null;
+    return [...eventMetrics].sort((a, b) => b.totalCheckins - a.totalCheckins)[0];
+  }, [eventMetrics]);
 
   // Dados para a Aba de Cruzamento: Campanha x Evento
   const campaignEventCrossData = useMemo(() => {
@@ -715,6 +739,49 @@ export function RelatorioGestorPage() {
       {/* ── ABA 2: EVENTO ── */}
       {activeTab === "evento" && (
         <div className="space-y-6">
+          {/* Cards de Destaque / Campeões */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-200 dark:border-emerald-900/50 flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                  <Trophy size={14} />
+                  <span>Campeão de Vendas</span>
+                </div>
+                <h4 className="text-lg font-bold text-gray-900 dark:text-zinc-100">
+                  {topSalesEvent ? topSalesEvent.name : "Nenhum evento registrado"}
+                </h4>
+                <p className="text-xs text-gray-500 dark:text-zinc-400">
+                  {topSalesEvent
+                    ? `${topSalesEvent.totalVendas} vendas concluídas (${topSalesEvent.salesProgressPercent}% da meta)`
+                    : "Sem dados suficientes"}
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-xl">
+                🏆
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-500/10 via-purple-500/5 to-transparent border border-purple-200 dark:border-purple-900/50 flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                  <Users size={14} />
+                  <span>Campeão de Público / Presença</span>
+                </div>
+                <h4 className="text-lg font-bold text-gray-900 dark:text-zinc-100">
+                  {topAttendanceEvent ? topAttendanceEvent.name : "Nenhum evento registrado"}
+                </h4>
+                <p className="text-xs text-gray-500 dark:text-zinc-400">
+                  {topAttendanceEvent
+                    ? `${topAttendanceEvent.totalCheckins} pessoas no evento (${topAttendanceEvent.audienceProgressPercent}% do público alvo)`
+                    : "Sem dados suficientes"}
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold text-xl">
+                📍
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card className="lg:col-span-2">
               <div className="flex items-center justify-between mb-4">
@@ -723,13 +790,13 @@ export function RelatorioGestorPage() {
                     Desempenho por Evento / Feirão
                   </h3>
                   <p className="text-xs text-gray-500 dark:text-zinc-400">
-                    Comparativo de leads captados vs vendas realizadas em cada evento
+                    Comparativo de Leads, Presença (Pessoas/Check-ins) e Vendas
                   </p>
                 </div>
                 <Award size={18} className="text-gray-400" />
               </div>
 
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={eventMetrics}>
                   <CartesianGrid strokeDasharray="3 3" stroke={chartAxisStroke} vertical={false} />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fill: chartTickFill }} stroke={chartAxisStroke} />
@@ -737,6 +804,7 @@ export function RelatorioGestorPage() {
                   <Tooltip contentStyle={{ ...chartTooltipStyle, background: chartTooltipBg }} />
                   <Legend wrapperStyle={{ fontSize: "12px" }} />
                   <Bar dataKey="totalLeads" name="Leads Captados" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="totalCheckins" name="Pessoas / Check-ins" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="totalVendas" name="Vendas Concluídas" fill="#10b981" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -744,26 +812,49 @@ export function RelatorioGestorPage() {
 
             <Card>
               <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100 mb-1">
-                Atingimento de Metas
+                Atingimento de Metas (Pessoas & Vendas)
               </h3>
               <p className="text-xs text-gray-500 dark:text-zinc-400 mb-4">
-                Progresso das metas comerciais fixadas nos eventos
+                Progresso comparativo das metas de público e metas comerciais
               </p>
 
-              <div className="space-y-4">
-                {eventMetrics.slice(0, 5).map((ev) => (
-                  <div key={ev.id} className="space-y-1">
-                    <div className="flex justify-between text-xs font-semibold">
-                      <span className="text-gray-900 dark:text-zinc-100">{ev.name}</span>
-                      <span className="text-emerald-600 font-bold">
-                        {ev.totalVendas} / {ev.sales_target || 0} ({ev.progressPercent}%)
-                      </span>
+              <div className="space-y-5">
+                {eventMetrics.slice(0, 4).map((ev) => (
+                  <div key={ev.id} className="space-y-2 border-b border-gray-100 dark:border-zinc-800/80 pb-3 last:border-none last:pb-0">
+                    <span className="text-xs font-bold text-gray-900 dark:text-zinc-100 block">
+                      {ev.name}
+                    </span>
+
+                    {/* Meta de Público */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-gray-500 dark:text-zinc-400">Público (Pessoas):</span>
+                        <span className="text-purple-600 font-semibold">
+                          {ev.totalCheckins} / {ev.audienceTarget || 0} ({ev.audienceProgressPercent}%)
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="bg-purple-500 h-full rounded-full transition-all duration-300"
+                          style={{ width: `${ev.audienceProgressPercent}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="w-full bg-gray-100 dark:bg-zinc-800 h-2 rounded-full overflow-hidden">
-                      <div
-                        className="bg-[#FF0636] h-full rounded-full transition-all duration-300"
-                        style={{ width: `${ev.progressPercent}%` }}
-                      />
+
+                    {/* Meta de Vendas */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-gray-500 dark:text-zinc-400">Vendas:</span>
+                        <span className="text-emerald-600 font-semibold">
+                          {ev.totalVendas} / {ev.salesTarget || 0} ({ev.salesProgressPercent}%)
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                          style={{ width: `${ev.salesProgressPercent}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -783,10 +874,11 @@ export function RelatorioGestorPage() {
                     <th className="pb-3 px-3">Evento</th>
                     <th className="pb-3 px-3">Data</th>
                     <th className="pb-3 px-3">Leads Totais</th>
-                    <th className="pb-3 px-3">Check-ins</th>
+                    <th className="pb-3 px-3">Check-ins (Pessoas)</th>
+                    <th className="pb-3 px-3">Meta Público</th>
                     <th className="pb-3 px-3">Vendas</th>
-                    <th className="pb-3 px-3">Meta de Vendas</th>
-                    <th className="pb-3 px-3">Atingimento</th>
+                    <th className="pb-3 px-3">Meta Vendas</th>
+                    <th className="pb-3 px-3">Atingimento Vendas</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-zinc-800/60">
@@ -801,14 +893,17 @@ export function RelatorioGestorPage() {
                       <td className="py-3 px-3 font-bold text-gray-800 dark:text-zinc-200">
                         {ev.totalLeads}
                       </td>
-                      <td className="py-3 px-3 text-blue-600 font-semibold">{ev.totalCheckins}</td>
+                      <td className="py-3 px-3 text-purple-600 font-bold">{ev.totalCheckins}</td>
+                      <td className="py-3 px-3 text-gray-600 dark:text-zinc-400">
+                        {ev.audienceTarget || "-"} ({ev.audienceProgressPercent}%)
+                      </td>
                       <td className="py-3 px-3 text-emerald-600 font-bold">{ev.totalVendas}</td>
                       <td className="py-3 px-3 text-gray-600 dark:text-zinc-400">
-                        {ev.sales_target || "-"}
+                        {ev.salesTarget || "-"}
                       </td>
                       <td className="py-3 px-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-[#FF0636] border border-rose-200">
-                          {ev.progressPercent}%
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900">
+                          {ev.salesProgressPercent}%
                         </span>
                       </td>
                     </tr>
