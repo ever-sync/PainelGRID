@@ -536,6 +536,7 @@ export function RelatorioGestorPage() {
   const [campaignsForClient, setCampaignsForClient] = useState<Campaign[]>([]);
   const [eventsForClient, setEventsForClient] = useState<Event[]>([]);
   const [activeTab, setActiveTab] = useState<ReportTabId>("cliente");
+  const [selectedEventId, setSelectedEventId] = useState<string>("all");
   const [apiReports, setApiReports] = useState<Record<string, ReportBase>>({});
   const [loadError, setLoadError] = useState("");
   const [pipelineStages, setPipelineStages] = useState<KanbanColumn[]>([]);
@@ -896,6 +897,23 @@ export function RelatorioGestorPage() {
         };
       }),
     [allLeads, clientEvents, selectedClientAddress],
+  );
+
+  useEffect(() => {
+    if (
+      selectedEventId !== "all" &&
+      !eventDashboardRows.some((row) => row.id === selectedEventId)
+    ) {
+      setSelectedEventId("all");
+    }
+  }, [eventDashboardRows, selectedEventId]);
+
+  const filteredEventDashboardRows = useMemo(
+    () =>
+      selectedEventId === "all"
+        ? eventDashboardRows
+        : eventDashboardRows.filter((row) => row.id === selectedEventId),
+    [eventDashboardRows, selectedEventId],
   );
 
   const finishedEventsCount = useMemo(
@@ -1849,11 +1867,26 @@ export function RelatorioGestorPage() {
           </div>
 
           <div className={reportTableClass}>
-            <div className="border-b border-[#eadfce] px-5 py-4 text-lg font-semibold text-zinc-950">
-              Performance por Evento
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#eadfce] px-5 py-4">
+              <h2 className="text-lg font-semibold text-zinc-950">
+                Performance por Evento
+              </h2>
+              <FilterSelect
+                label="Evento"
+                value={selectedEventId}
+                onChange={setSelectedEventId}
+                options={[
+                  { label: "Todos os eventos", value: "all" },
+                  ...clientEvents.map((event) => ({
+                    label: event.name,
+                    value: event.id,
+                  })),
+                ]}
+                dark={isDarkMode}
+              />
             </div>
 
-            {eventDashboardRows.length > 0 ? (
+            {filteredEventDashboardRows.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead className="bg-[#fbf7f2]">
@@ -1872,7 +1905,7 @@ export function RelatorioGestorPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {eventDashboardRows.map((row) => (
+                    {filteredEventDashboardRows.map((row) => (
                       <tr
                         key={row.id}
                         className={clsx(
@@ -1932,7 +1965,7 @@ export function RelatorioGestorPage() {
               <div className="h-[330px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    data={eventDashboardRows.map((row) => ({
+                    data={filteredEventDashboardRows.map((row) => ({
                       name: shortCampaign(row.name),
                       total: row.total,
                     }))}
@@ -1996,7 +2029,7 @@ export function RelatorioGestorPage() {
               <div className="h-[330px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    data={eventDashboardRows.map((row) => ({
+                    data={filteredEventDashboardRows.map((row) => ({
                       name: shortCampaign(row.name),
                       percentual: Number(row.engajPct.toFixed(1)),
                     }))}

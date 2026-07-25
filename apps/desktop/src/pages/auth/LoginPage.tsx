@@ -51,7 +51,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [step2fa, setStep2fa] = useState(false);
   const [tempToken2fa, setTempToken2fa] = useState("");
   const [code2fa, setCode2fa] = useState("");
-  const [devCodeHint, setDevCodeHint] = useState<string | undefined>();
 
   useEffect(() => {
     let timeoutId: number | undefined;
@@ -83,9 +82,18 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         effectiveRemember,
       );
 
-      setStep2fa(true);
-      setTempToken2fa(result.tempToken);
-      setDevCodeHint(result.devCodeHint);
+      if (result.requires2fa) {
+        setStep2fa(true);
+        setTempToken2fa(result.tempToken);
+        setIsSubmitting(false);
+        return;
+      }
+
+      if ("session" in result && result.session) {
+        const session = result.session as AuthSession;
+        onLogin(session, effectiveRemember);
+        navigate(roleRoutes[session.user.role]);
+      }
     } catch (error) {
       setLoginError(
         error instanceof Error ? error.message : "Não foi possível entrar",
@@ -155,11 +163,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                 <p className="text-sm text-gray-500">
                   Enviamos um código de 6 dígitos para o e-mail <strong>{email}</strong>.
                 </p>
-                {devCodeHint && (
-                  <div className="mt-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-                    💡 Modo Dev (Código em memória): <strong>{devCodeHint}</strong>
-                  </div>
-                )}
               </div>
             ) : (
               <div>
