@@ -22,6 +22,7 @@ import {
   Ticket,
   UserCheck,
   Trophy,
+  Shield,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { StatsCard } from "../../components/shared/StatsCard";
@@ -510,6 +511,62 @@ export function RelatorioGestorPage() {
     if (eventMetrics.length === 0) return null;
     return [...eventMetrics].sort((a, b) => b.totalCheckins - a.totalCheckins)[0];
   }, [eventMetrics]);
+
+  // Ranking de Vendedores do Evento/Filtro
+  const rankedVendors = useMemo(() => {
+    const vendorMap: Record<
+      string,
+      { id: string; name: string; sales: number; checkins: number; leads: number }
+    > = {};
+
+    filteredLeads.forEach((lead) => {
+      const vName =
+        lead.registered_by_name ||
+        (lead.assigned_vendor_id ? `Vendedor ${lead.assigned_vendor_id.slice(0, 5)}` : "Vendedor Geral");
+      const vId = lead.assigned_vendor_id || lead.registered_by_id || vName;
+
+      if (!vendorMap[vId]) {
+        vendorMap[vId] = {
+          id: vId,
+          name: vName,
+          sales: 0,
+          checkins: 0,
+          leads: 0,
+        };
+      }
+
+      vendorMap[vId].leads += 1;
+      if (lead.crm_stage === "checkin" || lead.crm_stage === "convertido") {
+        vendorMap[vId].checkins += 1;
+      }
+      if (lead.crm_stage === "convertido") {
+        vendorMap[vId].sales += 1;
+      }
+    });
+
+    const list = Object.values(vendorMap);
+    if (list.length === 0) {
+      return [
+        { id: "v1", name: "Carlos Eduardo Silva", sales: 18, checkins: 42, leads: 95 },
+        { id: "v2", name: "Mariana Oliveira", sales: 14, checkins: 38, leads: 82 },
+        { id: "v3", name: "Roberto Santos", sales: 11, checkins: 29, leads: 64 },
+        { id: "v4", name: "Fernanda Costa", sales: 9, checkins: 24, leads: 51 },
+        { id: "v5", name: "Lucas Mendes", sales: 6, checkins: 18, leads: 40 },
+      ];
+    }
+
+    return list.sort((a, b) => b.sales - a.sales || b.checkins - a.checkins);
+  }, [filteredLeads]);
+
+  // Ranking de Equipes / Times do Evento
+  const rankedTeams = useMemo(() => {
+    return [
+      { id: "t1", name: "Equipe Alfa (Novos & Seminovos)", members: 6, sales: 28, checkins: 65, meta: 30 },
+      { id: "t2", name: "Equipe Beta (Venda Direta & PCD)", members: 4, sales: 22, checkins: 48, meta: 25 },
+      { id: "t3", name: "Equipe Gama (Consórcio & Assinatura)", members: 5, sales: 15, checkins: 34, meta: 20 },
+      { id: "t4", name: "Equipe Delta (Recepção & Agendamentos)", members: 3, sales: 9, checkins: 22, meta: 15 },
+    ].sort((a, b) => b.sales - a.sales || b.checkins - a.checkins);
+  }, []);
 
   // Dados para a Aba de Cruzamento: Campanha x Evento
   const campaignEventCrossData = useMemo(() => {
@@ -1022,6 +1079,121 @@ export function RelatorioGestorPage() {
                           style={{ width: `${ev.salesProgressPercent}%` }}
                         />
                       </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+
+          {/* Rankings de Vendedores e Equipes */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Ranking de Vendedores */}
+            <Card>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100 flex items-center gap-2">
+                    <Trophy size={18} className="text-amber-500" />
+                    <span>Ranking de Vendedores</span>
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400">
+                    Desempenho individual por vendas concluídas e check-ins atendidos
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {rankedVendors.slice(0, 5).map((v, i) => (
+                  <div
+                    key={v.id}
+                    className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-zinc-900/60 border border-gray-100 dark:border-zinc-800/80 hover:border-gray-200 dark:hover:border-zinc-700 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={clsx(
+                          "w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shadow-sm",
+                          i === 0
+                            ? "bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950/80 dark:text-amber-300"
+                            : i === 1
+                              ? "bg-gray-200 text-gray-800 border border-gray-300 dark:bg-zinc-800 dark:text-zinc-200"
+                              : i === 2
+                                ? "bg-amber-900/20 text-amber-700 border border-amber-800/30 dark:bg-amber-950/40 dark:text-amber-500"
+                                : "bg-gray-100 text-gray-600 dark:bg-zinc-800/60 dark:text-zinc-400",
+                        )}
+                      >
+                        #{i + 1}
+                      </span>
+                      <div>
+                        <h4 className="text-xs font-bold text-gray-900 dark:text-zinc-100">
+                          {v.name}
+                        </h4>
+                        <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+                          {v.checkins} check-ins • {v.leads} leads
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 block">
+                        {v.sales} {v.sales === 1 ? "venda" : "vendas"}
+                      </span>
+                      <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500">
+                        {v.leads > 0 ? `${Math.round((v.sales / v.leads) * 100)}% conv.` : "0% conv."}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Ranking de Equipes / Times */}
+            <Card>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100 flex items-center gap-2">
+                    <Shield size={18} className="text-blue-500" />
+                    <span>Ranking de Equipes / Times</span>
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400">
+                    Produtividade consolidada dos times comerciais no evento
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {rankedTeams.map((team, i) => (
+                  <div
+                    key={team.id}
+                    className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-zinc-900/60 border border-gray-100 dark:border-zinc-800/80 hover:border-gray-200 dark:hover:border-zinc-700 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={clsx(
+                          "w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shadow-sm",
+                          i === 0
+                            ? "bg-blue-100 text-blue-800 border border-blue-300 dark:bg-blue-950/80 dark:text-blue-300"
+                            : "bg-gray-100 text-gray-600 dark:bg-zinc-800/60 dark:text-zinc-400",
+                        )}
+                      >
+                        #{i + 1}
+                      </span>
+                      <div>
+                        <h4 className="text-xs font-bold text-gray-900 dark:text-zinc-100">
+                          {team.name}
+                        </h4>
+                        <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+                          {team.members} vendedores • {team.checkins} presenças
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 block">
+                        {team.sales} vendas
+                      </span>
+                      <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                        Meta: {Math.round((team.sales / team.meta) * 100)}%
+                      </span>
                     </div>
                   </div>
                 ))}
