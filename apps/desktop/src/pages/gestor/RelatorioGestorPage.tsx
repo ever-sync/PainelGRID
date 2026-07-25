@@ -453,6 +453,8 @@ export function RelatorioGestorPage() {
   ).length;
   const taxaConversao =
     totalLeads > 0 ? Math.round((leadsConvertidos / totalLeads) * 100) : 0;
+  const taxaCheckinGeral =
+    totalLeads > 0 ? Math.round((leadsCheckin / totalLeads) * 100) : 0;
 
   // Dados do gráfico de funil baseados nas etapas REAIS do CRM
   const crmFunnelData = useMemo(() => {
@@ -549,6 +551,7 @@ export function RelatorioGestorPage() {
       const valorTotalVendas = evVendas * ticketMedio;
       const cac = evVendas > 0 ? Math.round(valorInvestido / evVendas) : 0;
       const nomeResumido = ev.name.length > 20 ? `${ev.name.slice(0, 20)}...` : ev.name;
+      const taxaCheckin = evLeads.length > 0 ? Math.round((evCheckins / evLeads.length) * 100) : 0;
 
       return {
         ...ev,
@@ -563,6 +566,7 @@ export function RelatorioGestorPage() {
         valorInvestido,
         valorTotalVendas,
         cac,
+        taxaCheckin,
       };
     });
   }, [availableEvents, leads]);
@@ -856,6 +860,7 @@ export function RelatorioGestorPage() {
               value={leadsCheckin}
               icon={<UserCheck size={20} />}
               iconColor="bg-purple-100 text-purple-600"
+              subtitle={`Taxa Comparecimento: ${taxaCheckinGeral}%`}
             />
             <StatsCard
               title="Vendas / Conversões"
@@ -1361,6 +1366,7 @@ export function RelatorioGestorPage() {
                     <th className="pb-3 px-3">Valor Investido</th>
                     <th className="pb-3 px-3">Leads Total</th>
                     <th className="pb-3 px-3">Check-ins</th>
+                    <th className="pb-3 px-3">Taxa Check-in</th>
                     <th className="pb-3 px-3">Quantas Compraram</th>
                     <th className="pb-3 px-3">Valor Total Vendas</th>
                     <th className="pb-3 px-3">CAC</th>
@@ -1383,6 +1389,11 @@ export function RelatorioGestorPage() {
                       </td>
                       <td className="py-3 px-3 text-purple-600 font-bold">
                         {ev.totalCheckins}
+                      </td>
+                      <td className="py-3 px-3 font-mono">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-900">
+                          {ev.taxaCheckin}%
+                        </span>
                       </td>
                       <td className="py-3 px-3 text-emerald-600 font-bold">
                         {ev.totalVendas}
