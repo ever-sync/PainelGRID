@@ -3,9 +3,9 @@
   "name": "GRID Recepção - Check-in",
   "icons": [
     {
-      "src": "/logo-Dd199j6p.png",
+      "src": "/logo.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "1069x1069"
     }
   ],
   "start_url": "/recepcao/check-in",
