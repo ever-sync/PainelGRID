@@ -12,6 +12,8 @@ import {
   CheckCircle2,
   Clock,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   LayoutDashboard,
   Megaphone,
   GitCompare,
@@ -76,6 +78,15 @@ export function RelatorioGestorPage() {
   // Filtros seletores superiores do lado direito
   const [selectedClientId, setSelectedClientId] = useState<string>("all");
   const [selectedEventId, setSelectedEventId] = useState<string>("all");
+
+  // Estado da Paginação dos Leads
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+
+  // Reseta paginação para 1 quando os seletores mudarem
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedClientId, selectedEventId]);
 
   useEffect(() => {
     setIsDarkMode(readDashboardDarkEnabled(user.id));
@@ -262,18 +273,29 @@ export function RelatorioGestorPage() {
   const sourcePieData = useMemo(() => {
     const map: Record<string, number> = {};
     filteredLeads.forEach((l) => {
-      const srcName =
-        l.source === "facebook_ads"
-          ? "Facebook Ads"
-          : l.source === "whatsapp"
-            ? "WhatsApp"
-            : l.source === "form_page"
-              ? "Formulário"
-              : "Outros";
+      const srcRaw = (l.source || "").toLowerCase();
+      let srcName = "Outros Canais";
+      if (srcRaw.includes("facebook") || srcRaw.includes("meta") || srcRaw.includes("ig") || srcRaw === "facebook_ads") {
+        srcName = "Facebook Ads (Meta)";
+      } else if (srcRaw.includes("whatsapp")) {
+        srcName = "WhatsApp Direct";
+      } else if (srcRaw.includes("form") || srcRaw.includes("site") || srcRaw.includes("web") || srcRaw === "form_page") {
+        srcName = "Formulário Web";
+      } else if (srcRaw.includes("manual") || srcRaw.includes("balcao")) {
+        srcName = "Manual / Balcão";
+      }
       map[srcName] = (map[srcName] || 0) + 1;
     });
     return Object.entries(map).map(([name, value]) => ({ name, value }));
   }, [filteredLeads]);
+
+  // Cálculos da Paginação da Tabela de Leads
+  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, filteredLeads.length);
+  const paginatedLeads = useMemo(() => {
+    return filteredLeads.slice(startIndex, startIndex + pageSize);
+  }, [filteredLeads, startIndex, pageSize]);
 
   // Dados para a Aba de Eventos
   const eventMetrics = useMemo(() => {
@@ -576,7 +598,7 @@ export function RelatorioGestorPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50 dark:divide-zinc-800/60">
-                    {filteredLeads.slice(0, 15).map((l) => {
+                    {paginatedLeads.map((l) => {
                       const clientObj = clients.find((c) => c.id === l.client_id);
                       return (
                         <tr
@@ -592,8 +614,16 @@ export function RelatorioGestorPage() {
                           <td className="py-3 px-3 text-gray-700 dark:text-zinc-300 font-medium">
                             {clientObj?.company_name ?? "Não informada"}
                           </td>
-                          <td className="py-3 px-3 text-gray-600 dark:text-zinc-400 capitalize">
-                            {l.source === "facebook_ads" ? "Facebook Ads" : l.source}
+                          <td className="py-3 px-3 text-gray-600 dark:text-zinc-400 font-medium">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300">
+                              {l.source === "facebook_ads"
+                                ? "Facebook Ads"
+                                : l.source === "whatsapp"
+                                  ? "WhatsApp"
+                                  : l.source === "form_page"
+                                    ? "Formulário Web"
+                                    : l.source || "Outros"}
+                            </span>
                           </td>
                           <td className="py-3 px-3">
                             <span
@@ -606,7 +636,7 @@ export function RelatorioGestorPage() {
                                     : "bg-gray-100 text-gray-700 border border-gray-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700",
                               )}
                             >
-                              {l.crm_stage}
+                              {l.crm_stage_name || l.crm_stage}
                             </span>
                           </td>
                           <td className="py-3 px-3 text-gray-500 dark:text-zinc-400">
@@ -617,6 +647,65 @@ export function RelatorioGestorPage() {
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* Rodapé de Paginação */}
+            {filteredLeads.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
+                <div className="text-gray-500 dark:text-zinc-400">
+                  Exibindo <span className="font-semibold text-gray-900 dark:text-zinc-100">{startIndex + 1}</span> a{" "}
+                  <span className="font-semibold text-gray-900 dark:text-zinc-100">{endIndex}</span> de{" "}
+                  <span className="font-semibold text-gray-900 dark:text-zinc-100">{filteredLeads.length}</span> leads
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 text-gray-500 dark:text-zinc-400">
+                    <span>Leads por página:</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      className={clsx(
+                        "px-2 py-1 rounded-lg text-xs font-semibold border cursor-pointer focus:outline-none",
+                        isDarkMode
+                          ? "bg-zinc-900 border-zinc-700 text-zinc-100"
+                          : "bg-white border-gray-200 text-gray-800",
+                      )}
+                    >
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      className="p-1.5 rounded-lg border border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+                      title="Página Anterior"
+                    >
+                      <ChevronLeft size={15} />
+                    </button>
+                    <span className="px-2 font-semibold text-gray-700 dark:text-zinc-300">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={currentPage >= totalPages}
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      className="p-1.5 rounded-lg border border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+                      title="Próxima Página"
+                    >
+                      <ChevronRight size={15} />
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </Card>
