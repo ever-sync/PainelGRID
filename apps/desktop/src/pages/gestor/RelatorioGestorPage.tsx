@@ -18,6 +18,7 @@ import {
   Layers,
   Award,
   Ticket,
+  UserCheck,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { StatsCard } from "../../components/shared/StatsCard";
@@ -185,7 +186,10 @@ export function RelatorioGestorPage() {
   // Métricas calculadas
   const totalLeads = filteredLeads.length;
   const leadsAgendados = filteredLeads.filter(
-    (l) => l.crm_stage === "agendado" || l.crm_stage === "checkin",
+    (l) => l.crm_stage === "agendado" || l.crm_stage === "checkin" || l.crm_stage === "convertido",
+  ).length;
+  const leadsCheckin = filteredLeads.filter(
+    (l) => l.crm_stage === "checkin" || l.crm_stage === "convertido",
   ).length;
   const leadsConvertidos = filteredLeads.filter(
     (l) => l.crm_stage === "convertido",
@@ -372,7 +376,7 @@ export function RelatorioGestorPage() {
       {activeTab === "visao_geral" && (
         <div className="space-y-6">
           {/* Cards de Estatísticas Principais */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             <StatsCard
               title="Total de Leads"
               value={totalLeads}
@@ -386,6 +390,12 @@ export function RelatorioGestorPage() {
               value={leadsAgendados}
               icon={<Clock size={20} />}
               iconColor="bg-amber-100 text-amber-600"
+            />
+            <StatsCard
+              title="Check-ins Realizados"
+              value={leadsCheckin}
+              icon={<UserCheck size={20} />}
+              iconColor="bg-purple-100 text-purple-600"
             />
             <StatsCard
               title="Vendas / Conversões"
