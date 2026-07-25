@@ -22,7 +22,7 @@ import {
   type EventDashboardTvResponse,
   type ExecutiveReportResponse,
 } from "../../services/events";
-import { listLeads, mapApiLeadToLead } from "../../services/leads";
+import { fetchAllLeads, mapApiLeadToLead } from "../../services/leads";
 import {
   getMetaCampaignsReport,
   type MetaCampaignsReportItem,
@@ -163,18 +163,16 @@ export function RelatorioExecutivoPage() {
       .catch(() => setClients([]));
   }, []);
 
-  // Carrega eventos + campanhas do cliente selecionado
+  // Carrega eventos do cliente selecionado ("all" = todos os clientes do gestor)
   useEffect(() => {
     const token = readStoredSession()?.accessToken;
     if (!token || !selectedClientId) return;
     setLoading(true);
-    Promise.all([
-      listEvents({ client_id: selectedClientId }, token),
-      getMetaCampaignsReport(selectedClientId, token).catch(() => ({
-        campaigns: [],
-      })),
-    ])
-      .then(([apiEvents, meta]) => {
+    listEvents(
+      selectedClientId === "all" ? {} : { client_id: selectedClientId },
+      token,
+    )
+      .then((apiEvents) => {
         const mapped = apiEvents.map(mapApiEventToEvent);
         mapped.sort(
           (a, b) =>
@@ -185,20 +183,21 @@ export function RelatorioExecutivoPage() {
           if (prev && mapped.some((e) => e.id === prev)) return prev;
           return mapped[0]?.id || "";
         });
-        setCampaigns(
-          (meta as { campaigns?: MetaCampaignsReportItem[] }).campaigns ?? [],
-        );
       })
+      .catch(() => setEvents([]))
       .finally(() => setLoading(false));
   }, [selectedClientId]);
 
-  // Carrega snapshot + relatório executivo + leads do evento selecionado
+  // Carrega snapshot + relatório executivo + leads + campanhas do evento.
+  // As campanhas do Meta são buscadas para TODOS os clientes participantes do
+  // evento (um evento pode ser compartilhado por 2+ clientes) e mescladas.
   useEffect(() => {
     const token = readStoredSession()?.accessToken;
     if (!token || !selectedEventId) {
       setTv(null);
       setExec(null);
       setEventLeads([]);
+      setCampaigns([]);
       return;
     }
     getEventDashboardTv(selectedEventId, token)
@@ -207,10 +206,32 @@ export function RelatorioExecutivoPage() {
     getEventExecutiveReport(selectedEventId, token)
       .then(setExec)
       .catch(() => setExec(null));
-    listLeads({ event_id: selectedEventId, take: 2000 }, token)
+    fetchAllLeads({ event_id: selectedEventId }, token, { maxItems: 3000 })
       .then((rows) => setEventLeads(rows.map(mapApiLeadToLead)))
       .catch(() => setEventLeads([]));
-  }, [selectedEventId]);
+
+    const ev = events.find((e) => e.id === selectedEventId);
+    const clientIds =
+      ev && ev.participant_client_ids.length > 0
+        ? ev.participant_client_ids
+        : ev
+          ? [ev.client_id]
+          : selectedClientId !== "all"
+            ? [selectedClientId]
+            : [];
+    Promise.all(
+      clientIds.map((cid) =>
+        getMetaCampaignsReport(cid, token).catch(() => ({ campaigns: [] })),
+      ),
+    )
+      .then((reports) => {
+        const merged = reports.flatMap(
+          (r) => (r as { campaigns?: MetaCampaignsReportItem[] }).campaigns ?? [],
+        );
+        setCampaigns(merged);
+      })
+      .catch(() => setCampaigns([]));
+  }, [selectedEventId, events, selectedClientId]);
 
   const report = useMemo(
     () => buildReport(tv, exec, campaigns, eventLeads),
@@ -243,10 +264,13 @@ export function RelatorioExecutivoPage() {
               value={selectedClientId}
               onChange={setSelectedClientId}
               dark={isDark}
-              options={clients.map((c) => ({
-                value: c.id,
-                label: c.company_name,
-              }))}
+              options={[
+                { value: "all", label: "🌐 Todos os clientes" },
+                ...clients.map((c) => ({
+                  value: c.id,
+                  label: c.company_name,
+                })),
+              ]}
               placeholder="Cliente"
             />
             <Selector
@@ -458,12 +482,16 @@ function buildReport(
     sold: 0,
   };
 
-  const investimento = campaigns.reduce((s, c) => s + (c.spend || 0), 0);
+  const metaSpend = campaigns.reduce((s, c) => s + (c.spend || 0), 0);
+  // Prefere o investimento declarado no evento; cai para o gasto do Meta.
+  const investimento = exec?.investment?.total ?? metaSpend;
+  const paidTraffic = exec?.investment?.paid_traffic ?? metaSpend;
+  const investimentoDeclarado = exec?.investment?.total != null;
   const leadsMidia = campaigns.reduce((s, c) => s + (c.leads || 0), 0);
   const impressoes = campaigns.reduce((s, c) => s + (c.impressions || 0), 0);
   const conversas = campaigns.reduce((s, c) => s + (c.conversations || 0), 0);
   const alcance = campaigns.reduce((s, c) => s + (c.reach || 0), 0);
-  const cplMedio = leadsMidia > 0 ? investimento / leadsMidia : 0;
+  const cplMedio = leadsMidia > 0 ? paidTraffic / leadsMidia : 0;
 
   const faturamento = tv ? Number(tv.cars.total_value) || 0 : 0;
   const veiculos = f.sold;
@@ -636,6 +664,9 @@ function buildReport(
   return {
     funnel: f,
     investimento,
+    metaSpend,
+    paidTraffic,
+    investimentoDeclarado,
     leadsMidia,
     impressoes,
     conversas,
@@ -887,6 +918,7 @@ function ExecutiveSummary({
           label="Investimento Total"
           value={formatCurrency(report.investimento)}
           isDark={isDark}
+          est={!report.investimentoDeclarado}
         />
         <BigStat
           label="Faturamento Gerado"
@@ -938,15 +970,25 @@ function ExecutiveSummary({
           em faturamento.
         </p>
       </div>
-      <p
+      <div
         className={clsx(
-          "mt-3 text-[11px]",
-          isDark ? "text-zinc-600" : "text-zinc-400",
+          "mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px]",
+          isDark ? "text-zinc-500" : "text-zinc-400",
         )}
       >
-        Lucro estimado com margens por segmento — 0km 5% · Seminovo 12% · Venda
-        Direta 3% · PcD 5%.
-      </p>
+        <span>
+          Investimento em tráfego pago:{" "}
+          <strong className={isDark ? "text-zinc-300" : "text-zinc-600"}>
+            {formatCurrency(report.paidTraffic)}
+          </strong>
+          {report.investimento > 0 &&
+            ` (${formatNumber((report.paidTraffic / report.investimento) * 100)}% do total)`}
+        </span>
+        <span>
+          Lucro estimado com margens por segmento — 0km 5% · Seminovo 12% · Venda
+          Direta 3% · PcD 5%.
+        </span>
+      </div>
     </div>
   );
 }
@@ -1021,7 +1063,7 @@ function CampaignsMediaTable({
           ))}
           <tr className={t.totalRow}>
             <td className={t.td}>TOTAL</td>
-            <td className={t.td}>{formatCurrency(report.investimento)}</td>
+            <td className={t.td}>{formatCurrency(report.metaSpend)}</td>
             <td className={t.td}>{formatNumber(report.leadsMidia)}</td>
             <td className={t.td}>{formatCurrency(report.cplMedio, 2)}</td>
             <td className={t.td}>{formatNumber(report.conversas)}</td>

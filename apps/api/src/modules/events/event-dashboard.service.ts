@@ -527,6 +527,8 @@ export class EventDashboardService {
         id: true,
         client_id: true,
         event_date: true,
+        total_investment: true,
+        paid_traffic_investment: true,
         participants: { select: { client_id: true } },
       },
     });
@@ -724,6 +726,13 @@ export class EventDashboardService {
 
     return {
       event_id: eventId,
+      investment: {
+        total: event.total_investment != null ? Number(event.total_investment) : null,
+        paid_traffic:
+          event.paid_traffic_investment != null
+            ? Number(event.paid_traffic_investment)
+            : null,
+      },
       attribution,
       attribution_coverage: {
         attributed_leads: attributedLeadCount,

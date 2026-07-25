@@ -6,6 +6,7 @@
   "scripts": {
     "prebuild": "rimraf dist && prisma generate",
     "build": "nest build",
+    "predev": "prisma generate && nest build",
     "dev": "nest start --watch",
     "start": "node dist/main",
     "start:debug": "nest start --debug --watch",

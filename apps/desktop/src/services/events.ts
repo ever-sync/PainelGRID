@@ -17,6 +17,8 @@ export type ApiEvent = {
   capacity: number | null;
   sales_target: number | null;
   require_wristband?: boolean;
+  total_investment?: number | null;
+  paid_traffic_investment?: number | null;
   status: EventStatus;
   cover_image_url: string | null;
   image_urls: string[];
@@ -59,6 +61,8 @@ export type CreateEventPayload = {
   capacity?: number;
   sales_target?: number;
   require_wristband?: boolean;
+  total_investment?: number;
+  paid_traffic_investment?: number;
   status?: EventStatus;
   cover_image_url?: string;
   image_urls?: string[];
@@ -226,6 +230,8 @@ export function mapApiEventToEvent(row: ApiEvent): Event {
     capacity: row.capacity,
     sales_target: row.sales_target ?? null,
     require_wristband: row.require_wristband ?? false,
+    total_investment: row.total_investment ?? null,
+    paid_traffic_investment: row.paid_traffic_investment ?? null,
     status: row.status,
     cover_image_url: row.cover_image_url,
     image_urls: row.image_urls ?? [],
@@ -242,6 +248,10 @@ export function mapApiEventToEvent(row: ApiEvent): Event {
 
 export type ExecutiveReportResponse = {
   event_id: string;
+  investment: {
+    total: number | null;
+    paid_traffic: number | null;
+  };
   attribution: Array<{
     meta_campaign_id: string;
     name: string;

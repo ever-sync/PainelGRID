@@ -7,6 +7,7 @@ import {
   IsDateString,
   IsEnum,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   IsUrl,
@@ -71,6 +72,18 @@ export class UpdateEventDto {
   @IsOptional()
   @IsBoolean()
   require_wristband?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  total_investment?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  paid_traffic_investment?: number | null;
 
   @IsOptional()
   @IsEnum(EventStatus)

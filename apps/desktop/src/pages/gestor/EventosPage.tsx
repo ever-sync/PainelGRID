@@ -4,6 +4,8 @@ import clsx from "clsx";
 import {
   CalendarDays,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   MapPin,
   PencilLine,
   Plus,
@@ -152,6 +154,15 @@ export function EventosPage() {
     Record<string, number>
   >({});
 
+  // Estado da Paginação da Tabela de Eventos
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+
+  // Reseta a paginação para 1 quando os filtros ou busca alterarem
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, selectedClientFilter, statusFilter, periodFilter]);
+
   // ── Form state (modal de criação/edição) ────────────────────────────────────
   const [formTab, setFormTab] = useState<
     "dados" | "datas" | "local" | "participantes"
@@ -162,6 +173,8 @@ export function EventosPage() {
   const [formLaunchDate, setFormLaunchDate] = useState("");
   const [formStatus, setFormStatus] = useState<Event["status"]>("draft");
   const [formRequireWristband, setFormRequireWristband] = useState(false);
+  const [formTotalInvestment, setFormTotalInvestment] = useState("");
+  const [formPaidTraffic, setFormPaidTraffic] = useState("");
   const [formDays, setFormDays] = useState<
     Array<{ start: string; end: string }>
   >([{ start: "", end: "" }]);
@@ -327,6 +340,14 @@ export function EventosPage() {
     clients,
   ]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredEvents.length / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, filteredEvents.length);
+
+  const paginatedEvents = useMemo(() => {
+    return filteredEvents.slice(startIndex, startIndex + pageSize);
+  }, [filteredEvents, startIndex, pageSize]);
+
   const selectedEvent =
     filteredEvents.find((event) => event.id === selectedEventId) ??
     filteredEvents[0] ??
@@ -406,6 +427,14 @@ export function EventosPage() {
     setFormLaunchDate(ev?.launch_date ? ev.launch_date.slice(0, 10) : "");
     setFormStatus(ev?.status ?? "draft");
     setFormRequireWristband(ev?.require_wristband ?? false);
+    setFormTotalInvestment(
+      ev?.total_investment != null ? String(ev.total_investment) : "",
+    );
+    setFormPaidTraffic(
+      ev?.paid_traffic_investment != null
+        ? String(ev.paid_traffic_investment)
+        : "",
+    );
     let daysToSet: Array<{ start: string; end: string }> = [
       { start: "", end: "" },
     ];
@@ -651,6 +680,12 @@ export function EventosPage() {
       location: locationParts.join(", ") || undefined,
       status: formStatus,
       require_wristband: formRequireWristband,
+      total_investment: formTotalInvestment.trim()
+        ? Number(formTotalInvestment.replace(",", "."))
+        : undefined,
+      paid_traffic_investment: formPaidTraffic.trim()
+        ? Number(formPaidTraffic.replace(",", "."))
+        : undefined,
     };
 
     setEventSaving(true);
@@ -984,7 +1019,7 @@ export function EventosPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredEvents.map((event) => {
+                {paginatedEvents.map((event) => {
                   const tone = getStatusTone(event.status);
                   return (
                     <tr
@@ -1077,6 +1112,82 @@ export function EventosPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Barra de Paginação da Tabela de Eventos */}
+          {filteredEvents.length > 0 && (
+            <div
+              className={clsx(
+                "flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3 border-t text-xs",
+                isDarkMode ? "border-zinc-800 text-zinc-400 bg-[#0f0f0f]" : "border-zinc-100 text-zinc-600 bg-zinc-50/50",
+              )}
+            >
+              <div>
+                <span>
+                  Mostrando <strong className={isDarkMode ? "text-zinc-200" : "text-zinc-900"}>{startIndex + 1}</strong> a{" "}
+                  <strong className={isDarkMode ? "text-zinc-200" : "text-zinc-900"}>{endIndex}</strong> de{" "}
+                  <strong className={isDarkMode ? "text-zinc-200" : "text-zinc-900"}>{filteredEvents.length}</strong> eventos
+                </span>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <span>Itens por página:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className={clsx(
+                      "px-2 py-1 rounded-lg text-xs font-semibold border outline-none cursor-pointer transition-colors",
+                      isDarkMode
+                        ? "bg-[#18181b] border-zinc-700 text-zinc-200"
+                        : "bg-white border-zinc-200 text-zinc-800",
+                    )}
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    className={clsx(
+                      "p-1.5 rounded-lg border text-xs font-semibold disabled:opacity-30 disabled:cursor-not-allowed transition-colors",
+                      isDarkMode
+                        ? "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                        : "border-zinc-200 text-zinc-700 hover:bg-zinc-100",
+                    )}
+                    title="Página Anterior"
+                  >
+                    <ChevronLeft size={15} />
+                  </button>
+                  <span className={clsx("px-2 font-semibold", isDarkMode ? "text-zinc-200" : "text-zinc-800")}>
+                    Página {currentPage} de {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    className={clsx(
+                      "p-1.5 rounded-lg border text-xs font-semibold disabled:opacity-30 disabled:cursor-not-allowed transition-colors",
+                      isDarkMode
+                        ? "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                        : "border-zinc-200 text-zinc-700 hover:bg-zinc-100",
+                    )}
+                    title="Próxima Página"
+                  >
+                    <ChevronRight size={15} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </Card>
 
         <Drawer
@@ -1782,6 +1893,54 @@ export function EventosPage() {
                   <option value="false">Não</option>
                   <option value="true">Sim</option>
                 </select>
+              </div>
+              <div>
+                <label
+                  className={clsx(
+                    "mb-1 block text-sm font-medium",
+                    isDarkMode ? "text-zinc-300" : "text-gray-700",
+                  )}
+                >
+                  Investimento total no evento (R$)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={formTotalInvestment}
+                  onChange={(e) => setFormTotalInvestment(e.target.value)}
+                  placeholder="Ex: 82300"
+                  className={clsx(
+                    "w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400",
+                    isDarkMode
+                      ? "border-zinc-700 bg-[#111111] text-zinc-100"
+                      : "border-gray-300 bg-white",
+                  )}
+                />
+              </div>
+              <div>
+                <label
+                  className={clsx(
+                    "mb-1 block text-sm font-medium",
+                    isDarkMode ? "text-zinc-300" : "text-gray-700",
+                  )}
+                >
+                  Desse valor, quanto foi para tráfego pago (R$)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={formPaidTraffic}
+                  onChange={(e) => setFormPaidTraffic(e.target.value)}
+                  placeholder="Ex: 17800"
+                  className={clsx(
+                    "w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400",
+                    isDarkMode
+                      ? "border-zinc-700 bg-[#111111] text-zinc-100"
+                      : "border-gray-300 bg-white",
+                  )}
+                />
               </div>
             </div>
           )}

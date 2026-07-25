@@ -7,6 +7,7 @@ import {
   IsDateString,
   IsEnum,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   IsUrl,
@@ -73,6 +74,20 @@ export class CreateEventDto {
   @IsOptional()
   @IsBoolean()
   require_wristband?: boolean;
+
+  /** Valor total investido no evento (R$). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  total_investment?: number;
+
+  /** Parte do investimento destinada a tráfego pago (R$). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  paid_traffic_investment?: number;
 
   @IsOptional()
   @IsEnum(EventStatus)

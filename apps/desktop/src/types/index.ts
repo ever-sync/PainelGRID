@@ -141,6 +141,8 @@ export interface Event {
   capacity: number | null;
   sales_target: number | null;
   require_wristband?: boolean;
+  total_investment?: number | null;
+  paid_traffic_investment?: number | null;
   status: EventStatus;
   cover_image_url?: string | null;
   image_urls: string[];

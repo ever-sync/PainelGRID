@@ -22,6 +22,8 @@ type EventRow = {
   capacity: number | null;
   sales_target: number | null;
   require_wristband: boolean;
+  total_investment: Prisma.Decimal | null;
+  paid_traffic_investment: Prisma.Decimal | null;
   status: EventStatus;
   cover_image_url: string | null;
   image_urls: string[];
@@ -167,6 +169,10 @@ export class EventsService {
       capacity: row.capacity,
       sales_target: row.sales_target,
       require_wristband: row.require_wristband ?? false,
+      total_investment:
+        row.total_investment != null ? Number(row.total_investment) : null,
+      paid_traffic_investment:
+        row.paid_traffic_investment != null ? Number(row.paid_traffic_investment) : null,
       status: row.status,
       cover_image_url: row.cover_image_url,
       image_urls: row.image_urls,
@@ -320,6 +326,8 @@ export class EventsService {
         capacity: dto.capacity ?? null,
         sales_target: dto.sales_target ?? null,
         require_wristband: dto.require_wristband ?? false,
+        total_investment: dto.total_investment ?? null,
+        paid_traffic_investment: dto.paid_traffic_investment ?? null,
         status: dto.status ?? EventStatus.draft,
         cover_image_url: dto.cover_image_url?.trim() || null,
         image_urls: dto.image_urls ?? [],
@@ -397,6 +405,10 @@ export class EventsService {
         capacity: dto.capacity ?? undefined,
         sales_target: dto.sales_target !== undefined ? dto.sales_target : undefined,
         require_wristband: dto.require_wristband !== undefined ? dto.require_wristband : undefined,
+        total_investment:
+          dto.total_investment !== undefined ? dto.total_investment : undefined,
+        paid_traffic_investment:
+          dto.paid_traffic_investment !== undefined ? dto.paid_traffic_investment : undefined,
         status: dto.status ?? undefined,
         cover_image_url:
           dto.cover_image_url !== undefined ? dto.cover_image_url.trim() || null : undefined,
