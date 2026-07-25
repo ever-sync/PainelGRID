@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiHeader, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '../../common/decorators';
 import { CrmService } from '../crm/crm.service';
 import { MoveLeadBySuffixDto } from '../crm/dto/move-lead-by-suffix.dto';
@@ -29,6 +30,7 @@ import { RubinhoService } from '../rubinho/rubinho.service';
 @Controller('integrations/v1')
 @Public()
 @UseGuards(IntegrationKeyGuard)
+@Throttle({ default: { limit: 600, ttl: 60000 } })
 @ApiHeader({ name: 'X-Leadflow-Integration-Key', required: true })
 export class IntegrationController {
   constructor(

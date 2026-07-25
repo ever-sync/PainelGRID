@@ -49,9 +49,14 @@ describe('ConversationsService', () => {
     clientsService = { assertGestorOwnsClient: jest.fn().mockResolvedValue(undefined) };
     realtimeEvents = { emitNewMessage: jest.fn() };
     metaService = { sendClientWhatsappMessage: jest.fn().mockResolvedValue('wamid-1') };
-    service = new ConversationsService(prisma, clientsService, realtimeEvents, metaService, {
-      dispatch: jest.fn(),
-    } as never);
+    service = new ConversationsService(
+      prisma,
+      clientsService,
+      realtimeEvents,
+      metaService,
+      { dispatch: jest.fn() } as never,
+      { upload: jest.fn(), download: jest.fn().mockResolvedValue(null) } as never,
+    );
   });
 
   // ─── findAll ─────────────────────────────────────────────────────────────

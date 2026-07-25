@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '../../common/decorators';
 import { IntegrationKeyGuard } from '../integration/integration-key.guard';
 import { AgentActionLogService } from './agent-action-log.service';
@@ -26,6 +27,7 @@ import { UpdateConversationStateDto } from './dto/update-conversation-state.dto'
 @Controller('agent')
 @Public()
 @UseGuards(IntegrationKeyGuard)
+@Throttle({ default: { limit: 600, ttl: 60000 } })
 export class AgentController {
   constructor(
     private readonly agentService: AgentService,

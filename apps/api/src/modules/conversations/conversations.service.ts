@@ -401,6 +401,8 @@ export class ConversationsService {
       },
     });
 
+    void this.storage.upload(this.mediaStorageKey(msg.id), args.fileBuffer, args.mimeType);
+
     await this.prisma.conversation.update({
       where: { id: conversationId },
       data: { last_message_at: msg.created_at },

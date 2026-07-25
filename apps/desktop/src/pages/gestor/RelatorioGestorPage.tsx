@@ -662,7 +662,6 @@ export function RelatorioGestorPage() {
 
   // Dados para a Aba de Cruzamento: Campanha x Evento
   const campaignEventCrossData = useMemo(() => {
-    const sources = ["facebook_ads", "whatsapp", "form_page", "manual"];
     return availableEvents.map((ev) => {
       const evLeads = leads.filter(
         (l) =>
@@ -673,7 +672,15 @@ export function RelatorioGestorPage() {
       const waLeads = evLeads.filter((l) => l.source === "whatsapp").length;
       const formLeads = evLeads.filter((l) => l.source === "form_page").length;
       const manualLeads = evLeads.filter((l) => l.source === "manual" || !l.source).length;
+
+      const agendados = evLeads.filter(
+        (l) => l.crm_stage === "agendado" || l.crm_stage === "checkin" || l.crm_stage === "convertido",
+      ).length;
       const vendas = evLeads.filter((l) => l.crm_stage === "convertido").length;
+
+      const valorInvestido = (ev.capacity || 100) * 150; // Orçamento alocado (ex: R$ 15.000)
+      const custoPorAgendamento = agendados > 0 ? Math.round(valorInvestido / agendados) : 0;
+      const taxaConversaoAgendamento = agendados > 0 ? Math.min(100, Math.round((vendas / agendados) * 100)) : 0;
 
       return {
         eventoId: ev.id,
@@ -683,7 +690,11 @@ export function RelatorioGestorPage() {
         whatsapp: waLeads,
         form_page: formLeads,
         manual: manualLeads,
+        agendados,
         vendas,
+        valorInvestido,
+        custoPorAgendamento,
+        taxaConversaoAgendamento,
       };
     });
   }, [availableEvents, leads]);
@@ -695,7 +706,9 @@ export function RelatorioGestorPage() {
     let form = 0;
     let manual = 0;
     let totalLeads = 0;
+    let agendados = 0;
     let vendas = 0;
+    let investido = 0;
 
     campaignEventCrossData.forEach((row) => {
       fb += row.facebook_ads;
@@ -703,11 +716,16 @@ export function RelatorioGestorPage() {
       form += row.form_page;
       manual += row.manual;
       totalLeads += row.totalLeads;
+      agendados += row.agendados;
       vendas += row.vendas;
+      investido += row.valorInvestido;
     });
 
     const topChannel =
       fb >= wa && fb >= form ? "Facebook Ads (Meta)" : wa >= form ? "WhatsApp Direct" : "Formulário Web";
+
+    const custoAgendamentoMedio = agendados > 0 ? Math.round(investido / agendados) : 0;
+    const taxaConversaoAgendamentoGlobal = agendados > 0 ? Math.round((vendas / agendados) * 100) : 0;
 
     return {
       fb,
@@ -715,9 +733,12 @@ export function RelatorioGestorPage() {
       form,
       manual,
       totalLeads,
+      agendados,
       vendas,
+      investido,
+      custoAgendamentoMedio,
+      taxaConversaoAgendamentoGlobal,
       topChannel,
-      conversionRate: totalLeads > 0 ? Math.round((vendas / totalLeads) * 100) : 0,
     };
   }, [campaignEventCrossData]);
 
@@ -1596,32 +1617,32 @@ export function RelatorioGestorPage() {
           {/* KPI Summary Cards para Atribuição Cruzada */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatsCard
-              title="Canal Principal de Origem"
-              value={crossTotals.topChannel}
-              icon={<GitCompare size={20} />}
-              subtitle="Maior captação"
-              iconColor="bg-[#FF0636]/10 text-[#FF0636]"
+              title="Custo Por Agendamento Médio"
+              value={formatCurrency(crossTotals.custoAgendamentoMedio)}
+              icon={<Target size={20} />}
+              subtitle="CPAgendamento Médio"
+              iconColor="bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400"
             />
             <StatsCard
-              title="Total Leads Atribuídos"
-              value={formatNumber(crossTotals.totalLeads)}
-              icon={<Users size={20} />}
-              subtitle="Cruzamento Ativo"
-              iconColor="bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
-            />
-            <StatsCard
-              title="Vendas de Origem Cruzada"
-              value={formatNumber(crossTotals.vendas)}
-              icon={<CheckCircle2 size={20} />}
-              subtitle="Conversões Finais"
+              title="Taxa Conversão (Venda / Agend.)"
+              value={`${crossTotals.taxaConversaoAgendamentoGlobal}%`}
+              icon={<TrendingUp size={20} />}
+              subtitle="Qtd Venda / Agendamento"
               iconColor="bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
             />
             <StatsCard
-              title="Taxa Média de Conversão"
-              value={`${crossTotals.conversionRate}%`}
-              icon={<TrendingUp size={20} />}
-              subtitle="Eficiência Global"
+              title="Agendamentos Totais"
+              value={formatNumber(crossTotals.agendados)}
+              icon={<Calendar size={20} />}
+              subtitle="Leads Agendados"
               iconColor="bg-purple-100 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400"
+            />
+            <StatsCard
+              title="Vendas Concluídas"
+              value={formatNumber(crossTotals.vendas)}
+              icon={<CheckCircle2 size={20} />}
+              subtitle="Conversões Finais"
+              iconColor="bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
             />
           </div>
 
@@ -1629,10 +1650,10 @@ export function RelatorioGestorPage() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">
-                  Matriz Cruzada: Campanha de Origem x Eventos Atribuidos
+                  Matriz Cruzada: Campanha de Origem x Eventos Atribuídos
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-zinc-400">
-                  Cruzamento direto entre o canal de origem do lead e o evento em que ele participou
+                  Cruzamento direto entre o canal de origem do lead, o volume de agendamentos e o custo por agendamento
                 </p>
               </div>
               <GitCompare size={18} className="text-[#FF0636]" />
@@ -1647,8 +1668,8 @@ export function RelatorioGestorPage() {
                 <Legend wrapperStyle={{ fontSize: "12px" }} />
                 <Bar dataKey="facebook_ads" name="Facebook Ads" fill="#FF0636" stackId="a" />
                 <Bar dataKey="whatsapp" name="WhatsApp" fill="#3b82f6" stackId="a" />
-                <Bar dataKey="form_page" name="Formulário" fill="#10b981" stackId="a" />
-                <Bar dataKey="manual" name="Manual / Outros" fill="#9ca3af" stackId="a" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="agendados" name="Agendamentos" fill="#8b5cf6" stackId="a" />
+                <Bar dataKey="vendas" name="Vendas Concluídas" fill="#10b981" stackId="a" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </Card>
@@ -1656,7 +1677,7 @@ export function RelatorioGestorPage() {
           {/* Tabela de Matriz Cruzada */}
           <Card>
             <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100 mb-4">
-              Detalhamento de Conversão: Fonte de Anúncio → Evento → Venda
+              Detalhamento de Eficiência: Campanha → Agendamento → Venda
             </h3>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
@@ -1665,40 +1686,34 @@ export function RelatorioGestorPage() {
                     <th className="pb-3 px-3">Evento</th>
                     <th className="pb-3 px-3 text-right">Facebook Ads</th>
                     <th className="pb-3 px-3 text-right">WhatsApp</th>
-                    <th className="pb-3 px-3 text-right">Formulário</th>
-                    <th className="pb-3 px-3 text-right">Manual / Outros</th>
-                    <th className="pb-3 px-3 text-right">Total Leads</th>
-                    <th className="pb-3 px-3 text-right">Vendas Finais</th>
-                    <th className="pb-3 px-3 text-right">Taxa Conversão</th>
+                    <th className="pb-3 px-3 text-right">Qtd Agendamentos</th>
+                    <th className="pb-3 px-3 text-right">Custo / Agendamento</th>
+                    <th className="pb-3 px-3 text-right">Vendas (Qtd)</th>
+                    <th className="pb-3 px-3 text-right">Taxa Conversão (Qtd / Agend.)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-zinc-800/60">
-                  {campaignEventCrossData.map((row) => {
-                    const convRate = row.totalLeads > 0 ? Math.round((row.vendas / row.totalLeads) * 100) : 0;
-
-                    return (
-                      <tr key={row.eventoId} className="hover:bg-gray-50/50 dark:hover:bg-zinc-900/50">
-                        <td className="py-3 px-3 font-semibold text-gray-900 dark:text-zinc-100">
-                          {row.eventoNome}
-                        </td>
-                        <td className="py-3 px-3 text-right text-rose-600 font-semibold">{row.facebook_ads}</td>
-                        <td className="py-3 px-3 text-right text-blue-600 font-semibold">{row.whatsapp}</td>
-                        <td className="py-3 px-3 text-right text-emerald-600 font-semibold">{row.form_page}</td>
-                        <td className="py-3 px-3 text-right text-gray-500 font-medium">{row.manual}</td>
-                        <td className="py-3 px-3 text-right font-bold text-gray-900 dark:text-zinc-100">
-                          {row.totalLeads}
-                        </td>
-                        <td className="py-3 px-3 text-right font-bold text-emerald-600">
-                          {row.vendas}
-                        </td>
-                        <td className="py-3 px-3 text-right">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900">
-                            {convRate}%
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {campaignEventCrossData.map((row) => (
+                    <tr key={row.eventoId} className="hover:bg-gray-50/50 dark:hover:bg-zinc-900/50">
+                      <td className="py-3 px-3 font-semibold text-gray-900 dark:text-zinc-100">
+                        {row.eventoNome}
+                      </td>
+                      <td className="py-3 px-3 text-right text-rose-600 font-semibold">{row.facebook_ads}</td>
+                      <td className="py-3 px-3 text-right text-blue-600 font-semibold">{row.whatsapp}</td>
+                      <td className="py-3 px-3 text-right font-bold text-purple-600">{row.agendados}</td>
+                      <td className="py-3 px-3 text-right font-mono text-rose-600 dark:text-rose-400 font-bold">
+                        {row.custoPorAgendamento > 0 ? formatCurrency(row.custoPorAgendamento) : "—"}
+                      </td>
+                      <td className="py-3 px-3 text-right font-bold text-emerald-600">
+                        {row.vendas}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900">
+                          {row.taxaConversaoAgendamento}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

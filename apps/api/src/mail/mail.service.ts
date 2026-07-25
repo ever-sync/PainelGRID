@@ -1,41 +1,54 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
 
+/**
+ * Envia e-mails via API HTTP do Resend (nao SMTP): a Railway bloqueia portas
+ * SMTP de saida (465/587) por padrao, o que fazia o envio travar ate o
+ * timeout e derrubar o login (2FA por e-mail e obrigatorio). A API HTTP nao
+ * depende dessas portas.
+ */
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private readonly transporter: nodemailer.Transporter | null = null;
+  private readonly apiKey: string;
   private readonly from: string;
   private readonly frontendUrl: string;
 
   constructor(config: ConfigService) {
-    const host = config.get<string>('SMTP_HOST', '');
-    const port = Number(config.get<string>('SMTP_PORT', '587'));
-    const secure = config.get<string>('SMTP_SECURE', 'false') === 'true';
-    const user = config.get<string>('SMTP_USER', '');
-    const pass = config.get<string>('SMTP_PASS', '');
+    this.apiKey =
+      config.get<string>('RESEND_API_KEY', '') || config.get<string>('SMTP_PASS', '');
     this.from = config.get<string>('SMTP_FROM', 'noreply@painel.grid.com.br');
     this.frontendUrl = config
       .get<string>('FRONTEND_URL', 'http://localhost:8080')
       .split(',')[0]
       .trim();
 
-    if (host && user && pass) {
-      this.transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure,
-        auth: { user, pass },
-        connectionTimeout: 10_000,
-        greetingTimeout: 10_000,
-        socketTimeout: 15_000,
-      });
-      this.logger.log(`SMTP configurado na porta ${port} (secure=${secure})`);
+    if (this.apiKey) {
+      this.logger.log('Resend (API HTTP) configurado para envio de e-mail');
     } else {
-      this.logger.warn(
-        'SMTP nao configurado completamente',
-      );
+      this.logger.warn('Resend nao configurado (RESEND_API_KEY/SMTP_PASS ausente)');
+    }
+  }
+
+  private async sendViaResend(params: { to: string; subject: string; html: string }): Promise<void> {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: this.from,
+        to: params.to,
+        subject: params.subject,
+        html: params.html,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(`Resend respondeu ${response.status}: ${body}`);
     }
   }
 
@@ -44,16 +57,16 @@ export class MailService {
     const subject = 'Bem-vindo ao PainelGRID — suas credenciais de acesso';
     const html = this.buildWelcomeHtml({ name, email: to, password, loginUrl: this.frontendUrl });
 
-    if (!this.transporter) {
-      this.logger.warn('Email de boas-vindas nao enviado: SMTP nao configurado');
+    if (!this.apiKey) {
+      this.logger.warn('Email de boas-vindas nao enviado: Resend nao configurado');
       return;
     }
 
     try {
-      await this.transporter.sendMail({ from: this.from, to, subject, html });
+      await this.sendViaResend({ to, subject, html });
       this.logger.log('Email de boas-vindas enviado');
     } catch (err) {
-      this.logger.error('Falha ao enviar email de boas-vindas');
+      this.logger.error(`Falha ao enviar email de boas-vindas: ${(err as Error).message}`);
     }
   }
 
@@ -137,19 +150,19 @@ export class MailService {
     const subject = `Código de Verificação PainelGRID: ${code}`;
     const html = this.buildTwoFactorHtml({ name, code });
 
-    if (!this.transporter) {
+    if (!this.apiKey) {
       if (process.env.NODE_ENV === 'production') {
-        throw new Error('SMTP nao configurado');
+        throw new Error('Resend nao configurado');
       }
-      this.logger.warn('Email 2FA nao enviado em desenvolvimento: SMTP nao configurado');
+      this.logger.warn('Email 2FA nao enviado em desenvolvimento: Resend nao configurado');
       return;
     }
 
     try {
-      await this.transporter.sendMail({ from: this.from, to, subject, html });
+      await this.sendViaResend({ to, subject, html });
       this.logger.log('Email de 2FA enviado');
     } catch (err) {
-      this.logger.error('Falha ao enviar email 2FA');
+      this.logger.error(`Falha ao enviar email 2FA: ${(err as Error).message}`);
       throw err;
     }
   }
