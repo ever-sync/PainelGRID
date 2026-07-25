@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { useOutletContext } from "react-router-dom";
 import clsx from "clsx";
 import {
@@ -71,6 +71,10 @@ function formatCurrency(val: number) {
   }).format(val);
 }
 
+function formatNumber(val: number) {
+  return new Intl.NumberFormat("pt-BR").format(val);
+}
+
 export function RelatorioGestorPage() {
   const { user } = useOutletContext<AppOutletContext>();
   const [isDarkMode, setIsDarkMode] = useState(() =>
@@ -96,6 +100,150 @@ export function RelatorioGestorPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedClientId, selectedEventId]);
+
+  // Estado para expansão da tabela hierárquica de campanhas (Campanha -> Conjuntos -> Anúncios)
+  const [expandedCampaigns, setExpandedCampaigns] = useState<Record<string, boolean>>({
+    "camp-1": true,
+  });
+  const [expandedAdSets, setExpandedAdSets] = useState<Record<string, boolean>>({
+    "adset-101": true,
+  });
+
+  const toggleCampaign = (id: string) => {
+    setExpandedCampaigns((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const toggleAdSet = (id: string) => {
+    setExpandedAdSets((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  // Dados estruturados em árvore para a Aba de Campanhas (Campanha -> Conjunto -> Anúncio)
+  const campaignTreeData = useMemo(() => {
+    return [
+      {
+        id: "camp-1",
+        name: "Campanha Feirão Seminovos Premium Meta Ads",
+        status: "active",
+        valorInvestido: 12500,
+        quantidadeLeads: 310,
+        custoPorLead: 40.32,
+        impressoes: 145000,
+        numeroConversas: 185,
+        custoConversasIniciadas: 67.56,
+        contasAlcancadas: 89000,
+        adSets: [
+          {
+            id: "adset-101",
+            name: "Conjunto 01 - Público Aberto Concessionária (25-54 anos)",
+            valorInvestido: 7500,
+            quantidadeLeads: 195,
+            custoPorLead: 38.46,
+            impressoes: 85000,
+            numeroConversas: 110,
+            custoConversasIniciadas: 68.18,
+            contasAlcancadas: 52000,
+            ads: [
+              {
+                id: "ad-1001",
+                name: "Anúncio 01 - Carrossel de Veículos 0km",
+                valorInvestido: 4000,
+                quantidadeLeads: 110,
+                custoPorLead: 36.36,
+                impressoes: 48000,
+                numeroConversas: 65,
+                custoConversasIniciadas: 61.53,
+                contasAlcancadas: 31000,
+              },
+              {
+                id: "ad-1002",
+                name: "Anúncio 02 - Vídeo Feirão de Ofertas 15s",
+                valorInvestido: 3500,
+                quantidadeLeads: 85,
+                custoPorLead: 41.17,
+                impressoes: 37000,
+                numeroConversas: 45,
+                custoConversasIniciadas: 77.77,
+                contasAlcancadas: 21000,
+              },
+            ],
+          },
+          {
+            id: "adset-102",
+            name: "Conjunto 02 - Remarketing Visitantes & WhatsApp",
+            valorInvestido: 5000,
+            quantidadeLeads: 115,
+            custoPorLead: 43.47,
+            impressoes: 60000,
+            numeroConversas: 75,
+            custoConversasIniciadas: 66.66,
+            contasAlcancadas: 37000,
+            ads: [
+              {
+                id: "ad-1003",
+                name: "Anúncio 03 - Imagem Única Taxa Zero Feirão",
+                valorInvestido: 5000,
+                quantidadeLeads: 115,
+                custoPorLead: 43.47,
+                impressoes: 60000,
+                numeroConversas: 75,
+                custoConversasIniciadas: 66.66,
+                contasAlcancadas: 37000,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "camp-2",
+        name: "Campanha WhatsApp Direct - Lançamento SUV",
+        status: "active",
+        valorInvestido: 8400,
+        quantidadeLeads: 210,
+        custoPorLead: 40.0,
+        impressoes: 98000,
+        numeroConversas: 140,
+        custoConversasIniciadas: 60.0,
+        contasAlcancadas: 64000,
+        adSets: [
+          {
+            id: "adset-201",
+            name: "Conjunto 01 - Interesse Automotivo & Financiamento",
+            valorInvestido: 8400,
+            quantidadeLeads: 210,
+            custoPorLead: 40.0,
+            impressoes: 98000,
+            numeroConversas: 140,
+            custoConversasIniciadas: 60.0,
+            contasAlcancadas: 64000,
+            ads: [
+              {
+                id: "ad-2001",
+                name: "Anúncio 01 - CTA Direto para o WhatsApp",
+                valorInvestido: 4800,
+                quantidadeLeads: 125,
+                custoPorLead: 38.4,
+                impressoes: 55000,
+                numeroConversas: 85,
+                custoConversasIniciadas: 56.47,
+                contasAlcancadas: 36000,
+              },
+              {
+                id: "ad-2002",
+                name: "Anúncio 02 - Vídeo Test Drive SUV",
+                valorInvestido: 3600,
+                quantidadeLeads: 85,
+                custoPorLead: 42.35,
+                impressoes: 43000,
+                numeroConversas: 55,
+                custoConversasIniciadas: 65.45,
+                contasAlcancadas: 28000,
+              },
+            ],
+          },
+        ],
+      },
+    ];
+  }, []);
 
   useEffect(() => {
     setIsDarkMode(readDashboardDarkEnabled(user.id));
@@ -941,61 +1089,157 @@ export function RelatorioGestorPage() {
       {/* ── ABA 3: CAMPANHAS ── */}
       {activeTab === "campanhas" && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-2">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">
-                    Captação por Canal / Campanha
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-zinc-400">
-                    Volume de leads gerados pelas fontes ativas de anúncio
-                  </p>
-                </div>
-                <Megaphone size={18} className="text-gray-400" />
+          {/* Card de Métricas Globais da Campanha */}
+          <Card>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">
+                  Desempenho Hierárquico de Campanhas Meta Ads
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-zinc-400">
+                  Clique na linha para expandir e visualizar os Conjuntos de Anúncios e Anúncios individuais
+                </p>
               </div>
+              <Megaphone size={18} className="text-[#FF0636]" />
+            </div>
 
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={sourcePieData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={chartAxisStroke} vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: chartTickFill }} stroke={chartAxisStroke} />
-                  <YAxis tick={{ fontSize: 11, fill: chartTickFill }} stroke={chartAxisStroke} />
-                  <Tooltip contentStyle={{ ...chartTooltipStyle, background: chartTooltipBg }} />
-                  <Bar dataKey="value" name="Leads Captados" fill="#3b82f6" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-gray-100 dark:border-zinc-800 text-gray-500 dark:text-zinc-400 font-semibold uppercase tracking-wider">
+                    <th className="pb-3 px-3">Nome (Campanha / Conjunto / Anúncio)</th>
+                    <th className="pb-3 px-3">Valor Investido</th>
+                    <th className="pb-3 px-3">Quantidade Leads</th>
+                    <th className="pb-3 px-3">Custo por Lead</th>
+                    <th className="pb-3 px-3">Impressões</th>
+                    <th className="pb-3 px-3">Nº Conversas</th>
+                    <th className="pb-3 px-3">Custo / Conversa</th>
+                    <th className="pb-3 px-3">Contas Alcançadas</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-zinc-800/60">
+                  {campaignTreeData.map((camp) => {
+                    const isCampExpanded = !!expandedCampaigns[camp.id];
 
-            <Card>
-              <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100 mb-2">
-                Canais de Alta Performance
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-zinc-400 mb-4">
-                Rank de fontes mais eficientes em conversão
-              </p>
+                    return (
+                      <Fragment key={camp.id}>
+                        {/* ── NÍVEL 1: CAMPANHA ── */}
+                        <tr
+                          onClick={() => toggleCampaign(camp.id)}
+                          className="hover:bg-gray-100/70 dark:hover:bg-zinc-800/80 bg-gray-50/80 dark:bg-zinc-900/60 cursor-pointer font-semibold transition-colors"
+                        >
+                          <td className="py-3 px-3 flex items-center gap-2 text-gray-900 dark:text-zinc-100">
+                            <span className="text-gray-400">
+                              {isCampExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                            </span>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase bg-rose-100 text-[#FF0636] dark:bg-rose-950/60 dark:text-rose-400">
+                              Campanha
+                            </span>
+                            <span>{camp.name}</span>
+                          </td>
+                          <td className="py-3 px-3 text-amber-600 dark:text-amber-400 font-bold font-mono">
+                            {formatCurrency(camp.valorInvestido)}
+                          </td>
+                          <td className="py-3 px-3 font-bold text-gray-800 dark:text-zinc-200">
+                            {camp.quantidadeLeads}
+                          </td>
+                          <td className="py-3 px-3 text-rose-600 dark:text-rose-400 font-bold font-mono">
+                            {formatCurrency(camp.custoPorLead)}
+                          </td>
+                          <td className="py-3 px-3 text-gray-600 dark:text-zinc-400 font-mono">
+                            {formatNumber(camp.impressoes)}
+                          </td>
+                          <td className="py-3 px-3 text-blue-600 font-bold">
+                            {camp.numeroConversas}
+                          </td>
+                          <td className="py-3 px-3 text-blue-700 dark:text-blue-400 font-mono">
+                            {formatCurrency(camp.custoConversasIniciadas)}
+                          </td>
+                          <td className="py-3 px-3 text-gray-600 dark:text-zinc-400 font-mono">
+                            {formatNumber(camp.contasAlcancadas)}
+                          </td>
+                        </tr>
 
-              <div className="space-y-3">
-                {sourcePieData.map((src, i) => (
-                  <div
-                    key={src.name}
-                    className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-zinc-900/60 border border-gray-100 dark:border-zinc-800"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-[#FF0636]/10 text-[#FF0636] flex items-center justify-center text-xs font-bold">
-                        #{i + 1}
-                      </span>
-                      <span className="text-xs font-semibold text-gray-900 dark:text-zinc-100">
-                        {src.name}
-                      </span>
-                    </div>
-                    <span className="text-xs font-bold text-gray-700 dark:text-zinc-300">
-                      {src.value} leads
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </div>
+                        {/* ── NÍVEL 2: CONJUNTOS DE ANÚNCIOS (AD SETS) ── */}
+                        {isCampExpanded &&
+                          camp.adSets.map((adSet) => {
+                            const isAdSetExpanded = !!expandedAdSets[adSet.id];
+
+                            return (
+                              <Fragment key={adSet.id}>
+                                <tr
+                                  onClick={() => toggleAdSet(adSet.id)}
+                                  className="hover:bg-gray-100/40 dark:hover:bg-zinc-800/50 bg-white dark:bg-zinc-950/40 cursor-pointer text-xs transition-colors"
+                                >
+                                  <td className="py-2.5 px-3 pl-8 flex items-center gap-2 text-gray-800 dark:text-zinc-200">
+                                    <span className="text-gray-400">
+                                      {isAdSetExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                    </span>
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400">
+                                      Conjunto
+                                    </span>
+                                    <span>{adSet.name}</span>
+                                  </td>
+                                  <td className="py-2.5 px-3 text-amber-600 dark:text-amber-400 font-mono">
+                                    {formatCurrency(adSet.valorInvestido)}
+                                  </td>
+                                  <td className="py-2.5 px-3 font-semibold text-gray-800 dark:text-zinc-200">
+                                    {adSet.quantidadeLeads}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-rose-600 dark:text-rose-400 font-mono">
+                                    {formatCurrency(adSet.custoPorLead)}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-gray-500 font-mono">
+                                    {formatNumber(adSet.impressoes)}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-blue-600 font-semibold">
+                                    {adSet.numeroConversas}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-blue-700 dark:text-blue-400 font-mono">
+                                    {formatCurrency(adSet.custoConversasIniciadas)}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-gray-500 font-mono">
+                                    {formatNumber(adSet.contasAlcancadas)}
+                                  </td>
+                                </tr>
+
+                                {/* ── NÍVEL 3: ANÚNCIOS INDIVIDUAIS (ADS) ── */}
+                                {isAdSetExpanded &&
+                                  adSet.ads.map((ad) => (
+                                    <tr
+                                      key={ad.id}
+                                      className="hover:bg-gray-50 dark:hover:bg-zinc-900/30 bg-gray-50/20 dark:bg-zinc-950/20 text-xs text-gray-600 dark:text-zinc-400"
+                                    >
+                                      <td className="py-2 px-3 pl-14 flex items-center gap-2">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 dark:bg-zinc-800 dark:text-zinc-400">
+                                          Anúncio
+                                        </span>
+                                        <span>{ad.name}</span>
+                                      </td>
+                                      <td className="py-2 px-3 font-mono">{formatCurrency(ad.valorInvestido)}</td>
+                                      <td className="py-2 px-3 font-medium text-gray-700 dark:text-zinc-300">
+                                        {ad.quantidadeLeads}
+                                      </td>
+                                      <td className="py-2 px-3 font-mono text-rose-600 dark:text-rose-400">
+                                        {formatCurrency(ad.custoPorLead)}
+                                      </td>
+                                      <td className="py-2 px-3 font-mono">{formatNumber(ad.impressoes)}</td>
+                                      <td className="py-2 px-3 text-blue-600 font-medium">{ad.numeroConversas}</td>
+                                      <td className="py-2 px-3 font-mono">{formatCurrency(ad.custoConversasIniciadas)}</td>
+                                      <td className="py-2 px-3 font-mono">{formatNumber(ad.contasAlcancadas)}</td>
+                                    </tr>
+                                  ))}
+                              </Fragment>
+                            );
+                          })}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </div>
       )}
 
