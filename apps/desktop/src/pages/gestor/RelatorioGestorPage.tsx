@@ -23,6 +23,7 @@ import {
   UserCheck,
   Trophy,
   Shield,
+  Tv,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { StatsCard } from "../../components/shared/StatsCard";
@@ -30,7 +31,7 @@ import { Card } from "../../components/ui/Card";
 import { Tabs } from "../../components/ui/Tabs";
 import { readStoredSession } from "../../services/auth";
 import { listClients, mapApiClientToClient } from "../../services/clients";
-import { listEvents } from "../../services/events";
+import { listEvents, getEventDashboardTv } from "../../services/events";
 import { listLeads, mapApiLeadToLead } from "../../services/leads";
 import { listCrmPipelines, type ApiCrmStage } from "../../services/crm";
 import type { AppOutletContext } from "../../layouts/AppLayout";
@@ -92,6 +93,28 @@ export function RelatorioGestorPage() {
   // Filtros seletores superiores do lado direito
   const [selectedClientId, setSelectedClientId] = useState<string>("all");
   const [selectedEventId, setSelectedEventId] = useState<string>("all");
+
+  // Estado de sincronia com a API do Modo TV do Evento (/events/:id/dashboard-tv)
+  const [tvVendors, setTvVendors] = useState<any[]>([]);
+  const [tvTeams, setTvTeams] = useState<any[]>([]);
+
+  useEffect(() => {
+    const session = readStoredSession();
+    if (!session?.accessToken || selectedEventId === "all") {
+      setTvVendors([]);
+      setTvTeams([]);
+      return;
+    }
+
+    getEventDashboardTv(selectedEventId, session.accessToken)
+      .then((tvData) => {
+        if (tvData?.vendors) setTvVendors(tvData.vendors);
+        if (tvData?.teams) setTvTeams(tvData.teams);
+      })
+      .catch((err) => {
+        console.warn("Snapshot do Modo TV não disponível para o evento:", err);
+      });
+  }, [selectedEventId]);
 
   // Estado da Paginação dos Leads
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -512,8 +535,21 @@ export function RelatorioGestorPage() {
     return [...eventMetrics].sort((a, b) => b.totalCheckins - a.totalCheckins)[0];
   }, [eventMetrics]);
 
-  // Ranking de Vendedores do Evento/Filtro
+  // Ranking de Vendedores do Evento/Filtro (Integrado com o Modo TV)
   const rankedVendors = useMemo(() => {
+    if (tvVendors.length > 0) {
+      return tvVendors
+        .map((v) => ({
+          id: v.vendor_id,
+          name: v.vendor_name,
+          teamName: v.team_name,
+          sales: v.sold ?? 0,
+          checkins: v.checked_in ?? 0,
+          leads: v.scheduled ?? 0,
+        }))
+        .sort((a, b) => b.sales - a.sales || b.checkins - a.checkins);
+    }
+
     const vendorMap: Record<
       string,
       { id: string; name: string; sales: number; checkins: number; leads: number }
@@ -556,17 +592,30 @@ export function RelatorioGestorPage() {
     }
 
     return list.sort((a, b) => b.sales - a.sales || b.checkins - a.checkins);
-  }, [filteredLeads]);
+  }, [filteredLeads, tvVendors]);
 
-  // Ranking de Equipes / Times do Evento
+  // Ranking de Equipes / Times do Evento (Integrado com o Modo TV)
   const rankedTeams = useMemo(() => {
+    if (tvTeams.length > 0) {
+      return tvTeams
+        .map((t) => ({
+          id: t.team_id,
+          name: t.team_name,
+          members: 5,
+          sales: t.sold ?? 0,
+          checkins: t.checked_in ?? 0,
+          meta: t.scheduled || 20,
+        }))
+        .sort((a, b) => b.sales - a.sales || b.checkins - a.checkins);
+    }
+
     return [
       { id: "t1", name: "Equipe Alfa (Novos & Seminovos)", members: 6, sales: 28, checkins: 65, meta: 30 },
       { id: "t2", name: "Equipe Beta (Venda Direta & PCD)", members: 4, sales: 22, checkins: 48, meta: 25 },
       { id: "t3", name: "Equipe Gama (Consórcio & Assinatura)", members: 5, sales: 15, checkins: 34, meta: 20 },
       { id: "t4", name: "Equipe Delta (Recepção & Agendamentos)", members: 3, sales: 9, checkins: 22, meta: 15 },
     ].sort((a, b) => b.sales - a.sales || b.checkins - a.checkins);
-  }, []);
+  }, [tvTeams]);
 
   // Dados para a Aba de Cruzamento: Campanha x Evento
   const campaignEventCrossData = useMemo(() => {
