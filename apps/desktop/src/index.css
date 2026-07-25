@@ -427,3 +427,36 @@
     }
   }
 }
+/* ── Impressão do Relatório Executivo (window.print / Salvar como PDF) ── */
+@media print {
+  /* Esconde toda a moldura do app: sidebar, navs, botões marcados no-print */
+  aside,
+  header nav,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Fundo branco e conteúdo em largura total */
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  .exec-report {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  /* Cada capítulo evita quebrar no meio entre páginas */
+  .exec-chapter {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    box-shadow: none !important;
+    border-color: #e4e4e7 !important;
+  }
+
+  @page {
+    margin: 14mm;
+  }
+}

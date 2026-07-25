@@ -73,6 +73,11 @@ const RelatorioGestorPage = lazy(() =>
     default: module.RelatorioGestorPage,
   })),
 );
+const RelatorioExecutivoPage = lazy(() =>
+  import("./pages/gestor/RelatorioExecutivoPage").then((module) => ({
+    default: module.RelatorioExecutivoPage,
+  })),
+);
 const RubinhoPage = lazy(() =>
   import("./pages/gestor/RubinhoPage").then((module) => ({
     default: module.RubinhoPage,
@@ -409,6 +414,10 @@ export default function App() {
               <Route
                 path="/gestor/relatorio"
                 element={<RelatorioGestorPage />}
+              />
+              <Route
+                path="/gestor/relatorio-executivo"
+                element={<RelatorioExecutivoPage />}
               />
               <Route path="/gestor/eventos" element={<EventosPage />} />
               <Route path="/gestor/eventos/:id" element={<EventDetailPage />} />

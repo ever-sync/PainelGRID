@@ -70,6 +70,24 @@ export class EventsController {
     return this.eventDashboardService.getTvDashboard(user, id);
   }
 
+  @Get(':id/executive-report')
+  @Roles(Role.GESTOR, Role.CLIENTE)
+  @ApiOperation({
+    summary: 'Relatório executivo do evento',
+    description:
+      'Atribuição real campanha→venda (via MetaLeadImport), analytics do Rubinho e ' +
+      'histórico dos eventos anteriores do cliente. Alimenta o Relatório Executivo.',
+  })
+  @ApiResponse({ status: 200, description: 'Relatório executivo do evento' })
+  @ApiResponse({ status: 403, description: 'Sem permissão' })
+  @ApiResponse({ status: 404, description: 'Evento não encontrado' })
+  getExecutiveReport(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.eventDashboardService.getExecutiveReport(user, id);
+  }
+
   @Get(':id')
   @Roles(Role.GESTOR, Role.CLIENTE, Role.VENDEDOR, Role.RECEPCAO)
   @ApiOperation({ summary: 'Retorna detalhe de um evento com estatísticas' })

@@ -237,3 +237,57 @@ export function mapApiEventToEvent(row: ApiEvent): Event {
     updated_at: row.updated_at,
   };
 }
+
+// ── Relatório Executivo (atribuição real, Rubinho, histórico) ───────────────
+
+export type ExecutiveReportResponse = {
+  event_id: string;
+  attribution: Array<{
+    meta_campaign_id: string;
+    name: string;
+    leads: number;
+    scheduled: number;
+    checked_in: number;
+    sold: number;
+    revenue: number;
+  }>;
+  attribution_coverage: {
+    attributed_leads: number;
+    total_leads: number;
+    attributed_sold: number;
+    total_sold: number;
+  };
+  rubinho: {
+    mensagens: number;
+    conversas_iniciadas: number;
+    credenciamentos: number;
+    agendamentos: number;
+    comparecimentos: number;
+    taxa_comparecimento: number;
+    vendas_originadas: number;
+    receita_influenciada: number;
+    acoes_ia: number;
+  };
+  history: Array<{
+    event_id: string;
+    name: string;
+    event_date: string;
+    leads: number;
+    scheduled: number;
+    confirmed: number;
+    checked_in: number;
+    sold: number;
+    revenue: number;
+  }>;
+};
+
+export function getEventExecutiveReport(
+  eventId: string,
+  token: string,
+  signal?: AbortSignal,
+) {
+  return httpRequest<ExecutiveReportResponse>(
+    `/events/${eventId}/executive-report`,
+    { method: "GET", token, signal },
+  );
+}

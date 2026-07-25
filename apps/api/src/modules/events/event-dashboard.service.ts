@@ -515,6 +515,227 @@ export class EventDashboardService {
     return formatter.format(date);
   }
 
+  /**
+   * Relatório executivo de um evento: atribuição real campanha→venda (via
+   * MetaLeadImport), analytics do Rubinho e histórico dos eventos anteriores.
+   * Substitui as heurísticas do front-end por dados de fato.
+   */
+  async getExecutiveReport(user: AuthenticatedUser, eventId: string) {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        client_id: true,
+        event_date: true,
+        participants: { select: { client_id: true } },
+      },
+    });
+    if (!event) {
+      throw new NotFoundException('Evento nao encontrado');
+    }
+    await this.assertEventRead(user, event);
+
+    const clientIds = Array.from(
+      new Set([event.client_id, ...event.participants.map((p) => p.client_id)]),
+    );
+
+    const [leads, sales, imports, metaCampaigns] = await Promise.all([
+      this.prisma.lead.findMany({
+        where: { event_interest_id: eventId, deleted_at: null },
+        select: { id: true, confirmation_status: true },
+      }),
+      this.prisma.sale.findMany({
+        where: { appointment: { event_id: eventId } },
+        select: { lead_id: true, value: true },
+      }),
+      this.prisma.metaLeadImport.findMany({
+        where: { client_id: { in: clientIds }, lead_id: { not: null } },
+        select: { lead_id: true, meta_campaign_id: true },
+      }),
+      this.prisma.metaCampaign.findMany({
+        where: { client_id: { in: clientIds } },
+        select: { meta_campaign_id: true, name: true },
+      }),
+    ]);
+
+    const eventLeadIds = new Set(leads.map((l) => l.id));
+    const scheduledIds = new Set<string>();
+    const checkedInIds = new Set<string>();
+    for (const lead of leads) {
+      const s = lead.confirmation_status;
+      if (
+        s === ConfirmationStatus.scheduled ||
+        s === ConfirmationStatus.confirmed ||
+        s === ConfirmationStatus.checked_in
+      ) {
+        scheduledIds.add(lead.id);
+      }
+      if (s === ConfirmationStatus.checked_in) checkedInIds.add(lead.id);
+    }
+
+    // lead_id -> meta_campaign_id (só leads deste evento)
+    const campaignByLead = new Map<string, string>();
+    for (const imp of imports) {
+      if (imp.lead_id && imp.meta_campaign_id && eventLeadIds.has(imp.lead_id)) {
+        campaignByLead.set(imp.lead_id, imp.meta_campaign_id);
+      }
+    }
+    const campaignName = new Map<string, string>();
+    for (const c of metaCampaigns) campaignName.set(c.meta_campaign_id, c.name);
+
+    const revenueByLead = new Map<string, number>();
+    for (const sale of sales) {
+      revenueByLead.set(
+        sale.lead_id,
+        (revenueByLead.get(sale.lead_id) ?? 0) + Number(sale.value),
+      );
+    }
+    const soldLeadIds = new Set(sales.map((s) => s.lead_id));
+
+    type Attr = {
+      meta_campaign_id: string;
+      name: string;
+      leads: number;
+      scheduled: number;
+      checked_in: number;
+      sold: number;
+      revenue: number;
+    };
+    const attrMap = new Map<string, Attr>();
+    const ensureAttr = (cid: string): Attr => {
+      let a = attrMap.get(cid);
+      if (!a) {
+        a = {
+          meta_campaign_id: cid,
+          name: campaignName.get(cid) ?? 'Sem campanha',
+          leads: 0,
+          scheduled: 0,
+          checked_in: 0,
+          sold: 0,
+          revenue: 0,
+        };
+        attrMap.set(cid, a);
+      }
+      return a;
+    };
+    for (const lead of leads) {
+      const cid = campaignByLead.get(lead.id);
+      if (!cid) continue;
+      const a = ensureAttr(cid);
+      a.leads += 1;
+      if (scheduledIds.has(lead.id)) a.scheduled += 1;
+      if (checkedInIds.has(lead.id)) a.checked_in += 1;
+      if (soldLeadIds.has(lead.id)) {
+        a.sold += 1;
+        a.revenue += revenueByLead.get(lead.id) ?? 0;
+      }
+    }
+    const attribution = Array.from(attrMap.values())
+      .map((a) => ({ ...a, revenue: Math.round(a.revenue * 100) / 100 }))
+      .sort((x, y) => y.revenue - x.revenue);
+
+    const attributedLeadCount = campaignByLead.size;
+    const attributedSold = attribution.reduce((s, a) => s + a.sold, 0);
+
+    // ── Rubinho ──
+    const [messageCount, conversations, agentLogCount, appointmentsAgent] =
+      await Promise.all([
+        this.prisma.message.count({
+          where: { conversation: { lead: { event_interest_id: eventId } } },
+        }),
+        this.prisma.conversation.findMany({
+          where: { lead: { event_interest_id: eventId }, channel: 'whatsapp' },
+          select: { id: true },
+        }),
+        this.prisma.agentActionLog.count({
+          where: { lead: { event_interest_id: eventId } },
+        }),
+        this.prisma.appointment.count({
+          where: {
+            event_id: eventId,
+            OR: [{ source: 'n8n_ai_agent' }, { created_by_type: 'external_agent' }],
+          },
+        }),
+      ]);
+
+    const eventRevenue = sales.reduce((s, sale) => s + Number(sale.value), 0);
+    const rubinho = {
+      mensagens: messageCount,
+      conversas_iniciadas: conversations.length,
+      credenciamentos: scheduledIds.size,
+      agendamentos: appointmentsAgent || scheduledIds.size,
+      comparecimentos: checkedInIds.size,
+      taxa_comparecimento:
+        scheduledIds.size > 0 ? (checkedInIds.size / scheduledIds.size) * 100 : 0,
+      vendas_originadas: soldLeadIds.size,
+      receita_influenciada: Math.round(eventRevenue * 100) / 100,
+      acoes_ia: agentLogCount,
+    };
+
+    // ── Histórico (últimos eventos do mesmo cliente) ──
+    const historyEvents = await this.prisma.event.findMany({
+      where: { client_id: event.client_id },
+      orderBy: { event_date: 'desc' },
+      take: 6,
+      select: { id: true, name: true, event_date: true },
+    });
+    const history = await Promise.all(
+      historyEvents.map(async (ev) => {
+        const [hLeads, hSales] = await Promise.all([
+          this.prisma.lead.findMany({
+            where: { event_interest_id: ev.id, deleted_at: null },
+            select: { confirmation_status: true },
+          }),
+          this.prisma.sale.findMany({
+            where: { appointment: { event_id: ev.id } },
+            select: { value: true },
+          }),
+        ]);
+        let scheduled = 0;
+        let confirmed = 0;
+        let checkedIn = 0;
+        for (const l of hLeads) {
+          const s = l.confirmation_status;
+          if (
+            s === ConfirmationStatus.scheduled ||
+            s === ConfirmationStatus.confirmed ||
+            s === ConfirmationStatus.checked_in
+          )
+            scheduled += 1;
+          if (s === ConfirmationStatus.confirmed || s === ConfirmationStatus.checked_in)
+            confirmed += 1;
+          if (s === ConfirmationStatus.checked_in) checkedIn += 1;
+        }
+        const revenue = hSales.reduce((sum, s) => sum + Number(s.value), 0);
+        return {
+          event_id: ev.id,
+          name: ev.name,
+          event_date: ev.event_date,
+          leads: hLeads.length,
+          scheduled,
+          confirmed,
+          checked_in: checkedIn,
+          sold: hSales.length,
+          revenue: Math.round(revenue * 100) / 100,
+        };
+      }),
+    );
+    history.reverse(); // cronológico ascendente
+
+    return {
+      event_id: eventId,
+      attribution,
+      attribution_coverage: {
+        attributed_leads: attributedLeadCount,
+        total_leads: leads.length,
+        attributed_sold: attributedSold,
+        total_sold: soldLeadIds.size,
+      },
+      rubinho,
+      history,
+    };
+  }
+
   private async assertEventRead(
     user: AuthenticatedUser,
     event: { participants: Array<{ client_id: string }> },

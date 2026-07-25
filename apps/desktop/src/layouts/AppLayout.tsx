@@ -139,6 +139,11 @@ function getNavItems(user: User): NavItem[] {
           icon: <BarChart3 size={18} />,
           label: "Relatório",
         },
+        {
+          href: "/gestor/relatorio-executivo",
+          icon: <Trophy size={18} />,
+          label: "Rel. Executivo",
+        },
       ];
     case "cliente":
       return [
