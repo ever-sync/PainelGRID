@@ -537,6 +537,9 @@ export function RelatorioGestorPage() {
   const [eventsForClient, setEventsForClient] = useState<Event[]>([]);
   const [activeTab, setActiveTab] = useState<ReportTabId>("cliente");
   const [selectedEventId, setSelectedEventId] = useState<string>("all");
+  const isClientTab = activeTab === "cliente";
+  const isCampaignsTab = activeTab === "campanhas";
+  const isEventsTab = activeTab === "eventos";
   const [apiReports, setApiReports] = useState<Record<string, ReportBase>>({});
   const [loadError, setLoadError] = useState("");
   const [pipelineStages, setPipelineStages] = useState<KanbanColumn[]>([]);
@@ -998,23 +1001,42 @@ export function RelatorioGestorPage() {
   }, [allLeads, reportBase.records, selectedClientIdSafe]);
 
   const summaryFunnel = useMemo(() => {
-    const checkin = allLeads.filter(
+    const eventScoped = isEventsTab && selectedEventId !== "all";
+    const scopedLeads = allLeads.filter(
       (lead) =>
         lead.client_id === selectedClientIdSafe &&
-        lead.confirmation_status === "checked_in",
+        (!eventScoped || lead.event_id === selectedEventId),
+    );
+
+    const totalLeadsValue = eventScoped
+      ? scopedLeads.length
+      : overviewStats.totalLeads;
+    const confirmadosValue = eventScoped
+      ? scopedLeads.filter(
+          (lead) =>
+            lead.confirmation_status === "confirmed" ||
+            lead.confirmation_status === "checked_in",
+        ).length
+      : overviewStats.confirmados;
+    const checkin = scopedLeads.filter(
+      (lead) => lead.confirmation_status === "checked_in",
     ).length;
     const compraramStage = pipelineStages.find(
       (stage) => stage.label.trim().toLowerCase() === "compraram",
     );
     const compraram = compraramStage
-      ? (stageCounts[compraramStage.id] ?? 0)
+      ? eventScoped
+        ? scopedLeads.filter(
+            (lead) => lead.crm_stage_id === compraramStage.id,
+          ).length
+        : (stageCounts[compraramStage.id] ?? 0)
       : 0;
 
     const stages = [
-      { label: "Leads", value: overviewStats.totalLeads, color: "#3b82f6" },
+      { label: "Leads", value: totalLeadsValue, color: "#3b82f6" },
       {
         label: "Confirmados",
-        value: overviewStats.confirmados,
+        value: confirmadosValue,
         color: "#22c55e",
       },
       { label: "Check-in", value: checkin, color: "#a855f7" },
@@ -1034,10 +1056,12 @@ export function RelatorioGestorPage() {
     }));
   }, [
     allLeads,
+    isEventsTab,
     overviewStats.confirmados,
     overviewStats.totalLeads,
     pipelineStages,
     selectedClientIdSafe,
+    selectedEventId,
     stageCounts,
   ]);
 
@@ -1132,10 +1156,6 @@ export function RelatorioGestorPage() {
 
     return tail.map(([month, total]) => ({ month, total }));
   }, [allLeads, selectedClientIdSafe]);
-
-  const isClientTab = activeTab === "cliente";
-  const isCampaignsTab = activeTab === "campanhas";
-  const isEventsTab = activeTab === "eventos";
 
   const leadById = useMemo(
     () => new Map(allLeads.map((lead) => [lead.id, lead])),
@@ -1258,6 +1278,14 @@ export function RelatorioGestorPage() {
 
   const pageSubtitle = useMemo(() => {
     if (isEventsTab) {
+      if (selectedEventId !== "all") {
+        const selectedEventName = clientEvents.find(
+          (event) => event.id === selectedEventId,
+        )?.name;
+        if (selectedEventName) {
+          return `${selectedClientCompanyName} · ${selectedEventName}`;
+        }
+      }
       return `${selectedClientCompanyName} · Eventos e presenca`;
     }
 
@@ -1266,7 +1294,13 @@ export function RelatorioGestorPage() {
     }
 
     return `${selectedClientCompanyName} · Visao geral do cliente`;
-  }, [isCampaignsTab, isEventsTab, selectedClientCompanyName]);
+  }, [
+    clientEvents,
+    isCampaignsTab,
+    isEventsTab,
+    selectedClientCompanyName,
+    selectedEventId,
+  ]);
 
   const handleExport = () => {
     const safeClientName = selectedClientCompanyName
