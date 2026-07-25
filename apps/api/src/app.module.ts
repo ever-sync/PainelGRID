@@ -7,6 +7,7 @@ import { getApiEnvFilePaths } from './config/env-paths';
 import { validateEnvironment } from './config/env.validation';
 import { PrismaModule } from './config/prisma.module';
 import { RedisModule } from './config/redis.module';
+import { StorageModule } from './config/storage.module';
 import { AgentModule } from './modules/agent/agent.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
@@ -77,6 +78,7 @@ const envFilePaths = getApiEnvFilePaths();
     }),
     PrismaModule,
     RedisModule,
+    StorageModule,
     AgentModule,
     AuthModule,
     AppointmentsModule,

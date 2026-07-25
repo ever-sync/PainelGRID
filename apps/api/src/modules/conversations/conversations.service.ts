@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { Prisma, SenderType } from '@prisma/client';
 import { Role } from '../../common/types';
 import { PrismaService } from '../../config/prisma.service';
+import { StorageService } from '../../config/storage.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { ClientsService } from '../clients/clients.service';
 import { ClientWebhookService } from '../crm/client-webhook.service';
@@ -19,7 +20,12 @@ export class ConversationsService {
     private readonly realtimeEvents: RealtimeEventsService,
     private readonly metaService: MetaService,
     private readonly clientWebhook: ClientWebhookService,
+    private readonly storage: StorageService,
   ) {}
+
+  private mediaStorageKey(messageId: string): string {
+    return `whatsapp-media/${messageId}`;
+  }
 
   private async assertClientRead(user: AuthenticatedUser, clientId: string) {
     if (user.role === Role.GESTOR) {
@@ -200,10 +206,18 @@ export class ConversationsService {
       throw new NotFoundException('Mensagem sem midia');
     }
 
-    return this.metaService.downloadClientWhatsappMedia(msg.conversation.client_id, {
+    const storageKey = this.mediaStorageKey(messageId);
+    const cached = await this.storage.download(storageKey);
+    if (cached) {
+      return { buffer: cached.buffer, contentType: cached.contentType, filename: messageId };
+    }
+
+    const media = await this.metaService.downloadClientWhatsappMedia(msg.conversation.client_id, {
       mediaId: msg.media_id,
       mediaUrl: msg.media_url,
     });
+    void this.storage.upload(storageKey, media.buffer, media.contentType);
+    return media;
   }
 
   async findAgentActions(user: AuthenticatedUser, conversationId: string) {

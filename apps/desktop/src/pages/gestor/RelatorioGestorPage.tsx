@@ -688,6 +688,39 @@ export function RelatorioGestorPage() {
     });
   }, [availableEvents, leads]);
 
+  // Totais consolidados para a Aba Campanha x Evento
+  const crossTotals = useMemo(() => {
+    let fb = 0;
+    let wa = 0;
+    let form = 0;
+    let manual = 0;
+    let totalLeads = 0;
+    let vendas = 0;
+
+    campaignEventCrossData.forEach((row) => {
+      fb += row.facebook_ads;
+      wa += row.whatsapp;
+      form += row.form_page;
+      manual += row.manual;
+      totalLeads += row.totalLeads;
+      vendas += row.vendas;
+    });
+
+    const topChannel =
+      fb >= wa && fb >= form ? "Facebook Ads (Meta)" : wa >= form ? "WhatsApp Direct" : "Formulário Web";
+
+    return {
+      fb,
+      wa,
+      form,
+      manual,
+      totalLeads,
+      vendas,
+      topChannel,
+      conversionRate: totalLeads > 0 ? Math.round((vendas / totalLeads) * 100) : 0,
+    };
+  }, [campaignEventCrossData]);
+
   const chartAxisStroke = isDarkMode ? "#52525b" : "#e5e7eb";
   const chartTickFill = isDarkMode ? "#a1a1aa" : "#6b7280";
   const chartTooltipBg = isDarkMode ? "#18181b" : "#ffffff";
@@ -1560,6 +1593,38 @@ export function RelatorioGestorPage() {
       {/* ── ABA 4: CAMPANHA X EVENTO ── */}
       {activeTab === "campanha_x_evento" && (
         <div className="space-y-6">
+          {/* KPI Summary Cards para Atribuição Cruzada */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatsCard
+              title="Canal Principal de Origem"
+              value={crossTotals.topChannel}
+              icon={<GitCompare size={20} />}
+              subtitle="Maior captação"
+              iconColor="bg-[#FF0636]/10 text-[#FF0636]"
+            />
+            <StatsCard
+              title="Total Leads Atribuídos"
+              value={formatNumber(crossTotals.totalLeads)}
+              icon={<Users size={20} />}
+              subtitle="Cruzamento Ativo"
+              iconColor="bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
+            />
+            <StatsCard
+              title="Vendas de Origem Cruzada"
+              value={formatNumber(crossTotals.vendas)}
+              icon={<CheckCircle2 size={20} />}
+              subtitle="Conversões Finais"
+              iconColor="bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
+            />
+            <StatsCard
+              title="Taxa Média de Conversão"
+              value={`${crossTotals.conversionRate}%`}
+              icon={<TrendingUp size={20} />}
+              subtitle="Eficiência Global"
+              iconColor="bg-purple-100 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400"
+            />
+          </div>
+
           <Card>
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -1598,32 +1663,42 @@ export function RelatorioGestorPage() {
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-zinc-800 text-gray-500 dark:text-zinc-400 font-semibold uppercase tracking-wider">
                     <th className="pb-3 px-3">Evento</th>
-                    <th className="pb-3 px-3">Facebook Ads</th>
-                    <th className="pb-3 px-3">WhatsApp</th>
-                    <th className="pb-3 px-3">Formulário</th>
-                    <th className="pb-3 px-3">Manual / Outros</th>
-                    <th className="pb-3 px-3">Total Leads</th>
-                    <th className="pb-3 px-3">Vendas Finais</th>
+                    <th className="pb-3 px-3 text-right">Facebook Ads</th>
+                    <th className="pb-3 px-3 text-right">WhatsApp</th>
+                    <th className="pb-3 px-3 text-right">Formulário</th>
+                    <th className="pb-3 px-3 text-right">Manual / Outros</th>
+                    <th className="pb-3 px-3 text-right">Total Leads</th>
+                    <th className="pb-3 px-3 text-right">Vendas Finais</th>
+                    <th className="pb-3 px-3 text-right">Taxa Conversão</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-zinc-800/60">
-                  {campaignEventCrossData.map((row) => (
-                    <tr key={row.eventoId} className="hover:bg-gray-50/50 dark:hover:bg-zinc-900/50">
-                      <td className="py-3 px-3 font-semibold text-gray-900 dark:text-zinc-100">
-                        {row.eventoNome}
-                      </td>
-                      <td className="py-3 px-3 text-rose-600 font-semibold">{row.facebook_ads}</td>
-                      <td className="py-3 px-3 text-blue-600 font-semibold">{row.whatsapp}</td>
-                      <td className="py-3 px-3 text-emerald-600 font-semibold">{row.form_page}</td>
-                      <td className="py-3 px-3 text-gray-500 font-medium">{row.manual}</td>
-                      <td className="py-3 px-3 font-bold text-gray-900 dark:text-zinc-100">
-                        {row.totalLeads}
-                      </td>
-                      <td className="py-3 px-3 font-bold text-emerald-600">
-                        {row.vendas}
-                      </td>
-                    </tr>
-                  ))}
+                  {campaignEventCrossData.map((row) => {
+                    const convRate = row.totalLeads > 0 ? Math.round((row.vendas / row.totalLeads) * 100) : 0;
+
+                    return (
+                      <tr key={row.eventoId} className="hover:bg-gray-50/50 dark:hover:bg-zinc-900/50">
+                        <td className="py-3 px-3 font-semibold text-gray-900 dark:text-zinc-100">
+                          {row.eventoNome}
+                        </td>
+                        <td className="py-3 px-3 text-right text-rose-600 font-semibold">{row.facebook_ads}</td>
+                        <td className="py-3 px-3 text-right text-blue-600 font-semibold">{row.whatsapp}</td>
+                        <td className="py-3 px-3 text-right text-emerald-600 font-semibold">{row.form_page}</td>
+                        <td className="py-3 px-3 text-right text-gray-500 font-medium">{row.manual}</td>
+                        <td className="py-3 px-3 text-right font-bold text-gray-900 dark:text-zinc-100">
+                          {row.totalLeads}
+                        </td>
+                        <td className="py-3 px-3 text-right font-bold text-emerald-600">
+                          {row.vendas}
+                        </td>
+                        <td className="py-3 px-3 text-right">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900">
+                            {convRate}%
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
