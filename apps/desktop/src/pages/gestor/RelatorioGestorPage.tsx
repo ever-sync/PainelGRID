@@ -28,6 +28,7 @@ import { readStoredSession } from "../../services/auth";
 import { listClients, mapApiClientToClient } from "../../services/clients";
 import { listEvents } from "../../services/events";
 import { listLeads, mapApiLeadToLead } from "../../services/leads";
+import { listCrmPipelines, type ApiCrmStage } from "../../services/crm";
 import type { AppOutletContext } from "../../layouts/AppLayout";
 import type { Client, Event, Lead } from "../../types";
 import {
@@ -69,6 +70,7 @@ export function RelatorioGestorPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [crmStages, setCrmStages] = useState<ApiCrmStage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Filtros seletores superiores do lado direito
@@ -91,6 +93,26 @@ export function RelatorioGestorPage() {
       window.removeEventListener(DASHBOARD_DARK_CHANGE_EVENT, sync);
     };
   }, [user.id]);
+
+  // Carrega pipelines e etapas reais do CRM para o cliente selecionado ou padrão
+  useEffect(() => {
+    const session = readStoredSession();
+    if (!session?.accessToken) return;
+
+    const clientIdToFetch =
+      selectedClientId !== "all" ? selectedClientId : clients[0]?.id;
+    if (!clientIdToFetch) return;
+
+    listCrmPipelines(clientIdToFetch, session.accessToken)
+      .then((pipelines) => {
+        if (pipelines && pipelines.length > 0 && pipelines[0].stages) {
+          setCrmStages(pipelines[0].stages);
+        }
+      })
+      .catch((err) => {
+        console.warn("Pipeline personalizado do CRM não encontrado:", err);
+      });
+  }, [selectedClientId, clients]);
 
   // Carrega Clientes, Eventos e Leads
   useEffect(() => {
@@ -197,22 +219,44 @@ export function RelatorioGestorPage() {
   const taxaConversao =
     totalLeads > 0 ? Math.round((leadsConvertidos / totalLeads) * 100) : 0;
 
-  // Dados do gráfico de funil CRM
+  // Dados do gráfico de funil baseados nas etapas REAIS do CRM
   const crmFunnelData = useMemo(() => {
-    const stages = [
-      { key: "novo", label: "Novo Lead" },
-      { key: "contactado", label: "Contactado" },
-      { key: "nao_responde", label: "Não Responde" },
-      { key: "agendado", label: "Agendado" },
-      { key: "checkin", label: "Check-in" },
-      { key: "convertido", label: "Convertido" },
-      { key: "perdido", label: "Perdido" },
+    if (crmStages.length > 0) {
+      return crmStages.map((stg) => {
+        const count = filteredLeads.filter((l) => {
+          if (l.crm_stage_id && l.crm_stage_id === stg.id) return true;
+          if (l.crm_stage_code && l.crm_stage_code.toLowerCase() === stg.code.toLowerCase()) return true;
+          if (l.crm_stage && l.crm_stage.toLowerCase() === stg.code.toLowerCase()) return true;
+          if (l.crm_stage_name && l.crm_stage_name.toLowerCase() === stg.name.toLowerCase()) return true;
+          return false;
+        }).length;
+
+        return {
+          stage: stg.name,
+          quantidade: count,
+          color: stg.color || "#FF0636",
+        };
+      });
+    }
+
+    const defaultStages = [
+      { key: "novo", label: "Novo Lead", color: "#3b82f6" },
+      { key: "contactado", label: "Contactado", color: "#6366f1" },
+      { key: "nao_responde", label: "Não Responde", color: "#64748b" },
+      { key: "agendado", label: "Agendado", color: "#f59e0b" },
+      { key: "checkin", label: "Check-in", color: "#8b5cf6" },
+      { key: "convertido", label: "Convertido", color: "#10b981" },
+      { key: "perdido", label: "Perdido", color: "#ef4444" },
     ];
-    return stages.map((s) => ({
+
+    return defaultStages.map((s) => ({
       stage: s.label,
-      quantidade: filteredLeads.filter((l) => l.crm_stage === s.key).length,
+      quantidade: filteredLeads.filter(
+        (l) => l.crm_stage === s.key || l.crm_stage_code === s.key,
+      ).length,
+      color: s.color,
     }));
-  }, [filteredLeads]);
+  }, [filteredLeads, crmStages]);
 
   // Dados do gráfico por Origem (Source)
   const sourcePieData = useMemo(() => {
@@ -443,7 +487,11 @@ export function RelatorioGestorPage() {
                     contentStyle={{ ...chartTooltipStyle, background: chartTooltipBg }}
                     formatter={(val: number) => [val, "Leads"]}
                   />
-                  <Bar dataKey="quantidade" fill="#FF0636" radius={[0, 6, 6, 0]} />
+                  <Bar dataKey="quantidade" radius={[0, 6, 6, 0]}>
+                    {crmFunnelData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color || "#FF0636"} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </Card>
