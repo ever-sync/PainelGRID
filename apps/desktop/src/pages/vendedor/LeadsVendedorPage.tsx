@@ -1114,134 +1114,111 @@ export function LeadsVendedorPage() {
       <PageHeader
         title="Meus Leads"
         breadcrumbs={[{ label: "Vendedor" }, { label: "Meus Leads" }]}
-        subtitle={`${leads.length} leads atribuídos a você`}
       />
 
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-100 p-3 shadow-sm md:p-4">
-          <div className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500 text-white">
-            <Trophy size={16} />
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-500/10 via-amber-50 to-amber-100/50 p-4 shadow-sm dark:border-amber-900/40 dark:from-amber-950/40 dark:via-zinc-900 dark:to-zinc-900">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">
+              Pontuação Total
+            </span>
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-500 text-white font-bold shadow-md shadow-amber-500/30">
+              <Trophy size={15} />
+            </span>
           </div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-            Pontos
-          </p>
-          <p className="mt-1 text-2xl font-extrabold leading-none text-amber-900 md:text-2xl">
+          <p className="text-2xl md:text-3xl font-black tabular-nums text-amber-950 dark:text-amber-300">
             {score?.total_points ?? 0}
           </p>
         </div>
-        <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-100 p-3 shadow-sm md:p-4">
-          <div className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-blue-500 text-white">
-            <CalendarPlus size={16} />
+
+        <div className="rounded-2xl border border-blue-200/80 bg-gradient-to-br from-blue-500/10 via-blue-50 to-indigo-100/50 p-4 shadow-sm dark:border-blue-900/40 dark:from-blue-950/40 dark:via-zinc-900 dark:to-zinc-900">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-400">
+              Agendamentos
+            </span>
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-blue-500 text-white font-bold shadow-md shadow-blue-500/30">
+              <CalendarPlus size={15} />
+            </span>
           </div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-            Agendou
-          </p>
-          <p className="mt-1 text-2xl font-extrabold leading-none text-blue-900 md:text-xl">
+          <p className="text-2xl md:text-3xl font-black tabular-nums text-blue-950 dark:text-blue-300">
             {score?.scheduled.count ?? 0}
           </p>
         </div>
-        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-100 p-3 shadow-sm md:p-4">
-          <div className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500 text-white">
-            <CheckCircle2 size={16} />
+
+        <div className="rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-500/10 via-emerald-50 to-green-100/50 p-4 shadow-sm dark:border-emerald-900/40 dark:from-emerald-950/40 dark:via-zinc-900 dark:to-zinc-900">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+              Compareceram
+            </span>
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-emerald-500 text-white font-bold shadow-md shadow-emerald-500/30">
+              <CheckCircle2 size={15} />
+            </span>
           </div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-            Compareceu
-          </p>
-          <p className="mt-1 text-2xl font-extrabold leading-none text-emerald-900 md:text-xl">
+          <p className="text-2xl md:text-3xl font-black tabular-nums text-emerald-950 dark:text-emerald-300">
             {score?.checked_in.count ?? 0}
           </p>
         </div>
-        <div className="rounded-2xl border border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 to-pink-100 p-3 shadow-sm md:p-4">
-          <div className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-fuchsia-500 text-white">
-            <ShoppingCart size={16} />
+
+        <div className="rounded-2xl border border-fuchsia-200/80 bg-gradient-to-br from-fuchsia-500/10 via-fuchsia-50 to-pink-100/50 p-4 shadow-sm dark:border-fuchsia-900/40 dark:from-fuchsia-950/40 dark:via-zinc-900 dark:to-zinc-900">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-fuchsia-700 dark:text-fuchsia-400">
+              Vendas Concluídas
+            </span>
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-fuchsia-500 text-white font-bold shadow-md shadow-fuchsia-500/30">
+              <ShoppingCart size={15} />
+            </span>
           </div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-fuchsia-700">
-            Vendeu
-          </p>
-          <p className="mt-1 text-2xl font-extrabold leading-none text-fuchsia-900 md:text-xl">
+          <p className="text-2xl md:text-3xl font-black tabular-nums text-fuchsia-950 dark:text-fuchsia-300">
             {score?.sold.count ?? 0}
           </p>
         </div>
       </div>
 
       <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <input
-          type="text"
-          placeholder="Buscar por nome, telefone ou placa..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full sm:max-w-xs rounded-xl border border-zinc-200 px-3.5 py-2 text-sm focus:border-[#E51838] focus:outline-none bg-white text-zinc-950 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-50"
-        />
+        <div className="relative w-full sm:max-w-md">
+          <Search
+            size={16}
+            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
+          />
+          <input
+            type="text"
+            placeholder="Buscar por nome, telefone ou placa..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full rounded-2xl border border-zinc-200/80 dark:border-zinc-800 py-2.5 pl-10 pr-4 text-xs font-medium outline-none focus:border-[#FF0636] transition-colors bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-sm"
+          />
+        </div>
         <Button
           icon={<Plus size={16} />}
           onClick={() => setLeadModalOpen(true)}
           className="hidden sm:inline-flex w-full sm:w-auto justify-center"
         >
-          Cadastrar lead
+          Cadastrar Lead
         </Button>
       </div>
 
-      <div className="mb-6 flex border-b border-zinc-200 dark:border-zinc-800 overflow-x-auto whitespace-nowrap scrollbar-none">
-        <button
-          type="button"
-          onClick={() => setSelectedStageTab("all")}
-          className={clsx(
-            "px-4 py-2.5 text-sm font-bold border-b-2 -mb-px transition-colors shrink-0",
-            selectedStageTab === "all"
-              ? "border-[#e51838] text-[#e51838]"
-              : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200",
-          )}
-        >
-          Todos ({leads.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setSelectedStageTab("new")}
-          className={clsx(
-            "px-4 py-2.5 text-sm font-bold border-b-2 -mb-px transition-colors shrink-0",
-            selectedStageTab === "new"
-              ? "border-[#e51838] text-[#e51838]"
-              : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200",
-          )}
-        >
-          Novos/Contatos ({countNew})
-        </button>
-        <button
-          type="button"
-          onClick={() => setSelectedStageTab("scheduled")}
-          className={clsx(
-            "px-4 py-2.5 text-sm font-bold border-b-2 -mb-px transition-colors shrink-0",
-            selectedStageTab === "scheduled"
-              ? "border-[#e51838] text-[#e51838]"
-              : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200",
-          )}
-        >
-          Agendados ({countScheduled})
-        </button>
-        <button
-          type="button"
-          onClick={() => setSelectedStageTab("checkin")}
-          className={clsx(
-            "px-4 py-2.5 text-sm font-bold border-b-2 -mb-px transition-colors shrink-0",
-            selectedStageTab === "checkin"
-              ? "border-[#e51838] text-[#e51838]"
-              : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200",
-          )}
-        >
-          Check-in ({countCheckin})
-        </button>
-        <button
-          type="button"
-          onClick={() => setSelectedStageTab("done")}
-          className={clsx(
-            "px-4 py-2.5 text-sm font-bold border-b-2 -mb-px transition-colors shrink-0",
-            selectedStageTab === "done"
-              ? "border-[#e51838] text-[#e51838]"
-              : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200",
-          )}
-        >
-          Concluídos ({countDone})
-        </button>
+      <div className="mb-6 flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+        {[
+          ["all", `Todos (${leads.length})`],
+          ["new", `Novos (${countNew})`],
+          ["scheduled", `Agendados (${countScheduled})`],
+          ["checkin", `Check-in (${countCheckin})`],
+          ["done", `Concluídos (${countDone})`],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setSelectedStageTab(key as any)}
+            className={clsx(
+              "rounded-full px-4 py-2 text-xs font-bold transition-all shrink-0 border",
+              selectedStageTab === key
+                ? "bg-[#FF0636] text-white border-[#FF0636] shadow-md shadow-[#FF0636]/20"
+                : "bg-white border-zinc-200 text-zinc-600 hover:border-zinc-300 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200",
+            )}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {actionError ? (
@@ -1258,33 +1235,38 @@ export function LeadsVendedorPage() {
 
       <div className="space-y-3 md:hidden">
         {filteredLeads.length === 0 ? (
-          <p className="text-center py-10 text-sm text-zinc-500">
+          <div className="rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 p-8 text-center text-xs text-zinc-400">
             Nenhum lead encontrado com os filtros atuais.
-          </p>
+          </div>
         ) : (
           filteredLeads.map((lead) => (
             <div
               key={lead.id}
-              className="rounded-2xl border border-zinc-100 bg-white dark:bg-[#141414] dark:border-zinc-800 p-4 shadow-sm"
+              className="rounded-2xl border border-zinc-200/80 bg-white dark:bg-zinc-900 dark:border-zinc-800/80 p-4 shadow-sm space-y-3.5"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                    {lead.name}
-                  </p>
-                  <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-                    {lead.phone}
-                  </p>
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#FF0636] to-[#b3102b] text-xs font-black text-white shadow-sm">
+                    {lead.name.slice(0, 2).toUpperCase()}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      {lead.name}
+                    </p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
+                      {lead.phone}
+                    </p>
+                  </div>
                 </div>
                 <StageBadge stage={lead.crm_stage} />
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-3 text-sm border-t border-zinc-100 dark:border-zinc-800/80 pt-3">
+              <div className="grid grid-cols-2 gap-3 text-xs rounded-xl bg-zinc-50 dark:bg-zinc-950/60 p-3 border border-zinc-100 dark:border-zinc-800/60">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                     Evento
                   </p>
-                  <p className="mt-0.5 truncate text-zinc-700 dark:text-zinc-300 font-medium">
+                  <p className="mt-0.5 truncate text-zinc-800 dark:text-zinc-200 font-semibold">
                     {lead.event_interest || "—"}
                   </p>
                 </div>
@@ -1300,7 +1282,7 @@ export function LeadsVendedorPage() {
                   <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                     Visita
                   </p>
-                  <p className="mt-0.5 text-zinc-700 dark:text-zinc-300 font-medium">
+                  <p className="mt-0.5 text-zinc-800 dark:text-zinc-200 font-semibold font-mono">
                     {lead.store_visit_datetime
                       ? new Date(lead.store_visit_datetime).toLocaleDateString(
                           "pt-BR",
@@ -1318,31 +1300,31 @@ export function LeadsVendedorPage() {
                   <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                     Check-in
                   </p>
-                  <p className="mt-0.5 text-zinc-700 dark:text-zinc-300 font-medium">
+                  <p className="mt-0.5 text-zinc-800 dark:text-zinc-200 font-semibold">
                     {lead.checkin_token ? "Disponível" : "—"}
                   </p>
                 </div>
               </div>
 
-              <div className="mt-4 flex flex-wrap gap-2 pt-3 border-t border-zinc-50 dark:border-zinc-800/50">
+              <div className="grid grid-cols-5 gap-1.5 pt-1">
                 <button
                   type="button"
                   onClick={() => openLeadChat(lead)}
-                  className="flex-1 min-w-[80px] inline-flex py-2 items-center justify-center gap-1.5 rounded-xl text-xs font-bold bg-green-50 text-green-700 dark:bg-green-950/20 dark:text-green-300 border border-green-200/40 dark:border-green-800/30 active:scale-[0.97] transition-all"
-                  title="Abrir conversa no WhatsApp"
+                  className="flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900 transition-all active:scale-95"
+                  title="WhatsApp"
                 >
-                  <MessageCircle size={14} />
-                  WhatsApp
+                  <MessageCircle size={15} />
+                  <span className="mt-0.5">Whats</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => copyCheckinPayload(lead)}
                   disabled={getCheckinButtonState(lead).disabled}
-                  className="flex-1 min-w-[80px] inline-flex py-2 items-center justify-center gap-1.5 rounded-xl text-xs font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/20 dark:text-blue-300 border border-blue-200/40 dark:border-blue-800/30 disabled:opacity-40 disabled:scale-100 active:scale-[0.97] transition-all"
+                  className="flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-200 dark:border-blue-900 disabled:opacity-30 transition-all active:scale-95"
                   title={getCheckinButtonState(lead).title}
                 >
-                  <CheckCircle2 size={14} />
-                  Check-in
+                  <CheckCircle2 size={15} />
+                  <span className="mt-0.5">Check-in</span>
                 </button>
                 <button
                   type="button"
@@ -1353,31 +1335,31 @@ export function LeadsVendedorPage() {
                     );
                   }}
                   disabled={getAppointmentButtonState(lead).disabled}
-                  className="flex-1 min-w-[80px] inline-flex py-2 items-center justify-center gap-1.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/20 dark:text-indigo-300 border border-indigo-200/40 dark:border-indigo-800/30 disabled:opacity-40 disabled:scale-100 active:scale-[0.97] transition-all"
+                  className="flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400 border border-purple-200 dark:border-purple-900 disabled:opacity-30 transition-all active:scale-95"
                   title={getAppointmentButtonState(lead).title}
                 >
-                  <CalendarPlus size={14} />
-                  Agendar
+                  <CalendarPlus size={15} />
+                  <span className="mt-0.5">Agendar</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSaleModal(lead)}
                   disabled={getSaleButtonState(lead).disabled}
-                  className="flex-1 min-w-[80px] inline-flex py-2 items-center justify-center gap-1.5 rounded-xl text-xs font-bold bg-orange-50 text-orange-700 dark:bg-orange-950/20 dark:text-orange-300 border border-orange-200/40 dark:border-orange-800/30 disabled:opacity-40 disabled:scale-100 active:scale-[0.97] transition-all"
+                  className="flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-900 disabled:opacity-30 transition-all active:scale-95"
                   title={getSaleButtonState(lead).title}
                 >
-                  <ShoppingCart size={14} />
-                  Vender
+                  <ShoppingCart size={15} />
+                  <span className="mt-0.5">Vender</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleOpenCloseAttendanceModal(lead)}
                   disabled={lead.confirmation_status === "closed"}
-                  className="flex-1 min-w-[80px] inline-flex py-2 items-center justify-center gap-1.5 rounded-xl text-xs font-bold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200/40 dark:border-gray-700/30 disabled:opacity-40 disabled:scale-100 active:scale-[0.97] transition-all"
-                  title="Encerrar Atendimento"
+                  className="flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-bold bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 disabled:opacity-30 transition-all active:scale-95"
+                  title="Encerrar"
                 >
-                  <XCircle size={14} />
-                  Encerrar
+                  <XCircle size={15} />
+                  <span className="mt-0.5">Fim</span>
                 </button>
               </div>
             </div>
@@ -1385,57 +1367,43 @@ export function LeadsVendedorPage() {
         )}
       </div>
 
-      <div className="hidden overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm md:block">
+      <div className="hidden overflow-hidden rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900 shadow-sm md:block">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-left text-xs">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-4 py-3 text-gray-500 font-medium">
-                  Nome
-                </th>
-                <th className="text-left px-4 py-3 text-gray-500 font-medium">
-                  Telefone
-                </th>
-                <th className="text-left px-4 py-3 text-gray-500 font-medium">
-                  Evento
-                </th>
-                <th className="text-left px-4 py-3 text-gray-500 font-medium">
-                  Etapa
-                </th>
-                <th className="text-left px-4 py-3 text-gray-500 font-medium">
-                  Status
-                </th>
-                <th className="text-left px-4 py-3 text-gray-500 font-medium">
-                  Visita
-                </th>
-                <th className="text-left px-4 py-3 text-gray-500 font-medium">
-                  Check-in
-                </th>
-                <th className="text-left px-4 py-3 text-gray-500 font-medium">
-                  Ações
-                </th>
+              <tr className="border-b border-zinc-100 dark:border-zinc-800/80 text-zinc-400 font-semibold uppercase tracking-wider bg-zinc-50/50 dark:bg-zinc-950/40">
+                <th className="py-3 px-4">Lead / Cliente</th>
+                <th className="py-3 px-4">Telefone</th>
+                <th className="py-3 px-4">Evento</th>
+                <th className="py-3 px-4">Etapa CRM</th>
+                <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4">Visita</th>
+                <th className="py-3 px-4">Convite Check-in</th>
+                <th className="py-3 px-4 text-right">Ações Rápidas</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-zinc-50 dark:divide-zinc-800/60">
               {filteredLeads.map((lead) => (
                 <tr
                   key={lead.id}
-                  className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50 transition-colors"
+                  className="hover:bg-zinc-50/60 dark:hover:bg-zinc-800/40 transition-colors"
                 >
-                  <td className="px-4 py-3 font-medium text-gray-900">
+                  <td className="py-3 px-4 font-bold text-zinc-900 dark:text-zinc-100">
                     {lead.name}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{lead.phone}</td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">
+                  <td className="py-3 px-4 text-zinc-500 dark:text-zinc-400 font-mono">
+                    {lead.phone}
+                  </td>
+                  <td className="py-3 px-4 text-zinc-600 dark:text-zinc-300 font-medium">
                     {lead.event_interest || "—"}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="py-3 px-4">
                     <StageBadge stage={lead.crm_stage} />
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="py-3 px-4">
                     <ConfirmationBadge status={lead.confirmation_status} />
                   </td>
-                  <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
+                  <td className="py-3 px-4 text-zinc-500 dark:text-zinc-400 font-mono">
                     {lead.store_visit_datetime
                       ? new Date(lead.store_visit_datetime).toLocaleDateString(
                           "pt-BR",
@@ -1448,9 +1416,9 @@ export function LeadsVendedorPage() {
                         )
                       : "—"}
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-500 max-w-[140px]">
+                  <td className="py-3 px-4 max-w-[150px]">
                     {lead.checkin_token ? (
-                      <div className="flex flex-col gap-1.5">
+                      <div className="flex flex-col gap-1">
                         <CheckinQrImage
                           value={
                             lead.checkin_token ?? lead.checkin_voucher ?? ""
@@ -1460,43 +1428,33 @@ export function LeadsVendedorPage() {
                         <button
                           type="button"
                           onClick={() => copyCheckinPayload(lead)}
-                          className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-[#FF0636] hover:underline"
                         >
-                          <Copy size={12} /> Copiar convite
+                          <Copy size={12} /> Copiar Convite
                         </button>
-                        {lead.checkin_voucher ? (
-                          <a
-                            href={`${window.location.origin}/convite?v=${encodeURIComponent(lead.checkin_voucher)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[11px] font-medium text-zinc-500 hover:text-zinc-700"
-                          >
-                            Abrir página do convite
-                          </a>
-                        ) : null}
                       </div>
                     ) : (
                       "—"
                     )}
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5">
+                  <td className="py-3 px-4">
+                    <div className="flex items-center justify-end gap-1">
                       <button
                         type="button"
                         onClick={() => openLeadChat(lead)}
-                        className="rounded-lg p-1.5 text-green-500 transition-colors hover:bg-green-50"
-                        title="Abrir conversa no WhatsApp"
+                        className="rounded-lg p-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                        title="Abrir WhatsApp"
                       >
-                        <MessageCircle size={15} />
+                        <MessageCircle size={16} />
                       </button>
                       <button
                         type="button"
                         onClick={() => copyCheckinPayload(lead)}
                         disabled={getCheckinButtonState(lead).disabled}
-                        className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-30"
+                        className="rounded-lg p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors disabled:opacity-30"
                         title={getCheckinButtonState(lead).title}
                       >
-                        <CheckCircle2 size={15} />
+                        <CheckCircle2 size={16} />
                       </button>
                       <button
                         type="button"
@@ -1507,19 +1465,19 @@ export function LeadsVendedorPage() {
                           );
                         }}
                         disabled={getAppointmentButtonState(lead).disabled}
-                        className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-30"
+                        className="rounded-lg p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition-colors disabled:opacity-30"
                         title={getAppointmentButtonState(lead).title}
                       >
-                        <CalendarPlus size={15} />
+                        <CalendarPlus size={16} />
                       </button>
                       <button
                         type="button"
                         onClick={() => setSaleModal(lead)}
                         disabled={getSaleButtonState(lead).disabled}
-                        className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-30"
+                        className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors disabled:opacity-30"
                         title={getSaleButtonState(lead).title}
                       >
-                        <ShoppingCart size={15} />
+                        <ShoppingCart size={16} />
                       </button>
                       <button
                         type="button"
