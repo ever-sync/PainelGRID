@@ -248,6 +248,7 @@ export class MailService {
       start: p.scheduledAt,
     });
 
+    const whatsappUrl = this.buildCredenciamentoWhatsAppUrl();
     const logoUrl = this.toAbsoluteMediaUrl(p.clientLogoUrl);
     const vendorAvatarUrl = this.toAbsoluteMediaUrl(p.vendorAvatarUrl);
     const vendorInitials = (vendorFirstName ?? '?').slice(0, 2).toUpperCase();
@@ -300,8 +301,10 @@ export class MailService {
     .details-row:last-child { border-bottom: none; padding-bottom: 0; }
     .details-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #888; }
     .details-value { font-size: 14px; font-weight: 600; color: #111; text-align: right; }
-    .cta { text-align: center; margin: 28px 0 8px; }
+    .cta { text-align: center; margin: 16px 0 8px; }
     .cta a { display: inline-block; background: #111; color: #fff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 13px 28px; border-radius: 12px; letter-spacing: -.1px; }
+    .cta-whatsapp { text-align: center; margin: 28px 0 8px; }
+    .cta-whatsapp a { display: inline-block; background: #25D366; color: #fff; text-decoration: none; font-weight: 700; font-size: 15px; padding: 14px 32px; border-radius: 12px; letter-spacing: -.1px; }
     .footer { padding: 20px 40px; text-align: center; font-size: 12px; color: #aaa; line-height: 1.7; }
   </style>
 </head>
@@ -340,6 +343,9 @@ export class MailService {
 
         ${vendorBlock}
 
+        <div class="cta-whatsapp">
+          <a href="${whatsappUrl}">💬 Continuar Credenciamento</a>
+        </div>
         <div class="cta">
           <a href="${calendarUrl}">📅 Adicionar ao Google Agenda</a>
         </div>
