@@ -13,6 +13,7 @@ export class MailService {
   private readonly apiKey: string;
   private readonly from: string;
   private readonly frontendUrl: string;
+  private readonly apiPublicUrl: string;
 
   constructor(config: ConfigService) {
     this.apiKey =
@@ -22,6 +23,12 @@ export class MailService {
       .get<string>('FRONTEND_URL', 'http://localhost:8080')
       .split(',')[0]
       .trim();
+    const railwayDomain = config.get<string>('RAILWAY_PUBLIC_DOMAIN', '');
+    this.apiPublicUrl = (
+      config.get<string>('API_PUBLIC_URL', '') ||
+      (railwayDomain ? `https://${railwayDomain}` : '') ||
+      'https://api.gpdevendas.app'
+    ).replace(/\/+$/, '');
 
     if (this.apiKey) {
       this.logger.log('Resend (API HTTP) configurado para envio de e-mail');
@@ -138,6 +145,203 @@ export class MailService {
       <div class="footer">
         <p>Você está recebendo este e-mail porque uma conta foi criada em seu nome.</p>
         <p>PainelGRID · Gestão de Vendas</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+  }
+
+  async sendAppointmentWelcome(params: {
+    to: string;
+    leadName: string;
+    eventName: string;
+    eventLocation: string | null;
+    scheduledAt: Date;
+    timezone: string;
+    vendorName: string | null;
+    vendorAvatarUrl: string | null;
+    clientLogoUrl: string | null;
+    clientName: string;
+  }): Promise<void> {
+    if (!this.apiKey) {
+      this.logger.warn('Email de boas-vindas ao evento nao enviado: Resend nao configurado');
+      return;
+    }
+
+    const subject = `Bem-vindo(a) ao ${params.eventName}! 🏁`;
+    const html = this.buildAppointmentWelcomeHtml(params);
+
+    try {
+      await this.sendViaResend({ to: params.to, subject, html });
+      this.logger.log('Email de boas-vindas ao evento enviado');
+    } catch (err) {
+      this.logger.error(
+        `Falha ao enviar email de boas-vindas ao evento: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  private toAbsoluteMediaUrl(path: string | null): string | null {
+    if (!path) return null;
+    if (/^https?:\/\//i.test(path)) return path;
+    return `${this.apiPublicUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+  }
+
+  private buildGoogleCalendarUrl(p: {
+    title: string;
+    details: string;
+    location: string;
+    start: Date;
+    durationMinutes?: number;
+  }): string {
+    const end = new Date(p.start.getTime() + (p.durationMinutes ?? 60) * 60_000);
+    const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const query = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: p.title,
+      dates: `${fmt(p.start)}/${fmt(end)}`,
+      details: p.details,
+      location: p.location,
+    });
+    return `https://calendar.google.com/calendar/render?${query.toString()}`;
+  }
+
+  private buildAppointmentWelcomeHtml(p: {
+    leadName: string;
+    eventName: string;
+    eventLocation: string | null;
+    scheduledAt: Date;
+    timezone: string;
+    vendorName: string | null;
+    vendorAvatarUrl: string | null;
+    clientLogoUrl: string | null;
+    clientName: string;
+  }): string {
+    const firstName = p.leadName.split(' ')[0];
+    const vendorFirstName = p.vendorName?.split(' ')[0] ?? null;
+    const location = p.eventLocation?.trim() || 'Local a confirmar';
+
+    const dateLabel = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: p.timezone || 'America/Sao_Paulo',
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    }).format(p.scheduledAt);
+    const timeLabel = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: p.timezone || 'America/Sao_Paulo',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(p.scheduledAt);
+
+    const calendarUrl = this.buildGoogleCalendarUrl({
+      title: p.eventName,
+      details: vendorFirstName
+        ? `Seu horário no ${p.eventName}. ${vendorFirstName} vai te aguardar por lá!`
+        : `Seu horário no ${p.eventName}.`,
+      location,
+      start: p.scheduledAt,
+    });
+
+    const logoUrl = this.toAbsoluteMediaUrl(p.clientLogoUrl);
+    const vendorAvatarUrl = this.toAbsoluteMediaUrl(p.vendorAvatarUrl);
+    const vendorInitials = (vendorFirstName ?? '?').slice(0, 2).toUpperCase();
+
+    const logoBlock = logoUrl
+      ? `<img src="${logoUrl}" alt="${p.clientName}" style="max-height:40px;max-width:180px;object-fit:contain;" />`
+      : `<span style="color:#fff;font-size:20px;font-weight:800;">${p.clientName}</span>`;
+
+    const vendorAvatarBlock = vendorAvatarUrl
+      ? `<img src="${vendorAvatarUrl}" alt="${p.vendorName}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;display:block;" />`
+      : `<div style="width:56px;height:56px;border-radius:50%;background:#f0f0f3;color:#888;font-weight:800;font-size:18px;display:flex;align-items:center;justify-content:center;">${vendorInitials}</div>`;
+
+    const vendorBlock = p.vendorName
+      ? `
+        <table role="presentation" style="width:100%;margin-top:24px;border:1.5px solid #e8e8ed;border-radius:14px;">
+          <tr>
+            <td style="padding:18px 20px;">
+              <table role="presentation"><tr>
+                <td style="width:56px;">${vendorAvatarBlock}</td>
+                <td style="padding-left:14px;">
+                  <p style="margin:0;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#888;">Seu vendedor</p>
+                  <p style="margin:2px 0 0;font-size:15px;font-weight:700;color:#111;">${p.vendorName}</p>
+                  <p style="margin:2px 0 0;font-size:13px;color:#555;">vai te aguardar pessoalmente no evento 🤝</p>
+                </td>
+              </tr></table>
+            </td>
+          </tr>
+        </table>`
+      : '';
+
+    return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bem-vindo ao ${p.eventName}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #f4f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .wrapper { max-width: 560px; margin: 40px auto; }
+    .card { background: #fff; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+    .header { background: #FF0636; padding: 30px 40px; text-align: center; }
+    .header p { color: rgba(255,255,255,.8); font-size: 13px; margin-top: 8px; font-weight: 600; letter-spacing: .02em; }
+    .body { padding: 36px 40px; }
+    .body h2 { font-size: 19px; font-weight: 700; color: #111; }
+    .body > p.lead { color: #555; font-size: 14px; line-height: 1.6; margin-top: 8px; }
+    .details { background: #f8f8fa; border: 1.5px solid #e8e8ed; border-radius: 14px; padding: 20px 24px; margin: 24px 0 0; }
+    .details-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #ececec; }
+    .details-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .details-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #888; }
+    .details-value { font-size: 14px; font-weight: 600; color: #111; text-align: right; }
+    .cta { text-align: center; margin: 28px 0 8px; }
+    .cta a { display: inline-block; background: #111; color: #fff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 13px 28px; border-radius: 12px; letter-spacing: -.1px; }
+    .footer { padding: 20px 40px; text-align: center; font-size: 12px; color: #aaa; line-height: 1.7; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="card">
+      <div class="header">
+        ${logoBlock}
+        <p>Bem-vindo(a) ao ${p.eventName}</p>
+      </div>
+      <div class="body">
+        <h2>Olá, ${firstName}! 🏁</h2>
+        <p class="lead">
+          Recebemos sua pré-agenda e já reservamos seu horário. Confira os detalhes
+          abaixo e não esqueça de adicionar ao seu calendário.
+        </p>
+
+        <div class="details">
+          <div class="details-row">
+            <span class="details-label">Evento</span>
+            <span class="details-value">${p.eventName}</span>
+          </div>
+          <div class="details-row">
+            <span class="details-label">Data</span>
+            <span class="details-value">${dateLabel}</span>
+          </div>
+          <div class="details-row">
+            <span class="details-label">Horário</span>
+            <span class="details-value">${timeLabel}</span>
+          </div>
+          <div class="details-row">
+            <span class="details-label">Local</span>
+            <span class="details-value">${location}</span>
+          </div>
+        </div>
+
+        ${vendorBlock}
+
+        <div class="cta">
+          <a href="${calendarUrl}">📅 Adicionar ao Google Agenda</a>
+        </div>
+      </div>
+      <div class="footer">
+        <p>Você está recebendo este e-mail porque um horário foi reservado em seu nome.</p>
+        <p>${p.clientName}</p>
       </div>
     </div>
   </div>

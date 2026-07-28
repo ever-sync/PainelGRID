@@ -16,6 +16,7 @@ import {
   DASHBOARD_DARK_CHANGE_EVENT,
   readDashboardDarkEnabled,
 } from "../../lib/dashboard-dark-mode";
+import { getVendorScoreRanking } from "../../services/vendorScore";
 import {
   listEvents,
   getEventDashboardTv,
@@ -286,9 +287,9 @@ export function RankingVendedorPage() {
         );
         setEvents(sorted);
         setSelectedEventId((prev) => {
-          if (prev && sorted.some((event) => event.id === prev)) return prev;
+          if (prev === "all" || (prev && sorted.some((event) => event.id === prev))) return prev;
           const active = sorted.find((event) => event.status === "active");
-          return active?.id ?? sorted[0]?.id ?? "";
+          return active?.id ?? "all";
         });
       })
       .catch(() => setEvents([]));
@@ -296,7 +297,7 @@ export function RankingVendedorPage() {
 
   useEffect(() => {
     const token = readStoredSession()?.accessToken;
-    if (!selectedEventId || !token) {
+    if (!token || !clientId) {
       setData(null);
       return;
     }
@@ -306,53 +307,118 @@ export function RankingVendedorPage() {
     setLoading(true);
     setError("");
 
-    getEventDashboardTv(selectedEventId, token, controller.signal)
-      .then((response) => {
-        if (!active) return;
-        setData(response);
-      })
-      .catch((err) => {
+    async function loadRankingData() {
+      try {
+        if (!selectedEventId || selectedEventId === "all") {
+          // Ranking Geral da Empresa (Todos os Vendedores e Times Reais)
+          const scoreItems = await getVendorScoreRanking(token, {
+            client_id: clientId,
+          });
+
+          if (!active) return;
+
+          const vendors: VendorRow[] = scoreItems.map((item) => ({
+            vendor_id: item.vendor_id,
+            vendor_name: item.vendor_name,
+            team_id: null,
+            team_name: "Equipe de Vendas",
+            leads: item.assigned,
+            scheduled: item.scheduled.count,
+            confirmed: item.checked_in.count,
+            checked_in: item.checked_in.count,
+            sold: item.sold.count,
+            points: item.total_points,
+          }));
+
+          const totalSales = vendors.reduce((acc, v) => acc + v.sold, 0);
+          const totalScheduled = vendors.reduce((acc, v) => acc + v.scheduled, 0);
+          const totalCheckedIn = vendors.reduce((acc, v) => acc + v.checked_in, 0);
+
+          const teams: TeamRow[] = vendors.length > 0 ? [
+            {
+              team_id: "geral",
+              team_name: "Equipe Geral de Vendas",
+              leads: vendors.reduce((acc, v) => acc + v.leads, 0),
+              scheduled: totalScheduled,
+              confirmed: totalCheckedIn,
+              checked_in: totalCheckedIn,
+              sold: totalSales,
+            },
+          ] : [];
+
+          setData({
+            event: {
+              id: "all",
+              name: "Geral da Empresa",
+              status: "active",
+            },
+            funnel: {
+              leads: vendors.reduce((acc, v) => acc + v.leads, 0),
+              scheduled: totalScheduled,
+              confirmed: totalCheckedIn,
+              checked_in: totalCheckedIn,
+              sold: totalSales,
+            },
+            teams,
+            vendors,
+            hourly: [],
+            daily: [],
+            ticker_messages: [],
+          });
+        } else {
+          // Ranking por Evento Selecionado
+          const response = await getEventDashboardTv(
+            selectedEventId,
+            token,
+            controller.signal,
+          );
+          if (!active) return;
+          setData(response);
+        }
+      } catch (err) {
         if (!active) return;
         setData(null);
         setError(
           err instanceof Error ? err.message : "Falha ao carregar ranking",
         );
-      })
-      .finally(() => {
+      } finally {
         if (active) setLoading(false);
-      });
+      }
+    }
+
+    void loadRankingData();
 
     return () => {
       active = false;
       controller.abort();
     };
-  }, [selectedEventId]);
+  }, [selectedEventId, clientId]);
 
   const leaderTeam = data?.teams[0] ?? null;
+
+  const eventOptions = [
+    { value: "all", label: "Geral da Empresa (Todos os Vendedores)" },
+    ...events.map((event) => ({
+      value: event.id,
+      label: event.name,
+    })),
+  ];
 
   return (
     <div>
       <PageHeader
         title="Ranking"
         breadcrumbs={[{ label: "Vendedor" }, { label: "Ranking" }]}
-        subtitle="Equipe na frente e ranking individual do evento."
+        subtitle="Equipe na frente e ranking individual dos vendedores."
       />
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div className="w-full sm:w-80">
           <Select
-            label="Evento Selecionado"
-            value={selectedEventId}
+            label="Visualização do Ranking"
+            value={selectedEventId || "all"}
             onChange={(e) => setSelectedEventId(e.target.value)}
-            options={events.map((event) => ({
-              value: event.id,
-              label: event.name,
-            }))}
-            placeholder={
-              events.length === 0
-                ? "Nenhum evento disponível"
-                : "Selecione um evento"
-            }
+            options={eventOptions}
           />
         </div>
 

@@ -1,13 +1,4 @@
-import { useEffect, useState } from "react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { lazy, type ComponentType, useEffect, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -20,6 +11,7 @@ import { PageHeader } from "../../components/shared/PageHeader";
 import { Tabs } from "../../components/ui/Tabs";
 import { Card } from "../../components/ui/Card";
 import { StatsCard } from "../../components/shared/StatsCard";
+import { DeferredContent } from "../../components/shared/DeferredContent";
 import { readStoredSession } from "../../services/auth";
 import {
   getCourse,
@@ -27,6 +19,22 @@ import {
   mapApiCourseToCourse,
 } from "../../services/coursesApi";
 import type { Course } from "../../types";
+
+function lazyRechart(name: keyof typeof import("recharts")) {
+  return lazy(() =>
+    import("recharts").then((module) => ({
+      default: module[name] as ComponentType<any>,
+    })),
+  );
+}
+
+const BarChart = lazyRechart("BarChart");
+const Bar = lazyRechart("Bar");
+const XAxis = lazyRechart("XAxis");
+const YAxis = lazyRechart("YAxis");
+const CartesianGrid = lazyRechart("CartesianGrid");
+const Tooltip = lazyRechart("Tooltip");
+const ResponsiveContainer = lazyRechart("ResponsiveContainer");
 
 const TABS = [
   { id: "dashboard", label: "Dashboard" },
@@ -108,26 +116,31 @@ export function CursosGestorPage() {
             <h3 className="text-base font-semibold text-gray-900 mb-4">
               Progresso por Curso
             </h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar
-                  dataKey="concluidos"
-                  name="Concluídos"
-                  fill="#22c55e"
-                  radius={[3, 3, 0, 0]}
-                />
-                <Bar
-                  dataKey="em_andamento"
-                  name="Em andamento"
-                  fill="#3b82f6"
-                  radius={[3, 3, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            <DeferredContent
+              height={200}
+              label="Carregando progresso por curso"
+            >
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar
+                    dataKey="concluidos"
+                    name="Concluídos"
+                    fill="#22c55e"
+                    radius={[3, 3, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="em_andamento"
+                    name="Em andamento"
+                    fill="#3b82f6"
+                    radius={[3, 3, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </DeferredContent>
           </Card>
         </div>
       )}

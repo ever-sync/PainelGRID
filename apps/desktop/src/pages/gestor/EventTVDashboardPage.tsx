@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useParams } from "react-router-dom";
 import { Maximize2, Minimize2 } from "lucide-react";
 import {
@@ -15,8 +23,6 @@ import { ConnectionDot } from "../../components/tv/ConnectionDot";
 import { Funnel } from "../../components/tv/Funnel";
 import { PodiumSlide } from "../../components/tv/PodiumSlide";
 import { SaleCelebration } from "../../components/tv/SaleCelebration";
-import { SegmentDonut } from "../../components/tv/SegmentDonut";
-import { SourceBars } from "../../components/tv/SourceBars";
 import { TeamRanking } from "../../components/tv/TeamRanking";
 import { TopModelsLeaderboard } from "../../components/tv/TopModelsLeaderboard";
 import { VendorRanking } from "../../components/tv/VendorRanking";
@@ -30,6 +36,26 @@ import {
 } from "../../components/tv/shared";
 
 const CELEBRATION_DURATION_MS = 9000;
+
+const SegmentDonut = lazy(() =>
+  import("../../components/tv/SegmentDonut").then((module) => ({
+    default: module.SegmentDonut,
+  })),
+);
+const SourceBars = lazy(() =>
+  import("../../components/tv/SourceBars").then((module) => ({
+    default: module.SourceBars,
+  })),
+);
+
+function TvChartFallback({ className }: { className: string }) {
+  return (
+    <div
+      className={`${className} min-h-[260px] animate-pulse rounded-2xl border border-zinc-800 bg-zinc-900/50`}
+      aria-label="Carregando gráfico"
+    />
+  );
+}
 
 const STATUS_META: Record<
   ConnectionStatus,
@@ -480,17 +506,24 @@ export function EventTVDashboardPage() {
           <div className="grid min-h-0 flex-1 grid-cols-12 gap-3">
             <VendorRanking vendors={data.vendors} className="col-span-7" />
             <TeamRanking teams={data.teams} className="col-span-5" />
-            <SegmentDonut
-              bySegment={data.cars.by_segment}
-              totalSold={data.funnel.sold}
-              totalValue={data.cars.total_value}
-              className="col-span-4"
-            />
+            <Suspense fallback={<TvChartFallback className="col-span-4" />}>
+              <SegmentDonut
+                bySegment={data.cars.by_segment}
+                totalSold={data.funnel.sold}
+                totalValue={data.cars.total_value}
+                className="col-span-4"
+              />
+            </Suspense>
             <TopModelsLeaderboard
               topModels={data.cars.top_models}
               className="col-span-4"
             />
-            <SourceBars data={data.checkin_by_source} className="col-span-4" />
+            <Suspense fallback={<TvChartFallback className="col-span-4" />}>
+              <SourceBars
+                data={data.checkin_by_source}
+                className="col-span-4"
+              />
+            </Suspense>
           </div>
         </>
       )}

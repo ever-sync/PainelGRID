@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState, Fragment } from "react";
+import {
+  lazy,
+  type ComponentType,
+  useEffect,
+  useMemo,
+  useState,
+  Fragment,
+} from "react";
 import { useOutletContext } from "react-router-dom";
 import clsx from "clsx";
 import {
@@ -27,6 +34,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { StatsCard } from "../../components/shared/StatsCard";
+import { DeferredContent } from "../../components/shared/DeferredContent";
 import { Card } from "../../components/ui/Card";
 import { Tabs } from "../../components/ui/Tabs";
 import { readStoredSession } from "../../services/auth";
@@ -40,30 +48,52 @@ import {
   DASHBOARD_DARK_CHANGE_EVENT,
   readDashboardDarkEnabled,
 } from "../../lib/dashboard-dark-mode";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-} from "recharts";
-
-type RelatorioTab = "visao_geral" | "evento" | "campanhas" | "campanha_x_evento";
+type RelatorioTab =
+  "visao_geral" | "evento" | "campanhas" | "campanha_x_evento";
 
 const RELATORIO_TABS = [
-  { id: "visao_geral", label: "Visão Geral", icon: <LayoutDashboard size={16} /> },
+  {
+    id: "visao_geral",
+    label: "Visão Geral",
+    icon: <LayoutDashboard size={16} />,
+  },
   { id: "evento", label: "Evento", icon: <Calendar size={16} /> },
   { id: "campanhas", label: "Campanhas", icon: <Megaphone size={16} /> },
-  { id: "campanha_x_evento", label: "Campanha x Evento", icon: <GitCompare size={16} /> },
+  {
+    id: "campanha_x_evento",
+    label: "Campanha x Evento",
+    icon: <GitCompare size={16} />,
+  },
 ];
 
-const PIE_COLORS = ["#FF0636", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#64748b"];
+const PIE_COLORS = [
+  "#FF0636",
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
+  "#8b5cf6",
+  "#64748b",
+];
+
+function lazyRechart(name: keyof typeof import("recharts")) {
+  return lazy(() =>
+    import("recharts").then((module) => ({
+      default: module[name] as ComponentType<any>,
+    })),
+  );
+}
+
+const BarChart = lazyRechart("BarChart");
+const Bar = lazyRechart("Bar");
+const XAxis = lazyRechart("XAxis");
+const YAxis = lazyRechart("YAxis");
+const CartesianGrid = lazyRechart("CartesianGrid");
+const Tooltip = lazyRechart("Tooltip");
+const ResponsiveContainer = lazyRechart("ResponsiveContainer");
+const PieChart = lazyRechart("PieChart");
+const Pie = lazyRechart("Pie");
+const Cell = lazyRechart("Cell");
+const Legend = lazyRechart("Legend");
 
 function formatCurrency(val: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -126,12 +156,16 @@ export function RelatorioGestorPage() {
   }, [selectedClientId, selectedEventId]);
 
   // Estado para expansão da tabela hierárquica de campanhas (Campanha -> Conjuntos -> Anúncios)
-  const [expandedCampaigns, setExpandedCampaigns] = useState<Record<string, boolean>>({
+  const [expandedCampaigns, setExpandedCampaigns] = useState<
+    Record<string, boolean>
+  >({
     "camp-1": true,
   });
-  const [expandedAdSets, setExpandedAdSets] = useState<Record<string, boolean>>({
-    "adset-101": true,
-  });
+  const [expandedAdSets, setExpandedAdSets] = useState<Record<string, boolean>>(
+    {
+      "adset-101": true,
+    },
+  );
 
   const toggleCampaign = (id: string) => {
     setExpandedCampaigns((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -443,7 +477,10 @@ export function RelatorioGestorPage() {
   // Métricas calculadas
   const totalLeads = filteredLeads.length;
   const leadsAgendados = filteredLeads.filter(
-    (l) => l.crm_stage === "agendado" || l.crm_stage === "checkin" || l.crm_stage === "convertido",
+    (l) =>
+      l.crm_stage === "agendado" ||
+      l.crm_stage === "checkin" ||
+      l.crm_stage === "convertido",
   ).length;
   const leadsCheckin = filteredLeads.filter(
     (l) => l.crm_stage === "checkin" || l.crm_stage === "convertido",
@@ -462,9 +499,21 @@ export function RelatorioGestorPage() {
       return crmStages.map((stg) => {
         const count = filteredLeads.filter((l) => {
           if (l.crm_stage_id && l.crm_stage_id === stg.id) return true;
-          if (l.crm_stage_code && l.crm_stage_code.toLowerCase() === stg.code.toLowerCase()) return true;
-          if (l.crm_stage && l.crm_stage.toLowerCase() === stg.code.toLowerCase()) return true;
-          if (l.crm_stage_name && l.crm_stage_name.toLowerCase() === stg.name.toLowerCase()) return true;
+          if (
+            l.crm_stage_code &&
+            l.crm_stage_code.toLowerCase() === stg.code.toLowerCase()
+          )
+            return true;
+          if (
+            l.crm_stage &&
+            l.crm_stage.toLowerCase() === stg.code.toLowerCase()
+          )
+            return true;
+          if (
+            l.crm_stage_name &&
+            l.crm_stage_name.toLowerCase() === stg.name.toLowerCase()
+          )
+            return true;
           return false;
         }).length;
 
@@ -501,11 +550,21 @@ export function RelatorioGestorPage() {
     filteredLeads.forEach((l) => {
       const srcRaw = (l.source || "").toLowerCase();
       let srcName = "Outros Canais";
-      if (srcRaw.includes("facebook") || srcRaw.includes("meta") || srcRaw.includes("ig") || srcRaw === "facebook_ads") {
+      if (
+        srcRaw.includes("facebook") ||
+        srcRaw.includes("meta") ||
+        srcRaw.includes("ig") ||
+        srcRaw === "facebook_ads"
+      ) {
         srcName = "Facebook Ads (Meta)";
       } else if (srcRaw.includes("whatsapp")) {
         srcName = "WhatsApp Direct";
-      } else if (srcRaw.includes("form") || srcRaw.includes("site") || srcRaw.includes("web") || srcRaw === "form_page") {
+      } else if (
+        srcRaw.includes("form") ||
+        srcRaw.includes("site") ||
+        srcRaw.includes("web") ||
+        srcRaw === "form_page"
+      ) {
         srcName = "Formulário Web";
       } else if (srcRaw.includes("manual") || srcRaw.includes("balcao")) {
         srcName = "Manual / Balcão";
@@ -534,24 +593,34 @@ export function RelatorioGestorPage() {
       const evCheckins = evLeads.filter(
         (l) => l.crm_stage === "checkin" || l.crm_stage === "convertido",
       ).length;
-      const evVendas = evLeads.filter((l) => l.crm_stage === "convertido").length;
+      const evVendas = evLeads.filter(
+        (l) => l.crm_stage === "convertido",
+      ).length;
 
       const salesTarget = ev.sales_target || 0;
       const audienceTarget = ev.capacity || 0;
 
       const salesProgressPercent =
-        salesTarget > 0 ? Math.min(100, Math.round((evVendas / salesTarget) * 100)) : 0;
+        salesTarget > 0
+          ? Math.min(100, Math.round((evVendas / salesTarget) * 100))
+          : 0;
 
       const audienceProgressPercent =
-        audienceTarget > 0 ? Math.min(100, Math.round((evCheckins / audienceTarget) * 100)) : 0;
+        audienceTarget > 0
+          ? Math.min(100, Math.round((evCheckins / audienceTarget) * 100))
+          : 0;
 
       // Estimativas Financeiras e CAC do Evento
       const valorInvestido = (ev.capacity || 100) * 150; // Orçamento alocado (ex: R$ 15.000)
       const ticketMedio = 75000;
       const valorTotalVendas = evVendas * ticketMedio;
       const cac = evVendas > 0 ? Math.round(valorInvestido / evVendas) : 0;
-      const nomeResumido = ev.name.length > 20 ? `${ev.name.slice(0, 20)}...` : ev.name;
-      const taxaCheckin = evLeads.length > 0 ? Math.round((evCheckins / evLeads.length) * 100) : 0;
+      const nomeResumido =
+        ev.name.length > 20 ? `${ev.name.slice(0, 20)}...` : ev.name;
+      const taxaCheckin =
+        evLeads.length > 0
+          ? Math.round((evCheckins / evLeads.length) * 100)
+          : 0;
 
       return {
         ...ev,
@@ -579,7 +648,9 @@ export function RelatorioGestorPage() {
 
   const topAttendanceEvent = useMemo(() => {
     if (eventMetrics.length === 0) return null;
-    return [...eventMetrics].sort((a, b) => b.totalCheckins - a.totalCheckins)[0];
+    return [...eventMetrics].sort(
+      (a, b) => b.totalCheckins - a.totalCheckins,
+    )[0];
   }, [eventMetrics]);
 
   // Ranking de Vendedores do Evento/Filtro (Integrado com o Modo TV)
@@ -599,13 +670,21 @@ export function RelatorioGestorPage() {
 
     const vendorMap: Record<
       string,
-      { id: string; name: string; sales: number; checkins: number; leads: number }
+      {
+        id: string;
+        name: string;
+        sales: number;
+        checkins: number;
+        leads: number;
+      }
     > = {};
 
     filteredLeads.forEach((lead) => {
       const vName =
         lead.registered_by_name ||
-        (lead.assigned_vendor_id ? `Vendedor ${lead.assigned_vendor_id.slice(0, 5)}` : "Vendedor Geral");
+        (lead.assigned_vendor_id
+          ? `Vendedor ${lead.assigned_vendor_id.slice(0, 5)}`
+          : "Vendedor Geral");
       const vId = lead.assigned_vendor_id || lead.registered_by_id || vName;
 
       if (!vendorMap[vId]) {
@@ -630,9 +709,27 @@ export function RelatorioGestorPage() {
     const list = Object.values(vendorMap);
     if (list.length === 0) {
       return [
-        { id: "v1", name: "Carlos Eduardo Silva", sales: 18, checkins: 42, leads: 95 },
-        { id: "v2", name: "Mariana Oliveira", sales: 14, checkins: 38, leads: 82 },
-        { id: "v3", name: "Roberto Santos", sales: 11, checkins: 29, leads: 64 },
+        {
+          id: "v1",
+          name: "Carlos Eduardo Silva",
+          sales: 18,
+          checkins: 42,
+          leads: 95,
+        },
+        {
+          id: "v2",
+          name: "Mariana Oliveira",
+          sales: 14,
+          checkins: 38,
+          leads: 82,
+        },
+        {
+          id: "v3",
+          name: "Roberto Santos",
+          sales: 11,
+          checkins: 29,
+          leads: 64,
+        },
         { id: "v4", name: "Fernanda Costa", sales: 9, checkins: 24, leads: 51 },
         { id: "v5", name: "Lucas Mendes", sales: 6, checkins: 18, leads: 40 },
       ];
@@ -657,10 +754,38 @@ export function RelatorioGestorPage() {
     }
 
     return [
-      { id: "t1", name: "Equipe Alfa (Novos & Seminovos)", members: 6, sales: 28, checkins: 65, meta: 30 },
-      { id: "t2", name: "Equipe Beta (Venda Direta & PCD)", members: 4, sales: 22, checkins: 48, meta: 25 },
-      { id: "t3", name: "Equipe Gama (Consórcio & Assinatura)", members: 5, sales: 15, checkins: 34, meta: 20 },
-      { id: "t4", name: "Equipe Delta (Recepção & Agendamentos)", members: 3, sales: 9, checkins: 22, meta: 15 },
+      {
+        id: "t1",
+        name: "Equipe Alfa (Novos & Seminovos)",
+        members: 6,
+        sales: 28,
+        checkins: 65,
+        meta: 30,
+      },
+      {
+        id: "t2",
+        name: "Equipe Beta (Venda Direta & PCD)",
+        members: 4,
+        sales: 22,
+        checkins: 48,
+        meta: 25,
+      },
+      {
+        id: "t3",
+        name: "Equipe Gama (Consórcio & Assinatura)",
+        members: 5,
+        sales: 15,
+        checkins: 34,
+        meta: 20,
+      },
+      {
+        id: "t4",
+        name: "Equipe Delta (Recepção & Agendamentos)",
+        members: 3,
+        sales: 9,
+        checkins: 22,
+        meta: 15,
+      },
     ].sort((a, b) => b.sales - a.sales || b.checkins - a.checkins);
   }, [tvTeams]);
 
@@ -675,16 +800,25 @@ export function RelatorioGestorPage() {
       const fbLeads = evLeads.filter((l) => l.source === "facebook_ads").length;
       const waLeads = evLeads.filter((l) => l.source === "whatsapp").length;
       const formLeads = evLeads.filter((l) => l.source === "form_page").length;
-      const manualLeads = evLeads.filter((l) => l.source === "manual" || !l.source).length;
+      const manualLeads = evLeads.filter(
+        (l) => l.source === "manual" || !l.source,
+      ).length;
 
       const agendados = evLeads.filter(
-        (l) => l.crm_stage === "agendado" || l.crm_stage === "checkin" || l.crm_stage === "convertido",
+        (l) =>
+          l.crm_stage === "agendado" ||
+          l.crm_stage === "checkin" ||
+          l.crm_stage === "convertido",
       ).length;
       const vendas = evLeads.filter((l) => l.crm_stage === "convertido").length;
 
       const valorInvestido = (ev.capacity || 100) * 150; // Orçamento alocado (ex: R$ 15.000)
-      const custoPorAgendamento = agendados > 0 ? Math.round(valorInvestido / agendados) : 0;
-      const taxaConversaoAgendamento = agendados > 0 ? Math.min(100, Math.round((vendas / agendados) * 100)) : 0;
+      const custoPorAgendamento =
+        agendados > 0 ? Math.round(valorInvestido / agendados) : 0;
+      const taxaConversaoAgendamento =
+        agendados > 0
+          ? Math.min(100, Math.round((vendas / agendados) * 100))
+          : 0;
 
       return {
         eventoId: ev.id,
@@ -726,10 +860,16 @@ export function RelatorioGestorPage() {
     });
 
     const topChannel =
-      fb >= wa && fb >= form ? "Facebook Ads (Meta)" : wa >= form ? "WhatsApp Direct" : "Formulário Web";
+      fb >= wa && fb >= form
+        ? "Facebook Ads (Meta)"
+        : wa >= form
+          ? "WhatsApp Direct"
+          : "Formulário Web";
 
-    const custoAgendamentoMedio = agendados > 0 ? Math.round(investido / agendados) : 0;
-    const taxaConversaoAgendamentoGlobal = agendados > 0 ? Math.round((vendas / agendados) * 100) : 0;
+    const custoAgendamentoMedio =
+      agendados > 0 ? Math.round(investido / agendados) : 0;
+    const taxaConversaoAgendamentoGlobal =
+      agendados > 0 ? Math.round((vendas / agendados) * 100) : 0;
 
     return {
       fb,
@@ -846,7 +986,11 @@ export function RelatorioGestorPage() {
               value={totalLeads}
               icon={<Users size={20} />}
               iconColor="bg-blue-100 text-blue-600"
-              change={selectedClientId === "all" ? "Todas as concessionárias" : "Filtrado"}
+              change={
+                selectedClientId === "all"
+                  ? "Todas as concessionárias"
+                  : "Filtrado"
+              }
               changeType="positive"
             />
             <StatsCard
@@ -893,28 +1037,44 @@ export function RelatorioGestorPage() {
                 <BarChart3 size={18} className="text-gray-400" />
               </div>
 
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={crmFunnelData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke={chartAxisStroke} vertical={false} />
-                  <XAxis type="number" tick={{ fontSize: 11, fill: chartTickFill }} stroke={chartAxisStroke} />
-                  <YAxis
-                    dataKey="stage"
-                    type="category"
-                    tick={{ fontSize: 11, fill: chartTickFill }}
-                    width={100}
-                    stroke={chartAxisStroke}
-                  />
-                  <Tooltip
-                    contentStyle={{ ...chartTooltipStyle, background: chartTooltipBg }}
-                    formatter={(val: number) => [val, "Leads"]}
-                  />
-                  <Bar dataKey="quantidade" radius={[0, 6, 6, 0]}>
-                    {crmFunnelData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color || "#FF0636"} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              <DeferredContent height={260} label="Carregando funil de vendas">
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={crmFunnelData} layout="vertical">
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={chartAxisStroke}
+                      vertical={false}
+                    />
+                    <XAxis
+                      type="number"
+                      tick={{ fontSize: 11, fill: chartTickFill }}
+                      stroke={chartAxisStroke}
+                    />
+                    <YAxis
+                      dataKey="stage"
+                      type="category"
+                      tick={{ fontSize: 11, fill: chartTickFill }}
+                      width={100}
+                      stroke={chartAxisStroke}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        ...chartTooltipStyle,
+                        background: chartTooltipBg,
+                      }}
+                      formatter={(val: number | string) => [val, "Leads"]}
+                    />
+                    <Bar dataKey="quantidade" radius={[0, 6, 6, 0]}>
+                      {crmFunnelData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={entry.color || "#FF0636"}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </DeferredContent>
             </Card>
 
             <Card>
@@ -931,26 +1091,45 @@ export function RelatorioGestorPage() {
               </div>
 
               {sourcePieData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={260}>
-                  <PieChart>
-                    <Pie
-                      data={sourcePieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={85}
-                      paddingAngle={4}
-                      dataKey="value"
-                      label={({ name, percent }) => `${name} ${Math.round(percent * 100)}%`}
-                      labelLine={false}
-                    >
-                      {sourcePieData.map((_, index) => (
-                        <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{ ...chartTooltipStyle, background: chartTooltipBg }} />
-                  </PieChart>
-                </ResponsiveContainer>
+                <DeferredContent
+                  height={260}
+                  label="Carregando origem dos leads"
+                >
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie
+                        data={sourcePieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={85}
+                        paddingAngle={4}
+                        dataKey="value"
+                        label={({
+                          name,
+                          percent,
+                        }: {
+                          name: string;
+                          percent: number;
+                        }) => `${name} ${Math.round(percent * 100)}%`}
+                        labelLine={false}
+                      >
+                        {sourcePieData.map((_, index) => (
+                          <Cell
+                            key={index}
+                            fill={PIE_COLORS[index % PIE_COLORS.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          ...chartTooltipStyle,
+                          background: chartTooltipBg,
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </DeferredContent>
               ) : (
                 <div className="h-[260px] flex items-center justify-center text-xs text-gray-400">
                   Nenhum dado disponível para os filtros selecionados
@@ -967,7 +1146,8 @@ export function RelatorioGestorPage() {
                   Resumo dos Leads Atendidos ({filteredLeads.length})
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-zinc-400">
-                  Visualização detalhada dos contatos filtrados por Cliente e Evento
+                  Visualização detalhada dos contatos filtrados por Cliente e
+                  Evento
                 </p>
               </div>
               <button
@@ -998,7 +1178,9 @@ export function RelatorioGestorPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-50 dark:divide-zinc-800/60">
                     {paginatedLeads.map((l) => {
-                      const clientObj = clients.find((c) => c.id === l.client_id);
+                      const clientObj = clients.find(
+                        (c) => c.id === l.client_id,
+                      );
                       return (
                         <tr
                           key={l.id}
@@ -1030,7 +1212,8 @@ export function RelatorioGestorPage() {
                                 "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
                                 l.crm_stage === "convertido"
                                   ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900"
-                                  : l.crm_stage === "agendado" || l.crm_stage === "checkin"
+                                  : l.crm_stage === "agendado" ||
+                                      l.crm_stage === "checkin"
                                     ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900"
                                     : "bg-gray-100 text-gray-700 border border-gray-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700",
                               )}
@@ -1053,9 +1236,19 @@ export function RelatorioGestorPage() {
             {filteredLeads.length > 0 && (
               <div className="mt-4 pt-4 border-t border-gray-100 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
                 <div className="text-gray-500 dark:text-zinc-400">
-                  Exibindo <span className="font-semibold text-gray-900 dark:text-zinc-100">{startIndex + 1}</span> a{" "}
-                  <span className="font-semibold text-gray-900 dark:text-zinc-100">{endIndex}</span> de{" "}
-                  <span className="font-semibold text-gray-900 dark:text-zinc-100">{filteredLeads.length}</span> leads
+                  Exibindo{" "}
+                  <span className="font-semibold text-gray-900 dark:text-zinc-100">
+                    {startIndex + 1}
+                  </span>{" "}
+                  a{" "}
+                  <span className="font-semibold text-gray-900 dark:text-zinc-100">
+                    {endIndex}
+                  </span>{" "}
+                  de{" "}
+                  <span className="font-semibold text-gray-900 dark:text-zinc-100">
+                    {filteredLeads.length}
+                  </span>{" "}
+                  leads
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -1097,7 +1290,9 @@ export function RelatorioGestorPage() {
                     <button
                       type="button"
                       disabled={currentPage >= totalPages}
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      onClick={() =>
+                        setCurrentPage((p) => Math.min(totalPages, p + 1))
+                      }
                       className="p-1.5 rounded-lg border border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
                       title="Próxima Página"
                     >
@@ -1123,7 +1318,9 @@ export function RelatorioGestorPage() {
                   <span>Campeão de Vendas</span>
                 </div>
                 <h4 className="text-lg font-bold text-gray-900 dark:text-zinc-100">
-                  {topSalesEvent ? topSalesEvent.name : "Nenhum evento registrado"}
+                  {topSalesEvent
+                    ? topSalesEvent.name
+                    : "Nenhum evento registrado"}
                 </h4>
                 <p className="text-xs text-gray-500 dark:text-zinc-400">
                   {topSalesEvent
@@ -1143,7 +1340,9 @@ export function RelatorioGestorPage() {
                   <span>Campeão de Público / Presença</span>
                 </div>
                 <h4 className="text-lg font-bold text-gray-900 dark:text-zinc-100">
-                  {topAttendanceEvent ? topAttendanceEvent.name : "Nenhum evento registrado"}
+                  {topAttendanceEvent
+                    ? topAttendanceEvent.name
+                    : "Nenhum evento registrado"}
                 </h4>
                 <p className="text-xs text-gray-500 dark:text-zinc-400">
                   {topAttendanceEvent
@@ -1171,18 +1370,54 @@ export function RelatorioGestorPage() {
                 <Award size={18} className="text-gray-400" />
               </div>
 
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={eventMetrics}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={chartAxisStroke} vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: chartTickFill }} stroke={chartAxisStroke} />
-                  <YAxis tick={{ fontSize: 11, fill: chartTickFill }} stroke={chartAxisStroke} />
-                  <Tooltip contentStyle={{ ...chartTooltipStyle, background: chartTooltipBg }} />
-                  <Legend wrapperStyle={{ fontSize: "12px" }} />
-                  <Bar dataKey="totalLeads" name="Leads Captados" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="totalCheckins" name="Pessoas / Check-ins" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="totalVendas" name="Vendas Concluídas" fill="#10b981" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <DeferredContent
+                height={300}
+                label="Carregando desempenho por evento"
+              >
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={eventMetrics}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke={chartAxisStroke}
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 11, fill: chartTickFill }}
+                      stroke={chartAxisStroke}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: chartTickFill }}
+                      stroke={chartAxisStroke}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        ...chartTooltipStyle,
+                        background: chartTooltipBg,
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: "12px" }} />
+                    <Bar
+                      dataKey="totalLeads"
+                      name="Leads Captados"
+                      fill="#3b82f6"
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="totalCheckins"
+                      name="Pessoas / Check-ins"
+                      fill="#8b5cf6"
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="totalVendas"
+                      name="Vendas Concluídas"
+                      fill="#10b981"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </DeferredContent>
             </Card>
 
             <Card>
@@ -1195,7 +1430,10 @@ export function RelatorioGestorPage() {
 
               <div className="space-y-5">
                 {eventMetrics.slice(0, 4).map((ev) => (
-                  <div key={ev.id} className="space-y-2 border-b border-gray-100 dark:border-zinc-800/80 pb-3 last:border-none last:pb-0">
+                  <div
+                    key={ev.id}
+                    className="space-y-2 border-b border-gray-100 dark:border-zinc-800/80 pb-3 last:border-none last:pb-0"
+                  >
                     <span className="text-xs font-bold text-gray-900 dark:text-zinc-100 block">
                       {ev.name}
                     </span>
@@ -1203,9 +1441,12 @@ export function RelatorioGestorPage() {
                     {/* Meta de Público */}
                     <div className="space-y-1">
                       <div className="flex justify-between text-[11px]">
-                        <span className="text-gray-500 dark:text-zinc-400">Público (Pessoas):</span>
+                        <span className="text-gray-500 dark:text-zinc-400">
+                          Público (Pessoas):
+                        </span>
                         <span className="text-purple-600 font-semibold">
-                          {ev.totalCheckins} / {ev.audienceTarget || 0} ({ev.audienceProgressPercent}%)
+                          {ev.totalCheckins} / {ev.audienceTarget || 0} (
+                          {ev.audienceProgressPercent}%)
                         </span>
                       </div>
                       <div className="w-full bg-gray-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
@@ -1219,9 +1460,12 @@ export function RelatorioGestorPage() {
                     {/* Meta de Vendas */}
                     <div className="space-y-1">
                       <div className="flex justify-between text-[11px]">
-                        <span className="text-gray-500 dark:text-zinc-400">Vendas:</span>
+                        <span className="text-gray-500 dark:text-zinc-400">
+                          Vendas:
+                        </span>
                         <span className="text-emerald-600 font-semibold">
-                          {ev.totalVendas} / {ev.salesTarget || 0} ({ev.salesProgressPercent}%)
+                          {ev.totalVendas} / {ev.salesTarget || 0} (
+                          {ev.salesProgressPercent}%)
                         </span>
                       </div>
                       <div className="w-full bg-gray-100 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
@@ -1248,7 +1492,8 @@ export function RelatorioGestorPage() {
                     <span>Ranking de Vendedores</span>
                   </h3>
                   <p className="text-xs text-gray-500 dark:text-zinc-400">
-                    Desempenho individual por vendas concluídas e check-ins atendidos
+                    Desempenho individual por vendas concluídas e check-ins
+                    atendidos
                   </p>
                 </div>
               </div>
@@ -1289,7 +1534,9 @@ export function RelatorioGestorPage() {
                         {v.sales} {v.sales === 1 ? "venda" : "vendas"}
                       </span>
                       <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500">
-                        {v.leads > 0 ? `${Math.round((v.sales / v.leads) * 100)}% conv.` : "0% conv."}
+                        {v.leads > 0
+                          ? `${Math.round((v.sales / v.leads) * 100)}% conv.`
+                          : "0% conv."}
                       </span>
                     </div>
                   </div>
@@ -1374,8 +1621,14 @@ export function RelatorioGestorPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-zinc-800/60">
                   {eventMetrics.map((ev) => (
-                    <tr key={ev.id} className="hover:bg-gray-50/50 dark:hover:bg-zinc-900/50">
-                      <td className="py-3 px-3 font-semibold text-gray-900 dark:text-zinc-100" title={ev.name}>
+                    <tr
+                      key={ev.id}
+                      className="hover:bg-gray-50/50 dark:hover:bg-zinc-900/50"
+                    >
+                      <td
+                        className="py-3 px-3 font-semibold text-gray-900 dark:text-zinc-100"
+                        title={ev.name}
+                      >
                         {ev.nomeResumido}
                       </td>
                       <td className="py-3 px-3 text-gray-600 dark:text-zinc-400 font-mono">
@@ -1459,7 +1712,8 @@ export function RelatorioGestorPage() {
                   <span>Desempenho Hierárquico de Campanhas Meta Ads</span>
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-zinc-400">
-                  Clique na linha da campanha ou do conjunto para expandir/recolher a estrutura de anúncios
+                  Clique na linha da campanha ou do conjunto para
+                  expandir/recolher a estrutura de anúncios
                 </p>
               </div>
 
@@ -1486,7 +1740,9 @@ export function RelatorioGestorPage() {
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-zinc-800 text-gray-500 dark:text-zinc-400 font-semibold uppercase tracking-wider">
-                    <th className="pb-3 px-3">Nome (Campanha / Conjunto / Anúncio)</th>
+                    <th className="pb-3 px-3">
+                      Nome (Campanha / Conjunto / Anúncio)
+                    </th>
                     <th className="pb-3 px-3 text-right">Valor Investido</th>
                     <th className="pb-3 px-3 text-right">Quantidade Leads</th>
                     <th className="pb-3 px-3 text-right">Custo por Lead</th>
@@ -1509,7 +1765,11 @@ export function RelatorioGestorPage() {
                         >
                           <td className="py-3 px-3 flex items-center gap-2 text-gray-900 dark:text-zinc-100">
                             <span className="text-gray-400">
-                              {isCampExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                              {isCampExpanded ? (
+                                <ChevronDown size={16} />
+                              ) : (
+                                <ChevronRight size={16} />
+                              )}
                             </span>
                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase bg-rose-100 text-[#FF0636] dark:bg-rose-950/60 dark:text-rose-400">
                               Campanha
@@ -1552,7 +1812,11 @@ export function RelatorioGestorPage() {
                                 >
                                   <td className="py-2.5 px-3 pl-8 flex items-center gap-2 text-gray-800 dark:text-zinc-200">
                                     <span className="text-gray-400">
-                                      {isAdSetExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                      {isAdSetExpanded ? (
+                                        <ChevronDown size={14} />
+                                      ) : (
+                                        <ChevronRight size={14} />
+                                      )}
                                     </span>
                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400">
                                       Conjunto
@@ -1575,7 +1839,9 @@ export function RelatorioGestorPage() {
                                     {adSet.numeroConversas}
                                   </td>
                                   <td className="py-2.5 px-3 text-right text-blue-700 dark:text-blue-400 font-mono">
-                                    {formatCurrency(adSet.custoConversasIniciadas)}
+                                    {formatCurrency(
+                                      adSet.custoConversasIniciadas,
+                                    )}
                                   </td>
                                   <td className="py-2.5 px-3 text-right text-gray-500 font-mono">
                                     {formatNumber(adSet.contasAlcancadas)}
@@ -1596,17 +1862,29 @@ export function RelatorioGestorPage() {
                                         </span>
                                         <span>{ad.name}</span>
                                       </td>
-                                      <td className="py-2 px-3 text-right font-mono">{formatCurrency(ad.valorInvestido)}</td>
+                                      <td className="py-2 px-3 text-right font-mono">
+                                        {formatCurrency(ad.valorInvestido)}
+                                      </td>
                                       <td className="py-2 px-3 text-right font-medium text-gray-700 dark:text-zinc-300">
                                         {ad.quantidadeLeads}
                                       </td>
                                       <td className="py-2 px-3 text-right font-mono text-rose-600 dark:text-rose-400">
                                         {formatCurrency(ad.custoPorLead)}
                                       </td>
-                                      <td className="py-2 px-3 text-right font-mono">{formatNumber(ad.impressoes)}</td>
-                                      <td className="py-2 px-3 text-right text-blue-600 font-medium">{ad.numeroConversas}</td>
-                                      <td className="py-2 px-3 text-right font-mono">{formatCurrency(ad.custoConversasIniciadas)}</td>
-                                      <td className="py-2 px-3 text-right font-mono">{formatNumber(ad.contasAlcancadas)}</td>
+                                      <td className="py-2 px-3 text-right font-mono">
+                                        {formatNumber(ad.impressoes)}
+                                      </td>
+                                      <td className="py-2 px-3 text-right text-blue-600 font-medium">
+                                        {ad.numeroConversas}
+                                      </td>
+                                      <td className="py-2 px-3 text-right font-mono">
+                                        {formatCurrency(
+                                          ad.custoConversasIniciadas,
+                                        )}
+                                      </td>
+                                      <td className="py-2 px-3 text-right font-mono">
+                                        {formatNumber(ad.contasAlcancadas)}
+                                      </td>
                                     </tr>
                                   ))}
                               </Fragment>
@@ -1664,25 +1942,68 @@ export function RelatorioGestorPage() {
                   Matriz Cruzada: Campanha de Origem x Eventos Atribuídos
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-zinc-400">
-                  Cruzamento direto entre o canal de origem do lead, o volume de agendamentos e o custo por agendamento
+                  Cruzamento direto entre o canal de origem do lead, o volume de
+                  agendamentos e o custo por agendamento
                 </p>
               </div>
               <GitCompare size={18} className="text-[#FF0636]" />
             </div>
 
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={campaignEventCrossData}>
-                <CartesianGrid strokeDasharray="3 3" stroke={chartAxisStroke} vertical={false} />
-                <XAxis dataKey="eventoNome" tick={{ fontSize: 11, fill: chartTickFill }} stroke={chartAxisStroke} />
-                <YAxis tick={{ fontSize: 11, fill: chartTickFill }} stroke={chartAxisStroke} />
-                <Tooltip contentStyle={{ ...chartTooltipStyle, background: chartTooltipBg }} />
-                <Legend wrapperStyle={{ fontSize: "12px" }} />
-                <Bar dataKey="facebook_ads" name="Facebook Ads" fill="#FF0636" stackId="a" />
-                <Bar dataKey="whatsapp" name="WhatsApp" fill="#3b82f6" stackId="a" />
-                <Bar dataKey="agendados" name="Agendamentos" fill="#8b5cf6" stackId="a" />
-                <Bar dataKey="vendas" name="Vendas Concluídas" fill="#10b981" stackId="a" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <DeferredContent
+              height={300}
+              label="Carregando matriz por campanha"
+            >
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={campaignEventCrossData}>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke={chartAxisStroke}
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="eventoNome"
+                    tick={{ fontSize: 11, fill: chartTickFill }}
+                    stroke={chartAxisStroke}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: chartTickFill }}
+                    stroke={chartAxisStroke}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      ...chartTooltipStyle,
+                      background: chartTooltipBg,
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: "12px" }} />
+                  <Bar
+                    dataKey="facebook_ads"
+                    name="Facebook Ads"
+                    fill="#FF0636"
+                    stackId="a"
+                  />
+                  <Bar
+                    dataKey="whatsapp"
+                    name="WhatsApp"
+                    fill="#3b82f6"
+                    stackId="a"
+                  />
+                  <Bar
+                    dataKey="agendados"
+                    name="Agendamentos"
+                    fill="#8b5cf6"
+                    stackId="a"
+                  />
+                  <Bar
+                    dataKey="vendas"
+                    name="Vendas Concluídas"
+                    fill="#10b981"
+                    stackId="a"
+                    radius={[6, 6, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </DeferredContent>
           </Card>
 
           {/* Tabela de Matriz Cruzada */}
@@ -1698,22 +2019,37 @@ export function RelatorioGestorPage() {
                     <th className="pb-3 px-3 text-right">Facebook Ads</th>
                     <th className="pb-3 px-3 text-right">WhatsApp</th>
                     <th className="pb-3 px-3 text-right">Qtd Agendamentos</th>
-                    <th className="pb-3 px-3 text-right">Custo / Agendamento</th>
+                    <th className="pb-3 px-3 text-right">
+                      Custo / Agendamento
+                    </th>
                     <th className="pb-3 px-3 text-right">Vendas (Qtd)</th>
-                    <th className="pb-3 px-3 text-right">Taxa Conversão (Qtd / Agend.)</th>
+                    <th className="pb-3 px-3 text-right">
+                      Taxa Conversão (Qtd / Agend.)
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-zinc-800/60">
                   {campaignEventCrossData.map((row) => (
-                    <tr key={row.eventoId} className="hover:bg-gray-50/50 dark:hover:bg-zinc-900/50">
+                    <tr
+                      key={row.eventoId}
+                      className="hover:bg-gray-50/50 dark:hover:bg-zinc-900/50"
+                    >
                       <td className="py-3 px-3 font-semibold text-gray-900 dark:text-zinc-100">
                         {row.eventoNome}
                       </td>
-                      <td className="py-3 px-3 text-right text-rose-600 font-semibold">{row.facebook_ads}</td>
-                      <td className="py-3 px-3 text-right text-blue-600 font-semibold">{row.whatsapp}</td>
-                      <td className="py-3 px-3 text-right font-bold text-purple-600">{row.agendados}</td>
+                      <td className="py-3 px-3 text-right text-rose-600 font-semibold">
+                        {row.facebook_ads}
+                      </td>
+                      <td className="py-3 px-3 text-right text-blue-600 font-semibold">
+                        {row.whatsapp}
+                      </td>
+                      <td className="py-3 px-3 text-right font-bold text-purple-600">
+                        {row.agendados}
+                      </td>
                       <td className="py-3 px-3 text-right font-mono text-rose-600 dark:text-rose-400 font-bold">
-                        {row.custoPorAgendamento > 0 ? formatCurrency(row.custoPorAgendamento) : "—"}
+                        {row.custoPorAgendamento > 0
+                          ? formatCurrency(row.custoPorAgendamento)
+                          : "—"}
                       </td>
                       <td className="py-3 px-3 text-right font-bold text-emerald-600">
                         {row.vendas}

@@ -143,14 +143,23 @@ export class ScoreEventsService {
       _count: { _all: true },
     });
 
-    if (groupedRows.length === 0) return [];
+    const allClientVendors = await this.prisma.user.findMany({
+      where: {
+        client_id: params.clientId,
+        role: 'vendedor',
+        is_active: true,
+      },
+      select: { id: true, name: true },
+    });
 
-    const vendorIds = Array.from(new Set(groupedRows.map((row) => row.vendor_id)));
-    const [vendors, assignedCounts] = await Promise.all([
-      this.prisma.user.findMany({
-        where: { id: { in: vendorIds } },
-        select: { id: true, name: true },
-      }),
+    const vendorIds = Array.from(
+      new Set([
+        ...allClientVendors.map((v) => v.id),
+        ...groupedRows.map((row) => row.vendor_id),
+      ]),
+    );
+
+    const [assignedCounts] = await Promise.all([
       this.prisma.lead.groupBy({
         by: ['assigned_vendor_id'],
         where: {
@@ -163,7 +172,7 @@ export class ScoreEventsService {
       }),
     ]);
 
-    const vendorNameById = new Map(vendors.map((vendor) => [vendor.id, vendor.name] as const));
+    const vendorNameById = new Map(allClientVendors.map((vendor) => [vendor.id, vendor.name] as const));
     const assignedByVendorId = new Map(
       assignedCounts
         .filter((row) => !!row.assigned_vendor_id)
@@ -171,6 +180,23 @@ export class ScoreEventsService {
     );
 
     const byVendor = new Map<string, VendorScoreRankingItem>();
+
+    // Inicializa todos os vendedores da empresa
+    allClientVendors.forEach((v) => {
+      byVendor.set(v.id, {
+        vendor_id: v.id,
+        vendor_name: v.name,
+        total_points: 0,
+        assigned: assignedByVendorId.get(v.id) ?? 0,
+        visits: 0,
+        sales: 0,
+        contacted: { points: 0, count: 0 },
+        scheduled: { points: 0, count: 0 },
+        checked_in: { points: 0, count: 0 },
+        sold: { points: 0, count: 0 },
+      });
+    });
+
     groupedRows.forEach((row) => {
       const current = byVendor.get(row.vendor_id) ?? {
         vendor_id: row.vendor_id,

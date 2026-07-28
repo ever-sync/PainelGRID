@@ -1,17 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
-import clsx from "clsx";
 import {
-  PieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+  lazy,
+  type ComponentType,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
+import clsx from "clsx";
 import { Users, TrendingUp, Calendar, Target } from "lucide-react";
 import { useOutletContext } from "react-router-dom";
 import { PageHeader } from "../../components/shared/PageHeader";
@@ -28,12 +22,32 @@ import { readStoredSession } from "../../services/auth";
 import { listLeads, mapApiLeadToLead } from "../../services/leads";
 import { listClientStaff, mapStaffToUser } from "../../services/staff";
 import { useLeadRealtimeSync } from "../../hooks/useLeadRealtimeSync";
+import { DeferredContent } from "../../components/shared/DeferredContent";
 
 type OutletContext = {
   user: User;
 };
 
 const PIE_COLORS = ["#3b82f6", "#22c55e", "#a855f7", "#9ca3af"];
+
+function lazyRechart(name: keyof typeof import("recharts")) {
+  return lazy(() =>
+    import("recharts").then((module) => ({
+      default: module[name] as ComponentType<any>,
+    })),
+  );
+}
+
+const PieChart = lazyRechart("PieChart");
+const Pie = lazyRechart("Pie");
+const Cell = lazyRechart("Cell");
+const BarChart = lazyRechart("BarChart");
+const Bar = lazyRechart("Bar");
+const XAxis = lazyRechart("XAxis");
+const YAxis = lazyRechart("YAxis");
+const CartesianGrid = lazyRechart("CartesianGrid");
+const Tooltip = lazyRechart("Tooltip");
+const ResponsiveContainer = lazyRechart("ResponsiveContainer");
 
 export function DashboardClientePage() {
   const { user } = useOutletContext<OutletContext>();
@@ -236,37 +250,43 @@ export function DashboardClientePage() {
           <h3 className="text-base font-semibold text-gray-900 mb-4">
             Leads por Fonte
           </h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={90}
-                paddingAngle={3}
-                dataKey="value"
-                label={({ name, percent }) =>
-                  `${name} ${Math.round(percent * 100)}%`
-                }
-                labelLine={false}
-              >
-                {pieData.map((_, index) => (
-                  <Cell
-                    key={index}
-                    fill={PIE_COLORS[index % PIE_COLORS.length]}
-                  />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  ...chartTooltipStyle,
-                  background: chartTooltipBg,
-                }}
-                formatter={(value: number) => [value, "Leads"]}
-              />
-            </PieChart>
-          </ResponsiveContainer>
+          <DeferredContent height={220} label="Carregando leads por fonte">
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={90}
+                  paddingAngle={3}
+                  dataKey="value"
+                  label={({
+                    name,
+                    percent,
+                  }: {
+                    name: string;
+                    percent: number;
+                  }) => `${name} ${Math.round(percent * 100)}%`}
+                  labelLine={false}
+                >
+                  {pieData.map((_, index) => (
+                    <Cell
+                      key={index}
+                      fill={PIE_COLORS[index % PIE_COLORS.length]}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    ...chartTooltipStyle,
+                    background: chartTooltipBg,
+                  }}
+                  formatter={(value: number | string) => [value, "Leads"]}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </DeferredContent>
         </Card>
 
         {/* Funnel bar chart */}
@@ -274,40 +294,42 @@ export function DashboardClientePage() {
           <h3 className="text-base font-semibold text-gray-900 mb-4">
             Funil CRM por Etapa
           </h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={funnelData} layout="vertical">
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke={chartAxisStroke}
-                vertical={false}
-              />
-              <XAxis
-                type="number"
-                tick={{ fontSize: 11, fill: chartTickFill }}
-                stroke={chartAxisStroke}
-              />
-              <YAxis
-                dataKey="stage"
-                type="category"
-                tick={{ fontSize: 11, fill: chartTickFill }}
-                width={70}
-                stroke={chartAxisStroke}
-              />
-              <Tooltip
-                contentStyle={{
-                  ...chartTooltipStyle,
-                  background: chartTooltipBg,
-                }}
-                formatter={(value: number) => [value, "Leads"]}
-              />
-              <Bar
-                dataKey="count"
-                name="Leads"
-                fill="#3b82f6"
-                radius={[0, 4, 4, 0]}
-              />
-            </BarChart>
-          </ResponsiveContainer>
+          <DeferredContent height={220} label="Carregando funil por etapa">
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={funnelData} layout="vertical">
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke={chartAxisStroke}
+                  vertical={false}
+                />
+                <XAxis
+                  type="number"
+                  tick={{ fontSize: 11, fill: chartTickFill }}
+                  stroke={chartAxisStroke}
+                />
+                <YAxis
+                  dataKey="stage"
+                  type="category"
+                  tick={{ fontSize: 11, fill: chartTickFill }}
+                  width={70}
+                  stroke={chartAxisStroke}
+                />
+                <Tooltip
+                  contentStyle={{
+                    ...chartTooltipStyle,
+                    background: chartTooltipBg,
+                  }}
+                  formatter={(value: number | string) => [value, "Leads"]}
+                />
+                <Bar
+                  dataKey="count"
+                  name="Leads"
+                  fill="#3b82f6"
+                  radius={[0, 4, 4, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </DeferredContent>
         </Card>
       </div>
 

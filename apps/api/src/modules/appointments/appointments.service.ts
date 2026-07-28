@@ -23,6 +23,7 @@ import { PrismaService } from '../../config/prisma.service';
 import { Role } from '../../common/types';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { ClientWebhookService } from '../crm/client-webhook.service';
+import { MailService } from '../../mail/mail.service';
 import { RealtimeEventsService } from '../realtime/realtime-events.service';
 import { ScoreEventsService } from '../score-events/score-events.service';
 import { resolveConfirmationStatusForStage } from '../clients/client-settings';
@@ -72,6 +73,7 @@ export class AppointmentsService {
     private readonly scoreEvents: ScoreEventsService,
     private readonly clientWebhook: ClientWebhookService,
     private readonly realtimeEvents: RealtimeEventsService,
+    private readonly mail: MailService,
   ) {}
 
   private checkinVoucherSecret(): string {
@@ -335,6 +337,8 @@ export class AppointmentsService {
     await this.assertNoDuplicateActiveAppointment(lead.id, event.id);
     await this.assertEventHasCapacity(event.id, event.capacity);
 
+    const isVendorCreated = dto.source === AppointmentSource.vendedor;
+
     const appointment = await this.prisma.$transaction(async (tx) => {
       const created = await tx.appointment.create({
         data: {
@@ -357,12 +361,11 @@ export class AppointmentsService {
         },
       });
 
-      const isVendor = dto.source === AppointmentSource.vendedor;
       await this.syncLeadStoreVisitDatetime(tx, lead.id);
       await tx.lead.update({
         where: { id: lead.id },
         data: {
-          ...(isVendor ? {} : { confirmation_status: ConfirmationStatus.scheduled }),
+          ...(isVendorCreated ? {} : { confirmation_status: ConfirmationStatus.scheduled }),
           checkin_token: lead.checkin_token ?? encryptCheckinToken(generateRawCheckinToken(), this.checkinVoucherSecret()),
           event_interest_id: event.id,
           attendant_type: dto.created_by_type ?? null,
@@ -378,10 +381,46 @@ export class AppointmentsService {
 
     this.emitLeadUpdated(appointment.client_id, appointment.lead_id, 'appointment_created');
 
+    if (isVendorCreated) {
+      void this.sendAppointmentWelcomeEmail(appointment).catch(() => undefined);
+    }
+
     return {
       ...this.toAppointmentResponse(appointment),
       idempotent_replay: false,
     };
+  }
+
+  private async sendAppointmentWelcomeEmail(appointment: AppointmentRecord): Promise<void> {
+    const lead = appointment.lead;
+    const event = appointment.event;
+    if (!lead.email) return;
+
+    const [vendor, client] = await Promise.all([
+      lead.assigned_vendor_id
+        ? this.prisma.user.findUnique({
+            where: { id: lead.assigned_vendor_id },
+            select: { name: true, avatar_url: true },
+          })
+        : Promise.resolve(null),
+      this.prisma.client.findUnique({
+        where: { id: event.client_id },
+        select: { logo_url: true, company_name: true },
+      }),
+    ]);
+
+    await this.mail.sendAppointmentWelcome({
+      to: lead.email,
+      leadName: lead.name,
+      eventName: event.name,
+      eventLocation: event.location,
+      scheduledAt: appointment.scheduled_at,
+      timezone: appointment.timezone,
+      vendorName: vendor?.name ?? null,
+      vendorAvatarUrl: vendor?.avatar_url ?? null,
+      clientLogoUrl: client?.logo_url ?? null,
+      clientName: client?.company_name ?? event.name,
+    });
   }
 
   private async confirmInternal(
