@@ -247,6 +247,8 @@ export type UpdateLeadBody = {
   crm_stage_id?: string | null;
   assigned_vendor_id?: string | null;
   vehicle_plate?: string | null;
+  cpf?: string | null;
+  wristband_number?: string | null;
   companions?: string | null;
   description?: string | null;
   first_name?: string | null;

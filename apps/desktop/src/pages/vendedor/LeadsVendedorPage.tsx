@@ -135,6 +135,15 @@ function formatCurrencyInput(value: string) {
   });
 }
 
+function formatCpfInput(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9)
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+}
+
 function isLeadClosedAfterSale(lead: Lead) {
   return (
     lead.active_appointment?.sale_id != null || lead.crm_stage === "convertido"
@@ -225,10 +234,19 @@ export function LeadsVendedorPage() {
   const [carLoading, setCarLoading] = useState(false);
   const [carLoadError, setCarLoadError] = useState("");
   const [saleValue, setSaleValue] = useState("");
+  const [saleWristbandNumber, setSaleWristbandNumber] = useState("");
+  const [saleCpf, setSaleCpf] = useState("");
   const [saleDate, setSaleDate] = useState(
     () => new Date().toISOString().split("T")[0],
   );
   const [saleNotes, setSaleNotes] = useState("");
+
+  const openSaleModal = useCallback((lead: Lead) => {
+    setActionError("");
+    setSaleWristbandNumber(lead.wristband_number ?? "");
+    setSaleCpf(lead.cpf ?? "");
+    setSaleModal(lead);
+  }, []);
   const [note, setNote] = useState("");
   const [selectedStageId, setSelectedStageId] = useState("");
   const [stageOptions, setStageOptions] = useState<ApiCrmStage[]>([]);
@@ -922,6 +940,14 @@ export function LeadsVendedorPage() {
       setActionError("Informe produto e valor da venda.");
       return;
     }
+    if (!saleWristbandNumber.trim()) {
+      setActionError("O número da pulseira é obrigatório para registrar a venda.");
+      return;
+    }
+    if (!saleCpf.trim()) {
+      setActionError("O CPF do cliente é obrigatório para registrar a venda.");
+      return;
+    }
     const selectedLead = saleModal;
     if (!selectedLead) return;
 
@@ -933,6 +959,15 @@ export function LeadsVendedorPage() {
         setActionError("Crie um agendamento antes de registrar a venda.");
         return;
       }
+
+      await updateLead(
+        selectedLead.id,
+        {
+          wristband_number: saleWristbandNumber.trim(),
+          cpf: saleCpf.trim(),
+        },
+        t,
+      );
 
       await createSale(t, {
         appointment_id: appointmentId,
@@ -946,6 +981,8 @@ export function LeadsVendedorPage() {
       setSaleType("NOVO");
       resetSaleVehicleFields();
       setSaleValue("");
+      setSaleWristbandNumber("");
+      setSaleCpf("");
       setSaleDate(new Date().toISOString().split("T")[0]);
       setSaleNotes("");
       setLeadName("");
@@ -1415,7 +1452,7 @@ export function LeadsVendedorPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSaleModal(lead)}
+                  onClick={() => openSaleModal(lead)}
                   disabled={getSaleButtonState(lead).disabled}
                   className="flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-900 disabled:opacity-30 transition-all active:scale-95"
                   title={getSaleButtonState(lead).title}
@@ -1544,7 +1581,7 @@ export function LeadsVendedorPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setSaleModal(lead)}
+                        onClick={() => openSaleModal(lead)}
                         disabled={getSaleButtonState(lead).disabled}
                         className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors disabled:opacity-30"
                         title={getSaleButtonState(lead).title}
@@ -2063,6 +2100,20 @@ export function LeadsVendedorPage() {
             onChange={(e) => setSaleValue(formatCurrencyInput(e.target.value))}
             placeholder="Valor (ex: 120.000,00)"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+          <Input
+            label="Número da pulseira *"
+            value={saleWristbandNumber}
+            onChange={(e) => setSaleWristbandNumber(e.target.value)}
+            placeholder="Digite o número da pulseira (obrigatório)"
+            required
+          />
+          <Input
+            label="CPF do cliente *"
+            value={saleCpf}
+            onChange={(e) => setSaleCpf(formatCpfInput(e.target.value))}
+            placeholder="000.000.000-00 (obrigatório)"
+            required
           />
           <textarea
             value={saleNotes}
