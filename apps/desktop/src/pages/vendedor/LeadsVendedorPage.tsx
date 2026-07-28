@@ -1277,8 +1277,21 @@ export function LeadsVendedorPage() {
 
       <div className="space-y-3 md:hidden">
         {filteredLeads.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 p-8 text-center text-xs text-zinc-400">
-            Nenhum lead encontrado com os filtros atuais.
+          <div className="rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 p-8 text-center space-y-3">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">
+              {leads.length > 0
+                ? `Nenhum lead nesta etapa (${selectedStageTab.toUpperCase()}) no momento.`
+                : "Você ainda não possui nenhum lead atribuído na sua carteira."}
+            </p>
+            {leads.length > 0 && selectedStageTab !== "all" ? (
+              <button
+                type="button"
+                onClick={() => setSelectedStageTab("all")}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FF0636] text-white text-xs font-bold shadow-md shadow-[#FF0636]/20 transition-transform active:scale-95"
+              >
+                Ver Todos os Leads ({leads.length})
+              </button>
+            ) : null}
           </div>
         ) : (
           filteredLeads.map((lead) => (
