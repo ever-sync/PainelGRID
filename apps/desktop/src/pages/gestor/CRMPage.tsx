@@ -1298,7 +1298,9 @@ const LeadCard = memo(function LeadCard({
       onPointerMove={handlePointerMove}
       onClick={handleClick}
       className={clsx(
-        "group cursor-pointer rounded-[18px] border p-3.5 transition-all duration-150",
+        // `shrink-0`: a lista de cards e flex-col; sem isso os cards
+        // comprimiriam quando a coluna nao coubesse na altura.
+        "group shrink-0 cursor-pointer rounded-[18px] border p-3.5 transition-all duration-150",
         dark
           ? "border-[#222] bg-[#111] hover:border-[#333] hover:shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
           : "border-zinc-100/80 bg-white hover:border-zinc-200 hover:shadow-[0_4px_16px_rgba(15,23,42,0.08)]",
@@ -1473,6 +1475,7 @@ function StageColumn({
   onToggleSelect,
   onLeadOpen,
   totalCount,
+  fillHeight,
 }: {
   stage: KanbanColumn;
   leads: Lead[];
@@ -1486,11 +1489,22 @@ function StageColumn({
   onToggleSelect?: (id: string) => void;
   onLeadOpen: (lead: Lead) => void;
   totalCount?: number;
+  /** Kanban: preenche a altura do board (o pai controla). Compact: altura fixa. */
+  fillHeight?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
 
   return (
-    <div className="flex h-[calc(100vh-11.5rem)] min-h-[36rem] flex-col gap-2 w-full">
+    <div
+      className={clsx(
+        "flex flex-col gap-2",
+        // No mobile a pagina rola normalmente (altura fixa). No desktop a coluna
+        // e um flex item do board e o `align-items: stretch` preenche a altura,
+        // sem depender de cadeia de `height: 100%`.
+        "h-[calc(100vh-11.5rem)] min-h-[36rem]",
+        fillHeight ? "w-[272px] shrink-0 md:h-auto md:min-h-0" : "w-full",
+      )}
+    >
       {/* ── Column header ── */}
       <div
         className={clsx(
@@ -1529,7 +1543,7 @@ function StageColumn({
       <div
         ref={setNodeRef}
         className={clsx(
-          "min-h-0 flex-1 overflow-hidden rounded-[20px] p-2.5 transition-all duration-150 [content-visibility:auto] [contain-intrinsic-size:auto_440px]",
+          "flex min-h-0 flex-1 flex-col overflow-hidden rounded-[20px] p-2.5 transition-all duration-150",
           isOver
             ? dark
               ? "bg-[#FF0636]/8 ring-2 ring-[#FF0636]/30"
@@ -1539,7 +1553,7 @@ function StageColumn({
               : "bg-zinc-50/70",
         )}
       >
-        <div className="h-full space-y-2.5 overflow-y-auto pr-1 [-ms-overflow-style:none] [scrollbar-width:thin]">
+        <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto pr-1 [-ms-overflow-style:none] [scrollbar-width:thin]">
           {leads.map((lead, index) => (
             <LeadCard
               key={lead.id}
@@ -1558,7 +1572,7 @@ function StageColumn({
           {leads.length === 0 && (
             <div
               className={clsx(
-                "flex h-full min-h-[200px] flex-col items-center justify-center gap-2 rounded-[16px] border border-dashed",
+                "flex min-h-[200px] flex-1 flex-col items-center justify-center gap-2 rounded-[16px] border border-dashed",
                 dark
                   ? "border-[#2a2a2a] text-zinc-700"
                   : "border-zinc-200 text-zinc-300",
@@ -2719,8 +2733,15 @@ export function CRMPage() {
   );
 
   return (
-    <div className={clsx("space-y-6", isDarkMode && "dashboard-dark bg-black")}>
-      <div className="space-y-6">
+    <div
+      className={clsx(
+        "flex flex-col gap-6",
+        // Preenche a altura util do layout (mesma faixa do sidebar fixo).
+        viewMode === "kanban" && "md:h-full md:min-h-0",
+        isDarkMode && "dashboard-dark bg-black",
+      )}
+    >
+      <div className="shrink-0 space-y-6">
         <div>
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_320px_auto] lg:items-end">
             <div>
@@ -3055,8 +3076,11 @@ export function CRMPage() {
                 ))}
             </div>
           ) : (
-            <div className="overflow-x-auto pb-4 [-ms-overflow-style:none] [scrollbar-width:thin]">
-              <div className="flex gap-3" style={{ minWidth: "max-content" }}>
+            <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden pb-2 [-ms-overflow-style:none] [scrollbar-width:thin]">
+              <div
+                className="flex h-full gap-3"
+                style={{ minWidth: "max-content" }}
+              >
                 {kanbanColumns
                   .filter(
                     (stage) =>
@@ -3064,27 +3088,23 @@ export function CRMPage() {
                       !hiddenStageIds.has(stage.id),
                   )
                   .map((stage) => (
-                    <div
+                    <StageColumn
                       key={stage.id}
-                      className="shrink-0"
-                      style={{ width: 272 }}
-                    >
-                      <StageColumn
-                        stage={stage}
-                        leads={visibleBoard[stage.id] ?? []}
-                        vendorsById={vendorsById}
-                        dark={isDarkMode}
-                        liveKind={liveStageKinds[stage.id]}
-                        liveLeadKinds={liveLeadKinds}
-                        selectionMode={selectionMode}
-                        selectedLeadIds={selectedLeadIds}
-                        onToggleSelect={toggleSelection}
-                        onLeadOpen={setOpenLead}
-                        totalCount={
-                          cardFiltersActive ? undefined : stageCounts[stage.id]
-                        }
-                      />
-                    </div>
+                      stage={stage}
+                      leads={visibleBoard[stage.id] ?? []}
+                      vendorsById={vendorsById}
+                      dark={isDarkMode}
+                      liveKind={liveStageKinds[stage.id]}
+                      liveLeadKinds={liveLeadKinds}
+                      selectionMode={selectionMode}
+                      selectedLeadIds={selectedLeadIds}
+                      onToggleSelect={toggleSelection}
+                      onLeadOpen={setOpenLead}
+                      totalCount={
+                        cardFiltersActive ? undefined : stageCounts[stage.id]
+                      }
+                      fillHeight
+                    />
                   ))}
               </div>
             </div>

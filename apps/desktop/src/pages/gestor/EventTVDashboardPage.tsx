@@ -28,6 +28,7 @@ import { TopModelsLeaderboard } from "../../components/tv/TopModelsLeaderboard";
 import { VendorRanking } from "../../components/tv/VendorRanking";
 import {
   ago,
+  mediaUrl,
   POLLING_INTERVAL_MS,
   SLIDES,
   triggerSaleCelebration,
@@ -546,6 +547,7 @@ export function EventTVDashboardPage() {
               sub: vendor.team_name ?? undefined,
               metric: vendor.sold,
               metricLabel: vendor.sold === 1 ? "venda" : "vendas",
+              logoUrl: mediaUrl(vendor.vendor_avatar_url),
             }))}
         />
       )}
@@ -569,6 +571,7 @@ export function EventTVDashboardPage() {
               sub: vendor.team_name ?? undefined,
               metric: vendor.points,
               metricLabel: "pts",
+              logoUrl: mediaUrl(vendor.vendor_avatar_url),
             }))}
         />
       )}
@@ -590,7 +593,7 @@ export function EventTVDashboardPage() {
               sub: `${team.points} pts`,
               metric: team.sold,
               metricLabel: team.sold === 1 ? "venda" : "vendas",
-              logoUrl: team.logo_url,
+              logoUrl: mediaUrl(team.logo_url),
             }))}
         />
       )}

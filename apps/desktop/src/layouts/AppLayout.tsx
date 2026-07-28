@@ -218,6 +218,8 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
   const isImmersiveChatRoute =
     location.pathname.startsWith("/gestor/chat") ||
     location.pathname.startsWith("/vendedor/chat");
+  /** Kanban ocupa a altura toda e rola por dentro (sem scroll da pagina). */
+  const isBoardRoute = location.pathname.startsWith("/gestor/crm");
   const [quickActionOpen, setQuickActionOpen] = useState(false);
   const [quickAction, setQuickAction] = useState<MobileQuickAction | null>(
     null,
@@ -477,12 +479,17 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
           isImmersiveChatRoute
             ? "overflow-hidden p-2 md:p-0"
             : "overflow-y-auto pt-[calc(4rem+env(safe-area-inset-top))] pb-0 md:pt-0",
+          // Board (kanban): no desktop a pagina controla o proprio scroll interno.
+          isBoardRoute && "md:overflow-hidden",
         )}
       >
         <main
           className={clsx(
             "min-h-full min-w-0",
-            isImmersiveChatRoute ? "p-0" : "p-4 md:p-6 xl:p-8",
+            // Altura definida (nao so min-height) para o `h-full` dos filhos
+            // resolver e o conteudo encostar no rodape, igual ao sidebar.
+            isImmersiveChatRoute ? "h-full p-0" : "p-4 md:p-6 xl:p-8",
+            isBoardRoute && "md:h-full",
           )}
         >
           <Outlet context={{ user, gestorClientId, setGestorClientId }} />

@@ -348,6 +348,7 @@ describe('LeadsService', () => {
         data: expect.objectContaining({
           client_id: clientId,
           assigned_vendor_id: vendorId,
+          registered_by_id: vendorId,
           event_interest_id: eventId,
           team_id: teamId,
         }),
@@ -613,7 +614,7 @@ describe('LeadsService', () => {
     expect(prisma.lead.create).not.toHaveBeenCalled();
   });
 
-  it('closeAttendance: encerra o atendimento, atualiza status para closed e move para ATENDIMENTO_ENCERRADO', async () => {
+  it('closeAttendance: vendedor encerra sem CPF/pulseira e move para ATENDIMENTO_ENCERRADO', async () => {
     prisma.lead.findFirst.mockResolvedValueOnce({
       ...baseExistingLead,
       crm_pipeline_id: 'pipeline-1',
@@ -629,30 +630,93 @@ describe('LeadsService', () => {
     const result = await service.closeAttendance(
       { sub: vendorId, role: Role.VENDEDOR, name: 'V', email: 'v@x', client_id: clientId } as never,
       baseExistingLead.id,
-      { wristband_number: 'P-102', cpf: '123.456.789-00', phone: '11999998888' },
+      { sold: false },
     );
 
+    expect(prisma.crmStage.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          code: expect.stringContaining('_ATENDIMENTO_ENCERRADO'),
+        }),
+      }),
+    );
     expect(prisma.lead.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: baseExistingLead.id },
         data: expect.objectContaining({
           confirmation_status: ConfirmationStatus.closed,
           crm_stage_id: 'stage-encerrado',
-          wristband_number: 'P-102',
-          cpf: '123.456.789-00',
-          phone: '11999998888',
         }),
       }),
     );
+    const updateData = prisma.lead.update.mock.calls[0]?.[0]?.data;
+    expect(updateData).not.toHaveProperty('wristband_number');
+    expect(updateData).not.toHaveProperty('cpf');
+    expect(updateData).not.toHaveProperty('phone');
     expect(prisma.crmHistory.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           lead_id: baseExistingLead.id,
           to_stage_id: 'stage-encerrado',
-          notes: expect.stringContaining('P-102'),
+          notes: 'Atendimento encerrado sem venda',
         }),
       }),
     );
     expect(result.confirmation_status).toBe(ConfirmationStatus.closed);
+  });
+
+  it('closeAttendance: move para COMPRARAM quando o vendedor confirma a venda', async () => {
+    prisma.lead.findFirst.mockResolvedValueOnce({
+      ...baseExistingLead,
+      crm_pipeline_id: 'pipeline-1',
+      crm_stage_id: 'stage-old',
+    });
+    prisma.crmStage.findFirst.mockResolvedValueOnce({ id: 'stage-vendido' });
+    prisma.lead.update.mockResolvedValueOnce({
+      ...baseExistingLead,
+      confirmation_status: ConfirmationStatus.closed,
+      crm_stage_id: 'stage-vendido',
+      sold_by_vendor_id: vendorId,
+    });
+
+    await service.closeAttendance(
+      { sub: vendorId, role: Role.VENDEDOR, name: 'V', email: 'v@x', client_id: clientId } as never,
+      baseExistingLead.id,
+      { sold: true },
+    );
+
+    expect(prisma.crmStage.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          code: expect.stringContaining('_COMPRARAM'),
+        }),
+      }),
+    );
+    expect(prisma.lead.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          crm_stage_id: 'stage-vendido',
+          sold_by_vendor_id: vendorId,
+        }),
+      }),
+    );
+  });
+
+  it('closeAttendance: mantém CPF obrigatório para perfis que fazem a baixa completa', async () => {
+    await expect(
+      service.closeAttendance(
+        {
+          sub: gestorId,
+          role: Role.GESTOR,
+          name: 'G',
+          email: 'g@x',
+          client_id: clientId,
+        } as never,
+        baseExistingLead.id,
+        { sold: false },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prisma.lead.findFirst).not.toHaveBeenCalled();
   });
 });

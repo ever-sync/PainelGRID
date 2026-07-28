@@ -11,7 +11,6 @@ import {
   CalendarPlus,
   CheckCircle2,
   ChevronDown,
-  Copy,
   Filter,
   Loader2,
   Mail,
@@ -46,19 +45,11 @@ import {
   mapApiLeadToLead,
   updateLead,
 } from "../../services/leads";
-import { createSale, type SaleType } from "../../services/sales";
 import {
   getVendorScoreSummary,
   type VendorScoreSummary,
 } from "../../services/vendorScore";
 import { listPipelineStages, type ApiCrmStage } from "../../services/crm";
-import {
-  listCarBrands,
-  listCarModelsByBrand,
-  listCarYearsByBrandAndModel,
-  type VehicleOption,
-} from "../../services/vehicles";
-import { CheckinQrImage } from "../../components/shared/CheckinQrImage";
 import { useLeadRealtimeSync } from "../../hooks/useLeadRealtimeSync";
 import {
   normalizeBrPhoneToE164,
@@ -69,88 +60,6 @@ import { triggerHapticFeedback } from "../../utils/haptics";
 type OutletContext = {
   user: User;
 };
-
-const SALE_ALLOWED_APPOINTMENT_STATUSES = new Set([
-  "scheduled",
-  "confirmed",
-  "completed",
-]);
-const APPOINTMENT_ACTIVE_STATUSES = new Set([
-  "proposed",
-  "scheduled",
-  "confirmed",
-]);
-
-function getSaleButtonState(lead: Lead): { disabled: boolean; title: string } {
-  if (isLeadClosedAfterSale(lead)) {
-    return { disabled: true, title: "Lead já concluído com venda" };
-  }
-  const appointment = lead.active_appointment;
-  if (appointment?.sale_id)
-    return { disabled: true, title: "Venda já registrada" };
-  return { disabled: false, title: "Registrar venda" };
-}
-
-function getAppointmentButtonState(lead: Lead): {
-  disabled: boolean;
-  title: string;
-} {
-  if (isLeadClosedAfterSale(lead)) {
-    return { disabled: true, title: "Lead já concluído com venda" };
-  }
-  const appointment = lead.active_appointment;
-  if (!appointment) return { disabled: false, title: "Agendar visita" };
-  if (APPOINTMENT_ACTIVE_STATUSES.has(appointment.status)) {
-    return { disabled: true, title: "Lead já possui agendamento ativo" };
-  }
-  return { disabled: false, title: "Agendar visita" };
-}
-
-function getCheckinButtonState(lead: Lead): {
-  disabled: boolean;
-  title: string;
-} {
-  if (isLeadClosedAfterSale(lead)) {
-    return { disabled: true, title: "Lead já concluído com venda" };
-  }
-  if (lead.confirmation_status === "checked_in") {
-    return { disabled: true, title: "Check-in já realizado" };
-  }
-  if (!lead.active_appointment) {
-    return { disabled: true, title: "Agende antes de liberar check-in" };
-  }
-  if (!lead.checkin_token) {
-    return { disabled: false, title: "Gerar/capturar convite de check-in" };
-  }
-  return { disabled: false, title: "Copiar convite/check-in" };
-}
-
-function formatCurrencyInput(value: string) {
-  const digits = value.replace(/\D/g, "");
-  if (!digits) return "";
-  const cents = Number(digits);
-  return (cents / 100).toLocaleString("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-function formatCpfInput(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 11);
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
-  if (digits.length <= 9)
-    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
-  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
-}
-
-function isLeadClosedAfterSale(lead: Lead) {
-  return (
-    lead.confirmation_status === "closed" ||
-    lead.active_appointment?.sale_id != null ||
-    lead.crm_stage === "convertido"
-  );
-}
 
 function toSaoPauloDateKey(value: string) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -209,46 +118,20 @@ export function LeadsVendedorPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [score, setScore] = useState<VendorScoreSummary | null>(null);
   const [leadModalOpen, setLeadModalOpen] = useState(false);
-  const [appointmentModal, setAppointmentModal] = useState<Lead | null>(null);
-  const [saleModal, setSaleModal] = useState<Lead | null>(null);
   const [noteModal, setNoteModal] = useState<Lead | null>(null);
   const [stageModal, setStageModal] = useState<Lead | null>(null);
   const [closeAttendanceModal, setCloseAttendanceModal] = useState<Lead | null>(
     null,
   );
-  const [closeWristbandNumber, setCloseWristbandNumber] = useState("");
-  const [closeCpf, setCloseCpf] = useState("");
-  const [closePhone, setClosePhone] = useState("");
+  const [closeAttendanceStep, setCloseAttendanceStep] = useState<
+    "confirm" | "sale"
+  >("confirm");
   const [leadName, setLeadName] = useState("");
   const [leadPhone, setLeadPhone] = useState("");
   const [leadEmail, setLeadEmail] = useState("");
   const [appointmentEventId, setAppointmentEventId] = useState("");
   const [appointmentDateKey, setAppointmentDateKey] = useState("");
   const [appointmentPeriod, setAppointmentPeriod] = useState("");
-  const [saleType, setSaleType] = useState<SaleType>("NOVO");
-  const [saleProduct, setSaleProduct] = useState("");
-  const [saleCarBrandCode, setSaleCarBrandCode] = useState("");
-  const [saleCarModelCode, setSaleCarModelCode] = useState("");
-  const [saleCarYearCode, setSaleCarYearCode] = useState("");
-  const [carBrands, setCarBrands] = useState<VehicleOption[]>([]);
-  const [carModels, setCarModels] = useState<VehicleOption[]>([]);
-  const [carYears, setCarYears] = useState<VehicleOption[]>([]);
-  const [carLoading, setCarLoading] = useState(false);
-  const [carLoadError, setCarLoadError] = useState("");
-  const [saleValue, setSaleValue] = useState("");
-  const [saleWristbandNumber, setSaleWristbandNumber] = useState("");
-  const [saleCpf, setSaleCpf] = useState("");
-  const [saleDate, setSaleDate] = useState(
-    () => new Date().toISOString().split("T")[0],
-  );
-  const [saleNotes, setSaleNotes] = useState("");
-
-  const openSaleModal = useCallback((lead: Lead) => {
-    setActionError("");
-    setSaleWristbandNumber(lead.wristband_number ?? "");
-    setSaleCpf(lead.cpf ?? "");
-    setSaleModal(lead);
-  }, []);
   const [note, setNote] = useState("");
   const [selectedStageId, setSelectedStageId] = useState("");
   const [stageOptions, setStageOptions] = useState<ApiCrmStage[]>([]);
@@ -384,33 +267,6 @@ export function LeadsVendedorPage() {
       phoneDuplicateHint?.assigned_vendor_name ??
       "outro vendedor")
     : null;
-  const selectedCarBrandLabel = useMemo(
-    () =>
-      carBrands.find((item) => item.value === saleCarBrandCode)?.label ?? "",
-    [carBrands, saleCarBrandCode],
-  );
-  const selectedCarModelLabel = useMemo(
-    () =>
-      carModels.find((item) => item.value === saleCarModelCode)?.label ?? "",
-    [carModels, saleCarModelCode],
-  );
-  const selectedCarYearLabel = useMemo(
-    () => carYears.find((item) => item.value === saleCarYearCode)?.label ?? "",
-    [carYears, saleCarYearCode],
-  );
-  const isFipeProductSelected = Boolean(
-    selectedCarBrandLabel && selectedCarModelLabel,
-  );
-
-  const resetSaleVehicleFields = useCallback(() => {
-    setSaleCarBrandCode("");
-    setSaleCarModelCode("");
-    setSaleCarYearCode("");
-    setCarModels([]);
-    setCarYears([]);
-    setSaleProduct("");
-    setSaleDate(new Date().toISOString().split("T")[0]);
-  }, []);
 
   const refreshLeads = useCallback(async () => {
     const t = readStoredSession()?.accessToken;
@@ -472,29 +328,13 @@ export function LeadsVendedorPage() {
     const action = searchParams.get("acao");
     if (action === "appointment") {
       setLeadModalOpen(true);
-    }
-    if (action === "sale") {
-      const firstSellableLead = leads.find((lead) => {
-        const appointment = lead.active_appointment;
-        return (
-          !!appointment &&
-          !appointment.sale_id &&
-          SALE_ALLOWED_APPOINTMENT_STATUSES.has(appointment.status)
-        );
-      });
-      if (!firstSellableLead) {
-        return;
-      }
-      setSaleModal(firstSellableLead);
-    }
-    if (action === "appointment" || action === "sale") {
       const nextParams = new URLSearchParams(searchParams);
       nextParams.delete("acao");
       nextParams.delete("leadMode");
       nextParams.delete("modo");
       setSearchParams(nextParams, { replace: true });
     }
-  }, [leads, searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     const t = readStoredSession()?.accessToken;
@@ -515,76 +355,6 @@ export function LeadsVendedorPage() {
       .catch(() => setVendorNamesById({}));
     void refreshScore();
   }, [clientId, refreshScore]);
-
-  useEffect(() => {
-    if (!saleModal || carBrands.length > 0 || carLoading) return;
-    setCarLoading(true);
-    setCarLoadError("");
-    void listCarBrands()
-      .then(setCarBrands)
-      .catch(() =>
-        setCarLoadError("Não foi possível carregar marcas de carro agora."),
-      )
-      .finally(() => setCarLoading(false));
-  }, [saleModal, carBrands.length, carLoading]);
-
-  useEffect(() => {
-    if (!saleCarBrandCode) {
-      setCarModels([]);
-      setCarYears([]);
-      setSaleCarModelCode("");
-      setSaleCarYearCode("");
-      return;
-    }
-    setCarLoading(true);
-    setCarLoadError("");
-    void listCarModelsByBrand(saleCarBrandCode)
-      .then((rows) => {
-        setCarModels(rows);
-        setSaleCarModelCode("");
-        setSaleCarYearCode("");
-        setCarYears([]);
-      })
-      .catch(() => {
-        setCarModels([]);
-        setCarYears([]);
-        setCarLoadError("Não foi possível carregar modelos para esta marca.");
-      })
-      .finally(() => setCarLoading(false));
-  }, [saleCarBrandCode]);
-
-  useEffect(() => {
-    if (!saleCarBrandCode || !saleCarModelCode) {
-      setCarYears([]);
-      setSaleCarYearCode("");
-      return;
-    }
-    setCarLoading(true);
-    setCarLoadError("");
-    void listCarYearsByBrandAndModel(saleCarBrandCode, saleCarModelCode)
-      .then((rows) => {
-        setCarYears(rows);
-        setSaleCarYearCode("");
-      })
-      .catch(() => {
-        setCarYears([]);
-        setCarLoadError(
-          "Não foi possível carregar anos/versões para este modelo.",
-        );
-      })
-      .finally(() => setCarLoading(false));
-  }, [saleCarBrandCode, saleCarModelCode]);
-
-  useEffect(() => {
-    if (!selectedCarBrandLabel || !selectedCarModelLabel) return;
-    if (!selectedCarYearLabel) {
-      setSaleProduct(`${selectedCarBrandLabel} ${selectedCarModelLabel}`);
-      return;
-    }
-    setSaleProduct(
-      `${selectedCarBrandLabel} ${selectedCarModelLabel} ${selectedCarYearLabel}`,
-    );
-  }, [selectedCarBrandLabel, selectedCarModelLabel, selectedCarYearLabel]);
 
   useEffect(() => {
     const t = readStoredSession()?.accessToken;
@@ -863,7 +633,7 @@ export function LeadsVendedorPage() {
         await refreshLeads();
         await refreshScore();
         setActionError(
-          `Lead "${next.name}" cadastrado, mas não foi possível concluir o agendamento automaticamente. Use o botão "Agendar" no card do lead para tentar novamente.`,
+          `Lead "${next.name}" cadastrado, mas não foi possível concluir o agendamento automático. Solicite apoio ao gestor ou à recepção.`,
         );
         return;
       }
@@ -914,8 +684,6 @@ export function LeadsVendedorPage() {
       setDuplicateLeadIdToClaim(null);
       setPhoneDuplicateHint(null);
       setActionError("");
-      setAppointmentModal(mapped);
-      setAppointmentEventId(mapped.event_id ?? activeEvents[0]?.id ?? "");
     } catch (error) {
       setActionError(
         error instanceof Error
@@ -927,150 +695,20 @@ export function LeadsVendedorPage() {
     }
   };
 
-  const saveAppointment = async () => {
-    const t = readStoredSession()?.accessToken;
-    if (!t || !clientId) return;
-    if (!appointmentEventId || !appointmentDateKey || !appointmentPeriod) {
-      setActionError("Informe evento, dia e período do agendamento.");
-      return;
-    }
-    const selectedLead = appointmentModal;
-    if (!selectedLead) return;
-
-    const periodTime =
-      APPOINTMENT_PERIOD_OPTIONS.find((p) => p.value === appointmentPeriod)
-        ?.time ?? "09:00";
-    setActionError("");
-    setSaving(true);
-    try {
-      const [year, month, day] = appointmentDateKey.split("-");
-      const scheduledAt = new Date(`${year}-${month}-${day}T${periodTime}:00`);
-      await createAppointment(t, {
-        lead_id: selectedLead.id,
-        event_id: appointmentEventId,
-        scheduled_at: scheduledAt.toISOString(),
-        timezone: "America/Sao_Paulo",
-      });
-      setAppointmentModal(null);
-      setAppointmentEventId("");
-      setAppointmentDateKey("");
-      setAppointmentPeriod("");
-      setLeadName("");
-      setLeadPhone("");
-      setLeadEmail("");
-      await refreshLeads();
-      await refreshScore();
-    } catch {
-      setActionError("Não foi possível criar o agendamento.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveSale = async () => {
-    const t = readStoredSession()?.accessToken;
-    if (!t || !clientId) return;
-    if (!saleProduct.trim() || !saleValue.trim()) {
-      setActionError("Informe produto e valor da venda.");
-      return;
-    }
-    if (!saleWristbandNumber.trim()) {
-      setActionError("O número da pulseira é obrigatório para registrar a venda.");
-      return;
-    }
-    if (!saleCpf.trim()) {
-      setActionError("O CPF do cliente é obrigatório para registrar a venda.");
-      return;
-    }
-    const selectedLead = saleModal;
-    if (!selectedLead) return;
-
-    setActionError("");
-    setSaving(true);
-    try {
-      const appointmentId = selectedLead.active_appointment?.id;
-      if (!appointmentId) {
-        setActionError("Crie um agendamento antes de registrar a venda.");
-        return;
-      }
-
-      await updateLead(
-        selectedLead.id,
-        {
-          wristband_number: saleWristbandNumber.trim(),
-          cpf: saleCpf.trim(),
-        },
-        t,
-      );
-
-      await createSale(t, {
-        appointment_id: appointmentId,
-        type: saleType,
-        product: saleProduct,
-        value: saleValue,
-        sold_at: new Date().toISOString(),
-        notes: saleNotes,
-      });
-      setSaleModal(null);
-      setSaleType("NOVO");
-      resetSaleVehicleFields();
-      setSaleValue("");
-      setSaleWristbandNumber("");
-      setSaleCpf("");
-      setSaleDate(new Date().toISOString().split("T")[0]);
-      setSaleNotes("");
-      setLeadName("");
-      setLeadPhone("");
-      setLeadEmail("");
-      await refreshLeads();
-      await refreshScore();
-    } catch {
-      setActionError("Não foi possível registrar a venda.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const currentLeadEvent = useMemo(() => {
-    if (!closeAttendanceModal) return null;
-    const eventId =
-      closeAttendanceModal.event_id ||
-      closeAttendanceModal.active_appointment?.event_id;
-    if (eventId) {
-      const found = events.find((e) => e.id === eventId);
-      if (found) return found;
-    }
-    if (closeAttendanceModal.event_interest) {
-      const foundByName = events.find(
-        (e) =>
-          e.name.toLowerCase() ===
-          closeAttendanceModal.event_interest?.toLowerCase(),
-      );
-      if (foundByName) return foundByName;
-    }
-    return events[0] ?? null;
-  }, [closeAttendanceModal, events]);
-
-  const isWristbandRequired = currentLeadEvent?.require_wristband ?? false;
-
   const handleOpenCloseAttendanceModal = (lead: Lead) => {
     setCloseAttendanceModal(lead);
-    setCloseWristbandNumber(lead.wristband_number ?? "");
-    setCloseCpf(lead.cpf ?? "");
-    setClosePhone(lead.phone ?? "");
+    setCloseAttendanceStep("confirm");
     setActionError("");
   };
 
-  const handleSaveCloseAttendance = async () => {
+  const handleContinueCloseAttendance = () => {
     if (!closeAttendanceModal) return;
-    if (!closeWristbandNumber.trim()) {
-      setActionError("Número da pulseira é obrigatório.");
-      return;
-    }
-    if (!closeCpf.trim()) {
-      setActionError("CPF do cliente é obrigatório.");
-      return;
-    }
+    setActionError("");
+    setCloseAttendanceStep("sale");
+  };
+
+  const handleSaleDecision = async (sold: boolean) => {
+    if (!closeAttendanceModal) return;
     const t = readStoredSession()?.accessToken;
     if (!t) return;
     setActionError("");
@@ -1078,14 +716,18 @@ export function LeadsVendedorPage() {
     try {
       await closeLeadAttendance(
         closeAttendanceModal.id,
-        {
-          wristband_number: closeWristbandNumber.trim(),
-          cpf: closeCpf.trim(),
-        },
+        { sold },
         t,
       );
       setCloseAttendanceModal(null);
+      setCloseAttendanceStep("confirm");
       await refreshLeads();
+      setSuccessMessage(
+        sold
+          ? "Atendimento concluído e lead movido para Compraram."
+          : "Atendimento concluído e lead movido para Atendimento encerrado.",
+      );
+      setTimeout(() => setSuccessMessage(""), 5000);
     } catch (err: unknown) {
       setActionError(
         err instanceof Error
@@ -1136,26 +778,6 @@ export function LeadsVendedorPage() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const copyCheckinPayload = (lead: Lead) => {
-    const payload = lead.checkin_voucher ?? lead.checkin_token;
-    if (!payload) {
-      setActionError(
-        "Check-in ainda não disponível para este lead. Confirme os dados e tente novamente.",
-      );
-      setSuccessMessage("");
-      return;
-    }
-    setActionError("");
-    void navigator.clipboard?.writeText(payload).then(() => {
-      setSuccessMessage(
-        "Voucher de check-in copiado para a área de transferência!",
-      );
-      setTimeout(() => {
-        setSuccessMessage("");
-      }, 5000);
-    });
   };
 
   const openLeadChat = (lead: Lead) => {
@@ -1417,7 +1039,10 @@ export function LeadsVendedorPage() {
                     Status
                   </p>
                   <div className="mt-0.5 inline-flex">
-                    <ConfirmationBadge status={lead.confirmation_status} />
+                    <ConfirmationBadge
+                      status={lead.confirmation_status}
+                      closedLabel="Concluído"
+                    />
                   </div>
                 </div>
                 <div>
@@ -1448,7 +1073,7 @@ export function LeadsVendedorPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-5 gap-1.5 pt-1">
+              <div className="grid grid-cols-2 gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => openLeadChat(lead)}
@@ -1458,41 +1083,6 @@ export function LeadsVendedorPage() {
                 >
                   <MessageCircle size={15} />
                   <span className="mt-0.5">Whats</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => copyCheckinPayload(lead)}
-                  disabled={getCheckinButtonState(lead).disabled}
-                  className="flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-200 dark:border-blue-900 disabled:opacity-30 transition-all active:scale-95"
-                  title={getCheckinButtonState(lead).title}
-                >
-                  <CheckCircle2 size={15} />
-                  <span className="mt-0.5">Check-in</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAppointmentModal(lead);
-                    setAppointmentEventId(
-                      lead.event_id ?? activeEvents[0]?.id ?? "",
-                    );
-                  }}
-                  disabled={getAppointmentButtonState(lead).disabled}
-                  className="flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400 border border-purple-200 dark:border-purple-900 disabled:opacity-30 transition-all active:scale-95"
-                  title={getAppointmentButtonState(lead).title}
-                >
-                  <CalendarPlus size={15} />
-                  <span className="mt-0.5">Agendar</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openSaleModal(lead)}
-                  disabled={getSaleButtonState(lead).disabled}
-                  className="flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-900 disabled:opacity-30 transition-all active:scale-95"
-                  title={getSaleButtonState(lead).title}
-                >
-                  <ShoppingCart size={15} />
-                  <span className="mt-0.5">Vender</span>
                 </button>
                 <button
                   type="button"
@@ -1521,7 +1111,6 @@ export function LeadsVendedorPage() {
                 <th className="py-3 px-4">Etapa CRM</th>
                 <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4">Visita</th>
-                <th className="py-3 px-4">Convite Check-in</th>
                 <th className="py-3 px-4 text-right">Ações Rápidas</th>
               </tr>
             </thead>
@@ -1544,7 +1133,10 @@ export function LeadsVendedorPage() {
                     <StageBadge stage={lead.crm_stage} />
                   </td>
                   <td className="py-3 px-4">
-                    <ConfirmationBadge status={lead.confirmation_status} />
+                    <ConfirmationBadge
+                      status={lead.confirmation_status}
+                      closedLabel="Concluído"
+                    />
                   </td>
                   <td className="py-3 px-4 text-zinc-500 dark:text-zinc-400 font-mono">
                     {lead.store_visit_datetime
@@ -1559,27 +1151,6 @@ export function LeadsVendedorPage() {
                         )
                       : "—"}
                   </td>
-                  <td className="py-3 px-4 max-w-[150px]">
-                    {lead.checkin_token ? (
-                      <div className="flex flex-col gap-1">
-                        <CheckinQrImage
-                          value={
-                            lead.checkin_token ?? lead.checkin_voucher ?? ""
-                          }
-                          size={144}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => copyCheckinPayload(lead)}
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-[#FF0636] hover:underline"
-                        >
-                          <Copy size={12} /> Copiar Convite
-                        </button>
-                      </div>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center justify-end gap-1">
                       <button
@@ -1590,38 +1161,6 @@ export function LeadsVendedorPage() {
                         title={lead.confirmation_status === "closed" ? "Atendimento encerrado" : "Abrir WhatsApp"}
                       >
                         <MessageCircle size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => copyCheckinPayload(lead)}
-                        disabled={getCheckinButtonState(lead).disabled}
-                        className="rounded-lg p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors disabled:opacity-30"
-                        title={getCheckinButtonState(lead).title}
-                      >
-                        <CheckCircle2 size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAppointmentModal(lead);
-                          setAppointmentEventId(
-                            lead.event_id ?? activeEvents[0]?.id ?? "",
-                          );
-                        }}
-                        disabled={getAppointmentButtonState(lead).disabled}
-                        className="rounded-lg p-2 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition-colors disabled:opacity-30"
-                        title={getAppointmentButtonState(lead).title}
-                      >
-                        <CalendarPlus size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openSaleModal(lead)}
-                        disabled={getSaleButtonState(lead).disabled}
-                        className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors disabled:opacity-30"
-                        title={getSaleButtonState(lead).title}
-                      >
-                        <ShoppingCart size={16} />
                       </button>
                       <button
                         type="button"
@@ -1958,219 +1497,6 @@ export function LeadsVendedorPage() {
       </Modal>
 
       <Modal
-        open={!!appointmentModal}
-        onClose={() => {
-          setAppointmentModal(null);
-          setAppointmentEventId("");
-          setAppointmentDateKey("");
-          setAppointmentPeriod("");
-        }}
-        title={`Agendar — ${appointmentModal?.name}`}
-        footer={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setAppointmentModal(null);
-                setAppointmentEventId("");
-                setAppointmentDateKey("");
-                setAppointmentPeriod("");
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button onClick={() => void saveAppointment()} loading={saving}>
-              Criar agendamento
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3 text-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-              Lead
-            </p>
-            <p className="mt-1 text-gray-800">
-              {appointmentModal?.name} —{" "}
-              {appointmentModal?.phone || "sem telefone"}
-            </p>
-          </div>
-          <Select
-            label="Evento"
-            value={appointmentEventId}
-            onChange={(e) => {
-              const nextId = e.target.value;
-              setAppointmentEventId(nextId);
-              setAppointmentDateKey("");
-            }}
-            options={activeEvents.map((event) => ({
-              value: event.id,
-              label: event.name,
-            }))}
-          />
-          <Select
-            label="Dia do evento"
-            value={appointmentDateKey}
-            onChange={(e) => {
-              const nextDateKey = e.target.value;
-              setAppointmentDateKey(nextDateKey);
-              const match = appointmentDateOptions.find(
-                (item) => item.dateKey === nextDateKey,
-              );
-              if (match) setAppointmentEventId(match.eventId);
-            }}
-            options={appointmentDateOptions.map((item) => ({
-              value: item.dateKey,
-              label: toPtBrDateLabel(item.dateKey),
-            }))}
-          />
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-gray-600">Período</p>
-            <div className="grid grid-cols-2 gap-2">
-              {APPOINTMENT_PERIOD_OPTIONS.map((p) => (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() => setAppointmentPeriod(p.value)}
-                  className={clsx(
-                    "rounded-xl border px-4 py-3 text-sm font-medium transition-colors",
-                    appointmentPeriod === p.value
-                      ? "border-[#FF0636] bg-[#FF0636] text-white"
-                      : "border-gray-200 bg-white text-gray-700 hover:border-[#FF0636] hover:text-[#FF0636]",
-                  )}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
-        open={!!saleModal}
-        onClose={() => {
-          setSaleModal(null);
-          resetSaleVehicleFields();
-        }}
-        title={`Registrar venda — ${saleModal?.name}`}
-        footer={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setSaleModal(null);
-                resetSaleVehicleFields();
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button onClick={() => void saveSale()} loading={saving}>
-              Registrar venda
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3 text-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-              Lead
-            </p>
-            <p className="mt-1 text-gray-800">
-              {saleModal?.name} — {saleModal?.phone || "sem telefone"}
-            </p>
-          </div>
-          <Select
-            label="Tipo"
-            value={saleType}
-            onChange={(e) => setSaleType(e.target.value as SaleType)}
-            options={[
-              { value: "NOVO", label: "Novo" },
-              { value: "SEMINOVO", label: "Seminovo" },
-              { value: "VENDA_DIRETA", label: "Venda direta" },
-              { value: "PCD", label: "PCD" },
-            ]}
-          />
-          <Select
-            label="Marca do carro"
-            value={saleCarBrandCode}
-            onChange={(e) => setSaleCarBrandCode(e.target.value)}
-            options={carBrands}
-            placeholder="Selecione uma marca (FIPE)"
-            disabled={carLoading || carBrands.length === 0}
-          />
-          <Select
-            label="Modelo do carro"
-            value={saleCarModelCode}
-            onChange={(e) => setSaleCarModelCode(e.target.value)}
-            options={carModels}
-            placeholder={
-              saleCarBrandCode
-                ? "Selecione um modelo"
-                : "Escolha uma marca primeiro"
-            }
-            disabled={!saleCarBrandCode || carLoading || carModels.length === 0}
-          />
-          <Select
-            label="Ano/versão"
-            value={saleCarYearCode}
-            onChange={(e) => setSaleCarYearCode(e.target.value)}
-            options={carYears}
-            placeholder={
-              saleCarModelCode
-                ? "Selecione o ano/versão"
-                : "Escolha um modelo primeiro"
-            }
-            disabled={!saleCarModelCode || carLoading || carYears.length === 0}
-          />
-          <input
-            value={saleProduct}
-            onChange={(e) => setSaleProduct(e.target.value)}
-            placeholder="Produto (preenchido automaticamente ao escolher marca/modelo/ano)"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-          {isFipeProductSelected ? (
-            <p className="text-xs text-blue-700">
-              <span className="rounded-full bg-blue-50 px-2 py-0.5 font-semibold">
-                Dados FIPE
-              </span>{" "}
-              Produto preenchido automaticamente (você pode editar manualmente).
-            </p>
-          ) : null}
-          {carLoadError ? (
-            <p className="text-xs text-amber-700">{carLoadError}</p>
-          ) : null}
-          <input
-            value={saleValue}
-            onChange={(e) => setSaleValue(formatCurrencyInput(e.target.value))}
-            placeholder="Valor (ex: 120.000,00)"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-          <Input
-            label="Número da pulseira *"
-            value={saleWristbandNumber}
-            onChange={(e) => setSaleWristbandNumber(e.target.value)}
-            placeholder="Digite o número da pulseira (obrigatório)"
-            required
-          />
-          <Input
-            label="CPF do cliente *"
-            value={saleCpf}
-            onChange={(e) => setSaleCpf(formatCpfInput(e.target.value))}
-            placeholder="000.000.000-00 (obrigatório)"
-            required
-          />
-          <textarea
-            value={saleNotes}
-            onChange={(e) => setSaleNotes(e.target.value)}
-            placeholder="Observações (opcional)"
-            rows={3}
-            className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-        </div>
-      </Modal>
-
-      <Modal
         open={!!noteModal}
         onClose={() => setNoteModal(null)}
         title={`Nota — ${noteModal?.name}`}
@@ -2232,53 +1558,58 @@ export function LeadsVendedorPage() {
 
       <Modal
         open={!!closeAttendanceModal}
-        onClose={() => setCloseAttendanceModal(null)}
-        title={`Baixa do Atendimento — ${closeAttendanceModal?.name}`}
+        onClose={() => {
+          setCloseAttendanceModal(null);
+          setCloseAttendanceStep("confirm");
+          setActionError("");
+        }}
+        title="Finalizar atendimento"
         footer={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => setCloseAttendanceModal(null)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => void handleSaveCloseAttendance()}
-              loading={saving}
-              isDisabled={
-                !closeWristbandNumber.trim() ||
-                !closeCpf.trim()
-              }
-            >
-              Confirmar Encerramento
-            </Button>
-          </>
+          closeAttendanceStep === "confirm" ? (
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => setCloseAttendanceModal(null)}
+              >
+                Não
+              </Button>
+              <Button onClick={handleContinueCloseAttendance}>Sim</Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => void handleSaleDecision(false)}
+                loading={saving}
+              >
+                Não
+              </Button>
+              <Button
+                onClick={() => void handleSaleDecision(true)}
+                loading={saving}
+              >
+                Sim
+              </Button>
+            </>
+          )
         }
       >
-        <div className="space-y-4 text-left">
+        <div className="space-y-3 text-left">
           {actionError && (
             <div className="p-3 bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-lg text-sm">
               {actionError}
             </div>
           )}
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            Para finalizar o atendimento e dar baixa, informe os campos
-            obrigatórios abaixo:
+          <p className="text-base font-semibold text-foreground">
+            {closeAttendanceStep === "confirm"
+              ? "Deseja finalizar este atendimento?"
+              : `Vendeu para o cliente ${closeAttendanceModal?.name}?`}
           </p>
-          <Input
-            label="Número da Pulseira *"
-            value={closeWristbandNumber}
-            onChange={(e) => setCloseWristbandNumber(e.target.value)}
-            placeholder="Ex: 1042"
-            required
-          />
-          <Input
-            label="CPF *"
-            value={closeCpf}
-            onChange={(e) => setCloseCpf(formatCpfInput(e.target.value))}
-            placeholder="000.000.000-00"
-            required
-          />
+          {closeAttendanceStep === "confirm" ? (
+            <p className="text-sm text-muted-foreground">
+              Ao confirmar, você informará se houve venda para este cliente.
+            </p>
+          ) : null}
         </div>
       </Modal>
     </div>

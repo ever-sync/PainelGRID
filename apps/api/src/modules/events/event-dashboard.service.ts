@@ -14,6 +14,7 @@ import { AuthenticatedUser } from '../auth/auth.types';
 type VendorBucket = {
   vendor_id: string;
   vendor_name: string;
+  vendor_avatar_url: string | null;
   client_id: string | null;
   team_id: string | null;
   team_name: string | null;
@@ -131,7 +132,7 @@ export class EventDashboardService {
           client_id: { in: participantClientIds },
           is_active: true,
         },
-        select: { id: true, name: true, client_id: true },
+        select: { id: true, name: true, client_id: true, avatar_url: true },
       }),
       this.prisma.scoreEvent.findMany({
         where: {
@@ -204,6 +205,7 @@ export class EventDashboardService {
         bucket = {
           vendor_id: vendorId,
           vendor_name: found?.name ?? fallbackName ?? 'Vendedor',
+          vendor_avatar_url: found?.avatar_url ?? null,
           client_id: found?.client_id ?? fallbackClientId ?? null,
           team_id: teamInfo?.team_id ?? null,
           team_name: teamInfo?.team_name ?? null,

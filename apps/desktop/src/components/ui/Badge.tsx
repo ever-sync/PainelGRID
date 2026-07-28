@@ -151,7 +151,13 @@ export function StageBadge({ stage }: { stage: CrmStage }) {
   return <Badge variant={variant}>{label}</Badge>;
 }
 
-export function ConfirmationBadge({ status }: { status: ConfirmationStatus }) {
+export function ConfirmationBadge({
+  status,
+  closedLabel = "Encerrado",
+}: {
+  status: ConfirmationStatus;
+  closedLabel?: string;
+}) {
   const map: Record<
     ConfirmationStatus,
     { variant: BadgeColor; label: string }
@@ -161,7 +167,7 @@ export function ConfirmationBadge({ status }: { status: ConfirmationStatus }) {
     confirmed: { variant: "green", label: "Confirmado" },
     cancelled: { variant: "red", label: "Cancelado" },
     checked_in: { variant: "blue", label: "Check-in" },
-    closed: { variant: "gray", label: "Encerrado" },
+    closed: { variant: "gray", label: closedLabel },
   };
   const { variant, label } = map[status];
   return (

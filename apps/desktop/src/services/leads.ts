@@ -412,7 +412,12 @@ export async function queryFipeData(
 
 export function closeLeadAttendance(
   leadId: string,
-  payload: { wristband_number: string; cpf: string; phone?: string },
+  payload: {
+    wristband_number?: string;
+    cpf?: string;
+    phone?: string;
+    sold: boolean;
+  },
   accessToken: string,
 ) {
   return httpRequest<ApiLead>(`/leads/${leadId}/close-attendance`, {

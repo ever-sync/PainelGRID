@@ -139,6 +139,7 @@ export type EventDashboardTvResponse = {
   vendors: Array<{
     vendor_id: string;
     vendor_name: string;
+    vendor_avatar_url?: string | null;
     client_id: string | null;
     team_id: string | null;
     team_name: string | null;
@@ -225,8 +226,43 @@ export function getActiveEventsSummary(token: string, signal?: AbortSignal) {
   });
 }
 
+export function computeDynamicEventStatus(row: {
+  status: EventStatus | string;
+  launch_date?: Date | string | null;
+  event_date: Date | string;
+  event_end_date?: Date | string | null;
+}): EventStatus {
+  if (row.status === "cancelled") {
+    return "cancelled" as EventStatus;
+  }
+
+  const now = new Date();
+  const startDate = row.launch_date
+    ? new Date(row.launch_date)
+    : new Date(row.event_date);
+
+  let endDate: Date;
+  if (row.event_end_date) {
+    endDate = new Date(row.event_end_date);
+  } else {
+    const eDate = new Date(row.event_date);
+    eDate.setHours(23, 59, 59, 999);
+    endDate = eDate;
+  }
+
+  if (now < startDate) {
+    return "draft" as EventStatus;
+  } else if (now > endDate) {
+    return "completed" as EventStatus;
+  } else {
+    return "active" as EventStatus;
+  }
+}
+
 export function mapApiEventToEvent(row: ApiEvent): Event {
   const leadsCount = row._count?.interested_leads ?? 0;
+  const computedStatus = computeDynamicEventStatus(row);
+
   return {
     id: row.id,
     client_id: row.client_id,
@@ -244,7 +280,7 @@ export function mapApiEventToEvent(row: ApiEvent): Event {
     require_wristband: row.require_wristband ?? false,
     total_investment: row.total_investment ?? null,
     paid_traffic_investment: row.paid_traffic_investment ?? null,
-    status: row.status,
+    status: computedStatus,
     cover_image_url: row.cover_image_url,
     image_urls: row.image_urls ?? [],
     event_days: row.event_days ?? null,

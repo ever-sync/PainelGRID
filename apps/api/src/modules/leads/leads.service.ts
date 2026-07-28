@@ -64,6 +64,7 @@ const leadSelect = {
   store_visit_datetime: true,
   team_id: true,
   assigned_vendor_id: true,
+  registered_by_id: true,
   attendant_type: true,
   attendant_user_id: true,
   sold_by_vendor_id: true,
@@ -86,6 +87,7 @@ const leadSelect = {
   crm_stage: { select: { id: true, code: true, name: true } },
   crm_pipeline: { select: { id: true, code: true } },
   event_interest: { select: { id: true, name: true } },
+  registered_by: { select: { name: true } },
   conversation_states: {
     select: {
       handoff_required: true,
@@ -657,6 +659,7 @@ export class LeadsService {
           crm_stage_id: defaultStageId ?? null,
           confirmation_status: confirmationStatus,
           assigned_vendor_id: assignedVendorId,
+          registered_by_id: assignedVendorId ?? null,
           team_id: vendorBinding?.teamId ?? null,
           notes: dto.notes?.trim() ?? null,
           birth_date: dto.birth_date ? new Date(dto.birth_date) : null,
@@ -1043,11 +1046,12 @@ export class LeadsService {
   }
 
   async closeAttendance(user: AuthenticatedUser, id: string, dto: CloseAttendanceDto) {
-    const wristbandNumber = dto?.wristband_number?.trim() || null;
+    const isVendor = user.role === Role.VENDEDOR;
+    const wristbandNumber = dto?.wristband_number?.trim();
     const cpf = dto?.cpf?.trim();
     const phone = dto?.phone?.trim();
 
-    if (!cpf) {
+    if (!isVendor && !cpf) {
       throw new BadRequestException('CPF é obrigatório.');
     }
 
@@ -1082,7 +1086,7 @@ export class LeadsService {
       }
     }
 
-    if (requiresWristband && !wristbandNumber) {
+    if (!isVendor && requiresWristband && !wristbandNumber) {
       throw new BadRequestException('Número da pulseira é obrigatório para este evento.');
     }
 
@@ -1098,14 +1102,30 @@ export class LeadsService {
     let targetStageId = lead.crm_stage_id;
     if (pipelineId) {
       const idBase = lead.client_id.replace(/-/g, '').toUpperCase().slice(0, 16);
-      const stage = await this.prisma.crmStage.findFirst({
+      const preferredCode = dto.sold
+        ? `${idBase}_COMPRARAM`
+        : `${idBase}_ATENDIMENTO_ENCERRADO`;
+      const fallbackCodes = dto.sold
+        ? [`${idBase}_VENDIDO`, `${idBase}_CONVERTIDO`]
+        : [`${idBase}_ATENDIMENTO_FINALIZADO`, `${idBase}_ENCERRADO`];
+      const preferredStage = await this.prisma.crmStage.findFirst({
         where: {
           client_id: lead.client_id,
           pipeline_id: pipelineId,
-          code: { in: [`${idBase}_ATENDIMENTO_ENCERRADO`, `${idBase}_ENCERRADO`] },
+          code: preferredCode,
         },
         select: { id: true },
       });
+      const stage =
+        preferredStage ??
+        (await this.prisma.crmStage.findFirst({
+          where: {
+            client_id: lead.client_id,
+            pipeline_id: pipelineId,
+            code: { in: fallbackCodes },
+          },
+          select: { id: true },
+        }));
       if (stage) {
         targetStageId = stage.id;
       }
@@ -1117,9 +1137,10 @@ export class LeadsService {
         confirmation_status: ConfirmationStatus.closed,
         crm_pipeline_id: pipelineId,
         crm_stage_id: targetStageId,
-        wristband_number: wristbandNumber,
-        cpf,
-        phone,
+        ...(wristbandNumber ? { wristband_number: wristbandNumber } : {}),
+        ...(cpf ? { cpf } : {}),
+        ...(phone ? { phone } : {}),
+        ...(dto.sold ? { sold_by_vendor_id: user.sub } : {}),
       },
       select: leadSelect,
     });
@@ -1131,7 +1152,11 @@ export class LeadsService {
           from_stage_id: lead.crm_stage_id,
           to_stage_id: targetStageId,
           changed_by_user_id: user.sub,
-          notes: `Atendimento encerrado. Pulseira: ${wristbandNumber}, CPF: ${cpf}`,
+          notes: `${
+            dto.sold ? 'Atendimento encerrado com venda' : 'Atendimento encerrado sem venda'
+          }${wristbandNumber ? `. Pulseira: ${wristbandNumber}` : ''}${
+            cpf ? `, CPF: ${cpf}` : ''
+          }`,
         },
       });
     }
@@ -1785,8 +1810,8 @@ export class LeadsService {
       confirmation_date: lead.confirmation_date,
       store_visit_datetime: lead.store_visit_datetime,
       assigned_vendor_id: lead.assigned_vendor_id,
-      registered_by_id: null,
-      registered_by_name: null,
+      registered_by_id: lead.registered_by_id,
+      registered_by_name: lead.registered_by?.name ?? null,
       campaign_id: lead.campaign_id,
       attendant_type: lead.attendant_type,
       attendant_user_id: lead.attendant_user_id,

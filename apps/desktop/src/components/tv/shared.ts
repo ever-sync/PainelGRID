@@ -1,5 +1,6 @@
 import confetti from "canvas-confetti";
 import { BadgeCheck, CalendarClock, Trophy, UserCheck } from "lucide-react";
+import { API_BASE } from "../../services/http";
 import type {
   EventDashboardTvResponse,
   SaleSegment,
@@ -209,3 +210,13 @@ export type PodiumItem = {
 };
 
 export type PodiumAccent = "emerald" | "amber" | "sky";
+
+/**
+ * `User.avatar_url` vem relativo (`/auth/avatar/:id`). Prefixa com a base da API
+ * para virar `src` de <img>; URLs absolutas (logo de cliente) passam direto.
+ */
+export function mediaUrl(path?: string | null): string | null {
+  if (!path) return null;
+  if (/^(https?:)?\/\//i.test(path) || path.startsWith("data:")) return path;
+  return `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+}

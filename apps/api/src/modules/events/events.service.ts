@@ -35,6 +35,42 @@ type EventRow = {
   appointments: Array<{ status: AppointmentStatus }>;
 };
 
+export function computeDynamicEventStatus(row: {
+  status: EventStatus | string;
+  launch_date?: Date | string | null;
+  event_date: Date | string;
+  event_end_date?: Date | string | null;
+}): EventStatus {
+  if (row.status === EventStatus.cancelled || row.status === 'cancelled') {
+    return EventStatus.cancelled;
+  }
+
+  const now = new Date();
+
+  // Data de início da ativação (Lançamento ou Data do Evento)
+  const startDate = row.launch_date
+    ? new Date(row.launch_date)
+    : new Date(row.event_date);
+
+  // Data de término (Término ou fim do dia da data do evento)
+  let endDate: Date;
+  if (row.event_end_date) {
+    endDate = new Date(row.event_end_date);
+  } else {
+    const eDate = new Date(row.event_date);
+    eDate.setHours(23, 59, 59, 999);
+    endDate = eDate;
+  }
+
+  if (now < startDate) {
+    return EventStatus.draft;
+  } else if (now > endDate) {
+    return EventStatus.completed;
+  } else {
+    return EventStatus.active;
+  }
+}
+
 @Injectable()
 export class EventsService {
   constructor(
@@ -154,6 +190,16 @@ export class EventsService {
       (appointment) => appointment.status === AppointmentStatus.completed,
     ).length;
     const participantClientIds = this.getParticipantClientIds(row);
+    const dynamicStatus = computeDynamicEventStatus(row);
+
+    if (row.id && row.status !== dynamicStatus) {
+      void this.prisma.event
+        .update({
+          where: { id: row.id },
+          data: { status: dynamicStatus },
+        })
+        .catch(() => {});
+    }
 
     return {
       id: row.id,
@@ -175,7 +221,7 @@ export class EventsService {
         row.total_investment != null ? Number(row.total_investment) : null,
       paid_traffic_investment:
         row.paid_traffic_investment != null ? Number(row.paid_traffic_investment) : null,
-      status: row.status,
+      status: dynamicStatus,
       cover_image_url: row.cover_image_url,
       image_urls: row.image_urls,
       created_at: row.created_at,
@@ -195,7 +241,6 @@ export class EventsService {
         participants: {
           some: { client_id: { in: clientIds } },
         },
-        ...(query.status ? { status: query.status } : {}),
       },
       orderBy: { event_date: 'desc' },
       include: {
@@ -210,7 +255,11 @@ export class EventsService {
       },
     });
 
-    return rows.map((row) => this.serializeEvent(row));
+    const serialized = rows.map((row) => this.serializeEvent(row));
+    if (query.status) {
+      return serialized.filter((item) => item.status === query.status);
+    }
+    return serialized;
   }
 
   async findOne(user: AuthenticatedUser, id: string) {

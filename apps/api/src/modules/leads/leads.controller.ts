@@ -141,10 +141,13 @@ export class LeadsController {
   }
 
   @Post(':id/close-attendance')
-  @Roles(Role.VENDEDOR, Role.GESTOR, Role.CLIENTE)
+  @Roles(Role.VENDEDOR, Role.GESTOR, Role.CLIENTE, Role.RECEPCAO)
   @ApiOperation({ summary: 'Encerra o atendimento do lead e move para a etapa Atendimento Encerrado' })
   @ApiResponse({ status: 200, description: 'Atendimento encerrado com sucesso' })
-  @ApiResponse({ status: 400, description: 'Número da pulseira, CPF e Telefone são obrigatórios' })
+  @ApiResponse({
+    status: 400,
+    description: 'CPF e, quando exigido pelo evento, número da pulseira são obrigatórios na baixa completa',
+  })
   @ApiResponse({ status: 403, description: 'Sem permissão para este lead' })
   @ApiResponse({ status: 404, description: 'Lead não encontrado' })
   closeAttendance(
