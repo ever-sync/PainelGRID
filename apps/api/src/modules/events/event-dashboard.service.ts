@@ -93,7 +93,13 @@ export class EventDashboardService {
         },
       }),
       this.prisma.sale.findMany({
-        where: { appointment: { event_id: eventId } },
+        where: {
+          OR: [
+            { appointment: { event_id: eventId } },
+            { lead: { event_interest_id: eventId } },
+            { team: { event_id: eventId } },
+          ],
+        },
         select: {
           id: true,
           lead_id: true,
@@ -128,12 +134,17 @@ export class EventDashboardService {
         select: { id: true, name: true, client_id: true },
       }),
       this.prisma.scoreEvent.findMany({
-        where: { appointment: { event_id: eventId } },
+        where: {
+          OR: [
+            { appointment: { event_id: eventId } },
+            { lead: { event_interest_id: eventId } },
+          ],
+        },
         select: { vendor_id: true, points: true },
       }),
     ]);
 
-    // Pontos por vendedor (kinds: contacted, scheduled, checked_in, sold)
+    // Pontos por vendedor no evento
     const pointsByVendor = new Map<string, number>();
     scoreRows.forEach((row) => {
       const current = pointsByVendor.get(row.vendor_id) ?? 0;
@@ -150,9 +161,6 @@ export class EventDashboardService {
     });
 
     // Funnel ────────────────────────────────────────────────────────────────
-    // Fonte de verdade: confirmation_status do lead (abrange todos os clientes
-    // participantes do evento e reflete a automacao de etapa do CRM). Cumulativo:
-    // quem chegou a um estagio conta nos anteriores.
     const scheduledLeadIds = new Set<string>();
     const confirmedLeadIds = new Set<string>();
     const checkedInLeadIds = new Set<string>();
@@ -211,8 +219,12 @@ export class EventDashboardService {
       return bucket;
     };
 
-    // Pre-popula vendedores conhecidos (mesmo zerados) pra aparecer no ranking
-    vendors.forEach((vendor) => ensureVendor(vendor.id));
+    // Pre-popula vendedores das equipes vinculadas ao evento
+    teams.forEach((team) => {
+      team.members.forEach((member) => {
+        ensureVendor(member.user_id, member.user.name, member.user.client_id);
+      });
+    });
 
     leads.forEach((lead) => {
       if (lead.assigned_vendor_id) {

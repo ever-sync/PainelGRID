@@ -75,6 +75,9 @@ export default defineConfig({
             return;
           }
 
+          if (packageName === "recharts") {
+            return "charts";
+          }
           if (packageName.startsWith("@dnd-kit/")) {
             return "dnd";
           }

@@ -6,32 +6,32 @@ import {
   ConfirmationStatus,
   EventStatus,
   Prisma,
-} from '@prisma/client';
+} from "@prisma/client";
 import {
   BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { createHash } from 'crypto';
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { createHash } from "crypto";
 import {
   encryptCheckinToken,
   generateRawCheckinToken,
-} from '../../common/utils/crypto.util';
-import { PrismaService } from '../../config/prisma.service';
-import { Role } from '../../common/types';
-import { AuthenticatedUser } from '../auth/auth.types';
-import { ClientWebhookService } from '../crm/client-webhook.service';
-import { MailService } from '../../mail/mail.service';
-import { RealtimeEventsService } from '../realtime/realtime-events.service';
-import { ScoreEventsService } from '../score-events/score-events.service';
-import { resolveConfirmationStatusForStage } from '../clients/client-settings';
-import { CancelAppointmentDto } from './dto/cancel-appointment.dto';
-import { ConfirmAppointmentDto } from './dto/confirm-appointment.dto';
-import { CreateAppointmentDto } from './dto/create-appointment.dto';
-import { NoShowAppointmentDto } from './dto/no-show-appointment.dto';
-import { RescheduleAppointmentDto } from './dto/reschedule-appointment.dto';
+} from "../../common/utils/crypto.util";
+import { PrismaService } from "../../config/prisma.service";
+import { Role } from "../../common/types";
+import { AuthenticatedUser } from "../auth/auth.types";
+import { ClientWebhookService } from "../crm/client-webhook.service";
+import { MailService } from "../../mail/mail.service";
+import { RealtimeEventsService } from "../realtime/realtime-events.service";
+import { ScoreEventsService } from "../score-events/score-events.service";
+import { resolveConfirmationStatusForStage } from "../clients/client-settings";
+import { CancelAppointmentDto } from "./dto/cancel-appointment.dto";
+import { ConfirmAppointmentDto } from "./dto/confirm-appointment.dto";
+import { CreateAppointmentDto } from "./dto/create-appointment.dto";
+import { NoShowAppointmentDto } from "./dto/no-show-appointment.dto";
+import { RescheduleAppointmentDto } from "./dto/reschedule-appointment.dto";
 
 const ACTIVE_APPOINTMENT_STATUSES = [
   AppointmentStatus.proposed,
@@ -46,15 +46,15 @@ const CAPACITY_APPOINTMENT_STATUSES = [
 ] satisfies AppointmentStatus[];
 
 type TransactionClient = {
-  apiIdempotencyRequest: PrismaService['apiIdempotencyRequest'];
-  appointment: PrismaService['appointment'];
-  client: PrismaService['client'];
-  crmHistory: PrismaService['crmHistory'];
-  crmPipeline: PrismaService['crmPipeline'];
-  crmStage: PrismaService['crmStage'];
-  lead: PrismaService['lead'];
-  user: PrismaService['user'];
-  scoreEvent: PrismaService['scoreEvent'];
+  apiIdempotencyRequest: PrismaService["apiIdempotencyRequest"];
+  appointment: PrismaService["appointment"];
+  client: PrismaService["client"];
+  crmHistory: PrismaService["crmHistory"];
+  crmPipeline: PrismaService["crmPipeline"];
+  crmStage: PrismaService["crmStage"];
+  lead: PrismaService["lead"];
+  user: PrismaService["user"];
+  scoreEvent: PrismaService["scoreEvent"];
 };
 
 type AppointmentRecord = Prisma.AppointmentGetPayload<{
@@ -77,11 +77,16 @@ export class AppointmentsService {
   ) {}
 
   private checkinVoucherSecret(): string {
-    const dedicated = this.configService.get<string>('LEADFLOW_CHECKIN_VOUCHER_SECRET')?.trim();
+    const dedicated = this.configService
+      .get<string>("LEADFLOW_CHECKIN_VOUCHER_SECRET")
+      ?.trim();
     if (dedicated) {
       return dedicated;
     }
-    return this.configService.get<string>('JWT_SECRET', 'leadflow_access_secret');
+    return this.configService.get<string>(
+      "JWT_SECRET",
+      "leadflow_access_secret",
+    );
   }
 
   async create(dto: CreateAppointmentDto, idempotencyKey?: string) {
@@ -90,7 +95,7 @@ export class AppointmentsService {
     });
 
     if (!lead || lead.deleted_at) {
-      throw new NotFoundException('Lead nao encontrado');
+      throw new NotFoundException("Lead nao encontrado");
     }
 
     const event = await this.prisma.event.findUnique({
@@ -98,7 +103,7 @@ export class AppointmentsService {
     });
 
     if (!event) {
-      throw new NotFoundException('Evento nao encontrado');
+      throw new NotFoundException("Evento nao encontrado");
     }
 
     const participantIds = await this.prisma.eventParticipant.findMany({
@@ -117,21 +122,24 @@ export class AppointmentsService {
       });
 
       if (!conversation) {
-        throw new NotFoundException('Conversa nao encontrada');
+        throw new NotFoundException("Conversa nao encontrada");
       }
 
-      if (conversation.client_id !== lead.client_id || conversation.lead_id !== lead.id) {
-        throw new BadRequestException('Conversa invalida para este lead');
+      if (
+        conversation.client_id !== lead.client_id ||
+        conversation.lead_id !== lead.id
+      ) {
+        throw new BadRequestException("Conversa invalida para este lead");
       }
     }
 
-    const endpoint = 'agent.appointments.create';
+    const endpoint = "agent.appointments.create";
     const requestHash = this.createRequestHash({
       lead_id: dto.lead_id,
       event_id: dto.event_id,
       conversation_id: dto.conversation_id ?? null,
       scheduled_at: dto.scheduled_at,
-      timezone: dto.timezone?.trim() || 'America/Sao_Paulo',
+      timezone: dto.timezone?.trim() || "America/Sao_Paulo",
       channel: dto.channel ?? null,
       source: dto.source ?? null,
       created_by_type: dto.created_by_type ?? null,
@@ -148,7 +156,7 @@ export class AppointmentsService {
     );
 
     if (!result.idempotent_replay) {
-      void this.clientWebhook.dispatch(lead.client_id, 'appointment.created', {
+      void this.clientWebhook.dispatch(lead.client_id, "appointment.created", {
         appointment_id: result.id,
         lead_id: dto.lead_id,
         event_id: dto.event_id,
@@ -163,9 +171,13 @@ export class AppointmentsService {
     return result;
   }
 
-  async confirm(id: string, dto: ConfirmAppointmentDto, idempotencyKey?: string) {
+  async confirm(
+    id: string,
+    dto: ConfirmAppointmentDto,
+    idempotencyKey?: string,
+  ) {
     const appointment = await this.getAppointmentOrFail(id);
-    const endpoint = 'agent.appointments.confirm';
+    const endpoint = "agent.appointments.confirm";
     const requestHash = this.createRequestHash({
       id,
       source: dto.source ?? null,
@@ -181,20 +193,28 @@ export class AppointmentsService {
     );
 
     if (!result.idempotent_replay && result.confirmed) {
-      void this.clientWebhook.dispatch(appointment.client_id, 'appointment.confirmed', {
-        appointment_id: appointment.id,
-        lead_id: appointment.lead_id,
-        client_id: appointment.client_id,
-        confirmed_at: result.confirmed_at as string,
-      });
+      void this.clientWebhook.dispatch(
+        appointment.client_id,
+        "appointment.confirmed",
+        {
+          appointment_id: appointment.id,
+          lead_id: appointment.lead_id,
+          client_id: appointment.client_id,
+          confirmed_at: result.confirmed_at as string,
+        },
+      );
     }
 
     return result;
   }
 
-  async reschedule(id: string, dto: RescheduleAppointmentDto, idempotencyKey?: string) {
+  async reschedule(
+    id: string,
+    dto: RescheduleAppointmentDto,
+    idempotencyKey?: string,
+  ) {
     const appointment = await this.getAppointmentOrFail(id);
-    const endpoint = 'agent.appointments.reschedule';
+    const endpoint = "agent.appointments.reschedule";
     const requestHash = this.createRequestHash({
       id,
       scheduled_at: dto.scheduled_at,
@@ -211,14 +231,18 @@ export class AppointmentsService {
     );
 
     if (!result.idempotent_replay && result.rescheduled) {
-      void this.clientWebhook.dispatch(appointment.client_id, 'appointment.rescheduled', {
-        from_appointment_id: appointment.id,
-        to_appointment_id: result.to_appointment_id as string,
-        lead_id: appointment.lead_id,
-        client_id: appointment.client_id,
-        new_scheduled_at: dto.scheduled_at,
-        rescheduled_at: new Date().toISOString(),
-      });
+      void this.clientWebhook.dispatch(
+        appointment.client_id,
+        "appointment.rescheduled",
+        {
+          from_appointment_id: appointment.id,
+          to_appointment_id: result.to_appointment_id as string,
+          lead_id: appointment.lead_id,
+          client_id: appointment.client_id,
+          new_scheduled_at: dto.scheduled_at,
+          rescheduled_at: new Date().toISOString(),
+        },
+      );
     }
 
     return result;
@@ -226,7 +250,7 @@ export class AppointmentsService {
 
   async noShow(id: string, dto: NoShowAppointmentDto, idempotencyKey?: string) {
     const appointment = await this.getAppointmentOrFail(id);
-    const endpoint = 'agent.appointments.no_show';
+    const endpoint = "agent.appointments.no_show";
     const requestHash = this.createRequestHash({
       id,
       reason: this.normalizeNullableString(dto.reason),
@@ -241,13 +265,17 @@ export class AppointmentsService {
     );
 
     if (!result.idempotent_replay && result.no_show) {
-      void this.clientWebhook.dispatch(appointment.client_id, 'appointment.no_show', {
-        appointment_id: appointment.id,
-        lead_id: appointment.lead_id,
-        client_id: appointment.client_id,
-        reason: dto.reason ?? null,
-        no_show_at: result.no_show_at as string,
-      });
+      void this.clientWebhook.dispatch(
+        appointment.client_id,
+        "appointment.no_show",
+        {
+          appointment_id: appointment.id,
+          lead_id: appointment.lead_id,
+          client_id: appointment.client_id,
+          reason: dto.reason ?? null,
+          no_show_at: result.no_show_at as string,
+        },
+      );
     }
 
     return result;
@@ -255,7 +283,7 @@ export class AppointmentsService {
 
   async cancel(id: string, dto: CancelAppointmentDto, idempotencyKey?: string) {
     const appointment = await this.getAppointmentOrFail(id);
-    const endpoint = 'agent.appointments.cancel';
+    const endpoint = "agent.appointments.cancel";
     const requestHash = this.createRequestHash({
       id,
       reason: this.normalizeNullableString(dto.reason),
@@ -271,13 +299,17 @@ export class AppointmentsService {
     );
 
     if (!result.idempotent_replay && result.cancelled) {
-      void this.clientWebhook.dispatch(appointment.client_id, 'appointment.cancelled', {
-        appointment_id: appointment.id,
-        lead_id: appointment.lead_id,
-        client_id: appointment.client_id,
-        reason: dto.reason ?? null,
-        cancelled_at: result.cancelled_at as string,
-      });
+      void this.clientWebhook.dispatch(
+        appointment.client_id,
+        "appointment.cancelled",
+        {
+          appointment_id: appointment.id,
+          lead_id: appointment.lead_id,
+          client_id: appointment.client_id,
+          reason: dto.reason ?? null,
+          cancelled_at: result.cancelled_at as string,
+        },
+      );
     }
 
     return result;
@@ -285,7 +317,9 @@ export class AppointmentsService {
 
   async createForVendor(user: AuthenticatedUser, dto: CreateAppointmentDto) {
     if (user.role !== Role.VENDEDOR || !user.client_id) {
-      throw new BadRequestException('Apenas vendedor pode criar agendamento pelo painel');
+      throw new BadRequestException(
+        "Apenas vendedor pode criar agendamento pelo painel",
+      );
     }
 
     const lead = await this.prisma.lead.findFirst({
@@ -297,7 +331,7 @@ export class AppointmentsService {
       },
     });
     if (!lead) {
-      throw new NotFoundException('Lead nao encontrado para este vendedor');
+      throw new NotFoundException("Lead nao encontrado para este vendedor");
     }
 
     const payload: CreateAppointmentDto = {
@@ -314,24 +348,24 @@ export class AppointmentsService {
 
   async checkInByReception(user: AuthenticatedUser, appointmentId: string) {
     if (user.role !== Role.RECEPCAO || !user.client_id) {
-      throw new BadRequestException('Apenas recepcao pode confirmar presenca');
+      throw new BadRequestException("Apenas recepcao pode confirmar presenca");
     }
 
     const appointment = await this.getAppointmentOrFail(appointmentId);
     if (appointment.client_id !== user.client_id) {
-      throw new BadRequestException('Agendamento nao pertence a esta empresa');
+      throw new BadRequestException("Agendamento nao pertence a esta empresa");
     }
 
     return this.checkInAppointment(appointment);
   }
 
   private async createInternal(
-    lead: Awaited<ReturnType<PrismaService['lead']['findUnique']>>,
-    event: Awaited<ReturnType<PrismaService['event']['findUnique']>>,
+    lead: Awaited<ReturnType<PrismaService["lead"]["findUnique"]>>,
+    event: Awaited<ReturnType<PrismaService["event"]["findUnique"]>>,
     dto: CreateAppointmentDto,
   ) {
     if (!lead || !event) {
-      throw new NotFoundException('Lead ou evento nao encontrado');
+      throw new NotFoundException("Lead ou evento nao encontrado");
     }
 
     await this.assertNoDuplicateActiveAppointment(lead.id, event.id);
@@ -339,47 +373,68 @@ export class AppointmentsService {
 
     const isVendorCreated = dto.source === AppointmentSource.vendedor;
 
-    const appointment = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.appointment.create({
-        data: {
-          client_id: lead.client_id,
-          lead_id: lead.id,
-          event_id: event.id,
-          conversation_id: dto.conversation_id ?? null,
-          scheduled_at: new Date(dto.scheduled_at),
-          timezone: dto.timezone?.trim() || 'America/Sao_Paulo',
-          channel: dto.channel,
-          source: dto.source,
-          created_by_type: dto.created_by_type,
-          created_by_id: dto.created_by_id ?? null,
-          notes: this.normalizeNullableString(dto.notes),
-        },
-        include: {
-          lead: true,
-          event: true,
-          conversation: true,
-        },
-      });
+    const appointment = await this.prisma.$transaction(
+      async (tx) => {
+        const created = await tx.appointment.create({
+          data: {
+            client_id: lead.client_id,
+            lead_id: lead.id,
+            event_id: event.id,
+            conversation_id: dto.conversation_id ?? null,
+            scheduled_at: new Date(dto.scheduled_at),
+            timezone: dto.timezone?.trim() || "America/Sao_Paulo",
+            channel: dto.channel,
+            source: dto.source,
+            created_by_type: dto.created_by_type,
+            created_by_id: dto.created_by_id ?? null,
+            notes: this.normalizeNullableString(dto.notes),
+          },
+          include: {
+            lead: true,
+            event: true,
+            conversation: true,
+          },
+        });
 
-      await this.syncLeadStoreVisitDatetime(tx, lead.id);
-      await tx.lead.update({
-        where: { id: lead.id },
-        data: {
-          ...(isVendorCreated ? {} : { confirmation_status: ConfirmationStatus.scheduled }),
-          checkin_token: lead.checkin_token ?? encryptCheckinToken(generateRawCheckinToken(), this.checkinVoucherSecret()),
-          event_interest_id: event.id,
-          attendant_type: dto.created_by_type ?? null,
-          attendant_user_id:
-            dto.created_by_type === AppointmentActorType.user ? (dto.created_by_id ?? null) : null,
-        },
-      });
-      await this.syncCrmOnAppointmentCreated(tx, lead, created.created_by_id, dto.source);
-      await this.awardScheduledIfVendor(tx, created);
+        await this.syncLeadStoreVisitDatetime(tx, lead.id);
+        await tx.lead.update({
+          where: { id: lead.id },
+          data: {
+            ...(isVendorCreated
+              ? {}
+              : { confirmation_status: ConfirmationStatus.scheduled }),
+            checkin_token:
+              lead.checkin_token ??
+              encryptCheckinToken(
+                generateRawCheckinToken(),
+                this.checkinVoucherSecret(),
+              ),
+            event_interest_id: event.id,
+            attendant_type: dto.created_by_type ?? null,
+            attendant_user_id:
+              dto.created_by_type === AppointmentActorType.user
+                ? (dto.created_by_id ?? null)
+                : null,
+          },
+        });
+        await this.syncCrmOnAppointmentCreated(
+          tx,
+          lead,
+          created.created_by_id,
+          dto.source,
+        );
+        await this.awardScheduledIfVendor(tx, created);
 
-      return created;
-    }, { timeout: 15000, maxWait: 10000 });
+        return created;
+      },
+      { timeout: 15000, maxWait: 10000 },
+    );
 
-    this.emitLeadUpdated(appointment.client_id, appointment.lead_id, 'appointment_created');
+    this.emitLeadUpdated(
+      appointment.client_id,
+      appointment.lead_id,
+      "appointment_created",
+    );
 
     if (isVendorCreated) {
       void this.sendAppointmentWelcomeEmail(appointment).catch(() => undefined);
@@ -391,7 +446,9 @@ export class AppointmentsService {
     };
   }
 
-  private async sendAppointmentWelcomeEmail(appointment: AppointmentRecord): Promise<void> {
+  private async sendAppointmentWelcomeEmail(
+    appointment: AppointmentRecord,
+  ): Promise<void> {
     const lead = appointment.lead;
     const event = appointment.event;
     if (!lead.email) return;
@@ -424,13 +481,15 @@ export class AppointmentsService {
   }
 
   private async confirmInternal(
-    appointment: Awaited<ReturnType<AppointmentsService['getAppointmentOrFail']>>,
+    appointment: Awaited<
+      ReturnType<AppointmentsService["getAppointmentOrFail"]>
+    >,
     dto: ConfirmAppointmentDto,
   ) {
     if (appointment.status === AppointmentStatus.confirmed) {
       return {
         confirmed: false,
-        reason: 'already_confirmed',
+        reason: "already_confirmed",
         appointment_id: appointment.id,
         lead_id: appointment.lead_id,
         status: appointment.status,
@@ -443,7 +502,9 @@ export class AppointmentsService {
       appointment.status !== AppointmentStatus.proposed &&
       appointment.status !== AppointmentStatus.scheduled
     ) {
-      throw new BadRequestException('Status do appointment nao permite confirmacao');
+      throw new BadRequestException(
+        "Status do appointment nao permite confirmacao",
+      );
     }
 
     const confirmedAt = new Date();
@@ -461,17 +522,30 @@ export class AppointmentsService {
         where: { id: appointment.lead_id },
         data: {
           confirmation_status: ConfirmationStatus.confirmed,
-          checkin_token: appointment.lead.checkin_token ?? encryptCheckinToken(generateRawCheckinToken(), this.checkinVoucherSecret()),
+          checkin_token:
+            appointment.lead.checkin_token ??
+            encryptCheckinToken(
+              generateRawCheckinToken(),
+              this.checkinVoucherSecret(),
+            ),
           confirmation_date: appointment.lead.confirmation_date ?? confirmedAt,
         },
       });
 
-      await this.syncCrmOnAppointmentConfirmed(tx, appointment.lead, appointment.created_by_id);
+      await this.syncCrmOnAppointmentConfirmed(
+        tx,
+        appointment.lead,
+        appointment.created_by_id,
+      );
 
       return updatedAppointment;
     });
 
-    this.emitLeadUpdated(appointment.client_id, appointment.lead_id, 'appointment_confirmed');
+    this.emitLeadUpdated(
+      appointment.client_id,
+      appointment.lead_id,
+      "appointment_confirmed",
+    );
 
     return {
       confirmed: true,
@@ -484,11 +558,15 @@ export class AppointmentsService {
   }
 
   private async rescheduleInternal(
-    appointment: Awaited<ReturnType<AppointmentsService['getAppointmentOrFail']>>,
+    appointment: Awaited<
+      ReturnType<AppointmentsService["getAppointmentOrFail"]>
+    >,
     dto: RescheduleAppointmentDto,
   ) {
     if (!this.isActiveAppointmentStatus(appointment.status)) {
-      throw new BadRequestException('Status do appointment nao permite remarcacao');
+      throw new BadRequestException(
+        "Status do appointment nao permite remarcacao",
+      );
     }
 
     await this.assertNoDuplicateActiveAppointment(
@@ -508,7 +586,10 @@ export class AppointmentsService {
         where: { id: appointment.id },
         data: {
           status: AppointmentStatus.rescheduled,
-          notes: this.mergeNotes(appointment.notes, `Rescheduled to ${scheduledAt.toISOString()}`),
+          notes: this.mergeNotes(
+            appointment.notes,
+            `Rescheduled to ${scheduledAt.toISOString()}`,
+          ),
         },
       });
 
@@ -540,15 +621,20 @@ export class AppointmentsService {
         where: { id: appointment.lead_id },
         data: {
           confirmation_status: ConfirmationStatus.scheduled,
-          checkin_token: appointment.lead.checkin_token ?? encryptCheckinToken(generateRawCheckinToken(), this.checkinVoucherSecret()),
+          checkin_token:
+            appointment.lead.checkin_token ??
+            encryptCheckinToken(
+              generateRawCheckinToken(),
+              this.checkinVoucherSecret(),
+            ),
         },
       });
       await this.syncCrmStage(
         tx,
         appointment.lead,
         appointment.created_by_id,
-        ['PRESENCA_REAGENDADA'],
-        'Lead reagendou o dia da visita',
+        ["PRESENCA_REAGENDADA"],
+        "Lead reagendou o dia da visita",
       );
       return created;
     });
@@ -556,7 +642,7 @@ export class AppointmentsService {
     this.emitLeadUpdated(
       newAppointment.client_id,
       newAppointment.lead_id,
-      'appointment_rescheduled',
+      "appointment_rescheduled",
     );
 
     return {
@@ -570,13 +656,15 @@ export class AppointmentsService {
   }
 
   private async cancelInternal(
-    appointment: Awaited<ReturnType<AppointmentsService['getAppointmentOrFail']>>,
+    appointment: Awaited<
+      ReturnType<AppointmentsService["getAppointmentOrFail"]>
+    >,
     dto: CancelAppointmentDto,
   ) {
     if (appointment.status === AppointmentStatus.cancelled) {
       return {
         cancelled: false,
-        reason: 'already_cancelled',
+        reason: "already_cancelled",
         appointment_id: appointment.id,
         lead_id: appointment.lead_id,
         status: appointment.status,
@@ -586,7 +674,9 @@ export class AppointmentsService {
     }
 
     if (!this.isActiveAppointmentStatus(appointment.status)) {
-      throw new BadRequestException('Status do appointment nao permite cancelamento');
+      throw new BadRequestException(
+        "Status do appointment nao permite cancelamento",
+      );
     }
 
     const cancelledAt = new Date();
@@ -614,13 +704,19 @@ export class AppointmentsService {
         tx,
         appointment.lead,
         appointment.created_by_id,
-        ['PRESENCA_CANCELADA'],
-        dto.reason ? `Lead cancelou o agendamento: ${dto.reason}` : 'Lead cancelou o agendamento',
+        ["PRESENCA_CANCELADA"],
+        dto.reason
+          ? `Lead cancelou o agendamento: ${dto.reason}`
+          : "Lead cancelou o agendamento",
       );
       return updatedAppointment;
     });
 
-    this.emitLeadUpdated(updated.client_id, updated.lead_id, 'appointment_cancelled');
+    this.emitLeadUpdated(
+      updated.client_id,
+      updated.lead_id,
+      "appointment_cancelled",
+    );
 
     return {
       cancelled: true,
@@ -633,12 +729,14 @@ export class AppointmentsService {
   }
 
   private async checkInAppointment(
-    appointment: Awaited<ReturnType<AppointmentsService['getAppointmentOrFail']>>,
+    appointment: Awaited<
+      ReturnType<AppointmentsService["getAppointmentOrFail"]>
+    >,
   ) {
     if (appointment.status === AppointmentStatus.completed) {
       return {
         checked_in: false,
-        reason: 'already_checked_in',
+        reason: "already_checked_in",
         appointment_id: appointment.id,
         lead_id: appointment.lead_id,
         status: appointment.status,
@@ -650,7 +748,9 @@ export class AppointmentsService {
       appointment.status !== AppointmentStatus.scheduled &&
       appointment.status !== AppointmentStatus.confirmed
     ) {
-      throw new BadRequestException('Status do appointment nao permite check-in');
+      throw new BadRequestException(
+        "Status do appointment nao permite check-in",
+      );
     }
 
     const completedAt = new Date();
@@ -680,15 +780,19 @@ export class AppointmentsService {
         tx,
         appointment.lead,
         appointment.created_by_id,
-        ['PRESENCA_CONFIRMADA'],
-        'Lead chegou à loja — check-in realizado',
+        ["PRESENCA_CONFIRMADA"],
+        "Lead chegou à loja — check-in realizado",
       );
       await this.awardCheckedInIfVendor(tx, updatedAppointment);
 
       return updatedAppointment;
     });
 
-    this.emitLeadUpdated(updated.client_id, updated.lead_id, 'appointment_checked_in');
+    this.emitLeadUpdated(
+      updated.client_id,
+      updated.lead_id,
+      "appointment_checked_in",
+    );
 
     return {
       checked_in: true,
@@ -710,17 +814,26 @@ export class AppointmentsService {
     });
 
     if (!appointment) {
-      throw new NotFoundException('Appointment nao encontrado');
+      throw new NotFoundException("Appointment nao encontrado");
     }
 
     return appointment;
   }
 
-  private async awardScheduledIfVendor(tx: TransactionClient, appointment: AppointmentRecord) {
-    if (appointment.status !== AppointmentStatus.scheduled && appointment.status !== AppointmentStatus.confirmed) {
+  private async awardScheduledIfVendor(
+    tx: TransactionClient,
+    appointment: AppointmentRecord,
+  ) {
+    if (
+      appointment.status !== AppointmentStatus.scheduled &&
+      appointment.status !== AppointmentStatus.confirmed
+    ) {
       return;
     }
-    if (appointment.created_by_type !== AppointmentActorType.user || !appointment.created_by_id) {
+    if (
+      appointment.created_by_type !== AppointmentActorType.user ||
+      !appointment.created_by_id
+    ) {
       return;
     }
 
@@ -738,13 +851,19 @@ export class AppointmentsService {
       vendor_id: vendor.id,
       lead_id: appointment.lead_id,
       appointment_id: appointment.id,
-      kind: 'scheduled',
+      kind: "scheduled",
       earned_at: appointment.created_at,
     });
   }
 
-  private async awardCheckedInIfVendor(tx: TransactionClient, appointment: AppointmentRecord) {
-    if (appointment.created_by_type !== AppointmentActorType.user || !appointment.created_by_id) {
+  private async awardCheckedInIfVendor(
+    tx: TransactionClient,
+    appointment: AppointmentRecord,
+  ) {
+    if (
+      appointment.created_by_type !== AppointmentActorType.user ||
+      !appointment.created_by_id
+    ) {
       return;
     }
 
@@ -762,7 +881,7 @@ export class AppointmentsService {
       vendor_id: vendor.id,
       lead_id: appointment.lead_id,
       appointment_id: appointment.id,
-      kind: 'checked_in',
+      kind: "checked_in",
       earned_at: appointment.completed_at ?? new Date(),
     });
   }
@@ -786,7 +905,9 @@ export class AppointmentsService {
     });
 
     if (duplicates > 0) {
-      throw new ConflictException('Ja existe appointment ativo para este lead e evento');
+      throw new ConflictException(
+        "Ja existe appointment ativo para este lead e evento",
+      );
     }
   }
 
@@ -812,29 +933,39 @@ export class AppointmentsService {
     });
 
     if (occupied >= capacity) {
-      throw new ConflictException('Evento sem disponibilidade para este agendamento');
+      throw new ConflictException(
+        "Evento sem disponibilidade para este agendamento",
+      );
     }
   }
 
-  private assertLeadMatchesEvent(leadClientId: string, participantClientIds: string[]) {
+  private assertLeadMatchesEvent(
+    leadClientId: string,
+    participantClientIds: string[],
+  ) {
     if (!participantClientIds.includes(leadClientId)) {
-      throw new BadRequestException('Lead e evento pertencem a clientes diferentes');
+      throw new BadRequestException(
+        "Lead e evento pertencem a clientes diferentes",
+      );
     }
   }
 
   private assertEventStatusAllowed(status: EventStatus) {
     if (status !== EventStatus.active && status !== EventStatus.draft) {
-      throw new BadRequestException('Evento nao permite novos appointments');
+      throw new BadRequestException("Evento nao permite novos appointments");
     }
   }
 
-  private async syncLeadStoreVisitDatetime(tx: TransactionClient, leadId: string) {
+  private async syncLeadStoreVisitDatetime(
+    tx: TransactionClient,
+    leadId: string,
+  ) {
     const activeAppointment = await tx.appointment.findFirst({
       where: {
         lead_id: leadId,
         status: { in: [...ACTIVE_APPOINTMENT_STATUSES] },
       },
-      orderBy: [{ created_at: 'desc' }],
+      orderBy: [{ created_at: "desc" }],
     });
 
     await tx.lead.update({
@@ -851,7 +982,7 @@ export class AppointmentsService {
    */
   private async syncCrmStage(
     tx: TransactionClient,
-    lead: NonNullable<Awaited<ReturnType<PrismaService['lead']['findUnique']>>>,
+    lead: NonNullable<Awaited<ReturnType<PrismaService["lead"]["findUnique"]>>>,
     actorId: string | null | undefined,
     suffixes: string[],
     historyNote: string,
@@ -870,13 +1001,15 @@ export class AppointmentsService {
 
     const resolvedActorId =
       actorId?.trim() ||
-      this.configService.get<string>('LEADFLOW_INTEGRATION_ACTOR_USER_ID')?.trim();
+      this.configService
+        .get<string>("LEADFLOW_INTEGRATION_ACTOR_USER_ID")
+        ?.trim();
     if (!resolvedActorId) return;
 
     const actor = await tx.user.findUnique({ where: { id: resolvedActorId } });
     if (!actor) return;
 
-    const idBase = lead.client_id.replace(/-/g, '').toUpperCase().slice(0, 16);
+    const idBase = lead.client_id.replace(/-/g, "").toUpperCase().slice(0, 16);
     const codes = suffixes.map((suffix) => `${idBase}_${suffix}`);
 
     const targetStage = await tx.crmStage.findFirst({
@@ -924,28 +1057,28 @@ export class AppointmentsService {
   /** Move lead para etapa CONFIRMADO ao confirmar agendamento. */
   private async syncCrmOnAppointmentConfirmed(
     tx: TransactionClient,
-    lead: NonNullable<Awaited<ReturnType<PrismaService['lead']['findUnique']>>>,
+    lead: NonNullable<Awaited<ReturnType<PrismaService["lead"]["findUnique"]>>>,
     actorId: string | null | undefined,
   ) {
     return this.syncCrmStage(
       tx,
       lead,
       actorId,
-      ['AGENDADOS_CONFIRMADOS'],
-      'Lead confirmou visita à loja',
+      ["AGENDADOS_CONFIRMADOS"],
+      "Lead confirmou visita à loja",
     );
   }
 
   private async syncCrmOnAppointmentCreated(
     tx: TransactionClient,
-    lead: NonNullable<Awaited<ReturnType<PrismaService['lead']['findUnique']>>>,
+    lead: NonNullable<Awaited<ReturnType<PrismaService["lead"]["findUnique"]>>>,
     createdById?: string | null,
     source?: AppointmentSource | null,
   ) {
     const isVendor = source === AppointmentSource.vendedor;
     const suffixes = isVendor
-      ? ['PRE_AGENDAMENTO', 'PRESENCA_AGENDADA']
-      : ['PRESENCA_AGENDADA'];
+      ? ["PRE_AGENDAMENTO", "PRESENCA_AGENDADA"]
+      : ["PRESENCA_AGENDADA"];
 
     return this.syncCrmStage(
       tx,
@@ -953,20 +1086,22 @@ export class AppointmentsService {
       createdById,
       suffixes,
       isVendor
-        ? 'Lead movido para etapa Pré-agendamento ao criar agendamento pelo vendedor'
-        : 'Lead movido para etapa PRESENCA_AGENDADA ao criar agendamento',
+        ? "Lead movido para etapa Pré-agendamento ao criar agendamento pelo vendedor"
+        : "Lead movido para etapa PRESENCA_AGENDADA ao criar agendamento",
       isVendor,
     );
   }
 
   private async noShowInternal(
-    appointment: Awaited<ReturnType<AppointmentsService['getAppointmentOrFail']>>,
+    appointment: Awaited<
+      ReturnType<AppointmentsService["getAppointmentOrFail"]>
+    >,
     dto: NoShowAppointmentDto,
   ) {
     if (appointment.status === AppointmentStatus.no_show) {
       return {
         no_show: false,
-        reason: 'already_no_show',
+        reason: "already_no_show",
         appointment_id: appointment.id,
         lead_id: appointment.lead_id,
         status: appointment.status,
@@ -979,7 +1114,9 @@ export class AppointmentsService {
       appointment.status !== AppointmentStatus.scheduled &&
       appointment.status !== AppointmentStatus.confirmed
     ) {
-      throw new BadRequestException('Status do appointment nao permite registrar no-show');
+      throw new BadRequestException(
+        "Status do appointment nao permite registrar no-show",
+      );
     }
 
     const noShowAt = new Date();
@@ -991,7 +1128,7 @@ export class AppointmentsService {
           no_show_at: noShowAt,
           notes: this.mergeNotes(
             appointment.notes,
-            dto.reason ? `No-show: ${dto.reason}` : 'No-show registrado',
+            dto.reason ? `No-show: ${dto.reason}` : "No-show registrado",
           ),
         },
       });
@@ -1001,8 +1138,8 @@ export class AppointmentsService {
         tx,
         appointment.lead,
         appointment.created_by_id,
-        ['LEAD_AUSENTE'],
-        'Lead nao compareceu — no-show registrado',
+        ["LEAD_AUSENTE"],
+        "Lead nao compareceu — no-show registrado",
       );
 
       return updatedAppointment;
@@ -1019,7 +1156,9 @@ export class AppointmentsService {
   }
 
   private isActiveAppointmentStatus(status: AppointmentStatus) {
-    return ACTIVE_APPOINTMENT_STATUSES.some((activeStatus) => activeStatus === status);
+    return ACTIVE_APPOINTMENT_STATUSES.some(
+      (activeStatus) => activeStatus === status,
+    );
   }
 
   private emitLeadUpdated(clientId: string, leadId: string, action: string) {
@@ -1049,7 +1188,8 @@ export class AppointmentsService {
       cancelled_at: this.toIsoString(appointment.cancelled_at),
       completed_at: this.toIsoString(appointment.completed_at),
       no_show_at: this.toIsoString(appointment.no_show_at),
-      rescheduled_from_appointment_id: appointment.rescheduled_from_appointment_id,
+      rescheduled_from_appointment_id:
+        appointment.rescheduled_from_appointment_id,
       notes: appointment.notes,
       created_at: this.toIsoString(appointment.created_at),
       updated_at: this.toIsoString(appointment.updated_at),
@@ -1084,7 +1224,7 @@ export class AppointmentsService {
   }
 
   private createRequestHash(payload: Record<string, unknown>) {
-    return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+    return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
   }
 
   private async runIdempotentAction<T extends Record<string, unknown>>(
@@ -1094,23 +1234,27 @@ export class AppointmentsService {
     idempotencyKey: string | undefined,
     action: () => Promise<T>,
   ): Promise<T> {
-    const normalizedIdempotencyKey = this.normalizeIdempotencyKey(idempotencyKey);
+    const normalizedIdempotencyKey =
+      this.normalizeIdempotencyKey(idempotencyKey);
     let reservedIdempotencyKey = false;
 
     if (normalizedIdempotencyKey) {
-      const existingRequest = await this.prisma.apiIdempotencyRequest.findUnique({
-        where: {
-          client_id_endpoint_idempotency_key: {
-            client_id: clientId,
-            endpoint,
-            idempotency_key: normalizedIdempotencyKey,
+      const existingRequest =
+        await this.prisma.apiIdempotencyRequest.findUnique({
+          where: {
+            client_id_endpoint_idempotency_key: {
+              client_id: clientId,
+              endpoint,
+              idempotency_key: normalizedIdempotencyKey,
+            },
           },
-        },
-      });
+        });
 
       if (existingRequest) {
         if (existingRequest.request_hash !== requestHash) {
-          throw new ConflictException('Idempotency-Key ja foi utilizado com payload diferente');
+          throw new ConflictException(
+            "Idempotency-Key ja foi utilizado com payload diferente",
+          );
         }
 
         if (existingRequest.response) {
@@ -1121,7 +1265,7 @@ export class AppointmentsService {
         }
 
         throw new ConflictException(
-          'Requisicao com este Idempotency-Key ainda esta em processamento',
+          "Requisicao com este Idempotency-Key ainda esta em processamento",
         );
       }
 
@@ -1152,7 +1296,11 @@ export class AppointmentsService {
       return response;
     } catch (error) {
       if (normalizedIdempotencyKey && reservedIdempotencyKey) {
-        await this.clearIdempotencyReservation(clientId, endpoint, normalizedIdempotencyKey);
+        await this.clearIdempotencyReservation(
+          clientId,
+          endpoint,
+          normalizedIdempotencyKey,
+        );
       }
 
       throw error;

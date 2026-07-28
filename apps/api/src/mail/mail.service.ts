@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 
 /**
  * Envia e-mails via API HTTP do Resend (nao SMTP): a Railway bloqueia portas
@@ -17,32 +17,39 @@ export class MailService {
 
   constructor(config: ConfigService) {
     this.apiKey =
-      config.get<string>('RESEND_API_KEY', '') || config.get<string>('SMTP_PASS', '');
-    this.from = config.get<string>('SMTP_FROM', 'noreply@painel.grid.com.br');
+      config.get<string>("RESEND_API_KEY", "") ||
+      config.get<string>("SMTP_PASS", "");
+    this.from = config.get<string>("SMTP_FROM", "noreply@painel.grid.com.br");
     this.frontendUrl = config
-      .get<string>('FRONTEND_URL', 'http://localhost:8080')
-      .split(',')[0]
+      .get<string>("FRONTEND_URL", "http://localhost:8080")
+      .split(",")[0]
       .trim();
-    const railwayDomain = config.get<string>('RAILWAY_PUBLIC_DOMAIN', '');
+    const railwayDomain = config.get<string>("RAILWAY_PUBLIC_DOMAIN", "");
     this.apiPublicUrl = (
-      config.get<string>('API_PUBLIC_URL', '') ||
-      (railwayDomain ? `https://${railwayDomain}` : '') ||
-      'https://api.gpdevendas.app'
-    ).replace(/\/+$/, '');
+      config.get<string>("API_PUBLIC_URL", "") ||
+      (railwayDomain ? `https://${railwayDomain}` : "") ||
+      "https://api.gpdevendas.app"
+    ).replace(/\/+$/, "");
 
     if (this.apiKey) {
-      this.logger.log('Resend (API HTTP) configurado para envio de e-mail');
+      this.logger.log("Resend (API HTTP) configurado para envio de e-mail");
     } else {
-      this.logger.warn('Resend nao configurado (RESEND_API_KEY/SMTP_PASS ausente)');
+      this.logger.warn(
+        "Resend nao configurado (RESEND_API_KEY/SMTP_PASS ausente)",
+      );
     }
   }
 
-  private async sendViaResend(params: { to: string; subject: string; html: string }): Promise<void> {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
+  private async sendViaResend(params: {
+    to: string;
+    subject: string;
+    html: string;
+  }): Promise<void> {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         from: this.from,
@@ -54,31 +61,49 @@ export class MailService {
     });
 
     if (!response.ok) {
-      const body = await response.text().catch(() => '');
+      const body = await response.text().catch(() => "");
       throw new Error(`Resend respondeu ${response.status}: ${body}`);
     }
   }
 
-  async sendWelcome(params: { to: string; name: string; password: string }): Promise<void> {
+  async sendWelcome(params: {
+    to: string;
+    name: string;
+    password: string;
+  }): Promise<void> {
     const { to, name, password } = params;
-    const subject = 'Bem-vindo ao PainelGRID — suas credenciais de acesso';
-    const html = this.buildWelcomeHtml({ name, email: to, password, loginUrl: this.frontendUrl });
+    const subject = "Bem-vindo ao PainelGRID — suas credenciais de acesso";
+    const html = this.buildWelcomeHtml({
+      name,
+      email: to,
+      password,
+      loginUrl: this.frontendUrl,
+    });
 
     if (!this.apiKey) {
-      this.logger.warn('Email de boas-vindas nao enviado: Resend nao configurado');
+      this.logger.warn(
+        "Email de boas-vindas nao enviado: Resend nao configurado",
+      );
       return;
     }
 
     try {
       await this.sendViaResend({ to, subject, html });
-      this.logger.log('Email de boas-vindas enviado');
+      this.logger.log("Email de boas-vindas enviado");
     } catch (err) {
-      this.logger.error(`Falha ao enviar email de boas-vindas: ${(err as Error).message}`);
+      this.logger.error(
+        `Falha ao enviar email de boas-vindas: ${(err as Error).message}`,
+      );
     }
   }
 
-  private buildWelcomeHtml(p: { name: string; email: string; password: string; loginUrl: string }) {
-    const firstName = p.name.split(' ')[0];
+  private buildWelcomeHtml(p: {
+    name: string;
+    email: string;
+    password: string;
+    loginUrl: string;
+  }) {
+    const firstName = p.name.split(" ")[0];
     return `
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -165,7 +190,9 @@ export class MailService {
     clientName: string;
   }): Promise<void> {
     if (!this.apiKey) {
-      this.logger.warn('Email de boas-vindas ao evento nao enviado: Resend nao configurado');
+      this.logger.warn(
+        "Email de boas-vindas ao evento nao enviado: Resend nao configurado",
+      );
       return;
     }
 
@@ -174,7 +201,7 @@ export class MailService {
 
     try {
       await this.sendViaResend({ to: params.to, subject, html });
-      this.logger.log('Email de boas-vindas ao evento enviado');
+      this.logger.log("Email de boas-vindas ao evento enviado");
     } catch (err) {
       this.logger.error(
         `Falha ao enviar email de boas-vindas ao evento: ${(err as Error).message}`,
@@ -185,7 +212,7 @@ export class MailService {
   private toAbsoluteMediaUrl(path: string | null): string | null {
     if (!path) return null;
     if (/^https?:\/\//i.test(path)) return path;
-    return `${this.apiPublicUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+    return `${this.apiPublicUrl}${path.startsWith("/") ? "" : "/"}${path}`;
   }
 
   private buildGoogleCalendarUrl(p: {
@@ -195,10 +222,13 @@ export class MailService {
     start: Date;
     durationMinutes?: number;
   }): string {
-    const end = new Date(p.start.getTime() + (p.durationMinutes ?? 60) * 60_000);
-    const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const end = new Date(
+      p.start.getTime() + (p.durationMinutes ?? 60) * 60_000,
+    );
+    const fmt = (d: Date) =>
+      d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
     const query = new URLSearchParams({
-      action: 'TEMPLATE',
+      action: "TEMPLATE",
       text: p.title,
       dates: `${fmt(p.start)}/${fmt(end)}`,
       details: p.details,
@@ -208,8 +238,8 @@ export class MailService {
   }
 
   private buildCredenciamentoWhatsAppUrl(): string {
-    const phoneDigits = '5511552970742';
-    return `https://wa.me/${phoneDigits}?text=${encodeURIComponent('Continuar Credenciamento')}`;
+    const phoneDigits = "5511552970742";
+    return `https://wa.me/${phoneDigits}?text=${encodeURIComponent("Continuar Credenciamento")}`;
   }
 
   private buildAppointmentWelcomeHtml(p: {
@@ -223,20 +253,20 @@ export class MailService {
     clientLogoUrl: string | null;
     clientName: string;
   }): string {
-    const firstName = p.leadName.split(' ')[0];
-    const vendorFirstName = p.vendorName?.split(' ')[0] ?? null;
-    const location = p.eventLocation?.trim() || 'Local a confirmar';
+    const firstName = p.leadName.split(" ")[0];
+    const vendorFirstName = p.vendorName?.split(" ")[0] ?? null;
+    const location = p.eventLocation?.trim() || "Local a confirmar";
 
-    const dateLabel = new Intl.DateTimeFormat('pt-BR', {
-      timeZone: p.timezone || 'America/Sao_Paulo',
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
+    const dateLabel = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: p.timezone || "America/Sao_Paulo",
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
     }).format(p.scheduledAt);
-    const timeLabel = new Intl.DateTimeFormat('pt-BR', {
-      timeZone: p.timezone || 'America/Sao_Paulo',
-      hour: '2-digit',
-      minute: '2-digit',
+    const timeLabel = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: p.timezone || "America/Sao_Paulo",
+      hour: "2-digit",
+      minute: "2-digit",
     }).format(p.scheduledAt);
 
     const calendarUrl = this.buildGoogleCalendarUrl({
@@ -251,7 +281,7 @@ export class MailService {
     const whatsappUrl = this.buildCredenciamentoWhatsAppUrl();
     const logoUrl = this.toAbsoluteMediaUrl(p.clientLogoUrl);
     const vendorAvatarUrl = this.toAbsoluteMediaUrl(p.vendorAvatarUrl);
-    const vendorInitials = (vendorFirstName ?? '?').slice(0, 2).toUpperCase();
+    const vendorInitials = (vendorFirstName ?? "?").slice(0, 2).toUpperCase();
 
     const logoBlock = logoUrl
       ? `<img src="${logoUrl}" alt="${p.clientName}" style="max-height:40px;max-width:180px;object-fit:contain;" />`
@@ -277,7 +307,7 @@ export class MailService {
             </td>
           </tr>
         </table>`
-      : '';
+      : "";
 
     return `
 <!DOCTYPE html>
@@ -360,22 +390,28 @@ export class MailService {
 </html>`;
   }
 
-  async sendTwoFactorCode(params: { to: string; name: string; code: string }): Promise<void> {
+  async sendTwoFactorCode(params: {
+    to: string;
+    name: string;
+    code: string;
+  }): Promise<void> {
     const { to, name, code } = params;
     const subject = `Código de Verificação PainelGRID: ${code}`;
     const html = this.buildTwoFactorHtml({ name, code });
 
     if (!this.apiKey) {
-      if (process.env.NODE_ENV === 'production') {
-        throw new Error('Resend nao configurado');
+      if (process.env.NODE_ENV === "production") {
+        throw new Error("Resend nao configurado");
       }
-      this.logger.warn('Email 2FA nao enviado em desenvolvimento: Resend nao configurado');
+      this.logger.warn(
+        "Email 2FA nao enviado em desenvolvimento: Resend nao configurado",
+      );
       return;
     }
 
     try {
       await this.sendViaResend({ to, subject, html });
-      this.logger.log('Email de 2FA enviado');
+      this.logger.log("Email de 2FA enviado");
     } catch (err) {
       this.logger.error(`Falha ao enviar email 2FA: ${(err as Error).message}`);
       throw err;
@@ -383,7 +419,7 @@ export class MailService {
   }
 
   private buildTwoFactorHtml(p: { name: string; code: string }) {
-    const firstName = p.name.split(' ')[0];
+    const firstName = p.name.split(" ")[0];
     return `
 <!DOCTYPE html>
 <html lang="pt-BR">
