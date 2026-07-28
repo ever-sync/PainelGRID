@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { ForbiddenException } from '@nestjs/common';
-import { Role } from '../../common/types';
-import { ClientsService } from './clients.service';
+import { ForbiddenException } from "@nestjs/common";
+import { Role } from "../../common/types";
+import { ClientsService } from "./clients.service";
 
-describe('ClientsService', () => {
-  const clientId = '33333333-3333-4333-8333-333333333333';
-  const gestorId = 'gestor-1';
+describe("ClientsService", () => {
+  const clientId = "33333333-3333-4333-8333-333333333333";
+  const gestorId = "gestor-1";
 
   let prisma: any;
   let redis: any;
@@ -33,21 +33,30 @@ describe('ClientsService', () => {
     service = new ClientsService(prisma, redis);
   });
 
-  describe('assertGestorOwnsClient', () => {
-    it('cache hit: retorna sem consultar Postgres', async () => {
-      const cached = { id: clientId, gestor_id: gestorId, company_name: 'Acme' };
+  describe("assertGestorOwnsClient", () => {
+    it("cache hit: retorna sem consultar Postgres", async () => {
+      const cached = {
+        id: clientId,
+        gestor_id: gestorId,
+        company_name: "Acme",
+      };
       redis.client.get.mockResolvedValue(JSON.stringify(cached));
 
       const result = await service.assertGestorOwnsClient(gestorId, clientId);
 
-      expect(redis.client.get).toHaveBeenCalledWith(`clients:owner:${gestorId}:${clientId}`);
+      expect(redis.client.get).toHaveBeenCalledWith(
+        `clients:owner:${gestorId}:${clientId}`,
+      );
       expect(prisma.client.findFirst).not.toHaveBeenCalled();
       expect(result).toMatchObject({ id: clientId });
     });
 
-    it('cache miss: consulta DB e popula cache', async () => {
+    it("cache miss: consulta DB e popula cache", async () => {
       redis.client.get.mockResolvedValue(null);
-      prisma.client.findFirst.mockResolvedValue({ id: clientId, gestor_id: gestorId });
+      prisma.client.findFirst.mockResolvedValue({
+        id: clientId,
+        gestor_id: gestorId,
+      });
 
       await service.assertGestorOwnsClient(gestorId, clientId);
 
@@ -57,50 +66,113 @@ describe('ClientsService', () => {
       expect(redis.client.set).toHaveBeenCalledWith(
         `clients:owner:${gestorId}:${clientId}`,
         expect.any(String),
-        'EX',
+        "EX",
         300,
       );
     });
 
-    it('cliente sem ownership: lança ForbiddenException e não cacheia', async () => {
+    it("cliente sem ownership: lança ForbiddenException e não cacheia", async () => {
       redis.client.get.mockResolvedValue(null);
       prisma.client.findFirst.mockResolvedValue(null);
 
-      await expect(service.assertGestorOwnsClient(gestorId, clientId)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
+      await expect(
+        service.assertGestorOwnsClient(gestorId, clientId),
+      ).rejects.toBeInstanceOf(ForbiddenException);
       expect(redis.client.set).not.toHaveBeenCalled();
     });
 
-    it('falha de Redis no get: cai para o DB sem propagar erro', async () => {
-      redis.client.get.mockRejectedValue(new Error('redis down'));
-      prisma.client.findFirst.mockResolvedValue({ id: clientId, gestor_id: gestorId });
+    it("falha de Redis no get: cai para o DB sem propagar erro", async () => {
+      redis.client.get.mockRejectedValue(new Error("redis down"));
+      prisma.client.findFirst.mockResolvedValue({
+        id: clientId,
+        gestor_id: gestorId,
+      });
 
       const result = await service.assertGestorOwnsClient(gestorId, clientId);
       expect(result).toMatchObject({ id: clientId });
     });
   });
 
-  describe('findAllForUser', () => {
-    it('VENDEDOR: bloqueia (não previsto na regra)', async () => {
+  describe("deleteForUser", () => {
+    it("remove avaliações dos vendedores antes de excluir eventos e usuários", async () => {
+      const transactionModels = new Map<string | symbol, any>();
+      const tx = new Proxy(
+        {},
+        {
+          get: (_target, property) => {
+            if (!transactionModels.has(property)) {
+              transactionModels.set(property, {
+                delete: jest.fn().mockResolvedValue(undefined),
+                deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+                updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+              });
+            }
+            return transactionModels.get(property);
+          },
+        },
+      ) as any;
+
+      prisma.$transaction = jest.fn(async (callback) => callback(tx));
+      redis.client.get.mockResolvedValue(
+        JSON.stringify({
+          id: clientId,
+          gestor_id: gestorId,
+          company_name: "Acme",
+        }),
+      );
+
+      await service.deleteForUser(
+        {
+          sub: gestorId,
+          role: Role.GESTOR,
+          email: "gestor@example.com",
+          name: "Gestor",
+          client_id: null,
+        },
+        clientId,
+      );
+
+      expect(tx.serviceRating.deleteMany).toHaveBeenCalledWith({
+        where: {
+          OR: [
+            { vendor: { client_id: clientId } },
+            { event: { client_id: clientId } },
+          ],
+        },
+      });
+      expect(
+        tx.serviceRating.deleteMany.mock.invocationCallOrder[0],
+      ).toBeLessThan(tx.event.deleteMany.mock.invocationCallOrder[0]);
+      expect(
+        tx.serviceRating.deleteMany.mock.invocationCallOrder[0],
+      ).toBeLessThan(tx.user.deleteMany.mock.invocationCallOrder[0]);
+      expect(redis.client.del).toHaveBeenCalledWith(`clients:item:${clientId}`);
+      expect(redis.client.del).toHaveBeenCalledWith(
+        `clients:owner:${gestorId}:${clientId}`,
+      );
+    });
+  });
+
+  describe("findAllForUser", () => {
+    it("VENDEDOR: bloqueia (não previsto na regra)", async () => {
       await expect(
         service.findAllForUser({
-          sub: 'v',
+          sub: "v",
           role: Role.VENDEDOR,
-          email: 'v@x',
-          name: 'V',
+          email: "v@x",
+          name: "V",
           client_id: clientId,
         } as never),
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
-    it('CLIENTE sem client_id: bloqueia', async () => {
+    it("CLIENTE sem client_id: bloqueia", async () => {
       await expect(
         service.findAllForUser({
-          sub: 'c',
+          sub: "c",
           role: Role.CLIENTE,
-          email: 'c@x',
-          name: 'C',
+          email: "c@x",
+          name: "C",
           client_id: null,
         } as never),
       ).rejects.toBeInstanceOf(ForbiddenException);

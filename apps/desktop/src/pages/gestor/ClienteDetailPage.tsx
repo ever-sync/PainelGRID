@@ -15,12 +15,14 @@ import {
   Check,
   CheckCircle2,
   CircleDashed,
+  Copy,
   Database,
   Eye,
   EyeOff,
   Facebook,
   FileText,
   Globe,
+  KeyRound,
   Layers3,
   Link2,
   MessageCircle,
@@ -65,10 +67,16 @@ import type { Client, Conversation, Lead } from "../../types";
 import type { MetaBusinessOption, MetaConnectionState } from "../../types/meta";
 import { readStoredSession } from "../../services/auth";
 import {
+  createIntegrationCredential,
   deleteClient,
   getClient,
+  listIntegrationCredentials,
   mapApiClientToClient,
+  revokeIntegrationCredential,
+  rotateIntegrationCredential,
   updateClient,
+  type IntegrationCredential,
+  type IntegrationCredentialWithKey,
 } from "../../services/clients";
 import {
   createPrincipalClientAccess,
@@ -123,6 +131,7 @@ const TABS = [
   { id: "perfil", label: "Perfil", icon: <Building2 size={14} /> },
   { id: "equipe", label: "Equipe", icon: <Users size={14} /> },
   { id: "acesso", label: "Acesso", icon: <Settings size={14} /> },
+  { id: "integracao", label: "Integração n8n", icon: <KeyRound size={14} /> },
   { id: "ads", label: "Ads (Facebook)", icon: <Facebook size={14} /> },
   { id: "rubinho", label: "Rubinho", icon: <Settings size={14} /> },
   { id: "veiculos", label: "Veículos", icon: <Car size={14} /> },
@@ -138,6 +147,10 @@ type DeleteAction =
   | { kind: "staff"; member: StaffUser }
   | { kind: "lead"; leadId: string; leadName: string }
   | { kind: "bulk-leads"; leadIds: string[] };
+type IntegrationAction = {
+  kind: "rotate" | "revoke";
+  credential: IntegrationCredential;
+};
 
 const VENDOR_CATEGORY_OPTIONS: Array<{
   value: EditableVendorCategory;
@@ -183,6 +196,12 @@ function formatDateTime(value?: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function isIntegrationCredentialActive(credential: IntegrationCredential) {
+  if (credential.revoked_at) return false;
+  if (!credential.expires_at) return true;
+  return new Date(credential.expires_at).getTime() > Date.now();
 }
 
 function formatDateOnly(value?: string | null) {
@@ -626,6 +645,16 @@ export function ClienteDetailPage() {
   const [companyEditWhatsapp, setCompanyEditWhatsapp] = useState("");
   const [companyEditAddress, setCompanyEditAddress] = useState("");
   const [companyEditWebhook, setCompanyEditWebhook] = useState("");
+  const [integrationCredentials, setIntegrationCredentials] = useState<
+    IntegrationCredential[]
+  >([]);
+  const [integrationLoading, setIntegrationLoading] = useState(false);
+  const [integrationSaving, setIntegrationSaving] = useState(false);
+  const [integrationError, setIntegrationError] = useState("");
+  const [integrationAction, setIntegrationAction] =
+    useState<IntegrationAction | null>(null);
+  const [revealedIntegrationCredential, setRevealedIntegrationCredential] =
+    useState<IntegrationCredentialWithKey | null>(null);
   const [detailLeads, setDetailLeads] = useState<Lead[] | null>(null);
   const [leadSearch, setLeadSearch] = useState("");
   const [leadSourceFilter, setLeadSourceFilter] =
@@ -991,6 +1020,47 @@ export function ClienteDetailPage() {
       .catch(() => setStaffError("Não foi possível carregar a equipe."))
       .finally(() => setStaffLoading(false));
   }, [activeTab, resolvedId]);
+
+  const loadIntegrationCredentials = useCallback(async () => {
+    if (!isUuid(resolvedId)) return;
+    const session = readStoredSession();
+    if (!session?.accessToken) {
+      setIntegrationError("Faça login novamente para gerenciar a integração.");
+      return;
+    }
+
+    setIntegrationLoading(true);
+    setIntegrationError("");
+    try {
+      const rows = await listIntegrationCredentials(
+        resolvedId,
+        session.accessToken,
+      );
+      setIntegrationCredentials(rows);
+    } catch (error) {
+      setIntegrationError(
+        getErrorMessage(
+          error,
+          "Não foi possível carregar as credenciais de integração.",
+        ),
+      );
+    } finally {
+      setIntegrationLoading(false);
+    }
+  }, [resolvedId]);
+
+  useEffect(() => {
+    if (activeTab === "integracao") {
+      void loadIntegrationCredentials();
+    }
+  }, [activeTab, loadIntegrationCredentials]);
+
+  useEffect(() => {
+    setIntegrationCredentials([]);
+    setIntegrationError("");
+    setIntegrationAction(null);
+    setRevealedIntegrationCredential(null);
+  }, [resolvedId]);
 
   // Load vehicles when tab is active
   const loadVehicles = useCallback(() => {
@@ -2190,6 +2260,116 @@ export function ClienteDetailPage() {
     }
   }
 
+  async function handleGenerateIntegrationCredential() {
+    if (!isUuid(resolvedId)) return;
+    const session = readStoredSession();
+    if (!session?.accessToken) {
+      setIntegrationError("Faça login novamente para gerenciar a integração.");
+      return;
+    }
+
+    setIntegrationSaving(true);
+    setIntegrationError("");
+    try {
+      const credential = await createIntegrationCredential(
+        resolvedId,
+        session.accessToken,
+        "n8n produção",
+      );
+      setRevealedIntegrationCredential(credential);
+      await loadIntegrationCredentials();
+      pushToast({
+        message: "Chave de integração criada com sucesso.",
+        type: "success",
+      });
+    } catch (error) {
+      setIntegrationError(
+        getErrorMessage(error, "Não foi possível criar a chave de integração."),
+      );
+    } finally {
+      setIntegrationSaving(false);
+    }
+  }
+
+  async function handleCopyIntegrationKey() {
+    const key = revealedIntegrationCredential?.key;
+    if (!key) return;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(key);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = key;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand("copy");
+        textarea.remove();
+        if (!copied) throw new Error("Falha ao copiar");
+      }
+      pushToast({
+        message: "Chave copiada. Cole agora no n8n.",
+        type: "success",
+      });
+    } catch {
+      pushToast({
+        message: "Não foi possível copiar automaticamente. Selecione a chave.",
+        type: "error",
+      });
+    }
+  }
+
+  async function handleConfirmIntegrationAction() {
+    if (!integrationAction || !isUuid(resolvedId)) return;
+    const session = readStoredSession();
+    if (!session?.accessToken) {
+      setIntegrationError("Faça login novamente para gerenciar a integração.");
+      return;
+    }
+
+    setIntegrationSaving(true);
+    setIntegrationError("");
+    try {
+      if (integrationAction.kind === "rotate") {
+        const credential = await rotateIntegrationCredential(
+          resolvedId,
+          integrationAction.credential.id,
+          session.accessToken,
+        );
+        setRevealedIntegrationCredential(credential);
+        pushToast({
+          message: "Chave trocada. Atualize o cabeçalho no n8n.",
+          type: "success",
+        });
+      } else {
+        await revokeIntegrationCredential(
+          resolvedId,
+          integrationAction.credential.id,
+          session.accessToken,
+        );
+        pushToast({
+          message: "Chave de integração revogada.",
+          type: "success",
+        });
+      }
+      setIntegrationAction(null);
+      await loadIntegrationCredentials();
+    } catch (error) {
+      setIntegrationError(
+        getErrorMessage(
+          error,
+          integrationAction.kind === "rotate"
+            ? "Não foi possível trocar a chave."
+            : "Não foi possível revogar a chave.",
+        ),
+      );
+    } finally {
+      setIntegrationSaving(false);
+    }
+  }
+
   function handleOpenCompanyEdit() {
     if (!client) return;
     setCompanyEditName(client.company_name);
@@ -2445,6 +2625,96 @@ export function ClienteDetailPage() {
         }
       />
 
+      <ConfirmationModal
+        open={Boolean(integrationAction)}
+        onClose={() =>
+          integrationSaving ? undefined : setIntegrationAction(null)
+        }
+        onConfirm={() => void handleConfirmIntegrationAction()}
+        loading={integrationSaving}
+        title={
+          integrationAction?.kind === "rotate"
+            ? "Trocar chave de integração"
+            : "Revogar chave de integração"
+        }
+        description={
+          integrationAction?.kind === "rotate" ? (
+            <p className="text-sm text-zinc-600">
+              A chave atual de{" "}
+              <span className="font-semibold text-zinc-900">
+                {integrationAction.credential.name}
+              </span>{" "}
+              será invalidada imediatamente. Depois, será necessário copiar a
+              nova chave para o n8n.
+            </p>
+          ) : (
+            <p className="text-sm text-zinc-600">
+              A chave de{" "}
+              <span className="font-semibold text-zinc-900">
+                {integrationAction?.credential.name}
+              </span>{" "}
+              deixará de funcionar imediatamente. Essa ação não pode ser
+              desfeita.
+            </p>
+          )
+        }
+        confirmLabel={
+          integrationAction?.kind === "rotate"
+            ? "Trocar chave"
+            : "Revogar chave"
+        }
+      />
+
+      <Modal
+        open={Boolean(revealedIntegrationCredential)}
+        onClose={() => setRevealedIntegrationCredential(null)}
+        title="Chave de integração n8n"
+        size="lg"
+        dark={isDarkMode}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setRevealedIntegrationCredential(null)}
+            >
+              Já copiei
+            </Button>
+            <Button
+              onClick={() => void handleCopyIntegrationKey()}
+              icon={<Copy size={15} />}
+            >
+              Copiar chave
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Esta chave completa será exibida somente agora. Copie e salve no n8n
+            antes de fechar esta janela.
+          </div>
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              x-leadflow-integration-key
+            </p>
+            <div className="flex items-center gap-2 rounded-2xl border border-zinc-200 bg-zinc-950 p-3 text-white">
+              <code className="min-w-0 flex-1 select-all break-all text-xs sm:text-sm">
+                {revealedIntegrationCredential?.key}
+              </code>
+              <button
+                type="button"
+                onClick={() => void handleCopyIntegrationKey()}
+                aria-label="Copiar chave"
+                title="Copiar chave"
+                className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-white/10 transition hover:bg-white/20"
+              >
+                <Copy size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
       <Modal
         open={companyEditOpen}
         onClose={() => (companyEditLoading ? null : setCompanyEditOpen(false))}
@@ -2504,9 +2774,7 @@ export function ClienteDetailPage() {
               <p className="mb-1 text-sm text-gray-500">WhatsApp</p>
               <input
                 value={companyEditWhatsapp}
-                onChange={(event) =>
-                  setCompanyEditWhatsapp(event.target.value)
-                }
+                onChange={(event) => setCompanyEditWhatsapp(event.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
             </div>
@@ -3106,6 +3374,180 @@ export function ClienteDetailPage() {
         </Card>
       )}
 
+      {activeTab === "integracao" && (
+        <div className="space-y-5">
+          <Card>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="inline-flex h-11 w-11 flex-none items-center justify-center rounded-2xl bg-violet-100 text-violet-700">
+                  <KeyRound size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">
+                    Credenciais da integração n8n
+                  </h3>
+                  <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                    Gere e administre a chave usada pelo fluxo do n8n para
+                    consultar e cadastrar leads deste cliente.
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="lg"
+                onClick={() => void handleGenerateIntegrationCredential()}
+                loading={integrationSaving}
+                icon={<Plus size={16} />}
+              >
+                Gerar chave
+              </Button>
+            </div>
+
+            <div className="mt-5 grid gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-sm text-blue-950 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                  Cabeçalho no n8n
+                </p>
+                <code className="mt-1 block break-all font-semibold">
+                  x-leadflow-integration-key
+                </code>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                  Endpoint de leads
+                </p>
+                <code className="mt-1 block break-all font-semibold">
+                  /api/integrations/v1/leads
+                </code>
+              </div>
+            </div>
+
+            {integrationError ? (
+              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {integrationError}
+              </div>
+            ) : null}
+          </Card>
+
+          <Card>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">
+                  Chaves criadas
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  A chave completa só aparece no momento da criação ou troca.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void loadIntegrationCredentials()}
+                loading={integrationLoading}
+                icon={<RefreshCcw size={14} />}
+              >
+                Atualizar
+              </Button>
+            </div>
+
+            {integrationLoading && integrationCredentials.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-10 text-center text-sm text-gray-500">
+                Carregando credenciais...
+              </div>
+            ) : integrationCredentials.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-10 text-center">
+                <KeyRound className="mx-auto text-gray-300" size={28} />
+                <p className="mt-3 text-sm font-semibold text-gray-700">
+                  Nenhuma chave criada
+                </p>
+                <p className="mt-1 text-sm text-gray-500">
+                  Clique em “Gerar chave” para conectar este cliente ao n8n.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {integrationCredentials.map((credential) => {
+                  const active = isIntegrationCredentialActive(credential);
+                  return (
+                    <div
+                      key={credential.id}
+                      className="rounded-2xl border border-gray-200 p-4"
+                    >
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold text-gray-900">
+                              {credential.name}
+                            </p>
+                            <Badge
+                              variant={
+                                active
+                                  ? "green"
+                                  : credential.revoked_at
+                                    ? "red"
+                                    : "gray"
+                              }
+                              dot
+                            >
+                              {active
+                                ? "Ativa"
+                                : credential.revoked_at
+                                  ? "Revogada"
+                                  : "Expirada"}
+                            </Badge>
+                          </div>
+                          <code className="mt-2 block break-all text-sm text-gray-600">
+                            {credential.key_prefix}••••••••
+                          </code>
+                          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-500">
+                            <span>
+                              Criada em {formatDateTime(credential.created_at)}
+                            </span>
+                            <span>
+                              Último uso:{" "}
+                              {formatDateTime(credential.last_used_at)}
+                            </span>
+                          </div>
+                        </div>
+                        {active ? (
+                          <div className="flex flex-none flex-wrap gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setIntegrationAction({
+                                  kind: "rotate",
+                                  credential,
+                                })
+                              }
+                              icon={<RefreshCcw size={14} />}
+                            >
+                              Trocar chave
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() =>
+                                setIntegrationAction({
+                                  kind: "revoke",
+                                  credential,
+                                })
+                              }
+                              icon={<Trash2 size={14} />}
+                            >
+                              Revogar
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
       {activeTab === "ads" && (
         <div className="space-y-6">
           <Card
@@ -3667,7 +4109,11 @@ export function ClienteDetailPage() {
                 value={vehiclesStatusFilter}
                 onChange={(e) => {
                   const value = e.target.value;
-                  if (value === "all" || value === "available" || value === "hidden") {
+                  if (
+                    value === "all" ||
+                    value === "available" ||
+                    value === "hidden"
+                  ) {
                     setVehiclesStatusFilter(value);
                   }
                 }}

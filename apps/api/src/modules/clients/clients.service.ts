@@ -4,17 +4,20 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-} from '@nestjs/common';
-import { Client, Prisma } from '@prisma/client';
-import { Role } from '../../common/types';
-import { assertSafeWebhookUrl } from '../../common/outbound-url.util';
-import { PrismaService } from '../../config/prisma.service';
-import { RedisService } from '../../config/redis.service';
-import { AuthenticatedUser } from '../auth/auth.types';
-import { provisionDefaultCrmPipeline } from '../crm/default-crm-pipeline';
-import { type CrmStageStatusRule, withCrmStageStatusRules } from './client-settings';
-import { CreateClientDto } from './dto/create-client.dto';
-import { UpdateClientDto } from './dto/update-client.dto';
+} from "@nestjs/common";
+import { Client, Prisma } from "@prisma/client";
+import { Role } from "../../common/types";
+import { assertSafeWebhookUrl } from "../../common/outbound-url.util";
+import { PrismaService } from "../../config/prisma.service";
+import { RedisService } from "../../config/redis.service";
+import { AuthenticatedUser } from "../auth/auth.types";
+import { provisionDefaultCrmPipeline } from "../crm/default-crm-pipeline";
+import {
+  type CrmStageStatusRule,
+  withCrmStageStatusRules,
+} from "./client-settings";
+import { CreateClientDto } from "./dto/create-client.dto";
+import { UpdateClientDto } from "./dto/update-client.dto";
 
 const CLIENT_CACHE_TTL_SECONDS = 5 * 60; // 5 min
 const clientCacheKey = (clientId: string) => `clients:item:${clientId}`;
@@ -22,7 +25,7 @@ const clientOwnerCacheKey = (gestorId: string, clientId: string) =>
   `clients:owner:${gestorId}:${clientId}`;
 
 /** API shape: never expose facebook_access_token; include primary ad account id for UI. */
-export type ClientListItem = Omit<Client, 'facebook_access_token'> & {
+export type ClientListItem = Omit<Client, "facebook_access_token"> & {
   leads_count: number;
   events_count: number;
   vehicles_count: number;
@@ -31,11 +34,15 @@ export type ClientListItem = Omit<Client, 'facebook_access_token'> & {
 
 const clientListInclude = {
   _count: {
-    select: { leads: { where: { deleted_at: null } }, event_participations: true, vehicles: true },
+    select: {
+      leads: { where: { deleted_at: null } },
+      event_participations: true,
+      vehicles: true,
+    },
   },
   facebook_ad_accounts: {
-    where: { status: 'active' },
-    orderBy: { created_at: 'asc' as const },
+    where: { status: "active" },
+    orderBy: { created_at: "asc" as const },
     take: 1,
     select: { ad_account_id: true },
   },
@@ -51,7 +58,10 @@ export class ClientsService {
   ) {}
 
   /** Invalida cache para um cliente — chamado em update/delete. */
-  private async invalidateClientCache(clientId: string, gestorId?: string | null) {
+  private async invalidateClientCache(
+    clientId: string,
+    gestorId?: string | null,
+  ) {
     try {
       await this.redis.client.del(clientCacheKey(clientId));
       if (gestorId) {
@@ -81,63 +91,64 @@ export class ClientsService {
     },
   ): Prisma.InputJsonValue {
     const base =
-      currentSettings && typeof currentSettings === 'object' && !Array.isArray(currentSettings)
-        ? ({ ...(currentSettings as Record<string, Prisma.InputJsonValue>) } as Record<
-            string,
-            Prisma.InputJsonValue
-          >)
+      currentSettings &&
+      typeof currentSettings === "object" &&
+      !Array.isArray(currentSettings)
+        ? ({
+            ...(currentSettings as Record<string, Prisma.InputJsonValue>),
+          } as Record<string, Prisma.InputJsonValue>)
         : {};
 
     if (patch.address !== undefined) {
-      const value = patch.address?.trim() ?? '';
+      const value = patch.address?.trim() ?? "";
       if (value) base.address = value;
       else delete base.address;
     }
 
     if (patch.contact_email !== undefined) {
-      const value = patch.contact_email?.trim() ?? '';
+      const value = patch.contact_email?.trim() ?? "";
       if (value) base.contact_email = value;
       else delete base.contact_email;
     }
 
     if (patch.address_street !== undefined) {
-      const value = patch.address_street?.trim() ?? '';
+      const value = patch.address_street?.trim() ?? "";
       if (value) base.address_street = value;
       else delete base.address_street;
     }
 
     if (patch.address_number !== undefined) {
-      const value = patch.address_number?.trim() ?? '';
+      const value = patch.address_number?.trim() ?? "";
       if (value) base.address_number = value;
       else delete base.address_number;
     }
 
     if (patch.address_complement !== undefined) {
-      const value = patch.address_complement?.trim() ?? '';
+      const value = patch.address_complement?.trim() ?? "";
       if (value) base.address_complement = value;
       else delete base.address_complement;
     }
 
     if (patch.address_district !== undefined) {
-      const value = patch.address_district?.trim() ?? '';
+      const value = patch.address_district?.trim() ?? "";
       if (value) base.address_district = value;
       else delete base.address_district;
     }
 
     if (patch.address_city !== undefined) {
-      const value = patch.address_city?.trim() ?? '';
+      const value = patch.address_city?.trim() ?? "";
       if (value) base.address_city = value;
       else delete base.address_city;
     }
 
     if (patch.address_state !== undefined) {
-      const value = patch.address_state?.trim() ?? '';
+      const value = patch.address_state?.trim() ?? "";
       if (value) base.address_state = value;
       else delete base.address_state;
     }
 
     if (patch.address_zipcode !== undefined) {
-      const value = patch.address_zipcode?.trim() ?? '';
+      const value = patch.address_zipcode?.trim() ?? "";
       if (value) base.address_zipcode = value;
       else delete base.address_zipcode;
     }
@@ -155,7 +166,12 @@ export class ClientsService {
       facebook_ad_accounts: { ad_account_id: string }[];
     },
   ): ClientListItem {
-    const { _count, facebook_access_token: _token, facebook_ad_accounts, ...rest } = row;
+    const {
+      _count,
+      facebook_access_token: _token,
+      facebook_ad_accounts,
+      ...rest
+    } = row;
     return {
       ...rest,
       leads_count: _count.leads,
@@ -183,11 +199,16 @@ export class ClientsService {
     });
 
     if (!client) {
-      throw new ForbiddenException('Cliente nao encontrado ou sem permissao');
+      throw new ForbiddenException("Cliente nao encontrado ou sem permissao");
     }
 
     try {
-      await this.redis.client.set(cacheKey, JSON.stringify(client), 'EX', CLIENT_CACHE_TTL_SECONDS);
+      await this.redis.client.set(
+        cacheKey,
+        JSON.stringify(client),
+        "EX",
+        CLIENT_CACHE_TTL_SECONDS,
+      );
     } catch (err) {
       this.logger.warn(`Falha ao salvar cache: ${(err as Error).message}`);
     }
@@ -199,7 +220,7 @@ export class ClientsService {
     if (user.role === Role.GESTOR) {
       const rows = await this.prisma.client.findMany({
         where: { gestor_id: user.sub },
-        orderBy: { created_at: 'desc' },
+        orderBy: { created_at: "desc" },
         include: clientListInclude,
       });
 
@@ -208,7 +229,7 @@ export class ClientsService {
 
     if (user.role === Role.CLIENTE) {
       if (!user.client_id) {
-        throw new ForbiddenException('Usuario sem empresa vinculada');
+        throw new ForbiddenException("Usuario sem empresa vinculada");
       }
 
       const row = await this.prisma.client.findUnique({
@@ -217,16 +238,19 @@ export class ClientsService {
       });
 
       if (!row) {
-        throw new NotFoundException('Cliente nao encontrado');
+        throw new NotFoundException("Cliente nao encontrado");
       }
 
       return [this.toListItem(row)];
     }
 
-    throw new ForbiddenException('Sem permissao para listar clientes');
+    throw new ForbiddenException("Sem permissao para listar clientes");
   }
 
-  async findOneForUser(user: AuthenticatedUser, id: string): Promise<ClientListItem> {
+  async findOneForUser(
+    user: AuthenticatedUser,
+    id: string,
+  ): Promise<ClientListItem> {
     await this.ensureReadAccess(user, id);
 
     const row = await this.prisma.client.findUnique({
@@ -235,13 +259,16 @@ export class ClientsService {
     });
 
     if (!row) {
-      throw new NotFoundException('Cliente nao encontrado');
+      throw new NotFoundException("Cliente nao encontrado");
     }
 
     return this.toListItem(row);
   }
 
-  async create(dto: CreateClientDto, gestorId: string): Promise<ClientListItem> {
+  async create(
+    dto: CreateClientDto,
+    gestorId: string,
+  ): Promise<ClientListItem> {
     const webhookUrl = dto.webhook_url_n8n?.trim()
       ? await this.validateWebhookUrl(dto.webhook_url_n8n)
       : null;
@@ -268,7 +295,7 @@ export class ClientsService {
             gestor_id: gestorId,
             company_name: dto.company_name.trim(),
             cnpj: dto.cnpj?.trim() ?? null,
-            plan: dto.plan?.trim() || 'basic',
+            plan: dto.plan?.trim() || "basic",
             logo_url: dto.logo_url ?? null,
             webhook_url_n8n: webhookUrl,
             phone_number: dto.phone_number?.trim() ?? null,
@@ -302,10 +329,12 @@ export class ClientsService {
         dto.webhook_url_n8n !== undefined ||
         dto.crm_stage_status_rules !== undefined
       ) {
-        throw new ForbiddenException('Campos administrativos exigem acesso de gestor');
+        throw new ForbiddenException(
+          "Campos administrativos exigem acesso de gestor",
+        );
       }
     } else {
-      throw new ForbiddenException('Sem permissao para editar esta empresa');
+      throw new ForbiddenException("Sem permissao para editar esta empresa");
     }
 
     const current = await this.prisma.client.findUnique({
@@ -342,9 +371,13 @@ export class ClientsService {
         logo_url: dto.logo_url,
         webhook_url_n8n: webhookUrl,
         phone_number:
-          dto.phone_number === undefined ? undefined : (dto.phone_number?.trim() ?? null),
+          dto.phone_number === undefined
+            ? undefined
+            : (dto.phone_number?.trim() ?? null),
         whatsapp_number:
-          dto.whatsapp_number === undefined ? undefined : (dto.whatsapp_number?.trim() ?? null),
+          dto.whatsapp_number === undefined
+            ? undefined
+            : (dto.whatsapp_number?.trim() ?? null),
         settings: hasSettingsPatch
           ? this.buildSettings(current?.settings, {
               address: dto.address,
@@ -377,7 +410,7 @@ export class ClientsService {
       return;
     }
 
-    throw new ForbiddenException('Sem permissao para este cliente');
+    throw new ForbiddenException("Sem permissao para este cliente");
   }
 
   private async validateWebhookUrl(raw: string): Promise<string> {
@@ -390,25 +423,32 @@ export class ClientsService {
 
   async deleteForUser(user: AuthenticatedUser, clientId: string) {
     if (user.role !== Role.GESTOR) {
-      throw new ForbiddenException('Apenas gestor pode excluir empresa');
+      throw new ForbiddenException("Apenas gestor pode excluir empresa");
     }
 
     await this.assertGestorOwnsClient(user.sub, clientId);
-    await this.invalidateClientCache(clientId, user.sub);
 
     await this.prisma.$transaction(
       async (tx) => {
-        await tx.apiIdempotencyRequest.deleteMany({ where: { client_id: clientId } });
+        await tx.apiIdempotencyRequest.deleteMany({
+          where: { client_id: clientId },
+        });
         await tx.webhookEvent.deleteMany({ where: { client_id: clientId } });
 
         await tx.scoreEvent.deleteMany({ where: { client_id: clientId } });
         await tx.sale.deleteMany({ where: { client_id: clientId } });
         await tx.appointment.deleteMany({ where: { client_id: clientId } });
         await tx.agentActionLog.deleteMany({ where: { client_id: clientId } });
-        await tx.conversationState.deleteMany({ where: { client_id: clientId } });
-        await tx.whatsAppAttributionEvent.deleteMany({ where: { client_id: clientId } });
+        await tx.conversationState.deleteMany({
+          where: { client_id: clientId },
+        });
+        await tx.whatsAppAttributionEvent.deleteMany({
+          where: { client_id: clientId },
+        });
 
-        await tx.metaDailyInsight.deleteMany({ where: { client_id: clientId } });
+        await tx.metaDailyInsight.deleteMany({
+          where: { client_id: clientId },
+        });
         await tx.metaLeadImport.deleteMany({ where: { client_id: clientId } });
         await tx.metaLeadForm.deleteMany({ where: { client_id: clientId } });
         await tx.metaCreative.deleteMany({ where: { client_id: clientId } });
@@ -421,12 +461,20 @@ export class ClientsService {
         });
         await tx.metaConnection.deleteMany({ where: { client_id: clientId } });
 
-        await tx.facebookAdAccount.deleteMany({ where: { client_id: clientId } });
-        await tx.message.deleteMany({ where: { conversation: { client_id: clientId } } });
+        await tx.facebookAdAccount.deleteMany({
+          where: { client_id: clientId },
+        });
+        await tx.message.deleteMany({
+          where: { conversation: { client_id: clientId } },
+        });
         await tx.conversation.deleteMany({ where: { client_id: clientId } });
-        await tx.campaignVendor.deleteMany({ where: { campaign: { client_id: clientId } } });
+        await tx.campaignVendor.deleteMany({
+          where: { campaign: { client_id: clientId } },
+        });
         await tx.campaign.deleteMany({ where: { client_id: clientId } });
-        await tx.crmHistory.deleteMany({ where: { lead: { client_id: clientId } } });
+        await tx.crmHistory.deleteMany({
+          where: { lead: { client_id: clientId } },
+        });
         await tx.lead.updateMany({
           where: { client_id: clientId },
           data: {
@@ -439,16 +487,30 @@ export class ClientsService {
         });
         await tx.crmStage.deleteMany({ where: { client_id: clientId } });
         await tx.crmPipeline.deleteMany({ where: { client_id: clientId } });
+        await tx.serviceRating.deleteMany({
+          where: {
+            OR: [
+              { vendor: { client_id: clientId } },
+              { event: { client_id: clientId } },
+            ],
+          },
+        });
         await tx.event.deleteMany({ where: { client_id: clientId } });
         await tx.lead.deleteMany({ where: { client_id: clientId } });
-        await tx.courseProgress.deleteMany({ where: { vendor: { client_id: clientId } } });
-        await tx.salesTeamMember.deleteMany({ where: { team: { client_id: clientId } } });
+        await tx.courseProgress.deleteMany({
+          where: { vendor: { client_id: clientId } },
+        });
+        await tx.salesTeamMember.deleteMany({
+          where: { team: { client_id: clientId } },
+        });
         await tx.salesTeam.deleteMany({ where: { client_id: clientId } });
         await tx.user.deleteMany({ where: { client_id: clientId } });
         await tx.client.delete({ where: { id: clientId } });
       },
       { maxWait: 10_000, timeout: 60_000 },
     );
+
+    await this.invalidateClientCache(clientId, user.sub);
 
     return { deleted: true };
   }

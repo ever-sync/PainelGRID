@@ -78,6 +78,65 @@ export function deleteClient(id: string, token: string) {
   });
 }
 
+export type IntegrationCredential = {
+  id: string;
+  client_id: string;
+  name: string;
+  key_prefix: string;
+  created_at: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+  last_used_at: string | null;
+};
+
+export type IntegrationCredentialWithKey = IntegrationCredential & {
+  key: string;
+};
+
+export function listIntegrationCredentials(clientId: string, token: string) {
+  return httpRequest<IntegrationCredential[]>(
+    `/clients/${clientId}/integration-credentials`,
+    { method: "GET", token },
+  );
+}
+
+export function createIntegrationCredential(
+  clientId: string,
+  token: string,
+  name: string,
+) {
+  return httpRequest<IntegrationCredentialWithKey>(
+    `/clients/${clientId}/integration-credentials`,
+    {
+      method: "POST",
+      token,
+      body: { name },
+    },
+  );
+}
+
+export function rotateIntegrationCredential(
+  clientId: string,
+  credentialId: string,
+  token: string,
+) {
+  return httpRequest<IntegrationCredentialWithKey>(
+    `/clients/${clientId}/integration-credentials/${credentialId}/rotate`,
+    { method: "POST", token },
+  );
+}
+
+export function revokeIntegrationCredential(
+  clientId: string,
+  credentialId: string,
+  token: string,
+) {
+  return httpRequest<IntegrationCredential>(
+    `/clients/${clientId}/integration-credentials/${credentialId}/revoke`,
+    { method: "POST", token },
+  );
+}
+
 export type CnpjLookupResult = {
   legalName: string;
   tradeName: string;
