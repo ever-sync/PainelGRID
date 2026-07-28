@@ -54,6 +54,7 @@ const routeRows = chunks
     (chunk) =>
       chunk.isDynamicEntry &&
       chunk.src?.startsWith("src/pages/") &&
+      chunk.src.endsWith("Page.tsx") &&
       chunk.file.endsWith(".js"),
   )
   .map((chunk) => {

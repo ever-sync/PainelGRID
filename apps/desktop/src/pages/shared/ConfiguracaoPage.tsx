@@ -29,6 +29,7 @@ import {
   changePassword,
   clearStoredSession,
   readStoredSession,
+  updateOwnProfile,
   uploadAvatar,
   writeStoredSession,
 } from "../../services/auth";
@@ -248,6 +249,8 @@ export function ConfiguracaoPage() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState("");
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState("");
@@ -375,7 +378,7 @@ export function ConfiguracaoPage() {
     }
   }
 
-  function handleSaveSettings() {
+  async function handleSaveSettings() {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(
         SETTINGS_STORAGE_KEY,
@@ -393,6 +396,38 @@ export function ConfiguracaoPage() {
       applyDashboardDarkEnabled(user.id, preferences.darkDashboard);
     }
     setIsDarkMode(preferences.darkDashboard);
+
+    const nextName = profile.name.trim();
+    const nextEmail = profile.email.trim();
+    const nameChanged = nextName.length > 0 && nextName !== user.name;
+    const emailChanged =
+      nextEmail.length > 0 && nextEmail.toLowerCase() !== user.email.toLowerCase();
+
+    if (nameChanged || emailChanged) {
+      const session = readStoredSession();
+      if (!session) return;
+
+      setProfileError("");
+      setProfileSaving(true);
+      try {
+        const updatedUser = await updateOwnProfile(session.accessToken, {
+          name: nameChanged ? nextName : undefined,
+          email: emailChanged ? nextEmail : undefined,
+        });
+        const nextSession = { ...session, user: updatedUser };
+        writeStoredSession(nextSession);
+        notifyAuthSessionUpdated(nextSession);
+      } catch (error) {
+        setProfileSaving(false);
+        setProfileError(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível salvar o perfil.",
+        );
+        return;
+      }
+      setProfileSaving(false);
+    }
 
     setSavedMessage("Configurações salvas com sucesso.");
     window.setTimeout(() => setSavedMessage(""), 2500);
@@ -778,8 +813,9 @@ export function ConfiguracaoPage() {
         dark={isDarkMode}
         actions={
           <Button
-            onClick={handleSaveSettings}
+            onClick={() => void handleSaveSettings()}
             icon={<Save size={16} />}
+            loading={profileSaving}
             className={clsx(
               "rounded-full px-5 text-white",
               isDarkMode
@@ -791,6 +827,15 @@ export function ConfiguracaoPage() {
           </Button>
         }
       />
+
+      {profileError ? (
+        <Card
+          className="rounded-[20px] border border-red-200 bg-red-50"
+          padding="md"
+        >
+          <p className="text-sm font-semibold text-red-700">{profileError}</p>
+        </Card>
+      ) : null}
 
       {savedMessage ? (
         <Card

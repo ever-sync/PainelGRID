@@ -27,6 +27,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { MobileRefreshTokenDto } from './dto/mobile-refresh-token.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
 import { AuthService } from './auth.service';
 import { AuthenticatedUser } from './auth.types';
 import { REFRESH_TOKEN_COOKIE_NAME } from './auth-cookie.constants';
@@ -224,6 +225,19 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Nao autenticado' })
   changePassword(@CurrentUser() user: AuthenticatedUser, @Body() dto: ChangePasswordDto) {
     return this.authService.changePassword(user, dto);
+  }
+
+  @ApiBearerAuth()
+  @Patch('me')
+  @ApiOperation({ summary: 'Atualiza nome/e-mail do usuario autenticado' })
+  @ApiResponse({ status: 200, description: 'Perfil atualizado com sucesso' })
+  @ApiResponse({ status: 401, description: 'Nao autenticado' })
+  @ApiResponse({ status: 409, description: 'E-mail ja em uso' })
+  updateMe(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateOwnProfileDto,
+  ) {
+    return this.authService.updateProfile(user, dto);
   }
 
   @ApiBearerAuth()

@@ -3,7 +3,7 @@ import { ScoreEventKind } from '@prisma/client';
 import { PrismaService } from '../../config/prisma.service';
 
 const SCORE_POINTS: Record<ScoreEventKind, number> = {
-  contacted: 1,
+  contacted: 0,
   scheduled: 2,
   checked_in: 3,
   sold: 7,
@@ -96,7 +96,6 @@ export class ScoreEventsService {
       vendor_id: vendorId,
       client_id: clientId,
       total_points:
-        byKind.contacted.points +
         byKind.scheduled.points +
         byKind.checked_in.points +
         byKind.sold.points,

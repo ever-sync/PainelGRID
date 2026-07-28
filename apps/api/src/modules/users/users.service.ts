@@ -291,6 +291,31 @@ export class UsersService {
     return this.storage.download(this.avatarStorageKey(userId));
   }
 
+  async updateOwnProfile(
+    userId: string,
+    dto: { name?: string; email?: string },
+  ): Promise<SafeUser> {
+    const currentUser = await this.getEntityById(userId);
+    const normalizedEmail = dto.email?.toLowerCase().trim();
+
+    if (normalizedEmail && normalizedEmail !== currentUser.email) {
+      const existing = await this.getEntityByEmail(normalizedEmail);
+      if (existing && existing.id !== userId) {
+        throw new ConflictException('Ja existe um usuario com este e-mail');
+      }
+    }
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: dto.name?.trim(),
+        email: normalizedEmail,
+      },
+    });
+
+    return this.sanitizeUser(user);
+  }
+
   sanitizeUser(user: User): SafeUser {
     const {
       password_hash: _passwordHash,

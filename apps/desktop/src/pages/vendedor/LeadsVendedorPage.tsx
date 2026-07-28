@@ -1149,7 +1149,9 @@ export function LeadsVendedorPage() {
             </span>
           </div>
           <p className="text-2xl md:text-3xl font-black tabular-nums text-amber-950 dark:text-amber-300">
-            {score?.total_points ?? 0}
+            {(score?.scheduled.points ?? 0) +
+              (score?.checked_in.points ?? 0) +
+              (score?.sold.points ?? 0)}
           </p>
         </div>
 

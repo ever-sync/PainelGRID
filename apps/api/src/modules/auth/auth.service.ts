@@ -22,6 +22,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
 import { AuthTokenPayload, AuthenticatedUser } from './auth.types';
 
 @Injectable()
@@ -227,6 +228,10 @@ export class AuthService {
 
   async getAvatar(userId: string) {
     return this.usersService.getAvatar(userId);
+  }
+
+  async updateProfile(authenticatedUser: AuthenticatedUser, dto: UpdateOwnProfileDto) {
+    return this.usersService.updateOwnProfile(authenticatedUser.sub, dto);
   }
 
   async requestPasswordReset(dto: ForgotPasswordDto) {

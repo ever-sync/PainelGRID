@@ -225,6 +225,18 @@ export async function uploadAvatar(
   return mapAuthApiUser(parsed as AuthApiUserPayload);
 }
 
+export async function updateOwnProfile(
+  accessToken: string,
+  dto: { name?: string; email?: string },
+): Promise<User> {
+  const updated = await httpRequest<AuthApiUserPayload>("/auth/me", {
+    method: "PATCH",
+    token: accessToken,
+    body: dto,
+  });
+  return mapAuthApiUser(updated);
+}
+
 export async function requestPasswordReset(email: string) {
   return httpRequest<{
     message: string;
