@@ -6,13 +6,18 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import {
+  AlertCircle,
   Trophy,
   CalendarPlus,
   CheckCircle2,
   Copy,
+  Loader2,
+  Mail,
   MessageCircle,
+  Phone,
   Plus,
   ShoppingCart,
+  User as UserIcon,
   XCircle,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
@@ -556,6 +561,11 @@ export function LeadsVendedorPage() {
       .finally(() => setStageLoading(false));
   }, [stageModal]);
 
+  const activeEvents = useMemo(
+    () => events.filter((event) => event.status === "active"),
+    [events],
+  );
+
   const appointmentDateOptions = useMemo(() => {
     if (!appointmentEventId) return [];
     const selectedEvent = events.find(
@@ -659,6 +669,10 @@ export function LeadsVendedorPage() {
       setActionError(phoneCheckError);
       return;
     }
+    if (!appointmentEventId || !appointmentDateKey || !appointmentPeriod) {
+      setActionError("Selecione evento, dia e período do agendamento.");
+      return;
+    }
     if (duplicatePhoneLead) {
       if (!duplicatePhoneLead.assigned_vendor_id) {
         setDuplicateLeadIdToClaim(duplicatePhoneLead.id);
@@ -676,7 +690,10 @@ export function LeadsVendedorPage() {
       }
       return;
     }
+    if (saving) return;
 
+    setActionError("");
+    setSaving(true);
     try {
       const check = await checkLeadPhone(
         normalizedLeadPhone,
@@ -700,17 +717,9 @@ export function LeadsVendedorPage() {
         }
         return;
       }
-    } catch {
-      setActionError(
-        "Não foi possível verificar o telefone agora. Tente novamente.",
-      );
-      return;
-    }
 
-    setDuplicateLeadIdToClaim(null);
-    setActionError("");
-    setSaving(true);
-    try {
+      setDuplicateLeadIdToClaim(null);
+
       const row = await createLead(
         {
           client_id: clientId,
@@ -722,14 +731,32 @@ export function LeadsVendedorPage() {
         t,
       );
       const next = mapApiLeadToLead(row);
-      setLeads((prev) => [next, ...prev]);
-      setAllClientLeads((prev) => [next, ...prev]);
+
+      const periodTime =
+        APPOINTMENT_PERIOD_OPTIONS.find((p) => p.value === appointmentPeriod)
+          ?.time ?? "09:00";
+      const [year, month, day] = appointmentDateKey.split("-");
+      const scheduledAt = new Date(`${year}-${month}-${day}T${periodTime}:00`);
+      await createAppointment(t, {
+        lead_id: next.id,
+        event_id: appointmentEventId,
+        scheduled_at: scheduledAt.toISOString(),
+        timezone: "America/Sao_Paulo",
+      });
+
       setLeadModalOpen(false);
       setLeadName("");
       setLeadPhone("");
       setLeadEmail("");
-      setAppointmentModal(next);
-      setAppointmentEventId(next.event_id ?? events[0]?.id ?? "");
+      setAppointmentEventId("");
+      setAppointmentDateKey("");
+      setAppointmentPeriod("");
+      await refreshLeads();
+      await refreshScore();
+      setSuccessMessage(
+        `Lead cadastrado! Pré-agendamento confirmado com sucesso para ${next.name}.`,
+      );
+      setTimeout(() => setSuccessMessage(""), 5000);
     } catch (error) {
       setActionError(
         error instanceof Error
@@ -764,7 +791,7 @@ export function LeadsVendedorPage() {
       setPhoneDuplicateHint(null);
       setActionError("");
       setAppointmentModal(mapped);
-      setAppointmentEventId(mapped.event_id ?? events[0]?.id ?? "");
+      setAppointmentEventId(mapped.event_id ?? activeEvents[0]?.id ?? "");
     } catch (error) {
       setActionError(
         error instanceof Error
@@ -1130,7 +1157,7 @@ export function LeadsVendedorPage() {
         <Button
           icon={<Plus size={16} />}
           onClick={() => setLeadModalOpen(true)}
-          className="w-full sm:w-auto justify-center"
+          className="hidden sm:inline-flex w-full sm:w-auto justify-center"
         >
           Cadastrar lead
         </Button>
@@ -1303,7 +1330,9 @@ export function LeadsVendedorPage() {
                   type="button"
                   onClick={() => {
                     setAppointmentModal(lead);
-                    setAppointmentEventId(lead.event_id ?? events[0]?.id ?? "");
+                    setAppointmentEventId(
+                      lead.event_id ?? activeEvents[0]?.id ?? "",
+                    );
                   }}
                   disabled={getAppointmentButtonState(lead).disabled}
                   className="flex-1 min-w-[80px] inline-flex py-2 items-center justify-center gap-1.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/20 dark:text-indigo-300 border border-indigo-200/40 dark:border-indigo-800/30 disabled:opacity-40 disabled:scale-100 active:scale-[0.97] transition-all"
@@ -1456,7 +1485,7 @@ export function LeadsVendedorPage() {
                         onClick={() => {
                           setAppointmentModal(lead);
                           setAppointmentEventId(
-                            lead.event_id ?? events[0]?.id ?? "",
+                            lead.event_id ?? activeEvents[0]?.id ?? "",
                           );
                         }}
                         disabled={getAppointmentButtonState(lead).disabled}
@@ -1499,6 +1528,9 @@ export function LeadsVendedorPage() {
           setDuplicateLeadIdToClaim(null);
           setWantsAssignDuplicate(null);
           setActionError("");
+          setAppointmentEventId("");
+          setAppointmentDateKey("");
+          setAppointmentPeriod("");
         }}
         title="Cadastrar lead"
         footer={
@@ -1510,6 +1542,9 @@ export function LeadsVendedorPage() {
                 setDuplicateLeadIdToClaim(null);
                 setWantsAssignDuplicate(null);
                 setActionError("");
+                setAppointmentEventId("");
+                setAppointmentDateKey("");
+                setAppointmentPeriod("");
               }}
             >
               Cancelar
@@ -1518,9 +1553,14 @@ export function LeadsVendedorPage() {
               <Button
                 onClick={() => void saveLead()}
                 loading={saving}
-                isDisabled={!leadName.trim()}
+                isDisabled={
+                  !leadName.trim() ||
+                  !appointmentEventId ||
+                  !appointmentDateKey ||
+                  !appointmentPeriod
+                }
               >
-                Cadastrar
+                Cadastrar e agendar
               </Button>
             ) : null}
             {duplicateLeadIdToClaim && wantsAssignDuplicate ? (
@@ -1535,72 +1575,109 @@ export function LeadsVendedorPage() {
           </>
         }
       >
-        <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-2">
-            <div
-              className={`flex items-center justify-center gap-1 rounded-lg border px-2 py-1 text-center text-[11px] font-medium transition-all duration-200 ${
-                leadModalStep === "phone"
-                  ? "border-blue-500 bg-blue-50 text-blue-700"
-                  : phoneStepDone
-                    ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                    : "border-gray-200 bg-gray-50 text-gray-500"
-              }`}
-            >
-              {phoneStepDone ? <CheckCircle2 size={12} /> : null}
-              1. Telefone
-            </div>
-            <div
-              className={`flex items-center justify-center gap-1 rounded-lg border px-2 py-1 text-center text-[11px] font-medium transition-all duration-200 ${
-                verifyStepActive
-                  ? "border-blue-500 bg-blue-50 text-blue-700"
-                  : verifyStepDone
-                    ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                    : "border-gray-200 bg-gray-50 text-gray-500"
-              }`}
-            >
-              {verifyStepDone ? <CheckCircle2 size={12} /> : null}
-              2. Verificação
-            </div>
-            <div
-              className={`flex items-center justify-center gap-1 rounded-lg border px-2 py-1 text-center text-[11px] font-medium transition-all duration-200 ${
-                leadModalStep === "data"
-                  ? "border-blue-500 bg-blue-50 text-blue-700"
-                  : "border-gray-200 bg-gray-50 text-gray-500"
-              }`}
-            >
-              3. Dados
-            </div>
+        <div className="space-y-5">
+          <div className="flex items-center">
+            {(
+              [
+                {
+                  key: "phone",
+                  label: "Telefone",
+                  done: phoneStepDone,
+                  active: leadModalStep === "phone",
+                },
+                {
+                  key: "verify",
+                  label: "Verificação",
+                  done: verifyStepDone,
+                  active: verifyStepActive,
+                },
+                {
+                  key: "data",
+                  label: "Dados",
+                  done: false,
+                  active: leadModalStep === "data",
+                },
+              ] as const
+            ).map((step, idx, arr) => (
+              <div
+                key={step.key}
+                className={clsx(
+                  "flex items-center",
+                  idx < arr.length - 1 ? "flex-1" : "",
+                )}
+              >
+                <div className="flex flex-col items-center gap-1.5">
+                  <div
+                    className={clsx(
+                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-xs font-semibold transition-colors duration-200",
+                      step.done
+                        ? "border-emerald-500 bg-emerald-500 text-white"
+                        : step.active
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {step.done ? <CheckCircle2 size={16} /> : idx + 1}
+                  </div>
+                  <span
+                    className={clsx(
+                      "whitespace-nowrap text-[11px] font-medium",
+                      step.active || step.done
+                        ? "text-foreground"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {step.label}
+                  </span>
+                </div>
+                {idx < arr.length - 1 ? (
+                  <div
+                    className={clsx(
+                      "mx-2 h-0.5 flex-1 rounded-full transition-colors duration-200",
+                      step.done ? "bg-emerald-500" : "bg-border",
+                    )}
+                    style={{ marginBottom: 18 }}
+                  />
+                ) : null}
+              </div>
+            ))}
           </div>
-          <input
-            value={leadPhone}
-            onChange={(e) => {
-              setLeadPhone(e.target.value);
-              setDuplicateLeadIdToClaim(null);
-              setWantsAssignDuplicate(null);
-              setActionError("");
-              setPhoneCheckError("");
-            }}
-            placeholder="Telefone do lead"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-          <p className="text-xs text-gray-500">
-            Digite o telefone primeiro para verificarmos se o lead já existe.
-          </p>
-          {normalizedLeadPhone ? (
-            <p className="text-xs text-gray-500">
-              Será salvo como: {normalizedLeadPhone}
+
+          <div className="space-y-2">
+            <Input
+              label="Telefone do lead"
+              icon={<Phone size={16} />}
+              value={leadPhone}
+              onChange={(e) => {
+                setLeadPhone(e.target.value);
+                setDuplicateLeadIdToClaim(null);
+                setWantsAssignDuplicate(null);
+                setActionError("");
+                setPhoneCheckError("");
+              }}
+              placeholder="(12) 98109-2776"
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground">
+              {normalizedLeadPhone
+                ? `Será salvo como ${normalizedLeadPhone}`
+                : "Digite o telefone primeiro para verificarmos se o lead já existe."}
             </p>
-          ) : null}
+          </div>
+
           {checkingPhone && normalizedLeadPhone ? (
-            <Notice tone="info" className="text-xs">
+            <div className="flex items-center gap-2 rounded-2xl border border-border bg-muted/50 px-3 py-2.5 text-xs text-muted-foreground">
+              <Loader2 size={14} className="animate-spin" />
               Verificando telefone...
-            </Notice>
+            </div>
           ) : null}
+
           {phoneCheckError ? (
-            <div className="space-y-2">
-              <Notice tone="error" className="text-xs">
+            <div className="space-y-2 rounded-2xl border border-destructive/30 bg-destructive/5 px-3 py-2.5">
+              <div className="flex items-start gap-2 text-xs text-destructive">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
                 {phoneCheckError}
-              </Notice>
+              </div>
               <Button
                 size="sm"
                 variant="secondary"
@@ -1614,16 +1691,18 @@ export function LeadsVendedorPage() {
               </Button>
             </div>
           ) : null}
+
           {duplicatePhoneLead && !checkingPhone ? (
             duplicatePhoneLead.assigned_vendor_id ? (
-              <Notice tone="error" className="text-xs">
+              <div className="flex items-start gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-xs text-destructive">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
                 {duplicatePhoneLead.assigned_vendor_id === vendorId
                   ? "Esse lead já está na sua carteira."
                   : `Esse lead já tem vendedor: ${duplicateLeadOwnerName}.`}
-              </Notice>
+              </div>
             ) : (
-              <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                <p className="text-xs text-amber-900">
+              <div className="space-y-2.5 rounded-2xl border border-amber-300/60 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
+                <p className="text-xs text-amber-900 dark:text-amber-300">
                   Lead já cadastrado e sem vendedor. Quer atribuir para você?
                 </p>
                 <div className="flex gap-2">
@@ -1636,7 +1715,7 @@ export function LeadsVendedorPage() {
                       setActionError("");
                     }}
                   >
-                    Sim
+                    Sim, atribuir
                   </Button>
                   <Button
                     size="sm"
@@ -1652,31 +1731,96 @@ export function LeadsVendedorPage() {
               </div>
             )
           ) : null}
+
           {leadModalStep === "data" ? (
-            <p className="text-xs text-emerald-700">
+            <div className="flex items-center gap-2 rounded-2xl border border-emerald-300/60 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+              <CheckCircle2 size={14} className="shrink-0" />
               Telefone disponível. Complete os dados para finalizar o cadastro.
-            </p>
+            </div>
           ) : null}
+
           <div
-            className={`overflow-hidden transition-all duration-200 ${
-              showCreateFields ? "max-h-40 opacity-100" : "max-h-0 opacity-0"
-            }`}
+            className={clsx(
+              "space-y-3 overflow-hidden transition-all duration-200",
+              showCreateFields
+                ? "max-h-[40rem] opacity-100"
+                : "max-h-0 opacity-0",
+            )}
           >
             {showCreateFields ? (
               <>
-                <input
+                <Input
+                  label="Nome"
+                  icon={<UserIcon size={16} />}
                   value={leadName}
                   onChange={(e) => setLeadName(e.target.value)}
-                  placeholder="Nome"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  placeholder="Nome completo do lead"
                 />
-                <input
+                <Input
+                  label="E-mail"
                   type="email"
+                  icon={<Mail size={16} />}
                   value={leadEmail}
                   onChange={(e) => setLeadEmail(e.target.value)}
                   placeholder="E-mail (opcional)"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                 />
+
+                <div className="space-y-3 border-t border-border pt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Agendamento
+                  </p>
+                  <Select
+                    label="Evento"
+                    value={appointmentEventId}
+                    onChange={(e) => {
+                      const nextId = e.target.value;
+                      setAppointmentEventId(nextId);
+                      setAppointmentDateKey("");
+                    }}
+                    options={activeEvents.map((event) => ({
+                      value: event.id,
+                      label: event.name,
+                    }))}
+                  />
+                  <Select
+                    label="Dia do evento"
+                    value={appointmentDateKey}
+                    onChange={(e) => {
+                      const nextDateKey = e.target.value;
+                      setAppointmentDateKey(nextDateKey);
+                      const match = appointmentDateOptions.find(
+                        (item) => item.dateKey === nextDateKey,
+                      );
+                      if (match) setAppointmentEventId(match.eventId);
+                    }}
+                    options={appointmentDateOptions.map((item) => ({
+                      value: item.dateKey,
+                      label: toPtBrDateLabel(item.dateKey),
+                    }))}
+                  />
+                  <div>
+                    <p className="mb-1.5 text-sm font-medium text-foreground">
+                      Período
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {APPOINTMENT_PERIOD_OPTIONS.map((p) => (
+                        <button
+                          key={p.value}
+                          type="button"
+                          onClick={() => setAppointmentPeriod(p.value)}
+                          className={clsx(
+                            "rounded-xl border px-4 py-3 text-sm font-medium transition-colors",
+                            appointmentPeriod === p.value
+                              ? "border-[#FF0636] bg-[#FF0636] text-white"
+                              : "border-border bg-background text-foreground hover:border-[#FF0636] hover:text-[#FF0636]",
+                          )}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </>
             ) : null}
           </div>
@@ -1685,13 +1829,23 @@ export function LeadsVendedorPage() {
 
       <Modal
         open={!!appointmentModal}
-        onClose={() => setAppointmentModal(null)}
+        onClose={() => {
+          setAppointmentModal(null);
+          setAppointmentEventId("");
+          setAppointmentDateKey("");
+          setAppointmentPeriod("");
+        }}
         title={`Agendar — ${appointmentModal?.name}`}
         footer={
           <>
             <Button
               variant="secondary"
-              onClick={() => setAppointmentModal(null)}
+              onClick={() => {
+                setAppointmentModal(null);
+                setAppointmentEventId("");
+                setAppointmentDateKey("");
+                setAppointmentPeriod("");
+              }}
             >
               Cancelar
             </Button>
@@ -1719,7 +1873,7 @@ export function LeadsVendedorPage() {
               setAppointmentEventId(nextId);
               setAppointmentDateKey("");
             }}
-            options={events.map((event) => ({
+            options={activeEvents.map((event) => ({
               value: event.id,
               label: event.name,
             }))}
