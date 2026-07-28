@@ -470,7 +470,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
           "h-screen md:pl-[112px] md:pr-4 md:py-4",
           isImmersiveChatRoute
             ? "overflow-hidden p-2 md:p-0"
-            : "overflow-y-auto pt-[calc(4rem+env(safe-area-inset-top))] pb-[calc(10rem+env(safe-area-inset-bottom))] md:pb-0 md:pt-0",
+            : "overflow-y-auto pt-[calc(4rem+env(safe-area-inset-top))] pb-0 md:pt-0",
         )}
       >
         <main
@@ -482,7 +482,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
           <Outlet context={{ user, gestorClientId, setGestorClientId }} />
           {!isImmersiveChatRoute && (
             <div
-              className="h-44 w-full shrink-0 md:hidden pointer-events-none"
+              className="h-32 w-full shrink-0 md:hidden pointer-events-none"
               aria-hidden="true"
             />
           )}

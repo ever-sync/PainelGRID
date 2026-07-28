@@ -1,19 +1,27 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
+  Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Req,
   Res,
   UnauthorizedException,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { CurrentUser, Public } from '../../common/decorators';
+import { avatarUploadOptions } from '../../common/upload-options';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
@@ -216,6 +224,41 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Nao autenticado' })
   changePassword(@CurrentUser() user: AuthenticatedUser, @Body() dto: ChangePasswordDto) {
     return this.authService.changePassword(user, dto);
+  }
+
+  @ApiBearerAuth()
+  @Post('me/avatar')
+  @UseInterceptors(FileInterceptor('file', avatarUploadOptions))
+  @ApiOperation({ summary: 'Envia/atualiza a foto de perfil do usuario autenticado' })
+  @ApiResponse({ status: 201, description: 'Foto de perfil atualizada com sucesso' })
+  @ApiResponse({ status: 400, description: 'Arquivo invalido ou storage nao configurado' })
+  async uploadAvatar(
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile()
+    file: { buffer: Buffer; mimetype?: string } | undefined,
+  ) {
+    if (!file?.buffer || !file.mimetype) {
+      throw new BadRequestException('Arquivo invalido para envio.');
+    }
+    return this.authService.uploadAvatar(user, file.buffer, file.mimetype);
+  }
+
+  @Public()
+  @Get('avatar/:id')
+  @ApiOperation({ summary: 'Entrega a foto de perfil de um usuario' })
+  @ApiResponse({ status: 200, description: 'Imagem entregue com sucesso' })
+  @ApiResponse({ status: 404, description: 'Usuario sem foto de perfil' })
+  async avatar(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Res() res: Response,
+  ) {
+    const media = await this.authService.getAvatar(id);
+    if (!media) {
+      throw new NotFoundException('Foto de perfil nao encontrada');
+    }
+    res.setHeader('Content-Type', media.contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(media.buffer);
   }
 
   private extractRefreshCookie(req: Request): string | null {

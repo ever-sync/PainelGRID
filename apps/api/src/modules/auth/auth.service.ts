@@ -221,6 +221,14 @@ export class AuthService {
     return this.usersService.findById(authenticatedUser.sub);
   }
 
+  async uploadAvatar(authenticatedUser: AuthenticatedUser, buffer: Buffer, mimeType: string) {
+    return this.usersService.updateOwnAvatar(authenticatedUser.sub, buffer, mimeType);
+  }
+
+  async getAvatar(userId: string) {
+    return this.usersService.getAvatar(userId);
+  }
+
   async requestPasswordReset(dto: ForgotPasswordDto) {
     const normalizedEmail = dto.email.toLowerCase().trim();
     const user = await this.usersService.getEntityByEmail(normalizedEmail);

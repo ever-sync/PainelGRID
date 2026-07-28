@@ -38,6 +38,30 @@ export const spreadsheetUploadOptions = {
   },
 };
 
+export const avatarUploadOptions = {
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+    files: 1,
+    fields: 0,
+    parts: 2,
+    fieldNameSize: 100,
+    fieldSize: 1024,
+  },
+  fileFilter: (
+    _request: unknown,
+    file: UploadFile,
+    callback: UploadCallback,
+  ) => {
+    const allowed = file.mimetype.toLowerCase().startsWith('image/');
+    callback(
+      allowed
+        ? null
+        : new BadRequestException('Envie somente um arquivo de imagem.'),
+      allowed,
+    );
+  },
+};
+
 export const chatMediaUploadOptions = {
   limits: {
     fileSize: 10 * 1024 * 1024,

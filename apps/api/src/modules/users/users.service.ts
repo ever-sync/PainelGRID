@@ -11,6 +11,7 @@ import { BCRYPT_SALT_ROUNDS } from '../../common/constants/bcrypt.constants';
 import { generateRatingToken } from '../../common/utils/crypto.util';
 import { Role, VendorCategory } from '../../common/types';
 import { PrismaService } from '../../config/prisma.service';
+import { StorageService } from '../../config/storage.service';
 import { MailService } from '../../mail/mail.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -31,6 +32,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
+    private readonly storage: StorageService,
   ) {}
 
   async findAll(): Promise<SafeUser[]> {
@@ -262,6 +264,31 @@ export class UsersService {
       where: { id: clientId },
       select: { id: true, company_name: true, logo_url: true },
     });
+  }
+
+  private avatarStorageKey(userId: string): string {
+    return `avatars/${userId}`;
+  }
+
+  async updateOwnAvatar(userId: string, buffer: Buffer, mimeType: string): Promise<SafeUser> {
+    if (!this.storage.isEnabled) {
+      throw new BadRequestException(
+        'Upload de imagens nao esta configurado neste ambiente.',
+      );
+    }
+
+    await this.storage.upload(this.avatarStorageKey(userId), buffer, mimeType);
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatar_url: `/auth/avatar/${userId}?v=${Date.now()}` },
+    });
+
+    return this.sanitizeUser(user);
+  }
+
+  async getAvatar(userId: string): Promise<{ buffer: Buffer; contentType: string } | null> {
+    return this.storage.download(this.avatarStorageKey(userId));
   }
 
   sanitizeUser(user: User): SafeUser {
