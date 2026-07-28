@@ -1,12 +1,26 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff, AlertTriangle, Loader2, ShieldCheck, ArrowLeft } from "lucide-react";
+import {
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  AlertTriangle,
+  Loader2,
+  ShieldCheck,
+  ArrowLeft,
+} from "lucide-react";
 import clsx from "clsx";
 import { Notice } from "../../components/ui/Notice";
 import type { UserRole } from "../../types";
 import gpLogo from "../../assets/logo.png";
-import loginCharacter from "../../assets/login-character.png";
-import { loginWithPassword, verifyTwoFactorCode, type AuthSession } from "../../services/auth";
+import loginCharacterAvif from "../../assets/login-character.avif";
+import loginCharacterWebp from "../../assets/login-character.webp";
+import {
+  loginWithPassword,
+  verifyTwoFactorCode,
+  type AuthSession,
+} from "../../services/auth";
 import { isNativePlatform } from "../../utils/platform";
 
 interface LoginPageProps {
@@ -34,6 +48,11 @@ const loginSlides = [
     description: "Eventos com pontuação e metas em tempo real.",
   },
 ] as const;
+
+// O fallback embutido evita baixar a ilustração em telas onde o painel está oculto.
+// Em desktop, <picture> escolhe AVIF ou WebP conforme o suporte do navegador.
+const transparentPixel =
+  "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
 
 export function LoginPage({ onLogin }: LoginPageProps) {
   const navigate = useNavigate();
@@ -119,7 +138,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       navigate(roleRoutes[session.user.role]);
     } catch (error) {
       setLoginError(
-        error instanceof Error ? error.message : "Código de verificação incorreto ou expirado.",
+        error instanceof Error
+          ? error.message
+          : "Código de verificação incorreto ou expirado.",
       );
     } finally {
       setIsSubmitting(false);
@@ -161,7 +182,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                   Digite o código enviado
                 </h1>
                 <p className="text-sm text-gray-500">
-                  Enviamos um código de 6 dígitos para o e-mail <strong>{email}</strong>.
+                  Enviamos um código de 6 dígitos para o e-mail{" "}
+                  <strong>{email}</strong>.
                 </p>
               </div>
             ) : (
@@ -332,11 +354,27 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       <div className="relative hidden min-h-screen w-1/2 overflow-hidden bg-[#060816] lg:flex lg:flex-col lg:items-center lg:justify-end">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,6,54,0.14),_transparent_35%),radial-gradient(circle_at_70%_30%,_rgba(61,86,162,0.18),_transparent_30%)]" />
         <div className="relative flex w-full flex-1 items-end justify-center px-10 pt-12">
-          <img
-            src={loginCharacter}
-            alt="Personagem GP de Vendas"
-            className="pointer-events-none relative z-10 w-[min(100%,370px)] max-w-none -translate-y-4 drop-shadow-[0_30px_60px_rgba(0,0,0,0.5)] xl:w-[400px] xl:-translate-y-6"
-          />
+          <picture>
+            <source
+              media="(min-width: 1024px)"
+              srcSet={loginCharacterAvif}
+              type="image/avif"
+            />
+            <source
+              media="(min-width: 1024px)"
+              srcSet={loginCharacterWebp}
+              type="image/webp"
+            />
+            <img
+              src={transparentPixel}
+              alt="Personagem GP de Vendas"
+              width={800}
+              height={755}
+              decoding="async"
+              fetchPriority="high"
+              className="pointer-events-none relative z-10 w-[min(100%,370px)] max-w-none -translate-y-4 drop-shadow-[0_30px_60px_rgba(0,0,0,0.5)] xl:w-[400px] xl:-translate-y-6"
+            />
+          </picture>
         </div>
 
         <div className="relative z-10 mb-8 flex flex-col items-center px-8 text-center">

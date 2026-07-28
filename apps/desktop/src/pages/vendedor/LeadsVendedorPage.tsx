@@ -256,6 +256,52 @@ export function LeadsVendedorPage() {
     "all" | "new" | "scheduled" | "checkin" | "done"
   >("all");
 
+  const isLeadNew = useCallback((l: Lead) => {
+    const stage = (l.crm_stage || "").toLowerCase();
+    const status = (l.confirmation_status || "").toLowerCase();
+    return (
+      stage === "novo" ||
+      stage === "new" ||
+      stage === "contactado" ||
+      stage === "nao_responde" ||
+      (!stage && status === "pending")
+    );
+  }, []);
+
+  const isLeadScheduled = useCallback((l: Lead) => {
+    const stage = (l.crm_stage || "").toLowerCase();
+    const status = (l.confirmation_status || "").toLowerCase();
+    return (
+      stage === "agendado" ||
+      stage === "scheduled" ||
+      status === "scheduled" ||
+      Boolean(l.active_appointment)
+    );
+  }, []);
+
+  const isLeadCheckin = useCallback((l: Lead) => {
+    const stage = (l.crm_stage || "").toLowerCase();
+    const status = (l.confirmation_status || "").toLowerCase();
+    return (
+      stage === "checkin" ||
+      stage === "checked_in" ||
+      status === "checked_in" ||
+      Boolean(l.checkin_token) ||
+      Boolean(l.checkin_at)
+    );
+  }, []);
+
+  const isLeadDone = useCallback((l: Lead) => {
+    const stage = (l.crm_stage || "").toLowerCase();
+    const status = (l.confirmation_status || "").toLowerCase();
+    return (
+      stage === "convertido" ||
+      stage === "perdido" ||
+      stage === "done" ||
+      status === "closed"
+    );
+  }, []);
+
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
       const q = searchQuery.toLowerCase().trim();
@@ -267,26 +313,14 @@ export function LeadsVendedorPage() {
 
       if (!matchesSearch) return false;
 
-      if (selectedStageTab === "new") {
-        return (
-          lead.crm_stage === "novo" ||
-          lead.crm_stage === "contactado" ||
-          lead.crm_stage === "nao_responde"
-        );
-      }
-      if (selectedStageTab === "scheduled") {
-        return lead.crm_stage === "agendado";
-      }
-      if (selectedStageTab === "checkin") {
-        return lead.crm_stage === "checkin";
-      }
-      if (selectedStageTab === "done") {
-        return lead.crm_stage === "convertido" || lead.crm_stage === "perdido";
-      }
+      if (selectedStageTab === "new") return isLeadNew(lead);
+      if (selectedStageTab === "scheduled") return isLeadScheduled(lead);
+      if (selectedStageTab === "checkin") return isLeadCheckin(lead);
+      if (selectedStageTab === "done") return isLeadDone(lead);
 
       return true;
     });
-  }, [leads, searchQuery, selectedStageTab]);
+  }, [leads, searchQuery, selectedStageTab, isLeadNew, isLeadScheduled, isLeadCheckin, isLeadDone]);
   const normalizedLeadPhone = useMemo(
     () => normalizeBrPhoneToE164(leadPhone),
     [leadPhone],
@@ -1086,31 +1120,10 @@ export function LeadsVendedorPage() {
     leadModalStep === "checking" || leadModalStep === "decision";
   const verifyStepDone = leadModalStep === "data";
 
-  const countNew = useMemo(
-    () =>
-      leads.filter(
-        (l) =>
-          l.crm_stage === "novo" ||
-          l.crm_stage === "contactado" ||
-          l.crm_stage === "nao_responde",
-      ).length,
-    [leads],
-  );
-  const countScheduled = useMemo(
-    () => leads.filter((l) => l.crm_stage === "agendado").length,
-    [leads],
-  );
-  const countCheckin = useMemo(
-    () => leads.filter((l) => l.crm_stage === "checkin").length,
-    [leads],
-  );
-  const countDone = useMemo(
-    () =>
-      leads.filter(
-        (l) => l.crm_stage === "convertido" || l.crm_stage === "perdido",
-      ).length,
-    [leads],
-  );
+  const countNew = useMemo(() => leads.filter(isLeadNew).length, [leads, isLeadNew]);
+  const countScheduled = useMemo(() => leads.filter(isLeadScheduled).length, [leads, isLeadScheduled]);
+  const countCheckin = useMemo(() => leads.filter(isLeadCheckin).length, [leads, isLeadCheckin]);
+  const countDone = useMemo(() => leads.filter(isLeadDone).length, [leads, isLeadDone]);
 
   return (
     <div>
