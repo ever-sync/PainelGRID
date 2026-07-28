@@ -287,7 +287,7 @@ export function LeadsVendedorPage() {
       stage === "checked_in" ||
       status === "checked_in" ||
       Boolean(l.checkin_token) ||
-      Boolean(l.checkin_at)
+      Boolean(l.checkin_voucher)
     );
   }, []);
 
