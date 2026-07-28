@@ -475,11 +475,17 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       >
         <main
           className={clsx(
-            "h-full min-w-0",
-            isImmersiveChatRoute ? "p-0" : "p-4 pb-12 md:p-6 md:pb-6 xl:p-8",
+            "min-h-full min-w-0",
+            isImmersiveChatRoute ? "p-0" : "p-4 md:p-6 xl:p-8",
           )}
         >
           <Outlet context={{ user, gestorClientId, setGestorClientId }} />
+          {!isImmersiveChatRoute && (
+            <div
+              className="h-44 w-full shrink-0 md:hidden pointer-events-none"
+              aria-hidden="true"
+            />
+          )}
         </main>
       </div>
 
