@@ -4,8 +4,10 @@ import {
   AlertCircle,
   Bell,
   Building2,
+  Camera,
   CheckCircle2,
   KanbanSquare,
+  Loader2,
   MoonStar,
   PanelLeft,
   Save,
@@ -26,7 +28,11 @@ import {
   changePassword,
   clearStoredSession,
   readStoredSession,
+  uploadAvatar,
+  writeStoredSession,
 } from "../../services/auth";
+import { notifyAuthSessionUpdated } from "../../services/auth-session";
+import { API_BASE } from "../../services/http";
 import {
   listClients,
   mapApiClientToClient,
@@ -211,6 +217,36 @@ export function ConfiguracaoPage() {
     email: user.email,
     company: user.company_name ?? "",
   });
+  const [userCompanyCnpj, setUserCompanyCnpj] = useState("");
+
+  useEffect(() => {
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+
+    void listClients(token).then((rows) => {
+      const mapped = rows.map(mapApiClientToClient);
+      setCrmClients(mapped);
+
+      const matched = mapped.find(
+        (c) =>
+          (user.client_id && c.id === user.client_id) ||
+          (user.company_name && c.company_name.toLowerCase() === user.company_name.toLowerCase()),
+      ) ?? mapped[0];
+
+      if (matched) {
+        setProfile((prev) => ({
+          ...prev,
+          company: matched.company_name,
+        }));
+        setUserCompanyCnpj(matched.cnpj || "");
+      }
+    }).catch(() => {
+      // silent
+    });
+  }, [user.client_id, user.company_name]);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState("");
@@ -227,6 +263,43 @@ export function ConfiguracaoPage() {
   const [crmStageOptions, setCrmStageOptions] = useState<
     Array<{ value: string; label: string; code: string; name: string }>
   >([]);
+
+  async function handleAvatarFileChange(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setAvatarError("Envie somente um arquivo de imagem.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError("A imagem deve ter no máximo 5MB.");
+      return;
+    }
+
+    const session = readStoredSession();
+    if (!session) return;
+
+    setAvatarError("");
+    setAvatarUploading(true);
+    try {
+      const updatedUser = await uploadAvatar(file, session.accessToken);
+      const nextSession = { ...session, user: updatedUser };
+      writeStoredSession(nextSession);
+      notifyAuthSessionUpdated(nextSession);
+    } catch (error) {
+      setAvatarError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível enviar a foto.",
+      );
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
 
   function openPasswordModal() {
     setPasswordModalOpen(true);
@@ -656,11 +729,19 @@ export function ConfiguracaoPage() {
       ? "border-zinc-700 bg-[#111111] text-zinc-100 hover:bg-[#1b1b1b]"
       : "border-zinc-200",
   );
-  const settingsTabs = [
-    { id: "perfil", label: "Perfil", icon: <UserCog size={15} /> },
-    { id: "ads", label: "Ads", icon: <Building2 size={15} /> },
-    { id: "crm", label: "CRM", icon: <KanbanSquare size={15} /> },
-  ] satisfies Array<{ id: SettingsTab; label: string; icon: React.ReactNode }>;
+  const settingsTabs = useMemo(() => {
+    const tabs: Array<{ id: SettingsTab; label: string; icon: React.ReactNode }> = [
+      { id: "perfil", label: "Perfil", icon: <UserCog size={15} /> },
+    ];
+
+    if (user.role === "gestor" || user.role === "cliente") {
+      tabs.push({ id: "ads", label: "Ads", icon: <Building2 size={15} /> });
+    }
+
+    tabs.push({ id: "crm", label: "CRM", icon: <KanbanSquare size={15} /> });
+
+    return tabs;
+  }, [user.role]);
   const selectedCrmClient = useMemo(
     () =>
       crmClients.find((client) => client.id === selectedCrmClientId) ?? null,
@@ -749,6 +830,70 @@ export function ConfiguracaoPage() {
                 </h2>
               </div>
 
+              <div className="mt-5 flex items-center gap-4">
+                <div className="relative">
+                  <div
+                    className={clsx(
+                      "flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 text-xl font-bold uppercase",
+                      isDarkMode
+                        ? "border-zinc-700 bg-[#151515] text-zinc-300"
+                        : "border-zinc-200 bg-zinc-100 text-zinc-500",
+                    )}
+                  >
+                    {user.avatar ? (
+                      <img
+                        src={`${API_BASE}${user.avatar}`}
+                        alt={user.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      user.name.slice(0, 2).toUpperCase()
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={avatarUploading}
+                    className={clsx(
+                      "absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 shadow-sm transition-colors disabled:opacity-60",
+                      isDarkMode
+                        ? "border-[#0a0a0a] bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+                        : "border-white bg-zinc-900 text-white hover:bg-zinc-800",
+                    )}
+                    title="Alterar foto de perfil"
+                  >
+                    {avatarUploading ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Camera size={14} />
+                    )}
+                  </button>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) => void handleAvatarFileChange(event)}
+                  />
+                </div>
+                <div>
+                  <p
+                    className={clsx(
+                      "text-sm font-semibold",
+                      isDarkMode ? "text-zinc-100" : "text-zinc-900",
+                    )}
+                  >
+                    Foto de perfil
+                  </p>
+                  <p className="text-xs text-zinc-400">JPG ou PNG, até 5MB.</p>
+                  {avatarError ? (
+                    <p className="mt-1 text-xs font-medium text-red-500">
+                      {avatarError}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <div>
                   <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
@@ -787,14 +932,30 @@ export function ConfiguracaoPage() {
                     Empresa
                   </p>
                   <input
-                    value={profile.company}
-                    onChange={(event) =>
-                      setProfile((current) => ({
-                        ...current,
-                        company: event.target.value,
-                      }))
-                    }
-                    className={profileFieldClass}
+                    value={profile.company || user.company_name || "Empresa Vinculada"}
+                    readOnly
+                    disabled
+                    title="O nome da empresa é vinculado automaticamente à sua conta de vendedor e não pode ser editado."
+                    className={clsx(
+                      profileFieldClass,
+                      "cursor-not-allowed opacity-80 font-bold bg-zinc-100 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700/80 text-zinc-700 dark:text-zinc-300",
+                    )}
+                  />
+                </div>
+
+                <div>
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+                    CNPJ da Empresa
+                  </p>
+                  <input
+                    value={userCompanyCnpj || "—"}
+                    readOnly
+                    disabled
+                    title="O CNPJ da empresa é vinculado automaticamente e não pode ser editado pelo vendedor."
+                    className={clsx(
+                      profileFieldClass,
+                      "cursor-not-allowed opacity-80 font-bold font-mono bg-zinc-100 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700/80 text-zinc-700 dark:text-zinc-300",
+                    )}
                   />
                 </div>
 

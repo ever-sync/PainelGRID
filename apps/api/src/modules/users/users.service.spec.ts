@@ -44,7 +44,11 @@ describe('UsersService', () => {
       },
       $transaction: jest.fn(async (callback: (tx: any) => Promise<any>) => callback(prisma)),
     };
-    service = new UsersService(prisma, { sendWelcome: jest.fn() } as any);
+    service = new UsersService(
+      prisma,
+      { sendWelcome: jest.fn() } as any,
+      { isEnabled: false, upload: jest.fn(), download: jest.fn() } as any,
+    );
     jest.spyOn(service as any, 'ensureClientOwnedByGestor').mockResolvedValue(undefined);
     jest.spyOn(service as any, 'ensureGestorCanManageUser').mockResolvedValue(undefined);
   });

@@ -8,7 +8,7 @@ import {
   writePersistedSession,
   type PersistedAuthSession,
 } from "./auth-session";
-import { httpRequest } from "./http";
+import { API_BASE, httpRequest } from "./http";
 import {
   clearNativeRefreshToken,
   readNativeRefreshToken,
@@ -45,11 +45,18 @@ async function withAuthRequestTimeout<T>(
   request: (signal: AbortSignal) => Promise<T>,
 ): Promise<T> {
   const controller = new AbortController();
-  const timeout = globalThis.setTimeout(() => controller.abort(), AUTH_REQUEST_TIMEOUT_MS);
+  const timeout = globalThis.setTimeout(
+    () => controller.abort(),
+    AUTH_REQUEST_TIMEOUT_MS,
+  );
   try {
     return await request(controller.signal);
   } catch (error) {
-    if (controller.signal.aborted && error instanceof Error && error.name === "AbortError") {
+    if (
+      controller.signal.aborted &&
+      error instanceof Error &&
+      error.name === "AbortError"
+    ) {
       throw new Error(
         "O servidor demorou para responder. Tente novamente; se persistir, verifique o serviço de e-mail.",
       );
@@ -179,6 +186,43 @@ export async function changePassword(
       new_password,
     },
   });
+}
+
+export async function uploadAvatar(
+  file: File,
+  accessToken: string,
+): Promise<User> {
+  if (!API_BASE) {
+    throw new Error("API nao configurada.");
+  }
+  const form = new FormData();
+  form.append("file", file);
+
+  const response = await fetch(`${API_BASE}/auth/me/avatar`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: form,
+  });
+
+  const raw = await response.text();
+  let parsed: unknown = null;
+  if (raw) {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = raw;
+    }
+  }
+  if (!response.ok) {
+    const message =
+      parsed && typeof parsed === "object" && "message" in parsed
+        ? String((parsed as { message?: unknown }).message)
+        : `Falha ao enviar foto de perfil (${response.status})`;
+    throw new Error(message);
+  }
+  return mapAuthApiUser(parsed as AuthApiUserPayload);
 }
 
 export async function requestPasswordReset(email: string) {
