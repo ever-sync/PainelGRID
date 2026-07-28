@@ -264,6 +264,52 @@ describe('LeadsService', () => {
     expect(prisma.lead.create).not.toHaveBeenCalled();
   });
 
+  it('bloqueia vendedor quando o telefone ja esta cadastrado no mesmo evento', async () => {
+    prisma.user.findFirst.mockResolvedValue({
+      id: vendorId,
+      client_id: clientId,
+    });
+    prisma.salesTeamMember.findFirst.mockResolvedValue({ team_id: teamId });
+    prisma.event.findFirst.mockResolvedValue({ id: eventId });
+    prisma.lead.findFirst.mockResolvedValue(baseExistingLead);
+
+    await expect(
+      service.create(
+        {
+          sub: vendorId,
+          role: Role.VENDEDOR,
+          name: 'Vendedor',
+          email: 'vend@teste.com',
+          client_id: clientId,
+        },
+        {
+          client_id: clientId,
+          name: 'Lead repetido',
+          phone: '11999999999',
+          source: LeadSource.manual,
+          event_interest_id: eventId,
+        } as never,
+      ),
+    ).rejects.toThrow('Telefone ja cadastrado neste evento');
+
+    expect(prisma.lead.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          client_id: clientId,
+          AND: expect.arrayContaining([
+            expect.objectContaining({
+              OR: expect.arrayContaining([
+                { event_interest_id: eventId },
+                { appointments: { some: { event_id: eventId } } },
+              ]),
+            }),
+          ]),
+        }),
+      }),
+    );
+    expect(prisma.lead.create).not.toHaveBeenCalled();
+  });
+
   it('cria lead do vendedor já vinculado ao time do evento', async () => {
     prisma.user.findFirst.mockResolvedValue({
       id: vendorId,

@@ -9,4 +9,8 @@ export class CheckLeadPhoneDto {
   @IsOptional()
   @IsUUID()
   client_id?: string;
+
+  @IsOptional()
+  @IsUUID()
+  event_id?: string;
 }

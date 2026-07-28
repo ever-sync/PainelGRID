@@ -77,11 +77,11 @@ export class LeadsController {
 
   @Get('check-phone')
   @Roles(Role.GESTOR, Role.CLIENTE, Role.VENDEDOR, Role.RECEPCAO)
-  @ApiOperation({ summary: 'Verifica se telefone já existe para o cliente do usuário' })
+  @ApiOperation({ summary: 'Verifica se telefone já existe para o cliente e evento informados' })
   @ApiResponse({ status: 200, description: 'Checagem executada com sucesso' })
   @ApiResponse({ status: 400, description: 'Telefone inválido' })
   checkPhone(@Query() query: CheckLeadPhoneDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.leadsService.checkPhone(user, query.phone, query.client_id);
+    return this.leadsService.checkPhone(user, query.phone, query.client_id, query.event_id);
   }
 
   @Get('lookup')

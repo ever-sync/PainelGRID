@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { PageHeader } from "../../components/shared/PageHeader";
 import { StatsCard } from "../../components/shared/StatsCard";
 import { Card } from "../../components/ui/Card";
 import { StageBadge } from "../../components/ui/Badge";
@@ -155,12 +154,6 @@ export function DashboardVendedorPage() {
 
   return (
     <div className={clsx("space-y-6", isDarkMode && "dashboard-dark bg-black")}>
-      <PageHeader
-        title="Meu Dashboard"
-        breadcrumbs={[{ label: "Vendedor" }, { label: "Dashboard" }]}
-        subtitle={`Olá, ${firstName} — acompanhe seu desempenho de vendas em tempo real.`}
-      />
-
       {/* Hero Welcome Banner */}
       <div
         className={clsx(

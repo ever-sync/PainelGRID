@@ -361,7 +361,10 @@ export function LeadsVendedorPage() {
     const normalizedDigits = phoneDigitsForCompare(normalizedLeadPhone);
     const localMatch =
       allClientLeads.find(
-        (lead) => phoneDigitsForCompare(lead.phone) === normalizedDigits,
+        (lead) =>
+          phoneDigitsForCompare(lead.phone) === normalizedDigits &&
+          (lead.event_id === appointmentEventId ||
+            lead.active_appointment?.event_id === appointmentEventId),
       ) ?? null;
     if (localMatch) return localMatch;
     if (!phoneDuplicateHint) return null;
@@ -370,7 +373,12 @@ export function LeadsVendedorPage() {
       name: phoneDuplicateHint.name,
       assigned_vendor_id: phoneDuplicateHint.assigned_vendor_id,
     } as Lead;
-  }, [allClientLeads, normalizedLeadPhone, phoneDuplicateHint]);
+  }, [
+    allClientLeads,
+    appointmentEventId,
+    normalizedLeadPhone,
+    phoneDuplicateHint,
+  ]);
   const duplicateLeadOwnerName = duplicatePhoneLead?.assigned_vendor_id
     ? (vendorNamesById[duplicatePhoneLead.assigned_vendor_id] ??
       phoneDuplicateHint?.assigned_vendor_name ??
@@ -589,7 +597,12 @@ export function LeadsVendedorPage() {
     setCheckingPhone(true);
     setPhoneCheckError("");
     const timeout = window.setTimeout(() => {
-      void checkLeadPhone(normalizedLeadPhone, t, clientId ?? undefined)
+      void checkLeadPhone(
+        normalizedLeadPhone,
+        t,
+        clientId ?? undefined,
+        appointmentEventId || undefined,
+      )
         .then((result) => {
           if (!result.exists || !result.lead) {
             setPhoneDuplicateHint(null);
@@ -606,7 +619,12 @@ export function LeadsVendedorPage() {
         .finally(() => setCheckingPhone(false));
     }, 280);
     return () => window.clearTimeout(timeout);
-  }, [clientId, normalizedLeadPhone, phoneCheckRetryNonce]);
+  }, [
+    appointmentEventId,
+    clientId,
+    normalizedLeadPhone,
+    phoneCheckRetryNonce,
+  ]);
 
   useEffect(() => {
     const pipelineId = stageModal?.crm_pipeline_id;
@@ -639,6 +657,14 @@ export function LeadsVendedorPage() {
     () => events.filter((event) => event.status === "active"),
     [events],
   );
+
+  useEffect(() => {
+    if (!leadModalOpen || appointmentEventId || activeEvents.length === 0) {
+      return;
+    }
+
+    setAppointmentEventId(activeEvents[0].id);
+  }, [activeEvents, appointmentEventId, leadModalOpen]);
 
   const appointmentDateOptions = useMemo(() => {
     if (!appointmentEventId) return [];
@@ -751,16 +777,18 @@ export function LeadsVendedorPage() {
       if (!duplicatePhoneLead.assigned_vendor_id) {
         setDuplicateLeadIdToClaim(duplicatePhoneLead.id);
         setActionError(
-          'Lead já cadastrado, mas sem vendedor. Clique em "Adicionar e atribuir".',
+          'Lead já cadastrado neste evento, mas sem vendedor. Clique em "Adicionar e atribuir".',
         );
       } else if (duplicatePhoneLead.assigned_vendor_id !== vendorId) {
         setDuplicateLeadIdToClaim(null);
         setActionError(
-          `Este lead já está atribuído ao vendedor ${duplicateLeadOwnerName}.`,
+          `Este lead já foi cadastrado neste evento e está atribuído ao vendedor ${duplicateLeadOwnerName}.`,
         );
       } else {
         setDuplicateLeadIdToClaim(null);
-        setActionError("Este lead já está na sua carteira.");
+        setActionError(
+          "Este lead já foi cadastrado neste evento e está na sua carteira.",
+        );
       }
       return;
     }
@@ -773,21 +801,24 @@ export function LeadsVendedorPage() {
         normalizedLeadPhone,
         t,
         clientId ?? undefined,
+        appointmentEventId,
       );
       if (check.exists && check.lead) {
         if (!check.lead.assigned_vendor_id) {
           setDuplicateLeadIdToClaim(check.lead.id);
           setActionError(
-            'Lead já cadastrado, mas sem vendedor. Clique em "Adicionar e atribuir".',
+            'Lead já cadastrado neste evento, mas sem vendedor. Clique em "Adicionar e atribuir".',
           );
         } else if (check.lead.assigned_vendor_id !== vendorId) {
           setDuplicateLeadIdToClaim(null);
           setActionError(
-            `Este lead já está atribuído ao vendedor ${check.lead.assigned_vendor_name ?? "outro vendedor"}.`,
+            `Este lead já foi cadastrado neste evento e está atribuído ao vendedor ${check.lead.assigned_vendor_name ?? "outro vendedor"}.`,
           );
         } else {
           setDuplicateLeadIdToClaim(null);
-          setActionError("Este lead já está na sua carteira.");
+          setActionError(
+            "Este lead já foi cadastrado neste evento e está na sua carteira.",
+          );
         }
         return;
       }
@@ -801,6 +832,7 @@ export function LeadsVendedorPage() {
           email: leadEmail || null,
           phone: normalizedLeadPhone || null,
           source: "manual",
+          event_interest_id: appointmentEventId,
         },
         t,
       );
@@ -1785,13 +1817,14 @@ export function LeadsVendedorPage() {
               <div className="flex items-start gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-xs text-destructive">
                 <AlertCircle size={14} className="mt-0.5 shrink-0" />
                 {duplicatePhoneLead.assigned_vendor_id === vendorId
-                  ? "Esse lead já está na sua carteira."
-                  : `Esse lead já tem vendedor: ${duplicateLeadOwnerName}.`}
+                  ? "Esse lead já foi cadastrado neste evento e está na sua carteira."
+                  : `Esse lead já foi cadastrado neste evento pelo vendedor ${duplicateLeadOwnerName}.`}
               </div>
             ) : (
               <div className="space-y-2.5 rounded-2xl border border-amber-300/60 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
                 <p className="text-xs text-amber-900 dark:text-amber-300">
-                  Lead já cadastrado e sem vendedor. Quer atribuir para você?
+                  Lead já cadastrado neste evento e sem vendedor. Quer atribuir
+                  para você?
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -1860,6 +1893,7 @@ export function LeadsVendedorPage() {
                   <Select
                     label="Evento"
                     value={appointmentEventId}
+                    placeholder="Selecione um evento"
                     onChange={(e) => {
                       const nextId = e.target.value;
                       setAppointmentEventId(nextId);
@@ -1873,6 +1907,14 @@ export function LeadsVendedorPage() {
                   <Select
                     label="Dia do evento"
                     value={appointmentDateKey}
+                    placeholder={
+                      appointmentEventId
+                        ? "Nenhum dia configurado"
+                        : "Selecione o evento primeiro"
+                    }
+                    disabled={
+                      !appointmentEventId || appointmentDateOptions.length === 0
+                    }
                     onChange={(e) => {
                       const nextDateKey = e.target.value;
                       setAppointmentDateKey(nextDateKey);

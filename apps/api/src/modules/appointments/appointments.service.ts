@@ -1083,9 +1083,7 @@ export class AppointmentsService {
     source?: AppointmentSource | null,
   ) {
     const isVendor = source === AppointmentSource.vendedor;
-    const suffixes = isVendor
-      ? ["PRE_AGENDAMENTO"]
-      : ["PRESENCA_AGENDADA", "PRE_AGENDAMENTO"];
+    const suffixes = ["PRESENCA_AGENDADA", "PRE_AGENDAMENTO"];
 
     return this.syncCrmStage(
       tx,
@@ -1093,7 +1091,7 @@ export class AppointmentsService {
       createdById,
       suffixes,
       isVendor
-        ? "Lead movido para etapa Pré-agendamento ao criar agendamento pelo vendedor"
+        ? "Lead movido para etapa PRESENCA_AGENDADA ao criar agendamento pelo vendedor"
         : "Lead movido para etapa PRESENCA_AGENDADA ao criar agendamento",
       isVendor,
     );

@@ -374,7 +374,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               width={800}
               height={755}
               decoding="async"
-              fetchPriority="high"
               className="pointer-events-none relative z-10 w-[min(100%,370px)] max-w-none -translate-y-4 drop-shadow-[0_30px_60px_rgba(0,0,0,0.5)] xl:w-[400px] xl:-translate-y-6"
             />
           </picture>

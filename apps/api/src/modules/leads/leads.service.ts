@@ -163,18 +163,34 @@ export class LeadsService {
     return lead as LeadWithRelations | null;
   }
 
-  private async findLeadByPhone(clientId: string, phone?: string | null, excludeLeadId?: string) {
+  private async findLeadByPhone(
+    clientId: string,
+    phone?: string | null,
+    excludeLeadId?: string,
+    eventId?: string,
+  ) {
     const candidateSet = buildLeadPhoneCandidates(phone);
     if (!candidateSet) {
       return null;
     }
+    const eventScope: Prisma.LeadWhereInput = {
+      OR: [
+        { event_interest_id: eventId },
+        { appointments: { some: { event_id: eventId } } },
+      ],
+    };
+    const exactPhoneScope: Prisma.LeadWhereInput = {
+      OR: candidateSet.candidates.map((candidate) => ({ phone: candidate })),
+    };
 
     const exact = await this.prisma.lead.findFirst({
       where: {
         client_id: clientId,
         deleted_at: null,
         ...(excludeLeadId ? { id: { not: excludeLeadId } } : {}),
-        OR: candidateSet.candidates.map((candidate) => ({ phone: candidate })),
+        ...(eventId
+          ? { AND: [eventScope, exactPhoneScope] }
+          : exactPhoneScope),
       },
       select: leadSelect,
     });
@@ -198,12 +214,19 @@ export class LeadsService {
     }
 
     if (suffixCandidates.size > 0) {
+      const suffixPhoneScope: Prisma.LeadWhereInput = {
+        OR: Array.from(suffixCandidates).map((suffix) => ({
+          phone: { endsWith: suffix },
+        })),
+      };
       const bySuffix = await this.prisma.lead.findFirst({
         where: {
           client_id: clientId,
           deleted_at: null,
           ...(excludeLeadId ? { id: { not: excludeLeadId } } : {}),
-          OR: Array.from(suffixCandidates).map((suffix) => ({ phone: { endsWith: suffix } })),
+          ...(eventId
+            ? { AND: [eventScope, suffixPhoneScope] }
+            : suffixPhoneScope),
         },
         select: leadSelect,
       });
@@ -219,6 +242,21 @@ export class LeadsService {
         AND l.deleted_at IS NULL
         AND l.phone IS NOT NULL
         ${excludeLeadId ? Prisma.sql`AND l.id <> ${excludeLeadId}::uuid` : Prisma.empty}
+        ${
+          eventId
+            ? Prisma.sql`
+                AND (
+                  l.event_interest_id = ${eventId}::uuid
+                  OR EXISTS (
+                    SELECT 1
+                    FROM appointments a
+                    WHERE a.lead_id = l.id
+                      AND a.event_id = ${eventId}::uuid
+                  )
+                )
+              `
+            : Prisma.empty
+        }
         AND (
           CASE
             WHEN LEFT(REGEXP_REPLACE(l.phone, '\D', '', 'g'), 2) = '55'
@@ -479,7 +517,12 @@ export class LeadsService {
     return this.toResponse(lead);
   }
 
-  async checkPhone(user: AuthenticatedUser, phone: string, requestedClientId?: string) {
+  async checkPhone(
+    user: AuthenticatedUser,
+    phone: string,
+    requestedClientId?: string,
+    eventId?: string,
+  ) {
     const normalized = normalizeBrazilianPhone(phone.trim());
     let clientId: string | null = null;
     if (user.role === Role.GESTOR) {
@@ -498,7 +541,11 @@ export class LeadsService {
       }
     }
 
-    const existing = await this.findLeadByPhone(clientId, normalized);
+    if (eventId) {
+      await this.assertEventExistsForClient(clientId, eventId);
+    }
+
+    const existing = await this.findLeadByPhone(clientId, normalized, undefined, eventId);
     if (!existing) {
       return { exists: false };
     }
@@ -536,9 +583,18 @@ export class LeadsService {
     const normalizedPhone = dto.phone?.trim() ? normalizeBrazilianPhone(dto.phone.trim()) : null;
 
     if (normalizedPhone) {
-      const existingByPhone = await this.findLeadByPhone(targetClientId, normalizedPhone);
+      const existingByPhone = await this.findLeadByPhone(
+        targetClientId,
+        normalizedPhone,
+        undefined,
+        dto.event_interest_id,
+      );
       if (existingByPhone) {
-        throw new BadRequestException('Telefone ja cadastrado para este cliente');
+        throw new BadRequestException(
+          dto.event_interest_id
+            ? 'Telefone ja cadastrado neste evento'
+            : 'Telefone ja cadastrado para este cliente',
+        );
       }
     }
 
@@ -555,13 +611,16 @@ export class LeadsService {
     let defaultStageId = dto.crm_stage_id;
     let defaultPipelineId = dto.crm_pipeline_id;
     if (assignedVendorId && !defaultStageId && !defaultPipelineId) {
-      const preAgendamento = await this.prisma.crmStage.findUnique({
-        where: { code: clientIdToStageCode(targetClientId, 'PRE_AGENDAMENTO') },
+      const presencaAgendada = await this.prisma.crmStage.findFirst({
+        where: {
+          client_id: targetClientId,
+          code: clientIdToStageCode(targetClientId, 'PRESENCA_AGENDADA'),
+        },
         select: { id: true, pipeline_id: true },
       });
-      if (preAgendamento) {
-        defaultStageId = preAgendamento.id;
-        defaultPipelineId = preAgendamento.pipeline_id;
+      if (presencaAgendada) {
+        defaultStageId = presencaAgendada.id;
+        defaultPipelineId = presencaAgendada.pipeline_id;
       }
     }
 
@@ -603,7 +662,11 @@ export class LeadsService {
       })) as LeadWithRelations;
     } catch (error) {
       if (isLeadPhoneUniqueViolation(error)) {
-        throw new BadRequestException('Telefone ja cadastrado para este cliente');
+        throw new BadRequestException(
+          dto.event_interest_id
+            ? 'Telefone ja cadastrado neste evento'
+            : 'Telefone ja cadastrado para este cliente',
+        );
       }
       throw error;
     }

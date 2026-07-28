@@ -316,9 +316,11 @@ export function checkLeadPhone(
   phone: string,
   token: string,
   clientId?: string,
+  eventId?: string,
 ) {
   const qs = new URLSearchParams({ phone: phone.trim() });
   if (clientId) qs.set("client_id", clientId);
+  if (eventId) qs.set("event_id", eventId);
   return httpRequest<CheckLeadPhoneResponse>(
     `/leads/check-phone?${qs.toString()}`,
     {
