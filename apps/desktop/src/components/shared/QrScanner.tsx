@@ -7,7 +7,7 @@ import { createAudioContext } from "../../utils/audioContext";
 type TorchCapabilities = MediaTrackCapabilities & { torch?: boolean };
 type TorchConstraintSet = MediaTrackConstraintSet & { torch?: boolean };
 
-interface QrScannerProps {
+export interface QrScannerProps {
   onScan: (decodedText: string) => void;
   onClose: () => void;
   dark?: boolean;

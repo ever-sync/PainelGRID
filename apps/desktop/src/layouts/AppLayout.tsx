@@ -32,7 +32,7 @@ import {
   DASHBOARD_DARK_CHANGE_EVENT,
   readDashboardDarkEnabled,
 } from "../lib/dashboard-dark-mode";
-import { QrScanner } from "../components/shared/QrScanner";
+import { LazyQrScanner } from "../components/shared/LazyQrScanner";
 import { checkInLeadByToken, queryFipeData } from "../services/leads";
 import { readStoredSession } from "../services/auth";
 
@@ -500,7 +500,9 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
         <div
           className={clsx(
             "mb-6 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-colors",
-            dashboardDark ? "bg-zinc-800/80 text-white border border-zinc-700/50" : "bg-zinc-900 text-white",
+            dashboardDark
+              ? "bg-zinc-800/80 text-white border border-zinc-700/50"
+              : "bg-zinc-900 text-white",
           )}
         >
           <img
@@ -886,7 +888,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                       <div className="space-y-3">
                         {scannerActive ? (
                           <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-2 relative">
-                            <QrScanner
+                            <LazyQrScanner
                               onScan={(val) => void handleCheckinSubmit(val)}
                               onClose={() => setScannerActive(false)}
                             />

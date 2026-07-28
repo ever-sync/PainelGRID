@@ -13,15 +13,6 @@ import {
   Users,
   CheckCircle2,
 } from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { Card } from "../../components/ui/Card";
 import { readStoredSession } from "../../services/auth";
 import { listClients, mapApiClientToClient } from "../../services/clients";
@@ -39,6 +30,11 @@ import {
   readDashboardDarkEnabled,
 } from "../../lib/dashboard-dark-mode";
 import type { Client, Event, Lead } from "../../types";
+import { DeferredCampaignPerformanceChart } from "./DeferredCampaignPerformanceChart";
+import type {
+  CampaignChartPoint,
+  CampaignMetricKey,
+} from "./CampaignPerformanceChart";
 
 type CalendarEvent = {
   day: number;
@@ -47,69 +43,45 @@ type CalendarEvent = {
   tone: "red" | "blue" | "yellow";
 };
 
-type CampaignChartPoint = {
-  day: string;
-  totalLeads: number;
-  scheduledLeads: number;
-  confirmedLeads: number;
-  cancelledLeads: number;
-  checkedInLeads: number;
-};
-
-type CampaignMetricKey =
-  | "totalLeads"
-  | "scheduledLeads"
-  | "confirmedLeads"
-  | "cancelledLeads"
-  | "checkedInLeads";
-
 const campaignMetrics: Array<{
   key: CampaignMetricKey;
   label: string;
   stroke: string;
-  areaFrom: string;
-  areaTo: string;
   chipStyle: string;
 }> = [
   {
     key: "totalLeads",
     label: "Quantidade de lead",
     stroke: "#FF0636",
-    areaFrom: "rgba(255, 6, 54, 0.35)",
-    areaTo: "rgba(255, 6, 54, 0.02)",
-    chipStyle: "bg-rose-50 text-rose-600 font-semibold border border-rose-200/70",
+    chipStyle:
+      "bg-rose-50 text-rose-600 font-semibold border border-rose-200/70",
   },
   {
     key: "scheduledLeads",
     label: "Agendados",
     stroke: "#3B82F6",
-    areaFrom: "rgba(59, 130, 246, 0.30)",
-    areaTo: "rgba(59, 130, 246, 0.02)",
-    chipStyle: "bg-blue-50 text-blue-600 font-semibold border border-blue-200/70",
+    chipStyle:
+      "bg-blue-50 text-blue-600 font-semibold border border-blue-200/70",
   },
   {
     key: "confirmedLeads",
     label: "Confirmados",
     stroke: "#8B5CF6",
-    areaFrom: "rgba(139, 92, 246, 0.30)",
-    areaTo: "rgba(139, 92, 246, 0.02)",
-    chipStyle: "bg-purple-50 text-purple-600 font-semibold border border-purple-200/70",
+    chipStyle:
+      "bg-purple-50 text-purple-600 font-semibold border border-purple-200/70",
   },
   {
     key: "cancelledLeads",
     label: "Cancelados",
     stroke: "#EF4444",
-    areaFrom: "rgba(239, 68, 68, 0.30)",
-    areaTo: "rgba(239, 68, 68, 0.02)",
     chipStyle: "bg-red-50 text-red-600 font-semibold border border-red-200/70",
   },
   {
     key: "checkedInLeads",
     label: "Presença confirmada",
     stroke: "#10B981",
-    areaFrom: "rgba(16, 185, 129, 0.30)",
-    areaTo: "rgba(16, 185, 129, 0.02)",
-    chipStyle: "bg-emerald-50 text-emerald-600 font-semibold border border-emerald-200/70",
+    chipStyle:
+      "bg-emerald-50 text-emerald-600 font-semibold border border-emerald-200/70",
   },
 ];
 
@@ -149,94 +121,6 @@ function parseDateKey(dateKey: string) {
 
 function isDateOnOrBefore(date: string, boundary: Date) {
   return new Date(date).getTime() <= boundary.getTime();
-}
-
-function CampaignChartTooltip({
-  active,
-  payload,
-  label,
-  dark,
-}: {
-  active?: boolean;
-  payload?: Array<{
-    dataKey?: string;
-    value?: number | string;
-  }>;
-  label?: string;
-  dark?: boolean;
-}) {
-  if (!active || !payload?.length) return null;
-
-  const rowsByMetric = new Map<
-    CampaignMetricKey,
-    { key: CampaignMetricKey; label: string; color: string; value: number }
-  >();
-
-  payload.forEach((entry) => {
-    const key = entry.dataKey as CampaignMetricKey | undefined;
-    if (!key) return;
-    const metric = campaignMetrics.find((item) => item.key === key);
-    if (!metric || rowsByMetric.has(key)) return;
-    rowsByMetric.set(key, {
-      key,
-      label: metric.label,
-      color: metric.stroke,
-      value: Number(entry.value ?? 0),
-    });
-  });
-
-  const rows = Array.from(rowsByMetric.values()).sort(
-    (a, b) => b.value - a.value,
-  );
-
-  return (
-    <div
-      className={clsx(
-        "min-w-[180px] rounded-2xl p-3 shadow-xl backdrop-blur",
-        dark
-          ? "border border-zinc-700 bg-zinc-900/95"
-          : "border border-zinc-200 bg-white/95",
-      )}
-    >
-      <p
-        className={clsx(
-          "text-[11px] font-semibold uppercase tracking-[0.18em]",
-          dark ? "text-zinc-400" : "text-zinc-400",
-        )}
-      >
-        {label}
-      </p>
-      <div className="mt-2 space-y-1.5">
-        {rows.map((row) => (
-          <div
-            key={row.key}
-            className="flex items-center justify-between gap-3"
-          >
-            <span
-              className={clsx(
-                "flex items-center gap-2 text-xs",
-                dark ? "text-zinc-300" : "text-zinc-600",
-              )}
-            >
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: row.color }}
-              />
-              {row.label}
-            </span>
-            <span
-              className={clsx(
-                "text-xs font-semibold",
-                dark ? "text-zinc-100" : "text-zinc-900",
-              )}
-            >
-              {row.value}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 function buildCampaignChartData(
@@ -280,8 +164,7 @@ function buildCampaignChartData(
           Boolean(lead.active_appointment?.scheduled_at),
       ).length,
       confirmedLeads: leadsUntilDay.filter(
-        (lead) =>
-          lead.confirmation_status === "confirmed",
+        (lead) => lead.confirmation_status === "confirmed",
       ).length,
       cancelledLeads: leadsUntilDay.filter(
         (lead) =>
@@ -289,8 +172,7 @@ function buildCampaignChartData(
           lead.crm_stage === "perdido",
       ).length,
       checkedInLeads: leadsUntilDay.filter(
-        (lead) =>
-          lead.confirmation_status === "checked_in",
+        (lead) => lead.confirmation_status === "checked_in",
       ).length,
     };
   });
@@ -466,7 +348,8 @@ function ActiveEventFunnelCard({
   ];
   const maxValue = Math.max(event.funnel.leads, 1);
   const conversionRate = Math.round((event.funnel.sold / maxValue) * 100);
-  const isExpired = new Date(event.event_date).getTime() < new Date().setHours(0,0,0,0);
+  const isExpired =
+    new Date(event.event_date).getTime() < new Date().setHours(0, 0, 0, 0);
 
   return (
     <Card className="w-[420px] shrink-0 rounded-3xl relative overflow-hidden">
@@ -1307,7 +1190,10 @@ export function DashboardGestorPage() {
         {/* 3. Balanced 2-Column Grid: Ranking & Engagement / Progress */}
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Ranking de Confirmações */}
-          <Card className="flex flex-col justify-between overflow-hidden rounded-3xl" padding="lg">
+          <Card
+            className="flex flex-col justify-between overflow-hidden rounded-3xl"
+            padding="lg"
+          >
             <div>
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -1365,7 +1251,10 @@ export function DashboardGestorPage() {
           </Card>
 
           {/* Progresso & Termômetro de Engajamento */}
-          <Card className="flex flex-col justify-between overflow-hidden rounded-3xl" padding="lg">
+          <Card
+            className="flex flex-col justify-between overflow-hidden rounded-3xl"
+            padding="lg"
+          >
             <SectionTitle title="Progresso & Engajamento" />
             <div className="mt-5 grid items-center gap-6 sm:grid-cols-2">
               <div
@@ -1561,65 +1450,12 @@ export function DashboardGestorPage() {
               )}
             >
               <div className="h-[330px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={campaignChartData}
-                    margin={{ top: 20, right: 16, left: 8, bottom: 8 }}
-                    barGap={6}
-                    barCategoryGap="18%"
-                  >
-                    <CartesianGrid
-                      vertical={false}
-                      stroke={isDarkMode ? "#27272a" : "#f4f4f5"}
-                      strokeDasharray="4 4"
-                    />
-                    <XAxis
-                      dataKey="day"
-                      axisLine={false}
-                      tickLine={false}
-                      tickMargin={12}
-                      tick={{
-                        fill: isDarkMode ? "#a1a1aa" : "#71717a",
-                        fontSize: 12,
-                        fontWeight: 600,
-                      }}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      allowDecimals={false}
-                      tick={{
-                        fill: isDarkMode ? "#a1a1aa" : "#71717a",
-                        fontSize: 11,
-                        fontWeight: 600,
-                      }}
-                      width={28}
-                    />
-                    <Tooltip
-                      cursor={{
-                        fill: isDarkMode
-                          ? "rgba(255,255,255,0.04)"
-                          : "rgba(0,0,0,0.03)",
-                      }}
-                      content={<CampaignChartTooltip dark={isDarkMode} />}
-                    />
-
-                    {campaignMetrics.map((metric) => {
-                      const isActive = metric.key === activeMetricKey;
-                      return (
-                        <Bar
-                          key={`bar-${metric.key}`}
-                          dataKey={metric.key}
-                          name={metric.label}
-                          fill={metric.stroke}
-                          radius={[6, 6, 0, 0]}
-                          maxBarSize={24}
-                          fillOpacity={isActive ? 1 : 0.45}
-                        />
-                      );
-                    })}
-                  </BarChart>
-                </ResponsiveContainer>
+                <DeferredCampaignPerformanceChart
+                  data={campaignChartData}
+                  metrics={campaignMetrics}
+                  activeMetricKey={activeMetricKey}
+                  dark={isDarkMode}
+                />
               </div>
             </div>
           </div>
@@ -1638,8 +1474,8 @@ export function DashboardGestorPage() {
                         ? "border-zinc-500 bg-zinc-800/90 shadow-md ring-2 ring-white/20"
                         : "border-zinc-300 bg-zinc-50/90 shadow-md ring-2 ring-black/10"
                       : isDarkMode
-                      ? "border-zinc-800 bg-[#15161b] opacity-85 hover:opacity-100"
-                      : "border-zinc-100 bg-white opacity-85 hover:opacity-100",
+                        ? "border-zinc-800 bg-[#15161b] opacity-85 hover:opacity-100"
+                        : "border-zinc-100 bg-white opacity-85 hover:opacity-100",
                   )}
                 >
                   <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400">

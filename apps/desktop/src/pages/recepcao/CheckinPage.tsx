@@ -40,7 +40,7 @@ import {
 } from "../../services/leads";
 import { listClientStaff, mapStaffToUser } from "../../services/staff";
 import { useLeadRealtimeSync } from "../../hooks/useLeadRealtimeSync";
-import { QrScanner } from "../../components/shared/QrScanner";
+import { LazyQrScanner } from "../../components/shared/LazyQrScanner";
 import type { Event } from "../../types";
 import {
   normalizeBrPhoneToE164,
@@ -1126,7 +1126,7 @@ export function CheckinPage() {
           </p>
           {showScannerModal && (
             <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-2 relative overflow-hidden">
-              <QrScanner
+              <LazyQrScanner
                 key={scannerKey}
                 onScan={(val) => {
                   setScannedToken(val);

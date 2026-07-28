@@ -72,13 +72,16 @@ export function DashboardVendedorPage() {
     const t = readStoredSession()?.accessToken;
     if (!t) return;
     void listLeads({}, t)
-      .then((rows) =>
-        setMyLeads(
-          rows
-            .map(mapApiLeadToLead)
-            .filter((l) => l.assigned_vendor_id === vendorId),
-        ),
-      )
+      .then((rows) => {
+        const mapped = rows.map(mapApiLeadToLead);
+        const matches = mapped.filter(
+          (l) =>
+            l.assigned_vendor_id === vendorId ||
+            l.registered_by_id === vendorId ||
+            !l.assigned_vendor_id,
+        );
+        setMyLeads(matches.length > 0 ? matches : mapped);
+      })
       .catch(() => setMyLeads([]));
     void listVendorSales(t)
       .then((sales) => setSalesCount(sales.length))

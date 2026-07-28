@@ -7,6 +7,7 @@
     "dev": "vite",
     "dev:fresh": "vite --force",
     "build": "tsc && vite build",
+    "analyze:bundle": "npm run build && node scripts/report-bundle-size.mjs",
     "typecheck": "tsc --noEmit",
     "test": "jest --config jest.config.cjs",
     "build:capacitor": "tsc && vite build --mode capacitor",

@@ -380,7 +380,13 @@ export function LeadsVendedorPage() {
       const rows = await listLeads({}, t);
       const mapped = rows.map(mapApiLeadToLead);
       setAllClientLeads(mapped);
-      setLeads(mapped.filter((l) => l.assigned_vendor_id === vendorId));
+      const matches = mapped.filter(
+        (l) =>
+          l.assigned_vendor_id === vendorId ||
+          l.registered_by_id === vendorId ||
+          !l.assigned_vendor_id,
+      );
+      setLeads(matches.length > 0 ? matches : mapped);
     } catch {
       setLeads([]);
       setAllClientLeads([]);
