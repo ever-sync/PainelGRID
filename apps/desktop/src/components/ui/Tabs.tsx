@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Tab, TabList, Tabs as TabsPrimitive } from "react-aria-components";
+import { cn } from "../../lib/utils";
 
 interface TabItem {
   id: string;
@@ -14,29 +14,61 @@ interface TabsProps {
   className?: string;
 }
 
-/**
- * So a barra de abas (TabList+Tab) do react-aria-components — sem TabPanel,
- * ja que as paginas que usam isso trocam o conteudo por fora, no estado
- * local delas, nao como filhos deste componente.
- */
 export function Tabs({ tabs, active, onChange, className }: TabsProps) {
   return (
-    <TabsPrimitive
-      selectedKey={active}
-      onSelectionChange={(key) => onChange(String(key))}
-      className={className}
+    <div
+      role="tablist"
+      aria-label="Navegação da página"
+      className={cn("flex gap-1 border-b border-border", className)}
     >
-      <TabList items={tabs} className="flex gap-1 border-b border-border">
-        {(tab) => (
-          <Tab
-            id={tab.id}
-            className="relative -mb-px inline-flex cursor-default items-center gap-2 border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground outline-none transition-colors hover:text-foreground data-[selected]:border-primary data-[selected]:text-primary data-[focus-visible]:ring-2 data-[focus-visible]:ring-ring/30"
+      {tabs.map((tab) => {
+        const selected = tab.id === active;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => onChange(tab.id)}
+            onKeyDown={(event) => {
+              if (
+                !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+              ) {
+                return;
+              }
+              event.preventDefault();
+              const currentIndex = tabs.findIndex(
+                (item) => item.id === tab.id,
+              );
+              const nextIndex =
+                event.key === "Home"
+                  ? 0
+                  : event.key === "End"
+                    ? tabs.length - 1
+                    : (currentIndex +
+                        (event.key === "ArrowRight" ? 1 : -1) +
+                        tabs.length) %
+                      tabs.length;
+              onChange(tabs[nextIndex].id);
+              const tabButtons =
+                event.currentTarget.parentElement?.querySelectorAll<HTMLElement>(
+                  '[role="tab"]',
+                );
+              window.requestAnimationFrame(() => tabButtons?.[nextIndex]?.focus());
+            }}
+            className={cn(
+              "relative -mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30",
+              selected
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
           >
             {tab.icon}
             {tab.label}
-          </Tab>
-        )}
-      </TabList>
-    </TabsPrimitive>
+          </button>
+        );
+      })}
+    </div>
   );
 }

@@ -1,12 +1,4 @@
-import {
-  Button as ButtonPrimitive,
-  ListBox,
-  ListBoxItem,
-  Popover,
-  Select as SelectPrimitive,
-  SelectValue,
-} from "react-aria-components";
-import { ChevronDown, Check } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 interface SelectOption {
@@ -29,12 +21,6 @@ interface SelectProps {
   dark?: boolean;
 }
 
-/**
- * Wrapper de API simples (value/onValueChange/onChange) sobre o Select composto do
- * react-aria-components — as ~30 chamadas no app so precisam de um dropdown
- * de valor unico, sem busca/grupos/multi-select, entao essas partes do
- * gerador shadcn foram descartadas.
- */
 export function Select({
   label,
   options,
@@ -54,60 +40,47 @@ export function Select({
   return (
     <div className="flex flex-col gap-1">
       {label && (
-        <span
-          id={selectId ? `${selectId}-label` : undefined}
+        <label
+          htmlFor={selectId}
           className="text-sm font-medium text-foreground"
         >
           {label}
-        </span>
+        </label>
       )}
-      <SelectPrimitive
-        aria-label={label ?? placeholder ?? "Selecionar"}
-        aria-describedby={errorId}
-        placeholder={placeholder}
-        selectedKey={value ?? null}
-        onSelectionChange={(key) => {
-          const val = key == null ? "" : String(key);
-          onValueChange?.(val);
-          onChange?.({ target: { value: val } });
-        }}
-        isDisabled={disabled}
-        isInvalid={Boolean(error)}
-      >
-        <ButtonPrimitive
-          data-slot="select-trigger"
+      <div className="relative">
+        <select
+          id={selectId}
+          value={value ?? ""}
+          disabled={disabled}
+          aria-invalid={Boolean(error)}
+          aria-describedby={errorId}
+          onChange={(event) => {
+            onValueChange?.(event.target.value);
+            onChange?.({ target: { value: event.target.value } });
+          }}
           className={cn(
-            "flex h-9 w-full items-center justify-between gap-1.5 rounded-2xl border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-muted-foreground",
+            "h-9 w-full appearance-none rounded-2xl border border-input bg-background px-3 py-2 pr-9 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50",
+            !value && "text-muted-foreground",
             error && "border-destructive focus-visible:ring-destructive/20",
             className,
           )}
         >
-          <SelectValue className="flex-1 truncate text-left" />
-          <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
-        </ButtonPrimitive>
-        <Popover
-          className="z-50 w-[var(--trigger-width)] min-w-36 overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-lg ring-1 ring-[#dfdfdf]/50"
-          offset={4}
-        >
-          <ListBox className="max-h-72 overflow-y-auto p-1 outline-none">
-            {options.map((opt) => (
-              <ListBoxItem
-                key={opt.value}
-                id={opt.value}
-                textValue={opt.label}
-                className="relative flex min-h-8 w-full cursor-default items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 text-sm outline-none data-[selected]:bg-accent data-[selected]:text-accent-foreground data-[focused]:bg-accent data-[focused]:text-accent-foreground"
-              >
-                {({ isSelected }) => (
-                  <>
-                    <span className="truncate">{opt.label}</span>
-                    {isSelected && <Check className="size-4 shrink-0" />}
-                  </>
-                )}
-              </ListBoxItem>
-            ))}
-          </ListBox>
-        </Popover>
-      </SelectPrimitive>
+          {placeholder && (
+            <option value="" disabled>
+              {placeholder}
+            </option>
+          )}
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDown
+          aria-hidden="true"
+          className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+        />
+      </div>
       {error && (
         <p id={errorId} className="text-xs text-destructive">
           {error}

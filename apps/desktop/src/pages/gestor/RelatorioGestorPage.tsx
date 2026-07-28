@@ -80,7 +80,9 @@ function lazyRechart(
 ) {
   return lazy(() =>
     import("../../components/shared/RechartsDeferred").then((module) => ({
-      default: module[name] as ComponentType<any>,
+      default: module[name] as ComponentType<
+        import("../../components/shared/RechartsDeferred").DeferredChartProps
+      >,
     })),
   );
 }

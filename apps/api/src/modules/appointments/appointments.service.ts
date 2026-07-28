@@ -1010,15 +1010,22 @@ export class AppointmentsService {
     if (!actor) return;
 
     const idBase = lead.client_id.replace(/-/g, "").toUpperCase().slice(0, 16);
-    const codes = suffixes.map((suffix) => `${idBase}_${suffix}`);
 
-    const targetStage = await tx.crmStage.findFirst({
-      where: {
-        client_id: lead.client_id,
-        pipeline_id: resolvedPipelineId,
-        code: { in: codes },
-      },
-    });
+    let targetStage: Awaited<ReturnType<typeof tx.crmStage.findFirst>> = null;
+    for (const suffix of suffixes) {
+      const code = `${idBase}_${suffix}`;
+      const found = await tx.crmStage.findFirst({
+        where: {
+          client_id: lead.client_id,
+          pipeline_id: resolvedPipelineId,
+          code,
+        },
+      });
+      if (found) {
+        targetStage = found;
+        break;
+      }
+    }
 
     if (!targetStage || targetStage.id === lead.crm_stage_id) return;
 
@@ -1077,8 +1084,8 @@ export class AppointmentsService {
   ) {
     const isVendor = source === AppointmentSource.vendedor;
     const suffixes = isVendor
-      ? ["PRE_AGENDAMENTO", "PRESENCA_AGENDADA"]
-      : ["PRESENCA_AGENDADA"];
+      ? ["PRE_AGENDAMENTO"]
+      : ["PRESENCA_AGENDADA", "PRE_AGENDAMENTO"];
 
     return this.syncCrmStage(
       tx,

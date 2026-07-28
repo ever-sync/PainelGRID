@@ -1,13 +1,11 @@
-import type * as React from "react";
+import {
+  forwardRef,
+  type AnchorHTMLAttributes,
+  type ButtonHTMLAttributes,
+  type ReactNode,
+} from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Loader2 } from "lucide-react";
-import {
-  Button as ButtonPrimitive,
-  Link as LinkPrimitive,
-  type ButtonProps as ButtonPrimitiveProps,
-  type LinkProps as LinkPrimitiveProps,
-} from "react-aria-components";
-
 import { cn } from "../../lib/utils";
 
 const buttonVariants = cva(
@@ -47,33 +45,39 @@ const buttonVariants = cva(
   },
 );
 
-function Button({
-  className,
-  variant = "default",
-  size = "default",
-  loading = false,
-  icon,
-  isDisabled,
-  children,
-  ...props
-}: Omit<ButtonPrimitiveProps, "className" | "children"> &
-  React.RefAttributes<HTMLButtonElement> &
-  VariantProps<typeof buttonVariants> & {
-    className?: string;
-    children?: React.ReactNode;
-    /** Mostra um spinner e desabilita o botao enquanto uma acao esta em andamento. */
-    loading?: boolean;
-    /** Icone exibido antes do conteudo (mesmo espacamento usado pelo data-icon do tema). */
-    icon?: React.ReactNode;
-    /** react-aria-components nao tipa `title`, mas o atributo HTML de tooltip passa normalmente. */
-    title?: string;
-  }) {
-  return (
-    <ButtonPrimitive
+interface ButtonProps
+  extends
+    Omit<ButtonHTMLAttributes<HTMLButtonElement>, "disabled">,
+    VariantProps<typeof buttonVariants> {
+  loading?: boolean;
+  icon?: ReactNode;
+  isDisabled?: boolean;
+  disabled?: boolean;
+}
+
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  (
+    {
+      className,
+      variant = "default",
+      size = "default",
+      loading = false,
+      icon,
+      isDisabled,
+      disabled,
+      children,
+      type = "button",
+      ...props
+    },
+    ref,
+  ) => (
+    <button
+      ref={ref}
+      type={type}
       data-slot="button"
       data-variant={variant}
       data-size={size}
-      isDisabled={isDisabled || loading}
+      disabled={disabled || isDisabled || loading}
       aria-busy={loading || undefined}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
@@ -92,28 +96,30 @@ function Button({
         )
       )}
       {children}
-    </ButtonPrimitive>
-  );
-}
+    </button>
+  ),
+);
 
-function LinkButton({
-  className,
-  variant = "default",
-  size = "default",
-  ...props
-}: Omit<LinkPrimitiveProps, "className"> &
-  VariantProps<typeof buttonVariants> & {
-    className?: string;
-  }) {
-  return (
-    <LinkPrimitive
+Button.displayName = "Button";
+
+interface LinkButtonProps
+  extends
+    AnchorHTMLAttributes<HTMLAnchorElement>,
+    VariantProps<typeof buttonVariants> {}
+
+const LinkButton = forwardRef<HTMLAnchorElement, LinkButtonProps>(
+  ({ className, variant = "default", size = "default", ...props }, ref) => (
+    <a
+      ref={ref}
       data-slot="button"
       data-variant={variant}
       data-size={size}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />
-  );
-}
+  ),
+);
+
+LinkButton.displayName = "LinkButton";
 
 export { Button, LinkButton, buttonVariants };

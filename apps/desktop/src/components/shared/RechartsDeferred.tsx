@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import {
   Bar as RechartsBar,
   BarChart as RechartsBarChart,
@@ -13,63 +13,66 @@ import {
   YAxis as RechartsYAxis,
 } from "recharts";
 
-type ChartProps = Record<string, any>;
-
-const Components = {
-  Bar: RechartsBar as unknown as ComponentType<ChartProps>,
-  BarChart: RechartsBarChart as unknown as ComponentType<ChartProps>,
-  CartesianGrid: RechartsCartesianGrid as unknown as ComponentType<ChartProps>,
-  Cell: RechartsCell as unknown as ComponentType<ChartProps>,
-  Legend: RechartsLegend as unknown as ComponentType<ChartProps>,
-  Pie: RechartsPie as unknown as ComponentType<ChartProps>,
-  PieChart: RechartsPieChart as unknown as ComponentType<ChartProps>,
-  ResponsiveContainer:
-    RechartsResponsiveContainer as unknown as ComponentType<ChartProps>,
-  Tooltip: RechartsTooltip as unknown as ComponentType<ChartProps>,
-  XAxis: RechartsXAxis as unknown as ComponentType<ChartProps>,
-  YAxis: RechartsYAxis as unknown as ComponentType<ChartProps>,
+export type DeferredChartProps = Record<string, unknown> & {
+  children?: ReactNode;
 };
 
-export function BarChart(props: ChartProps) {
+const Components = {
+  Bar: RechartsBar as unknown as ComponentType<DeferredChartProps>,
+  BarChart: RechartsBarChart as unknown as ComponentType<DeferredChartProps>,
+  CartesianGrid:
+    RechartsCartesianGrid as unknown as ComponentType<DeferredChartProps>,
+  Cell: RechartsCell as unknown as ComponentType<DeferredChartProps>,
+  Legend: RechartsLegend as unknown as ComponentType<DeferredChartProps>,
+  Pie: RechartsPie as unknown as ComponentType<DeferredChartProps>,
+  PieChart: RechartsPieChart as unknown as ComponentType<DeferredChartProps>,
+  ResponsiveContainer:
+    RechartsResponsiveContainer as unknown as ComponentType<DeferredChartProps>,
+  Tooltip: RechartsTooltip as unknown as ComponentType<DeferredChartProps>,
+  XAxis: RechartsXAxis as unknown as ComponentType<DeferredChartProps>,
+  YAxis: RechartsYAxis as unknown as ComponentType<DeferredChartProps>,
+};
+
+export function BarChart(props: DeferredChartProps) {
   return <Components.BarChart {...props} />;
 }
 
-export function Bar(props: ChartProps) {
+export function Bar(props: DeferredChartProps) {
   return <Components.Bar {...props} />;
 }
 
-export function XAxis(props: ChartProps) {
+export function XAxis(props: DeferredChartProps) {
   return <Components.XAxis {...props} />;
 }
 
-export function YAxis(props: ChartProps) {
+export function YAxis(props: DeferredChartProps) {
   return <Components.YAxis {...props} />;
 }
 
-export function CartesianGrid(props: ChartProps) {
+export function CartesianGrid(props: DeferredChartProps) {
   return <Components.CartesianGrid {...props} />;
 }
 
-export function Tooltip(props: ChartProps) {
+export function Tooltip(props: DeferredChartProps) {
   return <Components.Tooltip {...props} />;
 }
 
-export function ResponsiveContainer(props: ChartProps) {
+export function ResponsiveContainer(props: DeferredChartProps) {
   return <Components.ResponsiveContainer {...props} />;
 }
 
-export function PieChart(props: ChartProps) {
+export function PieChart(props: DeferredChartProps) {
   return <Components.PieChart {...props} />;
 }
 
-export function Pie(props: ChartProps) {
+export function Pie(props: DeferredChartProps) {
   return <Components.Pie {...props} />;
 }
 
-export function Cell(props: ChartProps) {
+export function Cell(props: DeferredChartProps) {
   return <Components.Cell {...props} />;
 }
 
-export function Legend(props: ChartProps) {
+export function Legend(props: DeferredChartProps) {
   return <Components.Legend {...props} />;
 }

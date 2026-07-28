@@ -238,7 +238,7 @@ export class MailService {
   }
 
   private buildCredenciamentoWhatsAppUrl(): string {
-    const phoneDigits = "5511552970742";
+    const phoneDigits = "551152970742";
     return `https://wa.me/${phoneDigits}?text=${encodeURIComponent("Continuar Credenciamento")}`;
   }
 
