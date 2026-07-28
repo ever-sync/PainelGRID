@@ -230,8 +230,9 @@ const server = createServer(async (request, response) => {
       return;
     }
 
-    const acceptsHtml = request.headers.accept?.includes("text/html");
-    const isClientRoute = acceptsHtml && !path.extname(pathname);
+    // Vite's preview server (and most static SPA hosts) fall back to index.html
+    // for extensionless paths even when a crawler or health check sends */*.
+    const isClientRoute = !path.extname(pathname);
     if (isClientRoute) {
       const indexFile = await existingFile(path.join(distDir, "index.html"));
       if (indexFile) {

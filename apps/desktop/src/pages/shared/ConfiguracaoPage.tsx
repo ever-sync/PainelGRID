@@ -4,6 +4,7 @@ import {
   AlertCircle,
   Bell,
   Building2,
+  CalendarPlus,
   Camera,
   CheckCircle2,
   KanbanSquare,
@@ -13,6 +14,8 @@ import {
   PanelLeft,
   Save,
   ShieldCheck,
+  ShoppingCart,
+  Trophy,
   Unplug,
   UserCog,
 } from "lucide-react";
@@ -74,7 +77,19 @@ type Preferences = {
   darkDashboard: boolean;
 };
 
-type SettingsTab = "perfil" | "ads" | "crm";
+type SettingsTab = "perfil" | "ads" | "crm" | "pontuacao";
+
+export type ClientScoreRules = {
+  scheduled_points: number;
+  checkin_points: number;
+  sold_points: number;
+};
+
+const DEFAULT_SCORE_RULES: ClientScoreRules = {
+  scheduled_points: 2,
+  checkin_points: 3,
+  sold_points: 7,
+};
 
 type CrmRuleDraft = Record<ConfirmationStatus, string>;
 
@@ -262,11 +277,55 @@ export function ConfiguracaoPage() {
   const [crmSaving, setCrmSaving] = useState(false);
   const [crmMessage, setCrmMessage] = useState("");
   const [selectedCrmClientId, setSelectedCrmClientId] = useState("");
+  const [selectedScoreClientId, setSelectedScoreClientId] = useState("");
+  const [scoreRules, setScoreRules] = useState<ClientScoreRules>(DEFAULT_SCORE_RULES);
+  const [scoreSaving, setScoreSaving] = useState(false);
+  const [scoreMessage, setScoreMessage] = useState("");
   const [crmRuleDraft, setCrmRuleDraft] =
     useState<CrmRuleDraft>(EMPTY_CRM_RULE_DRAFT);
   const [crmStageOptions, setCrmStageOptions] = useState<
     Array<{ value: string; label: string; code: string; name: string }>
   >([]);
+
+  useEffect(() => {
+    if (!selectedScoreClientId && crmClients.length > 0) {
+      setSelectedScoreClientId(crmClients[0].id);
+    }
+  }, [crmClients, selectedScoreClientId]);
+
+  useEffect(() => {
+    if (!selectedScoreClientId) return;
+    try {
+      const raw = window.localStorage.getItem(`painelgrid:score_rules:${selectedScoreClientId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setScoreRules({
+          scheduled_points: Math.max(0, Number(parsed.scheduled_points ?? 2)),
+          checkin_points: Math.max(0, Number(parsed.checkin_points ?? 3)),
+          sold_points: Math.max(0, Number(parsed.sold_points ?? 7)),
+        });
+        return;
+      }
+    } catch {
+      // ignore
+    }
+    setScoreRules(DEFAULT_SCORE_RULES);
+  }, [selectedScoreClientId]);
+
+  function handleSaveScoreRules() {
+    if (!selectedScoreClientId) return;
+    setScoreSaving(true);
+    try {
+      window.localStorage.setItem(
+        `painelgrid:score_rules:${selectedScoreClientId}`,
+        JSON.stringify(scoreRules),
+      );
+      setScoreMessage("Regras de pontuação salvas com sucesso para esta empresa!");
+      setTimeout(() => setScoreMessage(""), 3500);
+    } finally {
+      setScoreSaving(false);
+    }
+  }
 
   async function handleAvatarFileChange(
     event: React.ChangeEvent<HTMLInputElement>,
@@ -401,7 +460,8 @@ export function ConfiguracaoPage() {
     const nextEmail = profile.email.trim();
     const nameChanged = nextName.length > 0 && nextName !== user.name;
     const emailChanged =
-      nextEmail.length > 0 && nextEmail.toLowerCase() !== user.email.toLowerCase();
+      nextEmail.length > 0 &&
+      nextEmail.toLowerCase() !== user.email.toLowerCase();
 
     if (nameChanged || emailChanged) {
       const session = readStoredSession();
@@ -772,6 +832,7 @@ export function ConfiguracaoPage() {
 
     if (user.role === "gestor" || user.role === "cliente") {
       tabs.push({ id: "ads", label: "Ads", icon: <Building2 size={15} /> });
+      tabs.push({ id: "pontuacao", label: "Pontuação", icon: <Trophy size={15} /> });
     }
 
     tabs.push({ id: "crm", label: "CRM", icon: <KanbanSquare size={15} /> });
@@ -1497,6 +1558,166 @@ export function ConfiguracaoPage() {
                     setIsDarkMode(value);
                   }}
                 />
+              </div>
+            </Card>
+          </div>
+        ) : null}
+
+        {activeTab === "pontuacao" ? (
+          <div className="space-y-6">
+            <Card className={sectionCardClass} padding="lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 dark:border-zinc-800 pb-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500 dark:bg-amber-500/20 font-bold">
+                    <Trophy size={20} />
+                  </div>
+                  <div>
+                    <h2
+                      className={clsx(
+                        "text-lg font-black tracking-tight",
+                        isDarkMode ? "text-zinc-100" : "text-zinc-950",
+                      )}
+                    >
+                      Configuração da Regra de Pontuação
+                    </h2>
+                    <p className="text-xs text-zinc-400">
+                      Defina a pontuação concedida por agendamento, check-in e venda para cada empresa.
+                    </p>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleSaveScoreRules}
+                  isDisabled={scoreSaving}
+                  icon={<Save size={16} />}
+                  className="bg-[#FF0636] hover:bg-[#d9052e] text-white rounded-full px-5"
+                >
+                  Salvar Regras
+                </Button>
+              </div>
+
+              {scoreMessage ? (
+                <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/40 dark:border-emerald-900 p-3 text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                  {scoreMessage}
+                </div>
+              ) : null}
+
+              <div className="mt-6 space-y-6">
+                <div>
+                  <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-400">
+                    Selecione a Empresa / Cliente
+                  </label>
+                  <Select
+                    value={selectedScoreClientId}
+                    onChange={(e) =>
+                      setSelectedScoreClientId(
+                        typeof e === "string"
+                          ? e
+                          : (e as React.ChangeEvent<HTMLSelectElement>).target.value,
+                      )
+                    }
+                    options={crmClientOptions}
+                    className="w-full sm:max-w-md"
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-blue-200/80 bg-gradient-to-br from-blue-50 to-indigo-100/40 dark:border-blue-900/40 dark:from-blue-950/30 dark:to-zinc-900 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-500 text-white">
+                        <CalendarPlus size={16} />
+                      </div>
+                      <span className="text-[10px] font-black uppercase text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 px-2 py-0.5 rounded-full">
+                        Padrão: 2 pts
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                        Pontos por Agendamento
+                      </p>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                        Concedido ao confirmar agendamento de visita.
+                      </p>
+                    </div>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={scoreRules.scheduled_points}
+                      onChange={(e) =>
+                        setScoreRules((prev) => ({
+                          ...prev,
+                          scheduled_points: Math.max(0, parseInt(e.target.value) || 0),
+                        }))
+                      }
+                      className={profileFieldClass}
+                    />
+                  </div>
+
+                  <div className="rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-green-100/40 dark:border-emerald-900/40 dark:from-emerald-950/30 dark:to-zinc-900 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500 text-white">
+                        <CheckCircle2 size={16} />
+                      </div>
+                      <span className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/50 px-2 py-0.5 rounded-full">
+                        Padrão: 3 pts
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                        Pontos por Check-in
+                      </p>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                        Concedido quando o cliente realiza check-in.
+                      </p>
+                    </div>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={scoreRules.checkin_points}
+                      onChange={(e) =>
+                        setScoreRules((prev) => ({
+                          ...prev,
+                          checkin_points: Math.max(0, parseInt(e.target.value) || 0),
+                        }))
+                      }
+                      className={profileFieldClass}
+                    />
+                  </div>
+
+                  <div className="rounded-2xl border border-fuchsia-200/80 bg-gradient-to-br from-fuchsia-50 to-pink-100/40 dark:border-fuchsia-900/40 dark:from-fuchsia-950/30 dark:to-zinc-900 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-fuchsia-500 text-white">
+                        <ShoppingCart size={16} />
+                      </div>
+                      <span className="text-[10px] font-black uppercase text-fuchsia-700 dark:text-fuchsia-400 bg-fuchsia-100 dark:bg-fuchsia-900/50 px-2 py-0.5 rounded-full">
+                        Padrão: 7 pts
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                        Pontos por Venda
+                      </p>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                        Concedido ao registrar a venda final.
+                      </p>
+                    </div>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={scoreRules.sold_points}
+                      onChange={(e) =>
+                        setScoreRules((prev) => ({
+                          ...prev,
+                          sold_points: Math.max(0, parseInt(e.target.value) || 0),
+                        }))
+                      }
+                      className={profileFieldClass}
+                    />
+                  </div>
+                </div>
               </div>
             </Card>
           </div>
