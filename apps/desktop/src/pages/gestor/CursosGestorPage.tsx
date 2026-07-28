@@ -20,9 +20,11 @@ import {
 } from "../../services/coursesApi";
 import type { Course } from "../../types";
 
-function lazyRechart(name: keyof typeof import("recharts")) {
+function lazyRechart(
+  name: keyof typeof import("../../components/shared/RechartsDeferred"),
+) {
   return lazy(() =>
-    import("recharts").then((module) => ({
+    import("../../components/shared/RechartsDeferred").then((module) => ({
       default: module[name] as ComponentType<any>,
     })),
   );

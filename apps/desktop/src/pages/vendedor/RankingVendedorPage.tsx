@@ -311,15 +311,17 @@ export function RankingVendedorPage() {
       try {
         if (!selectedEventId || selectedEventId === "all") {
           // Ranking Geral da Empresa (Todos os Vendedores e Times Reais)
-          const scoreItems = await getVendorScoreRanking(token, {
-            client_id: clientId,
-          });
+          const scoreItems = await getVendorScoreRanking(
+            token,
+            clientId ? { client_id: clientId } : {},
+          );
 
           if (!active) return;
 
           const vendors: VendorRow[] = scoreItems.map((item) => ({
             vendor_id: item.vendor_id,
             vendor_name: item.vendor_name,
+            client_id: clientId ?? null,
             team_id: null,
             team_name: "Equipe de Vendas",
             leads: item.assigned,
@@ -333,16 +335,19 @@ export function RankingVendedorPage() {
           const totalSales = vendors.reduce((acc, v) => acc + v.sold, 0);
           const totalScheduled = vendors.reduce((acc, v) => acc + v.scheduled, 0);
           const totalCheckedIn = vendors.reduce((acc, v) => acc + v.checked_in, 0);
+          const totalPoints = vendors.reduce((acc, v) => acc + v.points, 0);
 
           const teams: TeamRow[] = vendors.length > 0 ? [
             {
               team_id: "geral",
               team_name: "Equipe Geral de Vendas",
+              logo_url: null,
               leads: vendors.reduce((acc, v) => acc + v.leads, 0),
               scheduled: totalScheduled,
               confirmed: totalCheckedIn,
               checked_in: totalCheckedIn,
               sold: totalSales,
+              points: totalPoints,
             },
           ] : [];
 
@@ -350,7 +355,13 @@ export function RankingVendedorPage() {
             event: {
               id: "all",
               name: "Geral da Empresa",
+              event_date: new Date().toISOString(),
+              event_end_date: null,
+              location: null,
+              capacity: null,
+              sales_target: null,
               status: "active",
+              participant_client_ids: clientId ? [clientId] : [],
             },
             funnel: {
               leads: vendors.reduce((acc, v) => acc + v.leads, 0),

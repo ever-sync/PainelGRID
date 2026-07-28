@@ -113,6 +113,9 @@ describe('AppointmentsService', () => {
         findUnique: jest.fn(),
         findFirst: jest.fn(),
       },
+      client: {
+        findUnique: jest.fn(),
+      },
       scoreEvent: {
         upsert: jest.fn(),
       },
@@ -136,6 +139,7 @@ describe('AppointmentsService', () => {
       } as any,
       { dispatch: jest.fn() } as any,
       { emitLeadUpdated: jest.fn() } as any,
+      { sendAppointmentWelcome: jest.fn() } as any,
     );
     prisma.eventParticipant.findMany.mockResolvedValue([{ client_id: clientId }]);
   });

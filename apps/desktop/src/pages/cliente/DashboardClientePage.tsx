@@ -30,9 +30,11 @@ type OutletContext = {
 
 const PIE_COLORS = ["#3b82f6", "#22c55e", "#a855f7", "#9ca3af"];
 
-function lazyRechart(name: keyof typeof import("recharts")) {
+function lazyRechart(
+  name: keyof typeof import("../../components/shared/RechartsDeferred"),
+) {
   return lazy(() =>
-    import("recharts").then((module) => ({
+    import("../../components/shared/RechartsDeferred").then((module) => ({
       default: module[name] as ComponentType<any>,
     })),
   );

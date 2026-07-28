@@ -75,9 +75,11 @@ const PIE_COLORS = [
   "#64748b",
 ];
 
-function lazyRechart(name: keyof typeof import("recharts")) {
+function lazyRechart(
+  name: keyof typeof import("../../components/shared/RechartsDeferred"),
+) {
   return lazy(() =>
-    import("recharts").then((module) => ({
+    import("../../components/shared/RechartsDeferred").then((module) => ({
       default: module[name] as ComponentType<any>,
     })),
   );
