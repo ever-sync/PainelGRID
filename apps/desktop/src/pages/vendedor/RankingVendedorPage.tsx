@@ -296,11 +296,12 @@ export function RankingVendedorPage() {
   }, [clientId]);
 
   useEffect(() => {
-    const token = readStoredSession()?.accessToken;
-    if (!token || !clientId) {
+    const sessionToken = readStoredSession()?.accessToken;
+    if (!sessionToken || !clientId) {
       setData(null);
       return;
     }
+    const token: string = sessionToken;
 
     let active = true;
     const controller = new AbortController();
@@ -372,9 +373,14 @@ export function RankingVendedorPage() {
             },
             teams,
             vendors,
-            hourly: [],
+            cars: {
+              by_segment: [],
+              top_models: [],
+              total_value: "0",
+            },
             daily: [],
-            ticker_messages: [],
+            checkin_by_source: [],
+            generated_at: new Date().toISOString(),
           });
         } else {
           // Ranking por Evento Selecionado

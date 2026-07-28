@@ -207,6 +207,11 @@ export class MailService {
     return `https://calendar.google.com/calendar/render?${query.toString()}`;
   }
 
+  private buildCredenciamentoWhatsAppUrl(): string {
+    const phoneDigits = '5511552970742';
+    return `https://wa.me/${phoneDigits}?text=${encodeURIComponent('Continuar Credenciamento')}`;
+  }
+
   private buildAppointmentWelcomeHtml(p: {
     leadName: string;
     eventName: string;

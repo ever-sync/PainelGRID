@@ -113,9 +113,6 @@ describe('AppointmentsService', () => {
         findUnique: jest.fn(),
         findFirst: jest.fn(),
       },
-      client: {
-        findUnique: jest.fn(),
-      },
       scoreEvent: {
         upsert: jest.fn(),
       },
