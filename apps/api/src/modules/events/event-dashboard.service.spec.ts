@@ -61,6 +61,7 @@ describe('EventDashboardService.getTvDashboard', () => {
       location: 'SP',
       capacity: 500,
       sales_target: 200,
+      scheduled_target: 20,
       status: EventStatus.active,
       participants: [{ client_id: clientA }, { client_id: clientB }],
     });
@@ -192,6 +193,7 @@ describe('EventDashboardService.getTvDashboard', () => {
 
     expect(result.event.id).toBe(eventId);
     expect(result.event.sales_target).toBe(200);
+    expect(result.event.scheduled_target).toBe(20);
     expect(result.event.participant_client_ids).toEqual([clientA, clientB]);
 
     // Funil: 4 leads, 2 agendados não cancelados (lead-1, lead-2),
@@ -210,6 +212,7 @@ describe('EventDashboardService.getTvDashboard', () => {
     expect(ana).toMatchObject({
       vendor_name: 'Ana',
       leads: 1,
+      scheduled: 1,
       confirmed: 1,
       checked_in: 1,
       sold: 1,
@@ -220,6 +223,7 @@ describe('EventDashboardService.getTvDashboard', () => {
     expect(bruno).toMatchObject({
       vendor_name: 'Bruno',
       leads: 2,
+      scheduled: 1,
       confirmed: 1,
       checked_in: 1,
       sold: 1,

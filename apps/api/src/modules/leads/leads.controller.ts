@@ -105,8 +105,12 @@ export class LeadsController {
   @Roles(Role.GESTOR, Role.CLIENTE, Role.VENDEDOR, Role.RECEPCAO)
   @ApiOperation({ summary: 'Consulta dados FIPE do veículo pela placa' })
   @ApiResponse({ status: 200, description: 'Dados retornados com sucesso' })
-  getFipeData(@Param('plate') plate: string) {
-    return this.leadsService.getFipeDataPublic(plate);
+  getFipeData(
+    @Param('plate') plate: string,
+    @Query('event_id') eventId: string | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.leadsService.getFipeDataPublic(plate, user, eventId);
   }
 
   @Get(':id')

@@ -453,16 +453,22 @@ export class AppointmentsService {
     const event = appointment.event;
     if (!lead.email) return;
 
+    const vendorUserId =
+      appointment.created_by_type === AppointmentActorType.user &&
+      appointment.created_by_id
+        ? appointment.created_by_id
+        : lead.assigned_vendor_id;
+
     const [vendor, client] = await Promise.all([
-      lead.assigned_vendor_id
+      vendorUserId
         ? this.prisma.user.findUnique({
-            where: { id: lead.assigned_vendor_id },
+            where: { id: vendorUserId },
             select: { name: true, avatar_url: true },
           })
         : Promise.resolve(null),
       this.prisma.client.findUnique({
         where: { id: event.client_id },
-        select: { logo_url: true, company_name: true },
+        select: { company_name: true },
       }),
     ]);
 
@@ -475,7 +481,6 @@ export class AppointmentsService {
       timezone: appointment.timezone,
       vendorName: vendor?.name ?? null,
       vendorAvatarUrl: vendor?.avatar_url ?? null,
-      clientLogoUrl: client?.logo_url ?? null,
       clientName: client?.company_name ?? event.name,
     });
   }

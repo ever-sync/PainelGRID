@@ -409,6 +409,16 @@ export class EventsService {
   }
 
   async update(user: AuthenticatedUser, id: string, dto: UpdateEventDto) {
+    if (
+      user.role !== Role.GESTOR &&
+      (dto.allow_vendor_checkin !== undefined ||
+        dto.allow_vendor_fipe !== undefined)
+    ) {
+      throw new ForbiddenException(
+        'Apenas o gestor pode alterar permissões dos vendedores.',
+      );
+    }
+
     const existing = await this.prisma.event.findUnique({
       where: { id },
       include: {
@@ -440,8 +450,12 @@ export class EventsService {
       data: {
         client_id: primaryClientId,
         name: dto.name?.trim(),
-        event_type: dto.event_type !== undefined ? dto.event_type.trim() || null : undefined,
-        description: dto.description !== undefined ? dto.description.trim() || null : undefined,
+        event_type:
+          dto.event_type !== undefined ? dto.event_type?.trim() || null : undefined,
+        description:
+          dto.description !== undefined
+            ? dto.description?.trim() || null
+            : undefined,
         launch_date:
           dto.launch_date !== undefined
             ? dto.launch_date
@@ -459,8 +473,9 @@ export class EventsService {
           dto.event_days !== undefined
             ? (dto.event_days as unknown as Prisma.InputJsonValue)
             : undefined,
-        location: dto.location !== undefined ? dto.location.trim() || null : undefined,
-        capacity: dto.capacity ?? undefined,
+        location:
+          dto.location !== undefined ? dto.location?.trim() || null : undefined,
+        capacity: dto.capacity !== undefined ? dto.capacity : undefined,
         sales_target: dto.sales_target !== undefined ? dto.sales_target : undefined,
         scheduled_target: dto.scheduled_target !== undefined ? dto.scheduled_target : undefined,
         require_wristband: dto.require_wristband !== undefined ? dto.require_wristband : undefined,

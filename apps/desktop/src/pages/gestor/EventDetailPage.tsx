@@ -1175,15 +1175,15 @@ export function EventDetailPage() {
         event.id,
         {
           name: formName.trim(),
-          event_type: formEventType.trim() || undefined,
-          description: formDescription.trim() || undefined,
-          launch_date: formLaunchDate || undefined,
+          event_type: formEventType.trim() || null,
+          description: formDescription.trim() || null,
+          launch_date: formLaunchDate || null,
           event_date: new Date(formEventDate).toISOString(),
           event_end_date: formEventEndDate
             ? new Date(formEventEndDate).toISOString()
-            : undefined,
-          location: formLocation.trim() || undefined,
-          capacity: hasCapacity ? capacityNumber : undefined,
+            : null,
+          location: formLocation.trim() || null,
+          capacity: hasCapacity ? capacityNumber : null,
           sales_target: hasSalesTarget ? salesTargetNumber : null,
           scheduled_target: formScheduledTarget.trim()
             ? Number(formScheduledTarget.replace(",", "."))
@@ -1196,10 +1196,6 @@ export function EventDetailPage() {
             : null,
           status: formStatus,
           require_wristband: formRequireWristband,
-          participant_client_ids: [
-            event?.participant_client_ids[0] ?? client?.id ?? "",
-            ...formExtraClientIds,
-          ].filter(Boolean),
         },
         session.accessToken,
       );
@@ -2438,7 +2434,7 @@ export function EventDetailPage() {
               />
               <Input
                 dark={isDarkMode}
-                label="Meta de agendamentos"
+                label="Meta de agendamentos por vendedor"
                 type="number"
                 min="1"
                 placeholder="ex: 50"
@@ -2540,19 +2536,36 @@ export function EventDetailPage() {
               </div>
             </div>
 
+            <div
+              className={clsx(
+                "mt-6 flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between",
+                isDarkMode ? "border-zinc-800" : "border-zinc-100",
+              )}
+            >
+              <div className="min-h-5 text-sm">
+                {settingsError && (
+                  <span className="font-medium text-red-600">
+                    {settingsError}
+                  </span>
+                )}
+                {!settingsError && settingsSuccess && (
+                  <span className="font-medium text-emerald-600">
+                    {settingsSuccess}
+                  </span>
+                )}
+              </div>
+              <Button
+                type="submit"
+                loading={settingsSaving}
+                icon={<Pencil size={16} />}
+                className="w-full sm:w-auto"
+              >
+                Salvar configurações
+              </Button>
+            </div>
           </Card>
 
           <div className="fixed right-6 top-1/2 z-40 flex -translate-y-1/2 flex-col gap-2">
-            <Button
-              type="submit"
-              size="icon"
-              title="Salvar alterações"
-              aria-label="Salvar alterações"
-              loading={settingsSaving}
-              className="rounded-full shadow-lg"
-            >
-              <Pencil size={16} />
-            </Button>
             {eventIsArchived && (
               <Button
                 type="button"

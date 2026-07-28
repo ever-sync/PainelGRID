@@ -361,6 +361,7 @@ export function RankingVendedorPage() {
               location: null,
               capacity: null,
               sales_target: null,
+              scheduled_target: null,
               status: "active",
               participant_client_ids: clientId ? [clientId] : [],
             },

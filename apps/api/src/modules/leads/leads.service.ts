@@ -1563,7 +1563,32 @@ export class LeadsService {
     return { ...this.toResponse(updated), already_existed: true };
   }
 
-  async getFipeDataPublic(plate: string) {
+  async getFipeDataPublic(
+    plate: string,
+    user?: AuthenticatedUser,
+    eventId?: string,
+  ) {
+    if (user?.role === Role.VENDEDOR) {
+      if (!user.client_id || !eventId) {
+        throw new ForbiddenException(
+          'Consulta FIPE não permitida para o vendedor neste evento.',
+        );
+      }
+      const allowedEvent = await this.prisma.event.findFirst({
+        where: {
+          id: eventId,
+          participants: { some: { client_id: user.client_id } },
+          allow_vendor_fipe: true,
+        },
+        select: { id: true },
+      });
+      if (!allowedEvent) {
+        throw new ForbiddenException(
+          'Consulta FIPE não permitida para o vendedor neste evento.',
+        );
+      }
+    }
+
     const normalized = plate.replace(/[^A-Z0-9]/gi, '').toUpperCase();
     if (!normalized || normalized.length < 7) {
       throw new BadRequestException('Informe uma placa válida com pelo menos 7 caracteres. Ex: ABC1D23');
@@ -1622,6 +1647,25 @@ export class LeadsService {
 
     if (!lead) {
       throw new NotFoundException('Convite invalido ou lead nao pertence a esta empresa');
+    }
+
+    if (user.role === Role.VENDEDOR) {
+      const eventId = lead.event_interest_id ?? lead.appointments[0]?.event_id ?? null;
+      const allowedEvent = eventId
+        ? await this.prisma.event.findFirst({
+            where: {
+              id: eventId,
+              participants: { some: { client_id: user.client_id } },
+              allow_vendor_checkin: true,
+            },
+            select: { id: true },
+          })
+        : null;
+      if (!allowedEvent) {
+        throw new ForbiddenException(
+          'Check-in não permitido para o vendedor neste evento.',
+        );
+      }
     }
 
     let pipelineId = lead.crm_pipeline_id;

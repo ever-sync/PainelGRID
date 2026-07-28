@@ -2007,7 +2007,7 @@ export function EventosPage() {
                     isDarkMode ? "text-zinc-300" : "text-gray-700",
                   )}
                 >
-                  Meta de agendamentos do evento (qtd.)
+                  Meta de agendamentos por vendedor (qtd.)
                 </label>
                 <input
                   type="number"

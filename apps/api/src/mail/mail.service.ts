@@ -14,6 +14,7 @@ export class MailService {
   private readonly from: string;
   private readonly frontendUrl: string;
   private readonly apiPublicUrl: string;
+  private readonly platformLogoUrl: string;
 
   constructor(config: ConfigService) {
     this.apiKey =
@@ -24,6 +25,9 @@ export class MailService {
       .get<string>("FRONTEND_URL", "http://localhost:8080")
       .split(",")[0]
       .trim();
+    this.platformLogoUrl =
+      config.get<string>("PLATFORM_LOGO_URL", "").trim() ||
+      `${this.frontendUrl.replace(/\/+$/, "")}/logo.png`;
     const railwayDomain = config.get<string>("RAILWAY_PUBLIC_DOMAIN", "");
     this.apiPublicUrl = (
       config.get<string>("API_PUBLIC_URL", "") ||
@@ -186,7 +190,6 @@ export class MailService {
     timezone: string;
     vendorName: string | null;
     vendorAvatarUrl: string | null;
-    clientLogoUrl: string | null;
     clientName: string;
   }): Promise<void> {
     if (!this.apiKey) {
@@ -250,7 +253,6 @@ export class MailService {
     timezone: string;
     vendorName: string | null;
     vendorAvatarUrl: string | null;
-    clientLogoUrl: string | null;
     clientName: string;
   }): string {
     const firstName = p.leadName.split(" ")[0];
@@ -279,13 +281,10 @@ export class MailService {
     });
 
     const whatsappUrl = this.buildCredenciamentoWhatsAppUrl();
-    const logoUrl = this.toAbsoluteMediaUrl(p.clientLogoUrl);
     const vendorAvatarUrl = this.toAbsoluteMediaUrl(p.vendorAvatarUrl);
     const vendorInitials = (vendorFirstName ?? "?").slice(0, 2).toUpperCase();
 
-    const logoBlock = logoUrl
-      ? `<img src="${logoUrl}" alt="${p.clientName}" style="max-height:40px;max-width:180px;object-fit:contain;" />`
-      : `<span style="color:#fff;font-size:20px;font-weight:800;">${p.clientName}</span>`;
+    const logoBlock = `<img src="${this.platformLogoUrl}" alt="PainelGRID" width="64" height="64" style="width:64px;height:64px;border-radius:14px;object-fit:cover;display:inline-block;" />`;
 
     const vendorAvatarBlock = vendorAvatarUrl
       ? `<img src="${vendorAvatarUrl}" alt="${p.vendorName}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;display:block;" />`

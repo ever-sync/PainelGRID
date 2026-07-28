@@ -8,6 +8,7 @@ import {
   Star,
   Sparkles,
   Flame,
+  CalendarCheck2,
 } from "lucide-react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import clsx from "clsx";
@@ -138,6 +139,20 @@ export function DashboardVendedorPage() {
   const activeEventName = eventRanking?.event.name ?? null;
   const activeEventSalesTarget = eventRanking?.event.sales_target ?? null;
   const activeEventSalesCount = eventRanking?.funnel.sold ?? 0;
+  const activeEventScheduledTarget =
+    eventRanking?.event.scheduled_target ?? null;
+  const myEventVendor =
+    eventRanking?.vendors.find((vendor) => vendor.vendor_id === vendorId) ??
+    null;
+  const myEventScheduledCount = myEventVendor?.scheduled ?? 0;
+  const appointmentMetaPct = activeEventScheduledTarget
+    ? Math.min(
+        Math.round(
+          (myEventScheduledCount / activeEventScheduledTarget) * 100,
+        ),
+        100,
+      )
+    : 0;
   const eventMetaPct = activeEventSalesTarget
     ? Math.min(
         Math.round((activeEventSalesCount / activeEventSalesTarget) * 100),
@@ -255,6 +270,60 @@ export function DashboardVendedorPage() {
           subtitle="por pontuação"
         />
       </div>
+
+      <Card className="p-5 md:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
+              <CalendarCheck2 size={21} />
+            </span>
+            <div>
+              <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">
+                Sua Meta de Agendamentos
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-zinc-400">
+                {activeEventName
+                  ? activeEventScheduledTarget
+                    ? `${myEventScheduledCount} de ${activeEventScheduledTarget} agendamentos realizados no ${activeEventName}`
+                    : `Meta individual não definida para ${activeEventName}`
+                  : "Nenhum evento ativo no momento"}
+              </p>
+            </div>
+          </div>
+
+          {activeEventScheduledTarget ? (
+            <div className="flex items-center justify-between gap-4 sm:justify-end">
+              <div className="text-right">
+                <p className="text-2xl font-black tabular-nums text-gray-900 dark:text-zinc-100">
+                  {myEventScheduledCount}
+                  <span className="text-sm font-semibold text-gray-400">
+                    {" "}
+                    / {activeEventScheduledTarget}
+                  </span>
+                </p>
+                <p className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                  Faltam{" "}
+                  {Math.max(
+                    0,
+                    activeEventScheduledTarget - myEventScheduledCount,
+                  )}{" "}
+                  agendamentos
+                </p>
+              </div>
+              <span className="inline-flex min-w-14 items-center justify-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300">
+                {appointmentMetaPct}%
+              </span>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="mt-4 h-3 overflow-hidden rounded-full border border-gray-200 bg-gray-100 p-0.5 dark:border-zinc-700 dark:bg-zinc-800">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-400 transition-all duration-500"
+            style={{ width: `${appointmentMetaPct}%` }}
+          />
+        </div>
+      </Card>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Meta progress - 2 Cols */}

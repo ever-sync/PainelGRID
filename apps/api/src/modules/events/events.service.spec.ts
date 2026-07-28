@@ -331,6 +331,41 @@ describe('EventsService', () => {
       expect(result.checkin_count).toBe(1);
     });
 
+    it('persiste a limpeza dos campos opcionais do formulario', async () => {
+      clientsService.assertGestorOwnsClient.mockResolvedValue({ id: clientId });
+      prisma.event.findUnique.mockResolvedValue({
+        ...baseRow,
+        event_type: 'Feirao',
+        description: 'Descricao anterior',
+        launch_date: new Date('2026-07-01'),
+        event_end_date: new Date('2026-07-03'),
+        location: 'Local anterior',
+        capacity: 100,
+      });
+
+      await service.update(gestorUser, 'evt-1', {
+        event_type: null,
+        description: null,
+        launch_date: null,
+        event_end_date: null,
+        location: null,
+        capacity: null,
+      });
+
+      expect(prisma.event.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            event_type: null,
+            description: null,
+            launch_date: null,
+            event_end_date: null,
+            location: null,
+            capacity: null,
+          }),
+        }),
+      );
+    });
+
     it('valida ownership pelo client_id do evento existente, nao do DTO', async () => {
       prisma.event.findUnique.mockResolvedValue({ ...baseRow, client_id: 'cliente-alheio' });
       clientsService.assertGestorOwnsClient.mockRejectedValue(new ForbiddenException());
@@ -349,6 +384,25 @@ describe('EventsService', () => {
       await expect(service.update(gestorUser, 'nope', {} as never)).rejects.toBeInstanceOf(
         NotFoundException,
       );
+    });
+
+    it('bloqueia cliente tentando alterar permissões dos vendedores', async () => {
+      await expect(
+        service.update(
+          {
+            sub: 'cliente-user',
+            role: Role.CLIENTE,
+            email: 'c@x',
+            name: 'C',
+            client_id: clientId,
+          } as never,
+          'evt-1',
+          { allow_vendor_checkin: false } as never,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(prisma.event.findUnique).not.toHaveBeenCalled();
+      expect(prisma.event.update).not.toHaveBeenCalled();
     });
   });
 

@@ -68,6 +68,7 @@ describe("AppointmentsService", () => {
   let prisma: any;
   let service: AppointmentsService;
   let configService: ConfigService;
+  let mail: { sendAppointmentWelcome: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -129,6 +130,7 @@ describe("AppointmentsService", () => {
         return undefined;
       }),
     } as any as ConfigService;
+    mail = { sendAppointmentWelcome: jest.fn() };
 
     service = new AppointmentsService(
       prisma,
@@ -138,7 +140,7 @@ describe("AppointmentsService", () => {
       } as any,
       { dispatch: jest.fn() } as any,
       { emitLeadUpdated: jest.fn() } as any,
-      { sendAppointmentWelcome: jest.fn() } as any,
+      mail as any,
     );
     prisma.eventParticipant.findMany.mockResolvedValue([
       { client_id: clientId },
@@ -237,6 +239,45 @@ describe("AppointmentsService", () => {
         where: expect.objectContaining({
           code: "2222222222224222_PRE_AGENDAMENTO",
         }),
+      }),
+    );
+  });
+
+  it("usa nome e foto do vendedor que criou o agendamento no email do lead", async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      name: "Vendedor Responsavel",
+      avatar_url: "/auth/avatar/user-vendor-1?v=123",
+    });
+    prisma.client.findUnique.mockResolvedValue({
+      company_name: "Concessionaria Teste",
+    });
+
+    await (service as any).sendAppointmentWelcomeEmail({
+      ...baseAppointment,
+      created_by_type: AppointmentActorType.user,
+      created_by_id: "user-vendor-1",
+      lead: {
+        ...baseAppointment.lead,
+        name: "Cliente Teste",
+        email: "cliente@example.com",
+        assigned_vendor_id: "outro-vendedor",
+      },
+      event: {
+        ...event,
+        name: "Evento Teste",
+        location: "Sao Paulo",
+      },
+    });
+
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({
+      where: { id: "user-vendor-1" },
+      select: { name: true, avatar_url: true },
+    });
+    expect(mail.sendAppointmentWelcome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "cliente@example.com",
+        vendorName: "Vendedor Responsavel",
+        vendorAvatarUrl: "/auth/avatar/user-vendor-1?v=123",
       }),
     );
   });

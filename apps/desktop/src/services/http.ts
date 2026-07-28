@@ -63,6 +63,7 @@ type RequestOptions = {
   token?: string | null;
   body?: unknown;
   signal?: AbortSignal;
+  cache?: RequestCache;
   suppressAuthRedirect?: boolean;
   /** Interno: evita loop após uma tentativa de refresh + retry. */
   _retryAfterRefresh?: boolean;
@@ -228,6 +229,7 @@ export async function httpRequest<T>(
       },
       body: options.body ? JSON.stringify(options.body) : undefined,
       signal: options.signal,
+      cache: options.cache,
     });
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {

@@ -35,16 +35,16 @@ export class UpdateEventDto {
   @IsOptional()
   @IsString()
   @MaxLength(100)
-  event_type?: string;
+  event_type?: string | null;
 
   @IsOptional()
   @IsString()
   @MaxLength(5000)
-  description?: string;
+  description?: string | null;
 
   @IsOptional()
   @IsDateString()
-  launch_date?: string;
+  launch_date?: string | null;
 
   @IsOptional()
   @IsDateString()
@@ -52,17 +52,17 @@ export class UpdateEventDto {
 
   @IsOptional()
   @IsDateString()
-  event_end_date?: string;
+  event_end_date?: string | null;
 
   @IsOptional()
   @IsString()
   @MaxLength(500)
-  location?: string;
+  location?: string | null;
 
   @IsOptional()
   @IsInt()
   @Min(1)
-  capacity?: number;
+  capacity?: number | null;
 
   @IsOptional()
   @IsInt()

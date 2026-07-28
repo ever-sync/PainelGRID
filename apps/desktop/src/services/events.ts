@@ -44,6 +44,7 @@ export function listEvents(
   return httpRequest<ApiEvent[]>(`/events?${qs.toString()}`, {
     method: "GET",
     token,
+    cache: "no-store",
   });
 }
 
@@ -87,6 +88,12 @@ export type UpdateEventPayload = Partial<
   Omit<
     CreateEventPayload,
     | "client_id"
+    | "event_type"
+    | "description"
+    | "launch_date"
+    | "event_end_date"
+    | "location"
+    | "capacity"
     | "sales_target"
     | "scheduled_target"
     | "total_investment"
@@ -94,6 +101,12 @@ export type UpdateEventPayload = Partial<
   >
 > & {
   client_id?: string;
+  event_type?: string | null;
+  description?: string | null;
+  launch_date?: string | null;
+  event_end_date?: string | null;
+  location?: string | null;
+  capacity?: number | null;
   sales_target?: number | null;
   scheduled_target?: number | null;
   total_investment?: number | null;
@@ -130,6 +143,7 @@ export type EventDashboardTvResponse = {
     location: string | null;
     capacity: number | null;
     sales_target: number | null;
+    scheduled_target: number | null;
     status: EventStatus;
     participant_client_ids: string[];
   };

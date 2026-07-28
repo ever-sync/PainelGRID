@@ -401,6 +401,13 @@ export function ConfiguracaoPage() {
       setEventSettingsEvents((current) =>
         current.map((event) => (event.id === updated.id ? updated : event)),
       );
+      window.localStorage.setItem(
+        "painelgrid:event-permissions-updated",
+        JSON.stringify({
+          eventId: updated.id,
+          updatedAt: Date.now(),
+        }),
+      );
       setEventSettingsMessage(
         "Permissões dos vendedores atualizadas com sucesso.",
       );

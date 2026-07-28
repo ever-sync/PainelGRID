@@ -12,7 +12,6 @@ import {
   DollarSign,
   CarFront,
   CalendarPlus,
-  ShoppingCart,
   X,
   ArrowLeft,
   Menu,
@@ -55,18 +54,13 @@ interface NavItem {
   label: string;
 }
 
-type MobileQuickAction = "appointment" | "sale" | "checkin" | "fipe";
+type MobileQuickAction = "appointment" | "checkin" | "fipe";
 
 const quickActionSteps: Record<MobileQuickAction, string[]> = {
   appointment: [
     "Escolha o lead que será agendado.",
     "Selecione o evento e a data/hora da visita.",
     "Confirme para somar 1 ponto em Agendou.",
-  ],
-  sale: [
-    "Escolha o lead com agendamento ativo.",
-    "Informe tipo, produto e valor da venda.",
-    "Confirme para somar Compareceu + Vendeu quando não houver check-in.",
   ],
   checkin: [
     "Escolha um cliente cadastrado ou crie um novo.",
@@ -251,43 +245,59 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     if (!token) return;
 
     let cancelled = false;
-    void listEvents({}, token)
-      .then((events) => {
-        if (cancelled) return;
-        const activeEvents = events.filter(
-          (event) => event.status === "active",
-        );
-        const nextDraftEvent = events.find(
-          (event) => event.status === "draft",
-        );
-        const permissionEvents =
-          activeEvents.length > 0
-            ? activeEvents
-            : nextDraftEvent
-              ? [nextDraftEvent]
-              : [];
+    const loadPermissions = () => {
+      void listEvents({}, token)
+        .then((events) => {
+          if (cancelled) return;
+          const sortedEvents = [...events].sort(
+            (a, b) =>
+              new Date(b.event_date).getTime() -
+              new Date(a.event_date).getTime(),
+          );
+          const selectedEvent =
+            sortedEvents.find((event) => event.status === "active") ??
+            sortedEvents[0] ??
+            null;
+          const permissionEvents = selectedEvent ? [selectedEvent] : [];
 
-        setVendorQuickActionPermissions({
-          checkin:
-            permissionEvents.length > 0 &&
-            permissionEvents.some(
-              (event) => event.allow_vendor_checkin ?? true,
-            ),
-          fipe:
-            permissionEvents.length > 0 &&
-            permissionEvents.some((event) => event.allow_vendor_fipe ?? true),
-          fipeEventId:
-            permissionEvents.find(
-              (event) => event.allow_vendor_fipe ?? true,
-            )?.id ?? null,
+          setVendorQuickActionPermissions({
+            checkin:
+              permissionEvents.length > 0 &&
+              permissionEvents.some(
+                (event) => event.allow_vendor_checkin ?? true,
+              ),
+            fipe:
+              permissionEvents.length > 0 &&
+              permissionEvents.some(
+                (event) => event.allow_vendor_fipe ?? true,
+              ),
+            fipeEventId:
+              permissionEvents.find(
+                (event) => event.allow_vendor_fipe ?? true,
+              )?.id ?? null,
+          });
+        })
+        .catch(() => {
+          // Mantém o comportamento anterior se a consulta de permissões falhar.
         });
-      })
-      .catch(() => {
-        // Mantém o comportamento anterior se a consulta de permissões falhar.
-      });
+    };
+
+    const handlePermissionStorage = (event: StorageEvent) => {
+      if (event.key === "painelgrid:event-permissions-updated") {
+        loadPermissions();
+      }
+    };
+
+    loadPermissions();
+    window.addEventListener("storage", handlePermissionStorage);
+    const refreshInterval = quickActionOpen
+      ? window.setInterval(loadPermissions, 1500)
+      : null;
 
     return () => {
       cancelled = true;
+      window.removeEventListener("storage", handlePermissionStorage);
+      if (refreshInterval) window.clearInterval(refreshInterval);
     };
   }, [user.role, quickActionOpen]);
 
@@ -426,11 +436,6 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       );
       return;
     }
-    if (quickAction === "sale") {
-      closeQuickAction();
-      navigate("/vendedor/leads?acao=sale");
-      return;
-    }
     const params = quickAction ? `?acao=${quickAction}` : "";
     closeQuickAction();
     navigate(`/vendedor/leads${params}`);
@@ -447,11 +452,6 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     if (action === "appointment") {
       closeQuickAction();
       navigate("/vendedor/leads?acao=appointment");
-      return;
-    }
-    if (action === "sale") {
-      closeQuickAction();
-      navigate("/vendedor/leads?acao=sale");
       return;
     }
     setQuickAction(action);
@@ -828,9 +828,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                 <h2 className="text-lg font-bold text-zinc-950">
                   {quickAction === "appointment"
                     ? "Criar agendamento"
-                    : quickAction === "sale"
-                      ? "Criar venda"
-                      : quickAction === "checkin"
+                    : quickAction === "checkin"
                         ? "Fazer check-in"
                         : quickAction === "fipe"
                           ? "Consultar Placa (FIPE)"
@@ -863,24 +861,6 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                     </span>
                     <span className="block text-xs leading-relaxed text-zinc-500">
                       Agende visita para um lead e marque o ponto de agendou.
-                    </span>
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => runQuickAction("sale")}
-                  className="flex items-center gap-3 rounded-2xl border border-zinc-100 bg-zinc-50 p-4 text-left transition-colors active:bg-zinc-100"
-                >
-                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
-                    <ShoppingCart size={22} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-bold text-zinc-950">
-                      Criar venda
-                    </span>
-                    <span className="block text-xs leading-relaxed text-zinc-500">
-                      Registre uma venda e some os pontos correspondentes.
                     </span>
                   </span>
                 </button>

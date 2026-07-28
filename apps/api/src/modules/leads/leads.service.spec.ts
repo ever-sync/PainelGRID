@@ -719,4 +719,46 @@ describe('LeadsService', () => {
 
     expect(prisma.lead.findFirst).not.toHaveBeenCalled();
   });
+
+  it('bloqueia check-in do vendedor quando o evento não permite', async () => {
+    prisma.lead.findFirst.mockResolvedValueOnce({
+      ...baseExistingLead,
+      event_interest_id: eventId,
+      checkin_token: 'convite-evento',
+    });
+    prisma.event.findFirst.mockResolvedValueOnce(null);
+
+    await expect(
+      service.checkInByToken(
+        {
+          sub: vendorId,
+          role: Role.VENDEDOR,
+          name: 'V',
+          email: 'v@x',
+          client_id: clientId,
+        } as never,
+        'convite-evento',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(prisma.lead.update).not.toHaveBeenCalled();
+  });
+
+  it('bloqueia consulta FIPE do vendedor quando o evento não permite', async () => {
+    prisma.event.findFirst.mockResolvedValueOnce(null);
+
+    await expect(
+      service.getFipeDataPublic(
+        'ABC1D23',
+        {
+          sub: vendorId,
+          role: Role.VENDEDOR,
+          name: 'V',
+          email: 'v@x',
+          client_id: clientId,
+        } as never,
+        eventId,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
 });
