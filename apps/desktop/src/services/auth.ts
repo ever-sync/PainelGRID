@@ -188,6 +188,8 @@ export async function changePassword(
   });
 }
 
+const AVATAR_UPLOAD_TIMEOUT_MS = 45_000;
+
 export async function uploadAvatar(
   file: File,
   accessToken: string,
@@ -198,13 +200,32 @@ export async function uploadAvatar(
   const form = new FormData();
   form.append("file", file);
 
-  const response = await fetch(`${API_BASE}/auth/me/avatar`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: form,
-  });
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(
+    () => controller.abort(),
+    AVATAR_UPLOAD_TIMEOUT_MS,
+  );
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/auth/me/avatar`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: form,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(
+        "O envio demorou demais e foi cancelado. Tente novamente.",
+      );
+    }
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeout);
+  }
 
   const raw = await response.text();
   let parsed: unknown = null;

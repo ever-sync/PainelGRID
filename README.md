@@ -67,8 +67,15 @@ npm run dev
 - `npm run test`: roda testes unitarios da API
 - `npm run test:integration`: roda testes de integracao da API
 - `npm run test:e2e:ui`: roda Playwright para o frontend
+- `npm run analyze:bundle --workspace=apps/desktop`: mede o peso inicial e por rota
+- `npm run check:performance --workspace=apps/desktop`: valida o build contra o orçamento de performance
 - `npm run docker:up`: sobe PostgreSQL e Redis
 - `npm run docker:down`: derruba os containers
+
+O frontend mede LCP, CLS, INP, FCP e TTFB após o carregamento crítico. Para
+encaminhar essas métricas a uma plataforma de observabilidade, defina
+`VITE_PERFORMANCE_ENDPOINT` durante o build. Em desenvolvimento, os valores
+também ficam disponíveis em `window.__GRID_WEB_VITALS__`.
 
 ## Documentacao
 

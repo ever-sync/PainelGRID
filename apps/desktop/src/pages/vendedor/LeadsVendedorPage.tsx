@@ -259,23 +259,34 @@ export function LeadsVendedorPage() {
   const isLeadNew = useCallback((l: Lead) => {
     const stage = (l.crm_stage || "").toLowerCase();
     const status = (l.confirmation_status || "").toLowerCase();
+    const apptStatus = (l.active_appointment?.status || "").toLowerCase();
     return (
       stage === "novo" ||
       stage === "new" ||
       stage === "contactado" ||
       stage === "nao_responde" ||
-      (!stage && status === "pending")
+      status === "pending" ||
+      apptStatus === "pending" ||
+      (!stage && !status)
     );
   }, []);
 
   const isLeadScheduled = useCallback((l: Lead) => {
     const stage = (l.crm_stage || "").toLowerCase();
     const status = (l.confirmation_status || "").toLowerCase();
+    const apptStatus = (l.active_appointment?.status || "").toLowerCase();
+
+    // Pre-agendamento pendente NAO e considerado agendado confirmado!
+    if (status === "pending" || apptStatus === "pending") {
+      return false;
+    }
+
     return (
       stage === "agendado" ||
       stage === "scheduled" ||
       status === "scheduled" ||
-      Boolean(l.active_appointment)
+      apptStatus === "scheduled" ||
+      apptStatus === "confirmed"
     );
   }, []);
 

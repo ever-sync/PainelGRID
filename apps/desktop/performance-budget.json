@@ -1,0 +1,7 @@
+{
+  "initialJsGzipBytes": 87040,
+  "initialRequestCount": 8,
+  "maxRouteJsGzipBytes": 174080,
+  "maxRouteRequestCount": 32,
+  "maxAsyncChunkGzipBytes": 117760
+}

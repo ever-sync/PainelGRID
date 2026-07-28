@@ -678,6 +678,9 @@ export class AppointmentsService {
   }
 
   private async awardScheduledIfVendor(tx: TransactionClient, appointment: AppointmentRecord) {
+    if (appointment.status !== AppointmentStatus.scheduled && appointment.status !== AppointmentStatus.confirmed) {
+      return;
+    }
     if (appointment.created_by_type !== AppointmentActorType.user || !appointment.created_by_id) {
       return;
     }

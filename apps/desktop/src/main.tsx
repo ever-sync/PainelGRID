@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { startPerformanceMonitoring } from "./performanceMonitoring";
 import { API_BASE, getBackendOrigin } from "./services/http";
 import { isNativePlatform } from "./utils/platform";
 
@@ -39,6 +40,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <App />
   </React.StrictMode>,
 );
+
+startPerformanceMonitoring();
 
 const DEV_SW_CLEANUP_KEY = "gpv-dev-sw-cleanup-reload";
 
