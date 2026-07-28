@@ -146,7 +146,9 @@ function formatCpfInput(value: string): string {
 
 function isLeadClosedAfterSale(lead: Lead) {
   return (
-    lead.active_appointment?.sale_id != null || lead.crm_stage === "convertido"
+    lead.confirmation_status === "closed" ||
+    lead.active_appointment?.sale_id != null ||
+    lead.crm_stage === "convertido"
   );
 }
 
@@ -1029,12 +1031,12 @@ export function LeadsVendedorPage() {
 
   const handleSaveCloseAttendance = async () => {
     if (!closeAttendanceModal) return;
-    if (isWristbandRequired && !closeWristbandNumber.trim()) {
-      setActionError("Número da pulseira é obrigatório para este evento.");
+    if (!closeWristbandNumber.trim()) {
+      setActionError("Número da pulseira é obrigatório.");
       return;
     }
-    if (!closeCpf.trim() || !closePhone.trim()) {
-      setActionError("CPF e Telefone são obrigatórios.");
+    if (!closeCpf.trim()) {
+      setActionError("CPF do cliente é obrigatório.");
       return;
     }
     const t = readStoredSession()?.accessToken;
@@ -1047,7 +1049,6 @@ export function LeadsVendedorPage() {
         {
           wristband_number: closeWristbandNumber.trim(),
           cpf: closeCpf.trim(),
-          phone: closePhone.trim(),
         },
         t,
       );
@@ -1419,8 +1420,9 @@ export function LeadsVendedorPage() {
                 <button
                   type="button"
                   onClick={() => openLeadChat(lead)}
-                  className="flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900 transition-all active:scale-95"
-                  title="WhatsApp"
+                  disabled={lead.confirmation_status === "closed"}
+                  className="flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900 disabled:opacity-30 transition-all active:scale-95"
+                  title={lead.confirmation_status === "closed" ? "Atendimento encerrado" : "WhatsApp"}
                 >
                   <MessageCircle size={15} />
                   <span className="mt-0.5">Whats</span>
@@ -1551,8 +1553,9 @@ export function LeadsVendedorPage() {
                       <button
                         type="button"
                         onClick={() => openLeadChat(lead)}
-                        className="rounded-lg p-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
-                        title="Abrir WhatsApp"
+                        disabled={lead.confirmation_status === "closed"}
+                        className="rounded-lg p-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors disabled:opacity-30"
+                        title={lead.confirmation_status === "closed" ? "Atendimento encerrado" : "Abrir WhatsApp"}
                       >
                         <MessageCircle size={16} />
                       </button>
@@ -2201,9 +2204,8 @@ export function LeadsVendedorPage() {
               onClick={() => void handleSaveCloseAttendance()}
               loading={saving}
               isDisabled={
-                (isWristbandRequired && !closeWristbandNumber.trim()) ||
-                !closeCpf.trim() ||
-                !closePhone.trim()
+                !closeWristbandNumber.trim() ||
+                !closeCpf.trim()
               }
             >
               Confirmar Encerramento
@@ -2222,28 +2224,17 @@ export function LeadsVendedorPage() {
             obrigatórios abaixo:
           </p>
           <Input
-            label={
-              isWristbandRequired
-                ? "Número da Pulseira *"
-                : "Número da Pulseira (Opcional)"
-            }
+            label="Número da Pulseira *"
             value={closeWristbandNumber}
             onChange={(e) => setCloseWristbandNumber(e.target.value)}
             placeholder="Ex: 1042"
-            required={isWristbandRequired}
+            required
           />
           <Input
             label="CPF *"
             value={closeCpf}
-            onChange={(e) => setCloseCpf(e.target.value)}
+            onChange={(e) => setCloseCpf(formatCpfInput(e.target.value))}
             placeholder="000.000.000-00"
-            required
-          />
-          <Input
-            label="Telefone *"
-            value={closePhone}
-            onChange={(e) => setClosePhone(e.target.value)}
-            placeholder="(11) 99999-9999"
             required
           />
         </div>

@@ -174,6 +174,7 @@ export function EventosPage() {
   const [formRequireWristband, setFormRequireWristband] = useState(false);
   const [formTotalInvestment, setFormTotalInvestment] = useState("");
   const [formPaidTraffic, setFormPaidTraffic] = useState("");
+  const [formSalesTarget, setFormSalesTarget] = useState("");
   const [formDays, setFormDays] = useState<
     Array<{ start: string; end: string }>
   >([{ start: "", end: "" }]);
@@ -432,6 +433,7 @@ export function EventosPage() {
         ? String(ev.paid_traffic_investment)
         : "",
     );
+    setFormSalesTarget(ev?.sales_target != null ? String(ev.sales_target) : "");
     let daysToSet: Array<{ start: string; end: string }> = [
       { start: "", end: "" },
     ];
@@ -682,6 +684,9 @@ export function EventosPage() {
         : undefined,
       paid_traffic_investment: formPaidTraffic.trim()
         ? Number(formPaidTraffic.replace(",", "."))
+        : undefined,
+      sales_target: formSalesTarget.trim()
+        ? Number(formSalesTarget.replace(",", "."))
         : undefined,
     };
 
@@ -1956,6 +1961,30 @@ export function EventosPage() {
                   value={formPaidTraffic}
                   onChange={(e) => setFormPaidTraffic(e.target.value)}
                   placeholder="Ex: 17800"
+                  className={clsx(
+                    "w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400",
+                    isDarkMode
+                      ? "border-zinc-700 bg-[#111111] text-zinc-100"
+                      : "border-gray-300 bg-white",
+                  )}
+                />
+              </div>
+              <div>
+                <label
+                  className={clsx(
+                    "mb-1 block text-sm font-medium",
+                    isDarkMode ? "text-zinc-300" : "text-gray-700",
+                  )}
+                >
+                  Meta de vendas do evento (qtd.)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="1"
+                  value={formSalesTarget}
+                  onChange={(e) => setFormSalesTarget(e.target.value)}
+                  placeholder="Ex: 15"
                   className={clsx(
                     "w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400",
                     isDarkMode

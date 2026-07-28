@@ -981,8 +981,8 @@ export class LeadsService {
     const cpf = dto?.cpf?.trim();
     const phone = dto?.phone?.trim();
 
-    if (!cpf || !phone) {
-      throw new BadRequestException('CPF e Telefone são obrigatórios.');
+    if (!cpf) {
+      throw new BadRequestException('CPF é obrigatório.');
     }
 
     const where: Prisma.LeadWhereInput = {

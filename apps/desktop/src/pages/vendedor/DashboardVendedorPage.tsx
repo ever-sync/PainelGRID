@@ -8,8 +8,6 @@ import {
   Star,
   Sparkles,
   Flame,
-  CheckCircle2,
-  Clock,
 } from "lucide-react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import clsx from "clsx";
@@ -38,7 +36,6 @@ import {
   readDashboardDarkEnabled,
 } from "../../lib/dashboard-dark-mode";
 
-const META_CONVERSOES = 15;
 type OutletContext = {
   user: User;
 };
@@ -139,10 +136,15 @@ export function DashboardVendedorPage() {
 
   const convRate =
     myLeads.length > 0 ? Math.round((salesCount / myLeads.length) * 100) : 0;
-  const metaPct = Math.min(
-    Math.round((salesCount / META_CONVERSOES) * 100),
-    100,
-  );
+  const activeEventName = eventRanking?.event.name ?? null;
+  const activeEventSalesTarget = eventRanking?.event.sales_target ?? null;
+  const activeEventSalesCount = eventRanking?.funnel.sold ?? 0;
+  const eventMetaPct = activeEventSalesTarget
+    ? Math.min(
+        Math.round((activeEventSalesCount / activeEventSalesTarget) * 100),
+        100,
+      )
+    : 0;
   const leadsThisWeek = (() => {
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     return myLeads.filter((l) => new Date(l.created_at).getTime() >= weekAgo)
@@ -170,26 +172,61 @@ export function DashboardVendedorPage() {
       >
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-[#FF0636]/10 text-[#FF0636] border border-[#FF0636]/20">
-              <Sparkles size={13} />
-              <span>Painel Comercial Ativo</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-[#FF0636]/10 text-[#FF0636] border border-[#FF0636]/20">
+                <Sparkles size={13} />
+                <span>Painel Comercial Ativo</span>
+              </div>
+              {activeEventName ? (
+                <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  <Flame size={13} />
+                  <span>{activeEventName}</span>
+                </div>
+              ) : null}
             </div>
             <h2 className="text-xl md:text-2xl font-black tracking-tight">
               Acelere suas conversões hoje, {firstName}! 🚀
             </h2>
             <p className="text-xs md:text-sm text-zinc-500 dark:text-zinc-400">
-              Você já atendeu <strong className="text-zinc-900 dark:text-zinc-100">{myLeads.length} leads</strong> com taxa de conversão de <strong className="text-emerald-600 dark:text-emerald-400">{convRate}%</strong>.
+              Você já atendeu{" "}
+              <strong className="text-zinc-900 dark:text-zinc-100">
+                {myLeads.length} leads
+              </strong>{" "}
+              com taxa de conversão de{" "}
+              <strong className="text-emerald-600 dark:text-emerald-400">
+                {convRate}%
+              </strong>
+              .
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => navigate("/vendedor/leads")}
-            className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-xs font-bold text-white bg-[#FF0636] hover:bg-[#e0052e] shadow-lg shadow-[#FF0636]/25 transition-all hover:scale-105 shrink-0"
-          >
-            <span>Ver Meus Leads</span>
-            <ArrowRight size={14} />
-          </button>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {eventRanking?.event.id ? (
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(`/eventos/${eventRanking.event.id}/tv-fila`)
+                }
+                className={clsx(
+                  "inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-xs font-bold transition-all hover:scale-105",
+                  isDarkMode
+                    ? "bg-white/10 text-white hover:bg-white/20 border border-white/20"
+                    : "bg-white text-zinc-900 hover:bg-zinc-50 border border-zinc-200 shadow-sm",
+                )}
+              >
+                <Users size={14} />
+                <span>Fila de Atendimento</span>
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => navigate("/vendedor/leads")}
+              className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-xs font-bold text-white bg-[#FF0636] hover:bg-[#e0052e] shadow-lg shadow-[#FF0636]/25 transition-all hover:scale-105 shrink-0"
+            >
+              <span>Ver Meus Leads</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -233,22 +270,30 @@ export function DashboardVendedorPage() {
             <div>
               <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100 flex items-center gap-2">
                 <Flame size={18} className="text-[#FF0636]" />
-                <span>Meta de Vendas do Mês</span>
+                <span>Meta de Vendas do Evento</span>
               </h3>
               <p className="text-xs text-gray-500 dark:text-zinc-400">
-                {salesCount} de {META_CONVERSOES} vendas realizadas ({metaPct}%)
+                {activeEventName
+                  ? activeEventSalesTarget
+                    ? `${activeEventSalesCount} de ${activeEventSalesTarget} vendas realizadas (${eventMetaPct}%) — ${activeEventName}`
+                    : `Meta não definida para ${activeEventName}`
+                  : "Nenhum evento ativo no momento"}
               </p>
             </div>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-black bg-[#FF0636]/10 text-[#FF0636] border border-[#FF0636]/20">
-              Faltam {Math.max(0, META_CONVERSOES - salesCount)} vendas
-            </span>
+            {activeEventSalesTarget ? (
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-black bg-[#FF0636]/10 text-[#FF0636] border border-[#FF0636]/20">
+                Faltam{" "}
+                {Math.max(0, activeEventSalesTarget - activeEventSalesCount)}{" "}
+                vendas
+              </span>
+            ) : null}
           </div>
 
           <div className="relative pt-1">
             <div className="h-4 overflow-hidden rounded-full bg-gray-100 dark:bg-zinc-800 p-0.5 border border-gray-200 dark:border-zinc-700">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-[#FF0636] via-rose-500 to-amber-500 shadow-md transition-all duration-500"
-                style={{ width: `${metaPct}%` }}
+                style={{ width: `${eventMetaPct}%` }}
               />
             </div>
           </div>
@@ -317,8 +362,7 @@ export function DashboardVendedorPage() {
 
       {/* Ranking do evento */}
       {eventRanking &&
-        (eventRanking.teams.length > 0 ||
-          eventRanking.vendors.length > 0) && (
+        (eventRanking.teams.length > 0 || eventRanking.vendors.length > 0) && (
           <Card className="p-5 md:p-6">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100 flex items-center gap-2">
