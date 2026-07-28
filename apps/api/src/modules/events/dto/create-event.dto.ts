@@ -80,6 +80,14 @@ export class CreateEventDto {
   @IsBoolean()
   require_wristband?: boolean;
 
+  @IsOptional()
+  @IsBoolean()
+  allow_vendor_checkin?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allow_vendor_fipe?: boolean;
+
   /** Valor total investido no evento (R$). */
   @IsOptional()
   @Type(() => Number)

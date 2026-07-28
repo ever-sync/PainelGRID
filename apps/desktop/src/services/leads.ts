@@ -386,8 +386,12 @@ export async function importLeadsCsv(
 export async function queryFipeData(
   plate: string,
   token: string,
+  eventId?: string | null,
 ): Promise<{ brand: string; model: string; modelYear: string; value: string }> {
-  const response = await fetch(`${API_BASE}/leads/fipe/${plate}`, {
+  const qs = eventId
+    ? `?${new URLSearchParams({ event_id: eventId }).toString()}`
+    : "";
+  const response = await fetch(`${API_BASE}/leads/fipe/${plate}${qs}`, {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
   });

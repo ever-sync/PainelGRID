@@ -18,6 +18,8 @@ export type ApiEvent = {
   sales_target: number | null;
   scheduled_target?: number | null;
   require_wristband?: boolean;
+  allow_vendor_checkin?: boolean;
+  allow_vendor_fipe?: boolean;
   total_investment?: number | null;
   paid_traffic_investment?: number | null;
   status: EventStatus;
@@ -63,6 +65,8 @@ export type CreateEventPayload = {
   sales_target?: number;
   scheduled_target?: number;
   require_wristband?: boolean;
+  allow_vendor_checkin?: boolean;
+  allow_vendor_fipe?: boolean;
   total_investment?: number;
   paid_traffic_investment?: number;
   status?: EventStatus;

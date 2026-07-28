@@ -23,6 +23,8 @@ type EventRow = {
   sales_target: number | null;
   scheduled_target: number | null;
   require_wristband: boolean;
+  allow_vendor_checkin: boolean;
+  allow_vendor_fipe: boolean;
   total_investment: Prisma.Decimal | null;
   paid_traffic_investment: Prisma.Decimal | null;
   status: EventStatus;
@@ -217,6 +219,8 @@ export class EventsService {
       sales_target: row.sales_target,
       scheduled_target: row.scheduled_target,
       require_wristband: row.require_wristband ?? false,
+      allow_vendor_checkin: row.allow_vendor_checkin ?? true,
+      allow_vendor_fipe: row.allow_vendor_fipe ?? true,
       total_investment:
         row.total_investment != null ? Number(row.total_investment) : null,
       paid_traffic_investment:
@@ -378,6 +382,8 @@ export class EventsService {
         sales_target: dto.sales_target ?? null,
         scheduled_target: dto.scheduled_target ?? null,
         require_wristband: dto.require_wristband ?? false,
+        allow_vendor_checkin: dto.allow_vendor_checkin ?? true,
+        allow_vendor_fipe: dto.allow_vendor_fipe ?? true,
         total_investment: dto.total_investment ?? null,
         paid_traffic_investment: dto.paid_traffic_investment ?? null,
         status: dto.status ?? EventStatus.draft,
@@ -458,6 +464,10 @@ export class EventsService {
         sales_target: dto.sales_target !== undefined ? dto.sales_target : undefined,
         scheduled_target: dto.scheduled_target !== undefined ? dto.scheduled_target : undefined,
         require_wristband: dto.require_wristband !== undefined ? dto.require_wristband : undefined,
+        allow_vendor_checkin:
+          dto.allow_vendor_checkin !== undefined ? dto.allow_vendor_checkin : undefined,
+        allow_vendor_fipe:
+          dto.allow_vendor_fipe !== undefined ? dto.allow_vendor_fipe : undefined,
         total_investment:
           dto.total_investment !== undefined ? dto.total_investment : undefined,
         paid_traffic_investment:

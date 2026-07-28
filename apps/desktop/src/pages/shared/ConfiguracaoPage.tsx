@@ -5,6 +5,7 @@ import {
   Bell,
   Building2,
   CalendarPlus,
+  CarFront,
   Camera,
   CheckCircle2,
   KanbanSquare,
@@ -18,6 +19,7 @@ import {
   Sliders,
   Trophy,
   Unplug,
+  UserCheck,
   UserCog,
 } from "lucide-react";
 import { useOutletContext } from "react-router-dom";
@@ -45,6 +47,11 @@ import {
   updateClient,
 } from "../../services/clients";
 import { listCrmPipelines } from "../../services/crm";
+import {
+  listEvents,
+  updateEvent,
+  type ApiEvent,
+} from "../../services/events";
 import {
   disconnectMetaGestor,
   getMetaGestorStatus,
@@ -78,7 +85,13 @@ type Preferences = {
   darkDashboard: boolean;
 };
 
-type SettingsTab = "perfil" | "ads" | "crm" | "pontuacao" | "preferencias";
+type SettingsTab =
+  | "perfil"
+  | "ads"
+  | "crm"
+  | "pontuacao"
+  | "evento"
+  | "preferencias";
 
 export type ClientScoreRules = {
   scheduled_points: number;
@@ -287,6 +300,15 @@ export function ConfiguracaoPage() {
   const [crmStageOptions, setCrmStageOptions] = useState<
     Array<{ value: string; label: string; code: string; name: string }>
   >([]);
+  const [eventSettingsEvents, setEventSettingsEvents] = useState<ApiEvent[]>(
+    [],
+  );
+  const [selectedEventSettingsId, setSelectedEventSettingsId] = useState("");
+  const [allowVendorCheckin, setAllowVendorCheckin] = useState(true);
+  const [allowVendorFipe, setAllowVendorFipe] = useState(true);
+  const [eventSettingsLoading, setEventSettingsLoading] = useState(false);
+  const [eventSettingsSaving, setEventSettingsSaving] = useState(false);
+  const [eventSettingsMessage, setEventSettingsMessage] = useState("");
 
   useEffect(() => {
     if (!selectedScoreClientId && crmClients.length > 0) {
@@ -325,6 +347,71 @@ export function ConfiguracaoPage() {
       setTimeout(() => setScoreMessage(""), 3500);
     } finally {
       setScoreSaving(false);
+    }
+  }
+
+  async function loadEventSettings() {
+    const accessToken = readStoredSession()?.accessToken ?? "";
+    if (!accessToken || user.role !== "gestor") return;
+
+    setEventSettingsLoading(true);
+    setEventSettingsMessage("");
+    try {
+      const rows = await listEvents({}, accessToken);
+      setEventSettingsEvents(rows);
+      setSelectedEventSettingsId((current) => {
+        if (current && rows.some((event) => event.id === current)) {
+          return current;
+        }
+        return (
+          rows.find((event) => event.status === "active")?.id ??
+          rows[0]?.id ??
+          ""
+        );
+      });
+    } catch (error) {
+      setEventSettingsMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar os eventos.",
+      );
+    } finally {
+      setEventSettingsLoading(false);
+    }
+  }
+
+  async function handleSaveEventPermissions() {
+    const accessToken = readStoredSession()?.accessToken ?? "";
+    if (!accessToken || !selectedEventSettingsId) {
+      setEventSettingsMessage("Selecione um evento para salvar.");
+      return;
+    }
+
+    setEventSettingsSaving(true);
+    setEventSettingsMessage("");
+    try {
+      const updated = await updateEvent(
+        selectedEventSettingsId,
+        {
+          allow_vendor_checkin: allowVendorCheckin,
+          allow_vendor_fipe: allowVendorFipe,
+        },
+        accessToken,
+      );
+      setEventSettingsEvents((current) =>
+        current.map((event) => (event.id === updated.id ? updated : event)),
+      );
+      setEventSettingsMessage(
+        "Permissões dos vendedores atualizadas com sucesso.",
+      );
+    } catch (error) {
+      setEventSettingsMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar as permissões do evento.",
+      );
+    } finally {
+      setEventSettingsSaving(false);
     }
   }
 
@@ -736,6 +823,11 @@ export function ConfiguracaoPage() {
   }, [user.role, user.client_id]);
 
   useEffect(() => {
+    if (user.role !== "gestor") return;
+    void loadEventSettings();
+  }, [user.role]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
 
     const syncTheme = () => {
@@ -837,6 +929,14 @@ export function ConfiguracaoPage() {
       tabs.push({ id: "crm", label: "CRM", icon: <KanbanSquare size={15} /> });
     }
 
+    if (user.role === "gestor") {
+      tabs.push({
+        id: "evento",
+        label: "Config. evento",
+        icon: <CalendarPlus size={15} />,
+      });
+    }
+
     tabs.push({
       id: "preferencias",
       label: "Preferências",
@@ -858,6 +958,23 @@ export function ConfiguracaoPage() {
       })),
     [crmClients],
   );
+  const selectedEventSettings = useMemo(
+    () =>
+      eventSettingsEvents.find(
+        (event) => event.id === selectedEventSettingsId,
+      ) ?? null,
+    [eventSettingsEvents, selectedEventSettingsId],
+  );
+  const eventSettingsOptions = useMemo(
+    () =>
+      eventSettingsEvents.map((event) => ({
+        value: event.id,
+        label: `${event.name} · ${new Date(event.event_date).toLocaleDateString(
+          "pt-BR",
+        )}`,
+      })),
+    [eventSettingsEvents],
+  );
 
   useEffect(() => {
     setCrmRuleDraft(stageRulesToDraft(selectedCrmClient));
@@ -870,6 +987,13 @@ export function ConfiguracaoPage() {
     }
     void loadCrmStages(selectedCrmClientId);
   }, [selectedCrmClientId]);
+
+  useEffect(() => {
+    if (!selectedEventSettings) return;
+    setAllowVendorCheckin(selectedEventSettings.allow_vendor_checkin ?? true);
+    setAllowVendorFipe(selectedEventSettings.allow_vendor_fipe ?? true);
+    setEventSettingsMessage("");
+  }, [selectedEventSettings]);
 
   return (
     <div className={clsx("space-y-6", isDarkMode && "dashboard-dark bg-black")}>
@@ -1495,6 +1619,122 @@ export function ConfiguracaoPage() {
                   cliente.
                 </div>
               )}
+            </Card>
+          </div>
+        ) : null}
+
+        {activeTab === "evento" && user.role === "gestor" ? (
+          <div className="space-y-6">
+            <Card className={sectionCardClass} padding="lg">
+              <div className="flex items-center gap-2">
+                <CalendarPlus size={18} className="text-zinc-500" />
+                <h2
+                  className={clsx(
+                    "text-lg font-black tracking-tight",
+                    isDarkMode ? "text-zinc-100" : "text-zinc-950",
+                  )}
+                >
+                  Permissões do evento
+                </h2>
+              </div>
+              <p
+                className={clsx(
+                  "mt-2 max-w-3xl text-sm",
+                  isDarkMode ? "text-zinc-400" : "text-zinc-500",
+                )}
+              >
+                Escolha um evento e defina quais ações estarão disponíveis no
+                menu rápido dos vendedores participantes.
+              </p>
+
+              <div className="mt-5 max-w-xl">
+                <Select
+                  label="Evento"
+                  value={selectedEventSettingsId}
+                  onChange={(event) =>
+                    setSelectedEventSettingsId(event.target.value)
+                  }
+                  options={eventSettingsOptions}
+                  placeholder={
+                    eventSettingsLoading
+                      ? "Carregando eventos..."
+                      : "Selecione um evento"
+                  }
+                  disabled={eventSettingsLoading}
+                  dark={isDarkMode}
+                />
+              </div>
+
+              {selectedEventSettings ? (
+                <>
+                  <div className="mt-6 grid gap-3 md:grid-cols-2">
+                    <ToggleRow
+                      icon={<UserCheck size={15} />}
+                      title="Vendedor pode fazer check-in"
+                      description="Exibe a ação Fazer check-in no menu rápido dos vendedores."
+                      checked={allowVendorCheckin}
+                      onChange={setAllowVendorCheckin}
+                      dark={isDarkMode}
+                    />
+                    <ToggleRow
+                      icon={<CarFront size={15} />}
+                      title="Vendedor pode consultar FIPE"
+                      description="Exibe a ação Consultar Placa (FIPE) no menu rápido dos vendedores."
+                      checked={allowVendorFipe}
+                      onChange={setAllowVendorFipe}
+                      dark={isDarkMode}
+                    />
+                  </div>
+
+                  <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+                    <p
+                      className={clsx(
+                        "text-sm",
+                        isDarkMode ? "text-zinc-400" : "text-zinc-500",
+                      )}
+                    >
+                      Evento atual: {selectedEventSettings.name}
+                    </p>
+                    <Button
+                      onClick={() => void handleSaveEventPermissions()}
+                      loading={eventSettingsSaving}
+                      icon={<Save size={16} />}
+                      className={clsx(
+                        "rounded-2xl px-5 py-3 text-white",
+                        isDarkMode
+                          ? "bg-[#1f1f1f] hover:bg-[#2b2b2b]"
+                          : "bg-[#0b0b0b] hover:bg-zinc-800",
+                      )}
+                    >
+                      Salvar permissões
+                    </Button>
+                  </div>
+                </>
+              ) : !eventSettingsLoading ? (
+                <div
+                  className={clsx(
+                    "mt-6 rounded-2xl border p-4 text-sm",
+                    isDarkMode
+                      ? "border-zinc-700 bg-[#141414] text-zinc-400"
+                      : "border-zinc-100 bg-zinc-50 text-zinc-500",
+                  )}
+                >
+                  Nenhum evento disponível para configuração.
+                </div>
+              ) : null}
+
+              {eventSettingsMessage ? (
+                <div
+                  className={clsx(
+                    "mt-4 rounded-2xl border px-4 py-3 text-sm",
+                    isDarkMode
+                      ? "border-zinc-700 bg-[#141414] text-zinc-300"
+                      : "border-zinc-100 bg-zinc-50 text-zinc-600",
+                  )}
+                >
+                  {eventSettingsMessage}
+                </div>
+              ) : null}
             </Card>
           </div>
         ) : null}

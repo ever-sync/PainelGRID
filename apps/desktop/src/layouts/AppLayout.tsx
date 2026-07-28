@@ -36,6 +36,7 @@ import {
 import { LazyQrScanner } from "../components/shared/LazyQrScanner";
 import { checkInLeadByToken, queryFipeData } from "../services/leads";
 import { readStoredSession } from "../services/auth";
+import { listEvents } from "../services/events";
 
 interface AppLayoutProps {
   user: User;
@@ -237,6 +238,58 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
   } | null>(null);
   const [checkinLoading, setCheckinLoading] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
+  const [vendorQuickActionPermissions, setVendorQuickActionPermissions] =
+    useState({
+      checkin: true,
+      fipe: true,
+      fipeEventId: null as string | null,
+    });
+
+  useEffect(() => {
+    if (user.role !== "vendedor") return;
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+
+    let cancelled = false;
+    void listEvents({}, token)
+      .then((events) => {
+        if (cancelled) return;
+        const activeEvents = events.filter(
+          (event) => event.status === "active",
+        );
+        const nextDraftEvent = events.find(
+          (event) => event.status === "draft",
+        );
+        const permissionEvents =
+          activeEvents.length > 0
+            ? activeEvents
+            : nextDraftEvent
+              ? [nextDraftEvent]
+              : [];
+
+        setVendorQuickActionPermissions({
+          checkin:
+            permissionEvents.length > 0 &&
+            permissionEvents.some(
+              (event) => event.allow_vendor_checkin ?? true,
+            ),
+          fipe:
+            permissionEvents.length > 0 &&
+            permissionEvents.some((event) => event.allow_vendor_fipe ?? true),
+          fipeEventId:
+            permissionEvents.find(
+              (event) => event.allow_vendor_fipe ?? true,
+            )?.id ?? null,
+        });
+      })
+      .catch(() => {
+        // Mantém o comportamento anterior se a consulta de permissões falhar.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user.role, quickActionOpen]);
 
   const handleCheckinSubmit = async (tokenValue: string) => {
     const token = readStoredSession()?.accessToken;
@@ -306,7 +359,13 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     setFipeError(null);
     setFipeResult(null);
     try {
-      const data = await queryFipeData(cleanPlate, token);
+      const data = await queryFipeData(
+        cleanPlate,
+        token,
+        user.role === "vendedor"
+          ? vendorQuickActionPermissions.fipeEventId
+          : undefined,
+      );
       setFipeResult(data);
     } catch (err: unknown) {
       setFipeError(
@@ -378,6 +437,13 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
   };
 
   const runQuickAction = (action: MobileQuickAction) => {
+    if (
+      user.role === "vendedor" &&
+      ((action === "checkin" && !vendorQuickActionPermissions.checkin) ||
+        (action === "fipe" && !vendorQuickActionPermissions.fipe))
+    ) {
+      return;
+    }
     if (action === "appointment") {
       closeQuickAction();
       navigate("/vendedor/leads?acao=appointment");
@@ -819,42 +885,48 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                   </span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => runQuickAction("checkin")}
-                  className="flex items-center gap-3 rounded-2xl border border-zinc-100 bg-zinc-50 p-4 text-left transition-colors active:bg-zinc-100"
-                >
-                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
-                    <UserCheck size={22} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-bold text-zinc-950">
-                      Fazer check-in
+                {(user.role !== "vendedor" ||
+                  vendorQuickActionPermissions.checkin) && (
+                  <button
+                    type="button"
+                    onClick={() => runQuickAction("checkin")}
+                    className="flex items-center gap-3 rounded-2xl border border-zinc-100 bg-zinc-50 p-4 text-left transition-colors active:bg-zinc-100"
+                  >
+                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+                      <UserCheck size={22} />
                     </span>
-                    <span className="block text-xs leading-relaxed text-zinc-500">
-                      Escolha o cliente e o modo de confirmação.
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold text-zinc-950">
+                        Fazer check-in
+                      </span>
+                      <span className="block text-xs leading-relaxed text-zinc-500">
+                        Escolha o cliente e o modo de confirmação.
+                      </span>
                     </span>
-                  </span>
-                </button>
+                  </button>
+                )}
 
-                <button
-                  type="button"
-                  onClick={() => runQuickAction("fipe")}
-                  className="flex items-center gap-3 rounded-2xl border border-zinc-100 bg-zinc-50 p-4 text-left transition-colors active:bg-zinc-100"
-                >
-                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-100 text-purple-600">
-                    <CarFront size={22} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-bold text-zinc-950">
-                      Consultar Placa (FIPE)
+                {(user.role !== "vendedor" ||
+                  vendorQuickActionPermissions.fipe) && (
+                  <button
+                    type="button"
+                    onClick={() => runQuickAction("fipe")}
+                    className="flex items-center gap-3 rounded-2xl border border-zinc-100 bg-zinc-50 p-4 text-left transition-colors active:bg-zinc-100"
+                  >
+                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-100 text-purple-600">
+                      <CarFront size={22} />
                     </span>
-                    <span className="block text-xs leading-relaxed text-zinc-500">
-                      Consulte a FIPE e marca/modelo de qualquer veículo pela
-                      placa.
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold text-zinc-950">
+                        Consultar Placa (FIPE)
+                      </span>
+                      <span className="block text-xs leading-relaxed text-zinc-500">
+                        Consulte a FIPE e marca/modelo de qualquer veículo pela
+                        placa.
+                      </span>
                     </span>
-                  </span>
-                </button>
+                  </button>
+                )}
               </div>
             ) : (
               <div className="space-y-4">

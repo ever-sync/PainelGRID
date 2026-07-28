@@ -79,6 +79,14 @@ export class UpdateEventDto {
   require_wristband?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  allow_vendor_checkin?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allow_vendor_fipe?: boolean;
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)

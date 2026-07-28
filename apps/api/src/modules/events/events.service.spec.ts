@@ -18,10 +18,12 @@ describe('EventsService', () => {
     event_type: null,
     description: null,
     launch_date: null,
-    event_date: new Date('2026-06-10'),
+    event_date: new Date(),
     event_end_date: null,
     location: null,
     capacity: null,
+    allow_vendor_checkin: true,
+    allow_vendor_fipe: true,
     status: EventStatus.active,
     cover_image_url: null,
     image_urls: [],
@@ -59,6 +61,7 @@ describe('EventsService', () => {
     };
     service = new EventsService(prisma, clientsService);
     prisma.client.count.mockResolvedValue(1);
+    prisma.event.update.mockResolvedValue(baseRow);
   });
 
   describe('findAll', () => {
@@ -76,7 +79,6 @@ describe('EventsService', () => {
         expect.objectContaining({
           where: {
             participants: { some: { client_id: { in: [clientId] } } },
-            status: EventStatus.active,
           },
         }),
       );
@@ -256,6 +258,8 @@ describe('EventsService', () => {
             description: null,
             location: null,
             capacity: null,
+            allow_vendor_checkin: true,
+            allow_vendor_fipe: true,
             status: EventStatus.draft,
           }),
         }),
@@ -288,6 +292,8 @@ describe('EventsService', () => {
         description: 'Nova desc',
         location: 'Novo local',
         capacity: 120,
+        allow_vendor_checkin: false,
+        allow_vendor_fipe: false,
         status: EventStatus.active,
         cover_image_url: 'https://img.test/cover.png',
         _count: { interested_leads: 7 },
@@ -300,6 +306,8 @@ describe('EventsService', () => {
         event_date: '2026-07-02T10:00:00.000Z',
         location: '  Novo local  ',
         capacity: 120,
+        allow_vendor_checkin: false,
+        allow_vendor_fipe: false,
         status: EventStatus.active,
         cover_image_url: 'https://img.test/cover.png',
       } as never);
@@ -312,6 +320,8 @@ describe('EventsService', () => {
             description: 'Nova desc',
             location: 'Novo local',
             capacity: 120,
+            allow_vendor_checkin: false,
+            allow_vendor_fipe: false,
             status: EventStatus.active,
             cover_image_url: 'https://img.test/cover.png',
           }),

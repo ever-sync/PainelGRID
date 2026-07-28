@@ -275,6 +275,8 @@ model Event {
   sales_target                  Int?
   scheduled_target              Int?
   require_wristband             Boolean             @default(false)
+  allow_vendor_checkin          Boolean             @default(true)
+  allow_vendor_fipe             Boolean             @default(true)
   event_days                    Json?
   total_investment              Decimal?            @db.Decimal(12, 2)
   paid_traffic_investment       Decimal?            @db.Decimal(12, 2)
