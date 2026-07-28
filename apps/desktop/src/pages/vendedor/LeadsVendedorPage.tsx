@@ -16,6 +16,7 @@ import {
   MessageCircle,
   Phone,
   Plus,
+  Search,
   ShoppingCart,
   User as UserIcon,
   XCircle,
