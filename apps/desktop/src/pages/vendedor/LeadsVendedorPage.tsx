@@ -732,17 +732,35 @@ export function LeadsVendedorPage() {
       );
       const next = mapApiLeadToLead(row);
 
-      const periodTime =
-        APPOINTMENT_PERIOD_OPTIONS.find((p) => p.value === appointmentPeriod)
-          ?.time ?? "09:00";
-      const [year, month, day] = appointmentDateKey.split("-");
-      const scheduledAt = new Date(`${year}-${month}-${day}T${periodTime}:00`);
-      await createAppointment(t, {
-        lead_id: next.id,
-        event_id: appointmentEventId,
-        scheduled_at: scheduledAt.toISOString(),
-        timezone: "America/Sao_Paulo",
-      });
+      try {
+        const periodTime =
+          APPOINTMENT_PERIOD_OPTIONS.find((p) => p.value === appointmentPeriod)
+            ?.time ?? "09:00";
+        const [year, month, day] = appointmentDateKey.split("-");
+        const scheduledAt = new Date(
+          `${year}-${month}-${day}T${periodTime}:00`,
+        );
+        await createAppointment(t, {
+          lead_id: next.id,
+          event_id: appointmentEventId,
+          scheduled_at: scheduledAt.toISOString(),
+          timezone: "America/Sao_Paulo",
+        });
+      } catch {
+        setLeadModalOpen(false);
+        setLeadName("");
+        setLeadPhone("");
+        setLeadEmail("");
+        setAppointmentEventId("");
+        setAppointmentDateKey("");
+        setAppointmentPeriod("");
+        await refreshLeads();
+        await refreshScore();
+        setActionError(
+          `Lead "${next.name}" cadastrado, mas não foi possível concluir o agendamento automaticamente. Use o botão "Agendar" no card do lead para tentar novamente.`,
+        );
+        return;
+      }
 
       setLeadModalOpen(false);
       setLeadName("");
