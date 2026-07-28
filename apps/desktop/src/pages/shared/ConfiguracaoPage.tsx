@@ -15,6 +15,7 @@ import {
   Save,
   ShieldCheck,
   ShoppingCart,
+  Sliders,
   Trophy,
   Unplug,
   UserCog,
@@ -77,7 +78,7 @@ type Preferences = {
   darkDashboard: boolean;
 };
 
-type SettingsTab = "perfil" | "ads" | "crm" | "pontuacao";
+type SettingsTab = "perfil" | "ads" | "crm" | "pontuacao" | "preferencias";
 
 export type ClientScoreRules = {
   scheduled_points: number;
@@ -833,9 +834,14 @@ export function ConfiguracaoPage() {
     if (user.role === "gestor" || user.role === "cliente") {
       tabs.push({ id: "ads", label: "Ads", icon: <Building2 size={15} /> });
       tabs.push({ id: "pontuacao", label: "Pontuação", icon: <Trophy size={15} /> });
+      tabs.push({ id: "crm", label: "CRM", icon: <KanbanSquare size={15} /> });
     }
 
-    tabs.push({ id: "crm", label: "CRM", icon: <KanbanSquare size={15} /> });
+    tabs.push({
+      id: "preferencias",
+      label: "Preferências",
+      icon: <Sliders size={15} />,
+    });
 
     return tabs;
   }, [user.role]);
@@ -1490,10 +1496,14 @@ export function ConfiguracaoPage() {
                 </div>
               )}
             </Card>
+          </div>
+        ) : null}
 
+        {activeTab === "preferencias" ? (
+          <div className="space-y-6">
             <Card className={sectionCardClass} padding="lg">
               <div className="flex items-center gap-2">
-                <KanbanSquare size={18} className="text-zinc-500" />
+                <Sliders size={18} className="text-zinc-500" />
                 <h2
                   className={clsx(
                     "text-lg font-black tracking-tight",
