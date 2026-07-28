@@ -73,7 +73,14 @@ export class ScoreEventsService {
   async summaryForVendor(vendorId: string, clientId: string) {
     const rows = await this.prisma.scoreEvent.groupBy({
       by: ['kind'],
-      where: { vendor_id: vendorId, client_id: clientId },
+      where: {
+        vendor_id: vendorId,
+        client_id: clientId,
+        lead: {
+          assigned_vendor_id: vendorId,
+          deleted_at: null,
+        },
+      },
       _sum: { points: true },
       _count: { _all: true },
     });
@@ -117,6 +124,9 @@ export class ScoreEventsService {
       by: ['vendor_id', 'kind'],
       where: {
         client_id: params.clientId,
+        lead: {
+          deleted_at: null,
+        },
         ...(params.eventId
           ? {
               appointment: {
