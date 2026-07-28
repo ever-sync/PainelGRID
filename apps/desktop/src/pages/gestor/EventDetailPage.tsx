@@ -321,6 +321,9 @@ export function EventDetailPage() {
   const [formLocation, setFormLocation] = useState("");
   const [formCapacity, setFormCapacity] = useState("");
   const [formSalesTarget, setFormSalesTarget] = useState("");
+  const [formScheduledTarget, setFormScheduledTarget] = useState("");
+  const [formTotalInvestment, setFormTotalInvestment] = useState("");
+  const [formPaidTraffic, setFormPaidTraffic] = useState("");
   const [formStatus, setFormStatus] = useState<Event["status"]>("draft");
   const [formRequireWristband, setFormRequireWristband] = useState(false);
   const [formExtraClientIds, setFormExtraClientIds] = useState<string[]>([]);
@@ -358,6 +361,17 @@ export function EventDetailPage() {
     );
     setFormSalesTarget(
       nextEvent.sales_target != null ? String(nextEvent.sales_target) : "",
+    );
+    setFormScheduledTarget(
+      nextEvent.scheduled_target != null ? String(nextEvent.scheduled_target) : "",
+    );
+    setFormTotalInvestment(
+      nextEvent.total_investment != null ? String(nextEvent.total_investment) : "",
+    );
+    setFormPaidTraffic(
+      nextEvent.paid_traffic_investment != null
+        ? String(nextEvent.paid_traffic_investment)
+        : "",
     );
     setFormStatus(nextEvent.status);
     setFormRequireWristband(nextEvent.require_wristband ?? false);
@@ -1171,6 +1185,15 @@ export function EventDetailPage() {
           location: formLocation.trim() || undefined,
           capacity: hasCapacity ? capacityNumber : undefined,
           sales_target: hasSalesTarget ? salesTargetNumber : null,
+          scheduled_target: formScheduledTarget.trim()
+            ? Number(formScheduledTarget.replace(",", "."))
+            : null,
+          total_investment: formTotalInvestment.trim()
+            ? Number(formTotalInvestment.replace(",", "."))
+            : null,
+          paid_traffic_investment: formPaidTraffic.trim()
+            ? Number(formPaidTraffic.replace(",", "."))
+            : null,
           status: formStatus,
           require_wristband: formRequireWristband,
           participant_client_ids: [
@@ -2412,6 +2435,35 @@ export function EventDetailPage() {
                 placeholder="ex: 200"
                 value={formSalesTarget}
                 onChange={(e) => setFormSalesTarget(e.target.value)}
+              />
+              <Input
+                dark={isDarkMode}
+                label="Meta de agendamentos"
+                type="number"
+                min="1"
+                placeholder="ex: 50"
+                value={formScheduledTarget}
+                onChange={(e) => setFormScheduledTarget(e.target.value)}
+              />
+              <Input
+                dark={isDarkMode}
+                label="Valor investido total (R$)"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="ex: 82300"
+                value={formTotalInvestment}
+                onChange={(e) => setFormTotalInvestment(e.target.value)}
+              />
+              <Input
+                dark={isDarkMode}
+                label="Valor tráfego pago (R$)"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="ex: 17800"
+                value={formPaidTraffic}
+                onChange={(e) => setFormPaidTraffic(e.target.value)}
               />
               <Input
                 dark={isDarkMode}

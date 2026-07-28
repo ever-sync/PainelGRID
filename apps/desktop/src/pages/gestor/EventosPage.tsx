@@ -175,6 +175,7 @@ export function EventosPage() {
   const [formTotalInvestment, setFormTotalInvestment] = useState("");
   const [formPaidTraffic, setFormPaidTraffic] = useState("");
   const [formSalesTarget, setFormSalesTarget] = useState("");
+  const [formScheduledTarget, setFormScheduledTarget] = useState("");
   const [formDays, setFormDays] = useState<
     Array<{ start: string; end: string }>
   >([{ start: "", end: "" }]);
@@ -434,6 +435,9 @@ export function EventosPage() {
         : "",
     );
     setFormSalesTarget(ev?.sales_target != null ? String(ev.sales_target) : "");
+    setFormScheduledTarget(
+      ev?.scheduled_target != null ? String(ev.scheduled_target) : "",
+    );
     let daysToSet: Array<{ start: string; end: string }> = [
       { start: "", end: "" },
     ];
@@ -687,6 +691,9 @@ export function EventosPage() {
         : undefined,
       sales_target: formSalesTarget.trim()
         ? Number(formSalesTarget.replace(",", "."))
+        : undefined,
+      scheduled_target: formScheduledTarget.trim()
+        ? Number(formScheduledTarget.replace(",", "."))
         : undefined,
     };
 
@@ -1985,6 +1992,30 @@ export function EventosPage() {
                   value={formSalesTarget}
                   onChange={(e) => setFormSalesTarget(e.target.value)}
                   placeholder="Ex: 15"
+                  className={clsx(
+                    "w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400",
+                    isDarkMode
+                      ? "border-zinc-700 bg-[#111111] text-zinc-100"
+                      : "border-gray-300 bg-white",
+                  )}
+                />
+              </div>
+              <div>
+                <label
+                  className={clsx(
+                    "mb-1 block text-sm font-medium",
+                    isDarkMode ? "text-zinc-300" : "text-gray-700",
+                  )}
+                >
+                  Meta de agendamentos do evento (qtd.)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="1"
+                  value={formScheduledTarget}
+                  onChange={(e) => setFormScheduledTarget(e.target.value)}
+                  placeholder="Ex: 50"
                   className={clsx(
                     "w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400",
                     isDarkMode

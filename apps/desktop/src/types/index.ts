@@ -140,6 +140,7 @@ export interface Event {
   location: string;
   capacity: number | null;
   sales_target: number | null;
+  scheduled_target?: number | null;
   require_wristband?: boolean;
   total_investment?: number | null;
   paid_traffic_investment?: number | null;

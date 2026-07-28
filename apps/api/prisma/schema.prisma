@@ -273,6 +273,7 @@ model Event {
   event_end_date                DateTime?
   image_urls                    String[]            @default([])
   sales_target                  Int?
+  scheduled_target              Int?
   require_wristband             Boolean             @default(false)
   event_days                    Json?
   total_investment              Decimal?            @db.Decimal(12, 2)

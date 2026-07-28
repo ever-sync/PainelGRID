@@ -70,6 +70,11 @@ export class UpdateEventDto {
   sales_target?: number | null;
 
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  scheduled_target?: number | null;
+
+  @IsOptional()
   @IsBoolean()
   require_wristband?: boolean;
 

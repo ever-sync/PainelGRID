@@ -16,6 +16,7 @@ export type ApiEvent = {
   location: string | null;
   capacity: number | null;
   sales_target: number | null;
+  scheduled_target?: number | null;
   require_wristband?: boolean;
   total_investment?: number | null;
   paid_traffic_investment?: number | null;
@@ -60,6 +61,7 @@ export type CreateEventPayload = {
   location?: string;
   capacity?: number;
   sales_target?: number;
+  scheduled_target?: number;
   require_wristband?: boolean;
   total_investment?: number;
   paid_traffic_investment?: number;
@@ -78,11 +80,20 @@ export function createEvent(payload: CreateEventPayload, token: string) {
 }
 
 export type UpdateEventPayload = Partial<
-  Omit<CreateEventPayload, "client_id" | "sales_target">
+  Omit<
+    CreateEventPayload,
+    | "client_id"
+    | "sales_target"
+    | "scheduled_target"
+    | "total_investment"
+    | "paid_traffic_investment"
+  >
 > & {
   client_id?: string;
-  /** `null` limpa a meta de vendas; `undefined` mantém. */
   sales_target?: number | null;
+  scheduled_target?: number | null;
+  total_investment?: number | null;
+  paid_traffic_investment?: number | null;
 };
 
 export function updateEvent(
@@ -229,6 +240,7 @@ export function mapApiEventToEvent(row: ApiEvent): Event {
     location: row.location ?? "",
     capacity: row.capacity,
     sales_target: row.sales_target ?? null,
+    scheduled_target: row.scheduled_target ?? null,
     require_wristband: row.require_wristband ?? false,
     total_investment: row.total_investment ?? null,
     paid_traffic_investment: row.paid_traffic_investment ?? null,

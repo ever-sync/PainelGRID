@@ -72,6 +72,11 @@ export class CreateEventDto {
   sales_target?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  scheduled_target?: number;
+
+  @IsOptional()
   @IsBoolean()
   require_wristband?: boolean;
 

@@ -21,6 +21,7 @@ type EventRow = {
   location: string | null;
   capacity: number | null;
   sales_target: number | null;
+  scheduled_target: number | null;
   require_wristband: boolean;
   total_investment: Prisma.Decimal | null;
   paid_traffic_investment: Prisma.Decimal | null;
@@ -168,6 +169,7 @@ export class EventsService {
       location: row.location,
       capacity: row.capacity,
       sales_target: row.sales_target,
+      scheduled_target: row.scheduled_target,
       require_wristband: row.require_wristband ?? false,
       total_investment:
         row.total_investment != null ? Number(row.total_investment) : null,
@@ -325,6 +327,7 @@ export class EventsService {
         location: dto.location?.trim() || null,
         capacity: dto.capacity ?? null,
         sales_target: dto.sales_target ?? null,
+        scheduled_target: dto.scheduled_target ?? null,
         require_wristband: dto.require_wristband ?? false,
         total_investment: dto.total_investment ?? null,
         paid_traffic_investment: dto.paid_traffic_investment ?? null,
@@ -404,6 +407,7 @@ export class EventsService {
         location: dto.location !== undefined ? dto.location.trim() || null : undefined,
         capacity: dto.capacity ?? undefined,
         sales_target: dto.sales_target !== undefined ? dto.sales_target : undefined,
+        scheduled_target: dto.scheduled_target !== undefined ? dto.scheduled_target : undefined,
         require_wristband: dto.require_wristband !== undefined ? dto.require_wristband : undefined,
         total_investment:
           dto.total_investment !== undefined ? dto.total_investment : undefined,
