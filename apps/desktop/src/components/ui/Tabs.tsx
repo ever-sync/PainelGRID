@@ -38,9 +38,7 @@ export function Tabs({ tabs, active, onChange, className }: TabsProps) {
                 return;
               }
               event.preventDefault();
-              const currentIndex = tabs.findIndex(
-                (item) => item.id === tab.id,
-              );
+              const currentIndex = tabs.findIndex((item) => item.id === tab.id);
               const nextIndex =
                 event.key === "Home"
                   ? 0
@@ -55,7 +53,9 @@ export function Tabs({ tabs, active, onChange, className }: TabsProps) {
                 event.currentTarget.parentElement?.querySelectorAll<HTMLElement>(
                   '[role="tab"]',
                 );
-              window.requestAnimationFrame(() => tabButtons?.[nextIndex]?.focus());
+              window.requestAnimationFrame(() =>
+                tabButtons?.[nextIndex]?.focus(),
+              );
             }}
             className={cn(
               "relative -mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30",

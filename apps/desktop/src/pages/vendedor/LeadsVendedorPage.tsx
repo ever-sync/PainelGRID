@@ -939,9 +939,7 @@ export function LeadsVendedorPage() {
         type: saleType,
         product: saleProduct,
         value: saleValue,
-        sold_at: saleDate
-          ? new Date(saleDate + "T12:00:00.000Z").toISOString()
-          : undefined,
+        sold_at: new Date().toISOString(),
         notes: saleNotes,
       });
       setSaleModal(null);
@@ -2065,13 +2063,6 @@ export function LeadsVendedorPage() {
             onChange={(e) => setSaleValue(formatCurrencyInput(e.target.value))}
             placeholder="Valor (ex: 120.000,00)"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-          <Input
-            label="Data da venda *"
-            type="date"
-            value={saleDate}
-            onChange={(e) => setSaleDate(e.target.value)}
-            required
           />
           <textarea
             value={saleNotes}
