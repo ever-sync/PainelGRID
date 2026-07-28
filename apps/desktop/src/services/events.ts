@@ -252,6 +252,11 @@ export type ExecutiveReportResponse = {
     total: number | null;
     paid_traffic: number | null;
   };
+  ratings: {
+    overall_avg: number;
+    total: number;
+    by_vendor: Array<{ vendor_id: string; avg_score: number; count: number }>;
+  };
   attribution: Array<{
     meta_campaign_id: string;
     name: string;

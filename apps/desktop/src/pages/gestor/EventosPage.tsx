@@ -22,7 +22,6 @@ import { EventStatusBadge } from "../../components/ui/Badge";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { Select } from "../../components/ui/Select";
 import { Drawer, Modal } from "../../components/ui/Modal";
-import { Input } from "../../components/ui/Input";
 import { Notice } from "../../components/ui/Notice";
 import { Tabs } from "../../components/ui/Tabs";
 import { readStoredSession } from "../../services/auth";
@@ -147,9 +146,9 @@ export function EventosPage() {
   const [selectedClientFilter, setSelectedClientFilter] = useState<
     "all" | string
   >("all");
-  const [periodFilter, setPeriodFilter] = useState<
-    "all" | "upcoming" | "past"
-  >("all");
+  const [periodFilter, setPeriodFilter] = useState<"all" | "upcoming" | "past">(
+    "all",
+  );
   const [cancelledCountByEvent, setCancelledCountByEvent] = useState<
     Record<string, number>
   >({});
@@ -323,9 +322,7 @@ export function EventosPage() {
             client.company_name.toLowerCase().includes(q),
           );
 
-        return (
-          matchesClient && matchesStatus && matchesPeriod && matchesSearch
-        );
+        return matchesClient && matchesStatus && matchesPeriod && matchesSearch;
       })
       .sort(
         (a, b) =>
@@ -1001,9 +998,7 @@ export function EventosPage() {
                     Clientes
                   </th>
                   <th className="px-3 py-3 font-semibold">Status</th>
-                  <th className="px-3 py-3 text-right font-semibold">
-                    Leads
-                  </th>
+                  <th className="px-3 py-3 text-right font-semibold">Leads</th>
                   <th className="px-3 py-3 text-right font-semibold">
                     Confirmados
                   </th>
@@ -1013,9 +1008,7 @@ export function EventosPage() {
                   <th className="px-3 py-3 text-right font-semibold">
                     Cancelaram
                   </th>
-                  <th className="px-5 py-3 text-right font-semibold">
-                    Ações
-                  </th>
+                  <th className="px-5 py-3 text-right font-semibold">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -1038,7 +1031,10 @@ export function EventosPage() {
                           className="flex min-w-0 items-center gap-3 text-left"
                         >
                           <span
-                            className={clsx("h-2 w-2 shrink-0 rounded-full", tone.strip)}
+                            className={clsx(
+                              "h-2 w-2 shrink-0 rounded-full",
+                              tone.strip,
+                            )}
                           />
                           <span
                             className={clsx(
@@ -1118,14 +1114,32 @@ export function EventosPage() {
             <div
               className={clsx(
                 "flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3 border-t text-xs",
-                isDarkMode ? "border-zinc-800 text-zinc-400 bg-[#0f0f0f]" : "border-zinc-100 text-zinc-600 bg-zinc-50/50",
+                isDarkMode
+                  ? "border-zinc-800 text-zinc-400 bg-[#0f0f0f]"
+                  : "border-zinc-100 text-zinc-600 bg-zinc-50/50",
               )}
             >
               <div>
                 <span>
-                  Mostrando <strong className={isDarkMode ? "text-zinc-200" : "text-zinc-900"}>{startIndex + 1}</strong> a{" "}
-                  <strong className={isDarkMode ? "text-zinc-200" : "text-zinc-900"}>{endIndex}</strong> de{" "}
-                  <strong className={isDarkMode ? "text-zinc-200" : "text-zinc-900"}>{filteredEvents.length}</strong> eventos
+                  Mostrando{" "}
+                  <strong
+                    className={isDarkMode ? "text-zinc-200" : "text-zinc-900"}
+                  >
+                    {startIndex + 1}
+                  </strong>{" "}
+                  a{" "}
+                  <strong
+                    className={isDarkMode ? "text-zinc-200" : "text-zinc-900"}
+                  >
+                    {endIndex}
+                  </strong>{" "}
+                  de{" "}
+                  <strong
+                    className={isDarkMode ? "text-zinc-200" : "text-zinc-900"}
+                  >
+                    {filteredEvents.length}
+                  </strong>{" "}
+                  eventos
                 </span>
               </div>
 
@@ -1167,13 +1181,20 @@ export function EventosPage() {
                   >
                     <ChevronLeft size={15} />
                   </button>
-                  <span className={clsx("px-2 font-semibold", isDarkMode ? "text-zinc-200" : "text-zinc-800")}>
+                  <span
+                    className={clsx(
+                      "px-2 font-semibold",
+                      isDarkMode ? "text-zinc-200" : "text-zinc-800",
+                    )}
+                  >
                     Página {currentPage} de {totalPages}
                   </span>
                   <button
                     type="button"
                     disabled={currentPage >= totalPages}
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(totalPages, p + 1))
+                    }
                     className={clsx(
                       "p-1.5 rounded-lg border text-xs font-semibold disabled:opacity-30 disabled:cursor-not-allowed transition-colors",
                       isDarkMode
@@ -1725,27 +1746,28 @@ export function EventosPage() {
           <div className="flex flex-wrap gap-1.5">
             {(["dados", "datas", "local", "participantes"] as const).map(
               (tab) => {
-              const labels: Record<string, string> = {
-                dados: "Dados",
-                datas: "Datas e Horários",
-                local: "Localização",
-                participantes: "Participantes",
-              };
-              return (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setFormTab(tab)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                    formTab === tab
-                      ? "bg-[#3D56A2] text-white"
-                      : "border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
-                  }`}
-                >
-                  {labels[tab]}
-                </button>
-              );
-            })}
+                const labels: Record<string, string> = {
+                  dados: "Dados",
+                  datas: "Datas e Horários",
+                  local: "Localização",
+                  participantes: "Participantes",
+                };
+                return (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setFormTab(tab)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      formTab === tab
+                        ? "bg-[#3D56A2] text-white"
+                        : "border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+                    }`}
+                  >
+                    {labels[tab]}
+                  </button>
+                );
+              },
+            )}
           </div>
 
           {/* ── Aba Dados ── */}

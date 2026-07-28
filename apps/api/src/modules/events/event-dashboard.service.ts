@@ -541,7 +541,7 @@ export class EventDashboardService {
       new Set([event.client_id, ...event.participants.map((p) => p.client_id)]),
     );
 
-    const [leads, sales, imports, metaCampaigns] = await Promise.all([
+    const [leads, sales, imports, metaCampaigns, ratingRows] = await Promise.all([
       this.prisma.lead.findMany({
         where: { event_interest_id: eventId, deleted_at: null },
         select: { id: true, confirmation_status: true },
@@ -557,6 +557,12 @@ export class EventDashboardService {
       this.prisma.metaCampaign.findMany({
         where: { client_id: { in: clientIds } },
         select: { meta_campaign_id: true, name: true },
+      }),
+      this.prisma.serviceRating.groupBy({
+        by: ['vendor_id'],
+        where: { event_id: eventId },
+        _avg: { score: true },
+        _count: { _all: true },
       }),
     ]);
 
@@ -724,6 +730,20 @@ export class EventDashboardService {
     );
     history.reverse(); // cronológico ascendente
 
+    // ── Avaliações dos clientes por vendedor ──
+    const vendorRatings = ratingRows.map((r) => ({
+      vendor_id: r.vendor_id,
+      avg_score: r._avg.score != null ? Math.round(r._avg.score * 100) / 100 : 0,
+      count: r._count._all,
+    }));
+    const totalRatings = vendorRatings.reduce((s, r) => s + r.count, 0);
+    const overallAvg =
+      totalRatings > 0
+        ? Math.round(
+            (vendorRatings.reduce((s, r) => s + r.avg_score * r.count, 0) / totalRatings) * 100,
+          ) / 100
+        : 0;
+
     return {
       event_id: eventId,
       investment: {
@@ -732,6 +752,11 @@ export class EventDashboardService {
           event.paid_traffic_investment != null
             ? Number(event.paid_traffic_investment)
             : null,
+      },
+      ratings: {
+        overall_avg: overallAvg,
+        total: totalRatings,
+        by_vendor: vendorRatings,
       },
       attribution,
       attribution_coverage: {

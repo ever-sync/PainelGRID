@@ -28,6 +28,7 @@ import { ClientWebhookService } from '../crm/client-webhook.service';
 import { LeadTimelineService } from '../lead-timeline/lead-timeline.service';
 import { MetaService } from '../meta/meta.service';
 import { resolveConfirmationStatusForStage } from '../clients/client-settings';
+import { clientIdToStageCode } from '../crm/default-crm-pipeline';
 import { RealtimeEventsService } from '../realtime/realtime-events.service';
 import { ScoreEventsService } from '../score-events/score-events.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
@@ -551,10 +552,23 @@ export class LeadsService {
       }
     }
 
-    this.assertPipelineStageConsistency(dto.crm_pipeline_id, dto.crm_stage_id);
+    let defaultStageId = dto.crm_stage_id;
+    let defaultPipelineId = dto.crm_pipeline_id;
+    if (assignedVendorId && !defaultStageId && !defaultPipelineId) {
+      const preAgendamento = await this.prisma.crmStage.findUnique({
+        where: { code: clientIdToStageCode(targetClientId, 'PRE_AGENDAMENTO') },
+        select: { id: true, pipeline_id: true },
+      });
+      if (preAgendamento) {
+        defaultStageId = preAgendamento.id;
+        defaultPipelineId = preAgendamento.pipeline_id;
+      }
+    }
 
-    if (dto.crm_stage_id) {
-      await this.assertCrmStageExistsForClient(targetClientId, dto.crm_stage_id);
+    this.assertPipelineStageConsistency(defaultPipelineId, defaultStageId);
+
+    if (defaultStageId) {
+      await this.assertCrmStageExistsForClient(targetClientId, defaultStageId);
     }
     if (dto.event_interest_id) {
       await this.assertEventExistsForClient(targetClientId, dto.event_interest_id);
@@ -562,7 +576,7 @@ export class LeadsService {
 
     const confirmationStatus = await this.resolveStatusForStageAssignment(
       targetClientId,
-      dto.crm_stage_id,
+      defaultStageId,
       dto.confirmation_status,
     );
 
@@ -577,8 +591,8 @@ export class LeadsService {
           source: dto.source,
           tags: dto.tags ?? [],
           event_interest_id: dto.event_interest_id ?? null,
-          crm_pipeline_id: dto.crm_pipeline_id ?? null,
-          crm_stage_id: dto.crm_stage_id ?? null,
+          crm_pipeline_id: defaultPipelineId ?? null,
+          crm_stage_id: defaultStageId ?? null,
           confirmation_status: confirmationStatus,
           assigned_vendor_id: assignedVendorId,
           team_id: vendorBinding?.teamId ?? null,

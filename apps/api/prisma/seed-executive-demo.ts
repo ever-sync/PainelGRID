@@ -59,6 +59,7 @@ type EventSpec = {
 
 async function deleteClientData(clientId: string) {
   // Ordem segura de FKs (filhos antes de pais).
+  await prisma.serviceRating.deleteMany({ where: { vendor: { client_id: clientId } } });
   await prisma.scoreEvent.deleteMany({ where: { client_id: clientId } });
   await prisma.sale.deleteMany({ where: { client_id: clientId } });
   await prisma.appointment.deleteMany({ where: { client_id: clientId } });
@@ -285,6 +286,7 @@ async function seedClient(opts: {
   const convRows: Array<Record<string, unknown>> = [];
   const msgRows: Array<Record<string, unknown>> = [];
   const agentRows: Array<Record<string, unknown>> = [];
+  const ratingRows: Array<Record<string, unknown>> = [];
 
   // garante ao menos 1 venda por vendedor (no evento principal)
   const forcedSaleVendors = new Set(vendors.map((v) => v.id));
@@ -439,6 +441,31 @@ async function seedClient(opts: {
         });
       }
 
+      // Avaliação do cliente ao vendedor: ~65% dos que fizeram check-in avaliam
+      if (isCheckedIn && Math.random() < 0.65) {
+        const score = weighted<number>([
+          [5, 55],
+          [4, 30],
+          [3, 10],
+          [2, 4],
+          [1, 1],
+        ]);
+        ratingRows.push({
+          id: randomUUID(),
+          vendor_id: vendor.id,
+          event_id: ev.id,
+          score,
+          customer_name: `${pick(FIRST)} ${pick(LAST)}`,
+          comment:
+            score >= 4
+              ? pick(['Ótimo atendimento!', 'Muito atencioso', 'Recomendo', 'Nota 10'])
+              : score === 3
+                ? 'Atendimento ok'
+                : 'Poderia ser melhor',
+          created_at: visitAt ?? eventDay,
+        });
+      }
+
       // Rubinho: conversa + mensagens + log de ação para ~40% dos leads
       if (Math.random() < 0.4) {
         const convId = randomUUID();
@@ -496,6 +523,7 @@ async function seedClient(opts: {
   await prisma.conversation.createMany({ data: convRows as never });
   await prisma.message.createMany({ data: msgRows as never });
   await prisma.agentActionLog.createMany({ data: agentRows as never });
+  await prisma.serviceRating.createMany({ data: ratingRows as never });
 
   return {
     clientId,

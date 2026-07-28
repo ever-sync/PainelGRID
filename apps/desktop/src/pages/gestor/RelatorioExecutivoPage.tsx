@@ -226,7 +226,8 @@ export function RelatorioExecutivoPage() {
     )
       .then((reports) => {
         const merged = reports.flatMap(
-          (r) => (r as { campaigns?: MetaCampaignsReportItem[] }).campaigns ?? [],
+          (r) =>
+            (r as { campaigns?: MetaCampaignsReportItem[] }).campaigns ?? [],
         );
         setCampaigns(merged);
       })
@@ -542,20 +543,33 @@ function buildReport(
   const attrReal = Boolean(exec);
   const coverage = exec?.attribution_coverage;
 
-  // Ranking (real) + receita estimada por ticket médio
+  // Avaliações dos clientes por vendedor (real, do exec)
+  const ratingByVendor = new Map(
+    (exec?.ratings?.by_vendor ?? []).map((r) => [r.vendor_id, r]),
+  );
+
+  // Ranking (real) + receita estimada por ticket médio + avaliação
   const vendors = (tv?.vendors ?? [])
-    .map((v) => ({
-      id: v.vendor_id,
-      name: v.vendor_name,
-      team: v.team_name,
-      atendimentos: v.leads,
-      agendados: v.scheduled,
-      compareceram: v.checked_in,
-      vendas: v.sold,
-      pontos: v.points,
-      receita: v.sold * ticketMedio,
-    }))
+    .map((v) => {
+      const rt = ratingByVendor.get(v.vendor_id);
+      return {
+        id: v.vendor_id,
+        name: v.vendor_name,
+        team: v.team_name,
+        atendimentos: v.leads,
+        agendados: v.scheduled,
+        compareceram: v.checked_in,
+        vendas: v.sold,
+        pontos: v.points,
+        receita: v.sold * ticketMedio,
+        avaliacao: rt?.avg_score ?? 0,
+        avaliacaoCount: rt?.count ?? 0,
+      };
+    })
     .sort((a, b) => b.vendas - a.vendas || b.pontos - a.pontos);
+
+  const ratingsOverall = exec?.ratings?.overall_avg ?? 0;
+  const ratingsTotal = exec?.ratings?.total ?? 0;
 
   const teams = (tv?.teams ?? [])
     .map((t) => ({
@@ -683,6 +697,8 @@ function buildReport(
     coverage,
     vendors,
     teams,
+    ratingsOverall,
+    ratingsTotal,
     salesByWeekday,
     arrivalsByHour,
     peakHour,
@@ -985,8 +1001,8 @@ function ExecutiveSummary({
             ` (${formatNumber((report.paidTraffic / report.investimento) * 100)}% do total)`}
         </span>
         <span>
-          Lucro estimado com margens por segmento — 0km 5% · Seminovo 12% · Venda
-          Direta 3% · PcD 5%.
+          Lucro estimado com margens por segmento — 0km 5% · Seminovo 12% ·
+          Venda Direta 3% · PcD 5%.
         </span>
       </div>
     </div>
@@ -1373,6 +1389,36 @@ function SalesRanking({
   const medal = ["🥇", "🥈", "🥉"];
   return (
     <div className="space-y-6">
+      {report.ratingsTotal > 0 && (
+        <div
+          className={clsx(
+            "flex flex-wrap items-center gap-x-6 gap-y-1 rounded-2xl border px-5 py-3",
+            isDark
+              ? "border-amber-500/25 bg-amber-500/10"
+              : "border-amber-200 bg-amber-50",
+          )}
+        >
+          <span
+            className={clsx(
+              "text-xs font-bold uppercase tracking-[0.14em]",
+              isDark ? "text-zinc-400" : "text-zinc-500",
+            )}
+          >
+            Satisfação dos clientes
+          </span>
+          <span className="text-lg font-black" style={{ color: "#f59e0b" }}>
+            ★ {report.ratingsOverall.toFixed(2)}
+            <span
+              className={clsx(
+                "ml-1 text-xs font-normal",
+                isDark ? "text-zinc-400" : "text-zinc-500",
+              )}
+            >
+              / 5 · {formatNumber(report.ratingsTotal)} avaliações
+            </span>
+          </span>
+        </div>
+      )}
       <div className={t.wrap}>
         <table className={t.table}>
           <thead>
@@ -1383,6 +1429,7 @@ function SalesRanking({
               <th className={t.th}>Agendados</th>
               <th className={t.th}>Vendas</th>
               <th className={t.th}>Receita</th>
+              <th className={t.th}>Avaliação</th>
             </tr>
           </thead>
           <tbody>
@@ -1419,6 +1466,28 @@ function SalesRanking({
                     isDark={isDark}
                     hint="Receita por vendedor = vendas × ticket médio"
                   />
+                </td>
+                <td className={t.td}>
+                  {v.avaliacaoCount > 0 ? (
+                    <span className="font-semibold">
+                      <span style={{ color: "#f59e0b" }}>★</span>{" "}
+                      {v.avaliacao.toFixed(1)}
+                      <span
+                        className={clsx(
+                          "ml-1 text-xs font-normal",
+                          isDark ? "text-zinc-500" : "text-zinc-400",
+                        )}
+                      >
+                        ({formatNumber(v.avaliacaoCount)})
+                      </span>
+                    </span>
+                  ) : (
+                    <span
+                      className={isDark ? "text-zinc-600" : "text-zinc-300"}
+                    >
+                      —
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}
