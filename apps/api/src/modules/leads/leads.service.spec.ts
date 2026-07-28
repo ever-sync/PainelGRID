@@ -19,7 +19,7 @@ describe('LeadsService', () => {
       update: jest.Mock;
       createMany: jest.Mock;
     };
-    crmStage: { findFirst: jest.Mock };
+    crmStage: { findFirst: jest.Mock; findUnique: jest.Mock };
     crmPipeline: { findFirst: jest.Mock };
     crmHistory: { create: jest.Mock };
     event: { findFirst: jest.Mock };
@@ -41,7 +41,7 @@ describe('LeadsService', () => {
         update: jest.fn(),
         createMany: jest.fn(),
       },
-      crmStage: { findFirst: jest.fn() },
+      crmStage: { findFirst: jest.fn(), findUnique: jest.fn() },
       crmPipeline: { findFirst: jest.fn() },
       crmHistory: { create: jest.fn() },
       event: { findFirst: jest.fn() },
@@ -53,6 +53,7 @@ describe('LeadsService', () => {
     prisma.lead.findMany.mockResolvedValue([]);
     prisma.lead.createMany.mockResolvedValue({ count: 0 });
     prisma.crmStage.findFirst.mockResolvedValue(null);
+    prisma.crmStage.findUnique.mockResolvedValue(null);
     prisma.crmPipeline.findFirst.mockResolvedValue(null);
     prisma.crmHistory.create.mockResolvedValue({ id: 'hist-1' });
     prisma.event.findFirst.mockResolvedValue(null);

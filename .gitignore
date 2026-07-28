@@ -17,6 +17,7 @@ build/
 out/
 .turbo/
 coverage/
+.lighthouseci/
 
 # Logs
 *.log

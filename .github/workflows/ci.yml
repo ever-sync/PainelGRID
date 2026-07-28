@@ -19,7 +19,7 @@ jobs:
   validate:
     name: Typecheck, tests and build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -36,3 +36,17 @@ jobs:
 
       - name: Validate application
         run: npm run ci
+        env:
+          VITE_API_URL: https://api.gpdevendas.app
+
+      - name: Validate Lighthouse performance budgets
+        run: npm run lighthouse:ci
+
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: .lighthouseci
+          if-no-files-found: ignore
+          retention-days: 14

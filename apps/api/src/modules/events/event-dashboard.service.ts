@@ -97,7 +97,7 @@ export class EventDashboardService {
           OR: [
             { appointment: { event_id: eventId } },
             { lead: { event_interest_id: eventId } },
-            { team: { event_id: eventId } },
+            { sales_team: { event_id: eventId } },
           ],
         },
         select: {

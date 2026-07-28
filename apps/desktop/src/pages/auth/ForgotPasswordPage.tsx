@@ -175,12 +175,12 @@ export function ForgotPasswordPage() {
                 type="submit"
                 loading={loading}
                 className="w-full rounded-xl py-3 text-white"
-                style={{ backgroundColor: "#FF0636" }}
+                style={{ backgroundColor: "#C9002B" }}
                 onMouseOver={(event) =>
                   (event.currentTarget.style.backgroundColor = "#d90030")
                 }
                 onMouseOut={(event) =>
-                  (event.currentTarget.style.backgroundColor = "#FF0636")
+                  (event.currentTarget.style.backgroundColor = "#C9002B")
                 }
               >
                 Continuar
@@ -208,9 +208,12 @@ export function ForgotPasswordPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((current) => !current)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+                  aria-label={
+                    showPassword ? "Ocultar nova senha" : "Mostrar nova senha"
+                  }
+                  className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
                 >
-                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
 
@@ -246,12 +249,12 @@ export function ForgotPasswordPage() {
                   type="submit"
                   loading={loading}
                   className="flex-1 rounded-xl py-3 text-white"
-                  style={{ backgroundColor: "#FF0636" }}
+                  style={{ backgroundColor: "#C9002B" }}
                   onMouseOver={(event) =>
                     (event.currentTarget.style.backgroundColor = "#d90030")
                   }
                   onMouseOut={(event) =>
-                    (event.currentTarget.style.backgroundColor = "#FF0636")
+                    (event.currentTarget.style.backgroundColor = "#C9002B")
                   }
                 >
                   Redefinir senha
@@ -267,12 +270,12 @@ export function ForgotPasswordPage() {
                 type="button"
                 onClick={() => navigate("/login", { replace: true })}
                 className="w-full rounded-xl py-3 text-white"
-                style={{ backgroundColor: "#FF0636" }}
+                style={{ backgroundColor: "#C9002B" }}
                 onMouseOver={(event) =>
                   (event.currentTarget.style.backgroundColor = "#d90030")
                 }
                 onMouseOut={(event) =>
-                  (event.currentTarget.style.backgroundColor = "#FF0636")
+                  (event.currentTarget.style.backgroundColor = "#C9002B")
                 }
               >
                 Ir para o login
@@ -284,7 +287,7 @@ export function ForgotPasswordPage() {
             <button
               type="button"
               onClick={() => navigate("/login")}
-              className="text-sm font-semibold text-[#FF0636] hover:underline"
+              className="text-sm font-semibold text-[#C9002B] hover:underline"
             >
               Voltar ao login
             </button>

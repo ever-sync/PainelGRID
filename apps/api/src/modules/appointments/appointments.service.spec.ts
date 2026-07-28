@@ -235,11 +235,7 @@ describe("AppointmentsService", () => {
     expect(prisma.crmStage.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          code: expect.objectContaining({
-            in: expect.arrayContaining([
-              expect.stringContaining("_PRE_AGENDAMENTO"),
-            ]),
-          }),
+          code: "2222222222224222_PRE_AGENDAMENTO",
         }),
       }),
     );

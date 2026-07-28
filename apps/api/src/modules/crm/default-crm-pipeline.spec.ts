@@ -19,15 +19,15 @@ describe('default-crm-pipeline', () => {
     );
   });
 
-  it('define exatamente 23 etapas padrao', () => {
-    expect(DEFAULT_CRM_STAGES).toHaveLength(23);
-    expect(getDefaultStageInputs(clientId)).toHaveLength(23);
+  it('define exatamente 24 etapas padrao', () => {
+    expect(DEFAULT_CRM_STAGES).toHaveLength(24);
+    expect(getDefaultStageInputs(clientId)).toHaveLength(24);
   });
 
-  it('mantem display_order unico de 1 a 23', () => {
+  it('mantem display_order unico de 1 a 24', () => {
     const orders = DEFAULT_CRM_STAGES.map((s) => s.order);
-    expect(new Set(orders).size).toBe(23);
+    expect(new Set(orders).size).toBe(24);
     expect(Math.min(...orders)).toBe(1);
-    expect(Math.max(...orders)).toBe(23);
+    expect(Math.max(...orders)).toBe(24);
   });
 });

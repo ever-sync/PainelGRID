@@ -193,6 +193,11 @@ const ConfiguracaoPage = lazy(() =>
     default: module.ConfiguracaoPage,
   })),
 );
+const PerformancePage = lazy(() =>
+  import("./pages/gestor/PerformancePage").then((module) => ({
+    default: module.PerformancePage,
+  })),
+);
 
 function ProtectedRoute({
   user,
@@ -428,6 +433,7 @@ export default function App() {
               />
               <Route path="/gestor/chat" element={<ChatPage />} />
               <Route path="/gestor/cursos" element={<CursosGestorPage />} />
+              <Route path="/gestor/performance" element={<PerformancePage />} />
               <Route
                 path="/gestor/configuracao"
                 element={<ConfiguracaoPage />}

@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { getApiEnvFilePaths } from './config/env-paths';
 import { validateEnvironment } from './config/env.validation';
@@ -33,6 +33,9 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
 import { MailModule } from './mail/mail.module';
 import { RubinhoModule } from './modules/rubinho/rubinho.module';
 import { VehiclesModule } from './modules/vehicles/vehicles.module';
+import { PerformanceModule } from './modules/performance/performance.module';
+import { RequestPerformanceMiddleware } from './modules/performance/request-performance.middleware';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 const envFilePaths = getApiEnvFilePaths();
 
@@ -102,6 +105,7 @@ const envFilePaths = getApiEnvFilePaths();
     MailModule,
     RubinhoModule,
     VehiclesModule,
+    PerformanceModule,
   ],
   providers: [
     {
@@ -116,6 +120,14 @@ const envFilePaths = getApiEnvFilePaths();
       provide: APP_GUARD,
       useClass: RolesGuard,
     },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: LoggingInterceptor,
+    },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestPerformanceMiddleware).forRoutes('*');
+  }
+}

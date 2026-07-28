@@ -291,9 +291,12 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    aria-label={
+                      showPassword ? "Ocultar senha" : "Mostrar senha"
+                    }
+                    className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
                   >
-                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
                 {isCapsLockOn && (
@@ -318,7 +321,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                 <button
                   type="button"
                   onClick={() => navigate("/esqueci-senha")}
-                  className="text-sm font-semibold text-[#FF0636] hover:underline"
+                  className="text-sm font-semibold text-[#C9002B] hover:underline"
                 >
                   Esqueceu a senha?
                 </button>
@@ -329,7 +332,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                 type="submit"
                 disabled={isSubmitting}
                 className="w-full text-white py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed shadow-sm"
-                style={{ backgroundColor: "#FF0636" }}
+                style={{ backgroundColor: "#C9002B" }}
               >
                 {isSubmitting ? (
                   <>
@@ -394,20 +397,27 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             </p>
           </div>
 
-          <div className="mt-6 flex gap-2">
+          <div className="mt-4 flex gap-1">
             {loginSlides.map((_, index) => (
               <button
                 key={index}
                 type="button"
                 aria-label={`Ir para o slide ${index + 1}`}
                 onClick={() => setCurrentSlide(index)}
-                className="h-2 w-2 rounded-full transition-all"
-                style={{
-                  backgroundColor:
-                    index === currentSlide ? "#FF0636" : "#4b5563",
-                  transform: index === currentSlide ? "scale(1.2)" : "scale(1)",
-                }}
-              />
+                aria-current={index === currentSlide ? "true" : undefined}
+                className="flex h-7 w-7 items-center justify-center rounded-full"
+              >
+                <span
+                  aria-hidden="true"
+                  className="h-2 w-2 rounded-full transition-all"
+                  style={{
+                    backgroundColor:
+                      index === currentSlide ? "#FF0636" : "#6b7280",
+                    transform:
+                      index === currentSlide ? "scale(1.2)" : "scale(1)",
+                  }}
+                />
+              </button>
             ))}
           </div>
         </div>

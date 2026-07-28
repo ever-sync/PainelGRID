@@ -23,6 +23,7 @@ import {
   QrCode,
   Settings,
   Trophy,
+  Gauge,
 } from "lucide-react";
 import clsx from "clsx";
 import type { User } from "../types";
@@ -143,6 +144,11 @@ function getNavItems(user: User): NavItem[] {
           href: "/gestor/relatorio-executivo",
           icon: <Trophy size={18} />,
           label: "Rel. Executivo",
+        },
+        {
+          href: "/gestor/performance",
+          icon: <Gauge size={18} />,
+          label: "Performance",
         },
       ];
     case "cliente":

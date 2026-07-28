@@ -11,7 +11,6 @@ import helmet from 'helmet';
 import type { Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { createCorsOriginDelegate } from './config/cors-origins';
 import { initSentryFromEnv } from './config/sentry';
 
@@ -47,10 +46,18 @@ async function bootstrap(): Promise<express.Express> {
   );
   server.use(
     cors({
-      origin: createCorsOriginDelegate(process.env.FRONTEND_URL, 'http://localhost:5173'),
+      origin: createCorsOriginDelegate(
+        process.env.FRONTEND_URL,
+        'http://localhost:5173',
+      ),
       credentials: true,
       methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'Accept',
+        'X-Requested-With',
+      ],
       optionsSuccessStatus: 204,
     }),
   );
@@ -72,8 +79,6 @@ async function bootstrap(): Promise<express.Express> {
     }),
   );
   app.useGlobalFilters(new GlobalExceptionFilter());
-  app.useGlobalInterceptors(new LoggingInterceptor());
-
   // Swagger pesa memória e pode falhar em serverless; em produção na Vercel não é necessário para o app.
   if (process.env.VERCEL !== '1') {
     const swaggerConfig = new DocumentBuilder()
@@ -93,18 +98,23 @@ async function bootstrap(): Promise<express.Express> {
   return server;
 }
 
-export default async function handler(req: Request, res: Response): Promise<void> {
+export default async function handler(
+  req: Request,
+  res: Response,
+): Promise<void> {
   try {
     if (!cachedApp) {
       cachedApp = await bootstrap();
     }
     cachedApp(req, res);
-  } catch (err) {
+  } catch {
     logger.error('[vercel] falha no handler/bootstrap');
     if (res.headersSent) {
       return;
     }
-    res.status(500).setHeader('Content-Type', 'application/json; charset=utf-8');
+    res
+      .status(500)
+      .setHeader('Content-Type', 'application/json; charset=utf-8');
     res.end(
       JSON.stringify({
         statusCode: 500,

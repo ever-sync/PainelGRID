@@ -3,11 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import compression from 'compression';
 import { json, urlencoded } from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { JsonLogger } from './common/logger/json-logger.service';
 import { createCorsOriginDelegate } from './config/cors-origins';
 import { initSentryFromEnv } from './config/sentry';
@@ -27,11 +27,16 @@ process.on('unhandledRejection', (reason: unknown) => {
 });
 
 function shouldEnableSwagger(configService: ConfigService): boolean {
-  const nodeEnv = configService.get<string>('NODE_ENV', 'development').toLowerCase();
+  const nodeEnv = configService
+    .get<string>('NODE_ENV', 'development')
+    .toLowerCase();
   if (nodeEnv !== 'production') {
     return true;
   }
-  const flag = configService.get<string>('ENABLE_SWAGGER')?.trim().toLowerCase();
+  const flag = configService
+    .get<string>('ENABLE_SWAGGER')
+    ?.trim()
+    .toLowerCase();
   return flag === 'true' || flag === '1';
 }
 
@@ -70,6 +75,11 @@ async function bootstrap() {
     }),
   );
   app.use(cookieParser());
+  app.use(
+    compression({
+      threshold: 1_024,
+    }),
+  );
   // Acomoda payloads com data URLs de imagem (ex.: logo de time em base64).
   app.use(json({ limit: '2mb' }));
   app.use(urlencoded({ extended: true, limit: '2mb' }));
@@ -86,8 +96,6 @@ async function bootstrap() {
     }),
   );
   app.useGlobalFilters(new GlobalExceptionFilter());
-  app.useGlobalInterceptors(new LoggingInterceptor());
-
   app.enableCors({
     origin: createCorsOriginDelegate(
       configService.get<string>('FRONTEND_URL'),
@@ -120,7 +128,9 @@ async function bootstrap() {
     SwaggerModule.setup('docs', app, document);
     logger.log(`Swagger disponivel em http://localhost:${port}/docs`);
   } else {
-    logger.log('Swagger desativado em producao (defina ENABLE_SWAGGER=true para ativar)');
+    logger.log(
+      'Swagger desativado em producao (defina ENABLE_SWAGGER=true para ativar)',
+    );
   }
 
   await app.listen(port);

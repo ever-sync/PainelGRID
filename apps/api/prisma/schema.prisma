@@ -65,6 +65,50 @@ model ServiceRating {
   @@map("service_ratings")
 }
 
+model WebVitalMetric {
+  id               String   @id @default(uuid()) @db.Uuid
+  metric_name      String   @db.VarChar(10)
+  value            Float
+  rating           String   @db.VarChar(20)
+  delta            Float
+  metric_id        String   @db.VarChar(100)
+  navigation_type  String?  @db.VarChar(50)
+  path             String   @db.VarChar(500)
+  session_id       String?  @db.VarChar(64)
+  connection_type  String?  @db.VarChar(20)
+  viewport         String?  @db.VarChar(20)
+  device_memory_gb Float?
+  user_agent       String?  @db.VarChar(500)
+  recorded_at      DateTime
+  received_at      DateTime @default(now())
+
+  @@unique([metric_id, metric_name, path])
+  @@index([metric_name, received_at(sort: Desc)])
+  @@index([path, received_at(sort: Desc)])
+  @@index([session_id])
+  @@map("web_vital_metrics")
+}
+
+model ApiRequestMetric {
+  id                   BigInt   @id @default(autoincrement())
+  request_id           String   @db.VarChar(64)
+  method               String   @db.VarChar(10)
+  path                 String   @db.VarChar(500)
+  status_code          Int
+  duration_ms          Float
+  database_duration_ms Float    @default(0)
+  database_query_count Int      @default(0)
+  slowest_query_ms     Float    @default(0)
+  response_size_bytes  Int?
+  is_slow              Boolean  @default(false)
+  sampled_at           DateTime @default(now())
+
+  @@index([sampled_at(sort: Desc)])
+  @@index([path, sampled_at(sort: Desc)])
+  @@index([is_slow, sampled_at(sort: Desc)])
+  @@map("api_request_metrics")
+}
+
 model Client {
   id                          String                     @id @default(uuid()) @db.Uuid
   gestor_id                   String                     @db.Uuid
@@ -206,6 +250,9 @@ model Lead {
   @@index([registered_by_id])
   @@index([campaign_id])
   @@index([event_interest_id])
+  @@index([client_id, deleted_at, created_at(sort: Desc)], map: "idx_leads_client_active_created")
+  @@index([client_id, event_interest_id, confirmation_status], map: "idx_leads_client_event_confirmation")
+  @@index([client_id, crm_pipeline_id, crm_stage_id], map: "idx_leads_client_pipeline_stage")
   @@map("leads")
 }
 
@@ -242,6 +289,7 @@ model Event {
   @@index([client_id])
   @@index([event_date])
   @@index([status])
+  @@index([client_id, status, event_date(sort: Desc)], map: "idx_events_client_status_date")
   @@map("events")
 }
 
@@ -395,6 +443,7 @@ model Conversation {
   @@index([client_id])
   @@index([lead_id])
   @@index([last_message_at])
+  @@index([client_id, last_message_at(sort: Desc)], map: "idx_conversations_client_last_message")
   @@map("conversations")
 }
 
@@ -413,6 +462,7 @@ model Message {
 
   @@index([conversation_id])
   @@index([created_at])
+  @@index([conversation_id, created_at(sort: Desc)], map: "idx_messages_conversation_created")
   @@map("messages")
 }
 
@@ -811,6 +861,7 @@ model Appointment {
   @@index([scheduled_at])
   @@index([status])
   @@index([rescheduled_from_appointment_id])
+  @@index([client_id, status, scheduled_at], map: "idx_appointments_client_status_scheduled")
   @@map("appointments")
 }
 
@@ -840,6 +891,7 @@ model Sale {
   @@index([team_id])
   @@index([vendor_id])
   @@index([sold_at])
+  @@index([client_id, sold_at(sort: Desc)], map: "idx_sales_client_sold_at")
   @@map("sales")
 }
 

@@ -69,13 +69,26 @@ npm run dev
 - `npm run test:e2e:ui`: roda Playwright para o frontend
 - `npm run analyze:bundle --workspace=apps/desktop`: mede o peso inicial e por rota
 - `npm run check:performance --workspace=apps/desktop`: valida o build contra o orçamento de performance
+- `npm run lighthouse:ci`: executa Lighthouse nas rotas públicas e bloqueia regressões
 - `npm run docker:up`: sobe PostgreSQL e Redis
 - `npm run docker:down`: derruba os containers
 
-O frontend mede LCP, CLS, INP, FCP e TTFB após o carregamento crítico. Para
-encaminhar essas métricas a uma plataforma de observabilidade, defina
-`VITE_PERFORMANCE_ENDPOINT` durante o build. Em desenvolvimento, os valores
-também ficam disponíveis em `window.__GRID_WEB_VITALS__`.
+O frontend mede LCP, CLS, INP, FCP e TTFB após o carregamento crítico e envia
+automaticamente os valores anônimos para `POST /api/performance/web-vitals`.
+`VITE_PERFORMANCE_ENDPOINT` pode sobrescrever esse destino durante o build.
+Em desenvolvimento, os valores também ficam disponíveis em
+`window.__GRID_WEB_VITALS__`.
+
+Gestores podem consultar os percentis das últimas 24 horas em:
+
+- `GET /api/performance/web-vitals/summary`
+- `GET /api/performance/api/summary`
+
+A API inclui `Server-Timing` e `x-request-id` nas respostas, registra todas as
+requisições lentas e uma amostra configurável das demais. Os ajustes operacionais
+são `API_SLOW_REQUEST_MS` (padrão 750), `PRISMA_SLOW_QUERY_MS` (padrão 200),
+`API_PERFORMANCE_SAMPLE_RATE` (padrão 0.1) e
+`PERFORMANCE_RETENTION_DAYS` (padrão 30).
 
 ## Documentacao
 

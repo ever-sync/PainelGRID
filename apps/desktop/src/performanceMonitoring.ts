@@ -9,6 +9,10 @@ export interface GridPerformanceMetric {
   navigationType: Metric["navigationType"];
   path: string;
   recordedAt: string;
+  sessionId: string;
+  connectionType?: string;
+  viewport: "mobile" | "tablet" | "desktop";
+  deviceMemoryGb?: number;
 }
 
 declare global {
@@ -19,7 +23,57 @@ declare global {
   }
 }
 
-const endpoint = import.meta.env.VITE_PERFORMANCE_ENDPOINT?.trim();
+function normalizeApiBaseUrl(raw: string): string {
+  const base = raw.trim().replace(/\/+$/, "");
+  return /\/api$/i.test(base) ? base : `${base}/api`;
+}
+
+function resolvePerformanceEndpoint(): string {
+  const configured = import.meta.env.VITE_PERFORMANCE_ENDPOINT?.trim();
+  if (configured) return configured;
+  if (import.meta.env.DEV) return "/api/performance/web-vitals";
+
+  const apiUrl = import.meta.env.VITE_API_URL?.trim();
+  return apiUrl ? `${normalizeApiBaseUrl(apiUrl)}/performance/web-vitals` : "";
+}
+
+function getSessionId(): string {
+  const key = "grid-performance-session";
+  try {
+    const existing = sessionStorage.getItem(key);
+    if (existing) return existing;
+    const created =
+      typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    sessionStorage.setItem(key, created);
+    return created;
+  } catch {
+    return "anonymous";
+  }
+}
+
+function getDeviceContext() {
+  const navigatorWithDeviceInfo = navigator as Navigator & {
+    connection?: { effectiveType?: string };
+    deviceMemory?: number;
+  };
+  const width = window.innerWidth;
+
+  return {
+    sessionId: getSessionId(),
+    connectionType: navigatorWithDeviceInfo.connection?.effectiveType,
+    viewport:
+      width < 768
+        ? ("mobile" as const)
+        : width < 1_024
+          ? ("tablet" as const)
+          : ("desktop" as const),
+    deviceMemoryGb: navigatorWithDeviceInfo.deviceMemory,
+  };
+}
+
+const endpoint = resolvePerformanceEndpoint();
 const debugMetrics =
   import.meta.env.DEV || import.meta.env.VITE_PERFORMANCE_DEBUG === "true";
 
@@ -33,6 +87,7 @@ function publishMetric(metric: Metric) {
     navigationType: metric.navigationType,
     path: window.location.pathname,
     recordedAt: new Date().toISOString(),
+    ...getDeviceContext(),
   };
 
   window.__GRID_WEB_VITALS__ ??= {};
