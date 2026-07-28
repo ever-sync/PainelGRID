@@ -338,21 +338,28 @@ export function RankingVendedorPage() {
         subtitle="Equipe na frente e ranking individual do evento."
       />
 
-      <div className="mb-4 max-w-xs">
-        <Select
-          label="Evento"
-          value={selectedEventId}
-          onChange={(e) => setSelectedEventId(e.target.value)}
-          options={events.map((event) => ({
-            value: event.id,
-            label: event.name,
-          }))}
-          placeholder={
-            events.length === 0
-              ? "Nenhum evento disponível"
-              : "Selecione um evento"
-          }
-        />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div className="w-full sm:w-80">
+          <Select
+            label="Evento Selecionado"
+            value={selectedEventId}
+            onChange={(e) => setSelectedEventId(e.target.value)}
+            options={events.map((event) => ({
+              value: event.id,
+              label: event.name,
+            }))}
+            placeholder={
+              events.length === 0
+                ? "Nenhum evento disponível"
+                : "Selecione um evento"
+            }
+          />
+        </div>
+
+        <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-900 shrink-0">
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Ranking Atualizado em Tempo Real</span>
+        </div>
       </div>
 
       {error && (
@@ -363,41 +370,45 @@ export function RankingVendedorPage() {
 
       {!selectedEventId && !loading && events.length === 0 ? (
         <Notice tone="info">
-          Nenhum evento encontrado para exibir ranking.
+          Nenhum evento encontrado para exibir o ranking no momento.
         </Notice>
       ) : null}
 
       {leaderTeam && (
-        <div className="mb-4 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-[#E51838] to-[#b3102b] p-4 shadow-lg shadow-[#E51838]/20">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/15 text-white">
-            <Trophy size={22} />
+        <div className="mb-6 flex items-center gap-4 rounded-2xl bg-gradient-to-r from-[#FF0636] to-[#b3102b] p-4 text-white shadow-lg shadow-[#FF0636]/20">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20 text-white font-black text-xl shadow-inner">
+            🏆
           </span>
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/70">
-              Equipe na frente
+            <p className="text-[10px] font-black uppercase tracking-wider text-white/80">
+              Equipe Líder no Evento
             </p>
-            <p className="truncate text-lg font-bold text-white">
+            <p className="truncate text-lg font-black text-white">
               {leaderTeam.team_name}
             </p>
-            <p className="text-xs text-white/80">{leaderTeam.sold} vendas</p>
+            <p className="text-xs font-semibold text-white/90">
+              {leaderTeam.sold} vendas registradas
+            </p>
           </div>
         </div>
       )}
 
       {loading && !data ? (
-        <p className="text-sm text-gray-500">Carregando ranking...</p>
+        <div className="py-12 text-center text-xs text-gray-400 dark:text-zinc-500">
+          Carregando ranking oficial do evento...
+        </div>
       ) : data ? (
         <>
           <VendorPodium vendors={data.vendors} dark={isDarkMode} />
           {isDarkMode ? (
-            <div className="rounded-3xl bg-[#0b0b0b] p-3">
+            <div className="rounded-3xl bg-[#0b0b0b] p-3 border border-zinc-800">
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                 <TeamRanking teams={data.teams} />
                 <VendorRanking vendors={data.vendors} />
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <LightTeamList teams={data.teams} />
               <LightVendorList vendors={data.vendors} />
             </div>

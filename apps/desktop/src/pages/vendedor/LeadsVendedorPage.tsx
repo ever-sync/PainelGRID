@@ -371,7 +371,7 @@ export function LeadsVendedorPage() {
 
   useLeadRealtimeSync(clientId, refreshVendorData, {
     onEvent: (name, payload) => {
-      if (name === "lead_checkin" || name === "lead_updated") {
+      if (name === "lead_checkin") {
         const matchingLead = allClientLeads.find(
           (l) => l.id === payload.lead_id,
         );

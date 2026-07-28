@@ -374,7 +374,7 @@ export class AppointmentsService {
       await this.awardScheduledIfVendor(tx, created);
 
       return created;
-    });
+    }, { timeout: 15000, maxWait: 10000 });
 
     this.emitLeadUpdated(appointment.client_id, appointment.lead_id, 'appointment_created');
 
