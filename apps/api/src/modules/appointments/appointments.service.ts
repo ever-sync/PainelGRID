@@ -1035,7 +1035,10 @@ export class AppointmentsService {
     });
     const mappedStatus = skipStatusUpdate
       ? null
-      : resolveConfirmationStatusForStage(client?.settings, targetStage.id);
+      : (resolveConfirmationStatusForStage(client?.settings, targetStage.id) ??
+         (targetStage.code.endsWith("_PRESENCA_AGENDADA")
+           ? ConfirmationStatus.scheduled
+           : null));
     const notesWithStatus =
       mappedStatus != null
         ? `${historyNote}\nStatus automático atualizado pela etapa do CRM`

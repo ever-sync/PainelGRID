@@ -633,11 +633,14 @@ export class LeadsService {
       await this.assertEventExistsForClient(targetClientId, dto.event_interest_id);
     }
 
-    const confirmationStatus = await this.resolveStatusForStageAssignment(
+    const resolvedStatus = await this.resolveStatusForStageAssignment(
       targetClientId,
       defaultStageId,
       dto.confirmation_status,
     );
+    const confirmationStatus =
+      resolvedStatus ??
+      (assignedVendorId ? ConfirmationStatus.scheduled : ConfirmationStatus.pending);
 
     let lead: LeadWithRelations;
     try {
