@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   KanbanSquare,
   Loader2,
+  Lock,
   MoonStar,
   PanelLeft,
   Save,
@@ -928,25 +929,35 @@ export function ConfiguracaoPage() {
                 </div>
 
                 <div>
-                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                    Empresa
-                  </p>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+                      Empresa
+                    </p>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200/60 dark:border-amber-900/40">
+                      <Lock size={10} /> Fixo
+                    </span>
+                  </div>
                   <input
                     value={profile.company || user.company_name || "Empresa Vinculada"}
                     readOnly
                     disabled
-                    title="O nome da empresa é vinculado automaticamente à sua conta de vendedor e não pode ser editado."
+                    title="O nome da empresa é vinculado automaticamente à sua conta e não pode ser editado."
                     className={clsx(
                       profileFieldClass,
-                      "cursor-not-allowed opacity-80 font-bold bg-zinc-100 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700/80 text-zinc-700 dark:text-zinc-300",
+                      "cursor-not-allowed opacity-90 font-bold bg-zinc-100/80 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700/80 text-zinc-700 dark:text-zinc-300",
                     )}
                   />
                 </div>
 
                 <div>
-                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                    CNPJ da Empresa
-                  </p>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+                      CNPJ da Empresa
+                    </p>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200/60 dark:border-amber-900/40">
+                      <Lock size={10} /> Fixo
+                    </span>
+                  </div>
                   <input
                     value={userCompanyCnpj || "—"}
                     readOnly
@@ -954,7 +965,7 @@ export function ConfiguracaoPage() {
                     title="O CNPJ da empresa é vinculado automaticamente e não pode ser editado pelo vendedor."
                     className={clsx(
                       profileFieldClass,
-                      "cursor-not-allowed opacity-80 font-bold font-mono bg-zinc-100 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700/80 text-zinc-700 dark:text-zinc-300",
+                      "cursor-not-allowed opacity-90 font-bold font-mono bg-zinc-100/80 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700/80 text-zinc-700 dark:text-zinc-300",
                     )}
                   />
                 </div>

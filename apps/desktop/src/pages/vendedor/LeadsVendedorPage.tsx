@@ -10,7 +10,9 @@ import {
   Trophy,
   CalendarPlus,
   CheckCircle2,
+  ChevronDown,
   Copy,
+  Filter,
   Loader2,
   Mail,
   MessageCircle,
@@ -1198,7 +1200,33 @@ export function LeadsVendedorPage() {
         </Button>
       </div>
 
-      <div className="mb-6 flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+      {/* Filtro Mobile (Dropdown Select) */}
+      <div className="mb-5 md:hidden">
+        <div className="relative">
+          <Filter
+            size={16}
+            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
+          />
+          <select
+            value={selectedStageTab}
+            onChange={(e) => setSelectedStageTab(e.target.value as any)}
+            className="w-full appearance-none rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-3 pl-10 pr-10 text-xs font-bold text-zinc-900 dark:text-zinc-100 shadow-sm outline-none focus:border-[#FF0636]"
+          >
+            <option value="all">Todos os Leads ({leads.length})</option>
+            <option value="new">Novos / Contatos ({countNew})</option>
+            <option value="scheduled">Agendados ({countScheduled})</option>
+            <option value="checkin">Check-in ({countCheckin})</option>
+            <option value="done">Concluídos ({countDone})</option>
+          </select>
+          <ChevronDown
+            size={16}
+            className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
+          />
+        </div>
+      </div>
+
+      {/* Abas Pill de Etapas Desktop */}
+      <div className="mb-6 hidden md:flex gap-2 overflow-x-auto pb-2 scrollbar-none">
         {[
           ["all", `Todos (${leads.length})`],
           ["new", `Novos (${countNew})`],
