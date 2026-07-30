@@ -13,7 +13,8 @@ model User {
   id                           String            @id @default(uuid()) @db.Uuid
   name                         String            @db.VarChar(255)
   email                        String            @unique @db.VarChar(255)
-  password_hash                String            @db.VarChar(255)
+  /// Nulo enquanto o vendedor auto-cadastrado nao criou a senha pelo link do e-mail.
+  password_hash                String?           @db.VarChar(255)
   role                         Role
   avatar_url                   String?           @db.VarChar(500)
   phone                        String?           @db.VarChar(20)
@@ -31,6 +32,14 @@ model User {
   auth_provider_id             String?           @unique @db.VarChar(255)
   /// Token do link publico de avaliacao de atendimento (somente vendedores).
   rating_token                 String?           @unique @db.VarChar(64)
+  /// Estado do auto-cadastro publico. `approved` para todo usuario criado pelo painel.
+  /// Nao substitui `is_active`: quem esta pendente tem is_active=false, mas o inverso
+  /// nao vale (desativado manualmente continua approved).
+  approval_status              UserApprovalStatus @default(approved)
+  approved_at                  DateTime?
+  approved_by_id               String?           @db.Uuid
+  approved_by                  User?             @relation("UserApprovals", fields: [approved_by_id], references: [id], onDelete: SetNull)
+  approvals_made               User[]            @relation("UserApprovals")
   campaign_vendors             CampaignVendor[]
   managed_clients              Client[]          @relation("GestorClients")
   course_progress              CourseProgress[]
@@ -46,7 +55,14 @@ model User {
   client                       Client?           @relation("ClientStaff", fields: [client_id], references: [id])
 
   @@index([client_id])
+  @@index([client_id, approval_status])
   @@map("users")
+}
+
+enum UserApprovalStatus {
+  pending
+  approved
+  rejected
 }
 
 model ServiceRating {
@@ -121,6 +137,8 @@ model Client {
   facebook_access_token       String?
   whatsapp_number             String?                    @db.VarChar(20)
   phone_number                String?                    @db.VarChar(20)
+  /// Token do link publico de auto-cadastro de vendedores (permanente, rotacionavel).
+  vendor_signup_token         String?                    @unique @db.VarChar(64)
   settings                    Json                       @default("{}")
   created_at                  DateTime                   @default(now())
   updated_at                  DateTime                   @updatedAt

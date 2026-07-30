@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { randomInt, randomUUID } from 'crypto';
 import { MailService } from '../../mail/mail.service';
+import { PasswordSetupService } from './password-setup.service';
 import { Role } from '../../common/types';
 import { RedisService } from '../../config/redis.service';
 import { UsersService } from '../users/users.service';
@@ -43,6 +44,9 @@ describe('AuthService', () => {
     vendor_categories: [] as import('../../common/types').VendorCategory[],
     auth_provider_id: null as string | null,
     rating_token: null as string | null,
+    approval_status: 'approved' as const,
+    approved_at: null as Date | null,
+    approved_by_id: null as string | null,
   };
 
   let service: AuthService;
@@ -105,6 +109,11 @@ describe('AuthService', () => {
       configService,
       redisService as unknown as RedisService,
       mailService as unknown as MailService,
+      {
+        issueSetupToken: jest.fn(),
+        peekSetupToken: jest.fn(),
+        consumeSetupToken: jest.fn(),
+      } as unknown as PasswordSetupService,
     );
   });
 

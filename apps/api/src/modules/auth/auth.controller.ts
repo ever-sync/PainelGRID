@@ -27,6 +27,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { MobileRefreshTokenDto } from './dto/mobile-refresh-token.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { SetupPasswordDto } from './dto/setup-password.dto';
 import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
 import { AuthService } from './auth.service';
 import { AuthenticatedUser } from './auth.types';
@@ -206,6 +207,28 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Token invalido ou expirado' })
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);
+  }
+
+  /** Preview da tela de primeira senha: so o primeiro nome, para a pessoa se reconhecer. */
+  @Public()
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @Get('password/setup/:token')
+  @ApiOperation({ summary: 'Valida o link de criacao de senha e retorna o primeiro nome' })
+  @ApiResponse({ status: 200, description: 'Link valido' })
+  @ApiResponse({ status: 404, description: 'Link invalido, expirado ou ja usado' })
+  getPasswordSetupPreview(@Param('token') token: string) {
+    return this.authService.getPasswordSetupPreview(token);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Post('password/setup')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cria a primeira senha do vendedor aprovado' })
+  @ApiResponse({ status: 200, description: 'Senha criada com sucesso' })
+  @ApiResponse({ status: 400, description: 'Link invalido, expirado ou ja usado' })
+  setupPassword(@Body() dto: SetupPasswordDto) {
+    return this.authService.setupPassword(dto);
   }
 
   @ApiBearerAuth()

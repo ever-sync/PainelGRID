@@ -42,6 +42,21 @@ export class ClientsController {
     return this.clientsService.create(dto, user.sub);
   }
 
+  @Post(':id/vendor-signup-link/rotate')
+  @Roles(Role.GESTOR, Role.CLIENTE)
+  @ApiOperation({
+    summary: 'Troca o token do link público de auto-cadastro de vendedores',
+    description: 'O link anterior deixa de funcionar. Quem já se cadastrou não é afetado.',
+  })
+  @ApiResponse({ status: 201, description: 'Novo token gerado' })
+  @ApiResponse({ status: 403, description: 'Sem permissão para este cliente' })
+  rotateVendorSignupLink(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.clientsService.rotateVendorSignupToken(user, id);
+  }
+
   @Patch(':id')
   @Roles(Role.GESTOR, Role.CLIENTE)
   @ApiOperation({ summary: 'Atualiza cliente existente' })

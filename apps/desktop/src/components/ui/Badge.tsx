@@ -123,6 +123,7 @@ import type {
   EventStatus,
   CampaignStatus,
   PlanType,
+  UserApprovalStatus,
 } from "../../types";
 
 export function SourceBadge({ source }: { source: LeadSource }) {
@@ -173,6 +174,42 @@ export function ConfirmationBadge({
   return (
     <Badge variant={variant} dot>
       {label}
+    </Badge>
+  );
+}
+
+/**
+ * Combina os dois eixos independentes: aprovacao do auto-cadastro e ativacao manual.
+ * Pendente/Recusado vem de `approval_status`; so quem esta aprovado mostra Ativo/Inativo.
+ */
+export function ApprovalStatusBadge({
+  status = "approved",
+  isActive,
+}: {
+  status?: UserApprovalStatus;
+  isActive: boolean;
+}) {
+  if (status === "pending") {
+    return (
+      <Badge variant="yellow" dot>
+        Pendente
+      </Badge>
+    );
+  }
+  if (status === "rejected") {
+    return (
+      <Badge variant="red" dot>
+        Recusado
+      </Badge>
+    );
+  }
+  return isActive ? (
+    <Badge variant="green" dot>
+      Ativo
+    </Badge>
+  ) : (
+    <Badge variant="gray" dot>
+      Inativo
     </Badge>
   );
 }

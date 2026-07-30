@@ -50,3 +50,11 @@ export function generateRawCheckinToken(): string {
 export function generateRatingToken(): string {
   return randomBytes(16).toString('hex');
 }
+
+/**
+ * Token opaco do link publico de auto-cadastro de vendedores (1:1 com o cliente).
+ * Permanente como o de avaliacao, mas rotacionavel: se vazar, o gestor troca e o antigo morre.
+ */
+export function generateVendorSignupToken(): string {
+  return randomBytes(16).toString('hex');
+}

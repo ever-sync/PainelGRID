@@ -5,6 +5,8 @@ import { PrismaService } from '../../config/prisma.service';
 import { verifyCheckinVoucher } from '../../common/checkin-voucher.util';
 import { encryptCheckinToken } from '../../common/utils/crypto.util';
 import type { SubmitRatingDto } from './dto/submit-rating.dto';
+import type { SubmitVendorSignupDto } from './dto/submit-vendor-signup.dto';
+import { UsersService } from '../users/users.service';
 
 const PREVIEW_WINDOW_MS = 60_000;
 const PREVIEW_MAX_PER_WINDOW = 48;
@@ -15,15 +17,23 @@ const RATING_SUBMIT_MAX_PER_WINDOW = 5;
 /** Evita que o mesmo IP reavalie o mesmo vendedor em sequencia. */
 const RATING_SUBMIT_COOLDOWN_MS = 6 * 60 * 60_000;
 
+/** Auto-cadastro de vendedor: mais restritivo que avaliacao (cria linha em users). */
+const SIGNUP_SUBMIT_WINDOW_MS = 60_000;
+const SIGNUP_SUBMIT_MAX_PER_WINDOW = 3;
+const SIGNUP_SUBMIT_COOLDOWN_MS = 60 * 60_000;
+
 @Injectable()
 export class PublicService {
   private readonly previewHitsByKey = new Map<string, number[]>();
   private readonly ratingSubmitHitsByKey = new Map<string, number[]>();
   private readonly ratingSubmitCooldownByTokenAndIp = new Map<string, number>();
+  private readonly signupSubmitHitsByKey = new Map<string, number[]>();
+  private readonly signupCooldownByTokenAndIp = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly usersService: UsersService,
   ) {}
 
   private voucherSecret(): string {
@@ -109,6 +119,77 @@ export class PublicService {
       );
     }
     this.ratingSubmitCooldownByTokenAndIp.set(key, Date.now());
+  }
+
+  private assertSignupSubmitRateLimit(clientKey: string) {
+    const now = Date.now();
+    const since = now - SIGNUP_SUBMIT_WINDOW_MS;
+    const hits = (this.signupSubmitHitsByKey.get(clientKey) ?? []).filter(
+      (t) => t > since,
+    );
+    if (hits.length >= SIGNUP_SUBMIT_MAX_PER_WINDOW) {
+      throw new HttpException(
+        'Muitas tentativas. Aguarde cerca de um minuto.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    hits.push(now);
+    this.signupSubmitHitsByKey.set(clientKey, hits);
+  }
+
+  private assertSignupCooldown(token: string, clientKey: string) {
+    const key = `${token}:${clientKey}`;
+    const last = this.signupCooldownByTokenAndIp.get(key);
+    if (last != null && Date.now() - last < SIGNUP_SUBMIT_COOLDOWN_MS) {
+      throw new HttpException(
+        'Ja recebemos um cadastro deste dispositivo ha pouco. Aguarde um pouco.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    this.signupCooldownByTokenAndIp.set(key, Date.now());
+  }
+
+  /** Resolve o cliente pelo token do link. 404 generico: nao revela se o token existe. */
+  private async findClientBySignupToken(token: string) {
+    const client = await this.prisma.client.findUnique({
+      where: { vendor_signup_token: token },
+      select: { id: true, company_name: true, logo_url: true },
+    });
+
+    if (!client) {
+      throw new NotFoundException('Link de cadastro invalido');
+    }
+
+    return client;
+  }
+
+  /** Preview do formulario publico: so o necessario para a pessoa se situar. */
+  async vendorSignupTarget(token: string, clientKey: string) {
+    this.assertPreviewRateLimit(clientKey || 'unknown');
+    const client = await this.findClientBySignupToken(token);
+    return {
+      company_name: client.company_name,
+      logo_url: client.logo_url,
+    };
+  }
+
+  async submitVendorSignup(
+    token: string,
+    dto: SubmitVendorSignupDto,
+    clientKey: string,
+  ) {
+    const key = clientKey || 'unknown';
+    this.assertSignupSubmitRateLimit(key);
+    this.assertSignupCooldown(token, key);
+
+    const client = await this.findClientBySignupToken(token);
+    await this.usersService.createSelfSignupVendor(client.id, dto);
+
+    return {
+      received: true,
+      message:
+        'Cadastro enviado! Voce recebera um e-mail assim que a empresa aprovar.',
+    };
   }
 
   private async findVendorByRatingToken(token: string) {

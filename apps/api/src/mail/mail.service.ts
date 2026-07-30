@@ -101,6 +101,115 @@ export class MailService {
     }
   }
 
+  /**
+   * Vendedor aprovado no auto-cadastro. Diferente do sendWelcome, NAO envia senha:
+   * manda um link de uso unico para a pessoa criar a propria.
+   *
+   * Lanca em caso de falha (o sendWelcome so loga) porque quem aprova precisa
+   * saber que o e-mail nao saiu, para poder reenviar.
+   */
+  async sendVendorActivated(params: {
+    to: string;
+    name: string;
+    companyName: string | null;
+    setupToken: string;
+  }): Promise<void> {
+    const firstName = params.name.trim().split(/\s+/)[0] || params.name;
+    const setupUrl = `${this.frontendUrl.replace(/\/+$/, "")}/definir-senha/${params.setupToken}`;
+    const subject = `Seu cadastro foi ativado, ${firstName.toUpperCase()} — crie sua senha`;
+    const html = this.buildVendorActivatedHtml({
+      firstName,
+      companyName: params.companyName,
+      setupUrl,
+    });
+
+    if (!this.apiKey) {
+      this.logger.warn(
+        "Email de ativacao nao enviado: Resend nao configurado",
+      );
+      throw new Error("Resend nao configurado");
+    }
+
+    try {
+      await this.sendViaResend({ to: params.to, subject, html });
+      this.logger.log("Email de ativacao de vendedor enviado");
+    } catch (err) {
+      this.logger.error(
+        `Falha ao enviar email de ativacao: ${(err as Error).message}`,
+      );
+      throw err;
+    }
+  }
+
+  private buildVendorActivatedHtml(p: {
+    firstName: string;
+    companyName: string | null;
+    setupUrl: string;
+  }) {
+    const team = p.companyName ? ` — equipe ${p.companyName}` : "";
+    return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Seu cadastro foi ativado</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #f4f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .wrapper { max-width: 560px; margin: 40px auto; }
+    .card { background: #fff; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+    .header { background: #FF0636; padding: 36px 40px; text-align: center; }
+    .header h1 { color: #fff; font-size: 22px; font-weight: 800; letter-spacing: -.3px; }
+    .header p { color: rgba(255,255,255,.75); font-size: 13px; margin-top: 4px; }
+    .body { padding: 36px 40px; }
+    .body h2 { font-size: 18px; font-weight: 700; color: #111; }
+    .body > p { color: #555; font-size: 14px; line-height: 1.6; margin-top: 8px; }
+    .creds { background: #f8f8fa; border: 1.5px solid #e8e8ed; border-radius: 14px; padding: 16px 20px; margin: 24px 0; word-break: break-all; font-size: 12px; color: #555; font-family: 'SF Mono', 'Fira Code', monospace; }
+    .cta { text-align: center; margin: 28px 0 8px; }
+    .cta a { display: inline-block; background: #FF0636; color: #fff; text-decoration: none; font-weight: 700; font-size: 15px; padding: 14px 36px; border-radius: 12px; letter-spacing: -.1px; }
+    .warning { background: #fff8ec; border: 1.5px solid #f5c842; border-radius: 10px; padding: 14px 18px; margin-top: 24px; font-size: 13px; color: #7a5c00; line-height: 1.5; }
+    .footer { padding: 20px 40px; text-align: center; font-size: 12px; color: #aaa; line-height: 1.7; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="card">
+      <div class="header">
+        <h1>PainelGRID</h1>
+        <p>Plataforma de gestão de vendas</p>
+      </div>
+      <div class="body">
+        <h2>Seu cadastro foi ativado, ${p.firstName.toUpperCase()}! 🎉</h2>
+        <p>
+          Seja bem-vindo ao PainelGRID${team}. Sua conta já está liberada —
+          falta só um passo: criar a sua senha de acesso.
+        </p>
+
+        <div class="cta">
+          <a href="${p.setupUrl}">Criar minha senha</a>
+        </div>
+
+        <p style="font-size:13px;color:#888;margin-top:20px;">
+          Se o botão não funcionar, copie e cole este endereço no navegador:
+        </p>
+        <div class="creds">${p.setupUrl}</div>
+
+        <div class="warning">
+          ⏳ Este link é <strong>pessoal e de uso único</strong>, e expira em 7 dias.
+          Se ele expirar, peça um novo à empresa.
+        </div>
+      </div>
+      <div class="footer">
+        <p>Você está recebendo este e-mail porque se cadastrou pelo link da equipe.</p>
+        <p>PainelGRID · Gestão de Vendas</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+  }
+
   private buildWelcomeHtml(p: {
     name: string;
     email: string;

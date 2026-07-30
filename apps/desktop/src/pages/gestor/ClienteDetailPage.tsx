@@ -55,10 +55,12 @@ import {
   StageBadge,
   ConfirmationBadge,
   PlanBadge,
+  ApprovalStatusBadge,
 } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { CopyableId } from "../../components/ui/CopyableId";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { VendorSignupLinkCard } from "../../components/shared/VendorSignupLinkCard";
 import { Modal } from "../../components/ui/Modal";
 import { Notice } from "../../components/ui/Notice";
 import { pushToast } from "../../components/ui/Toast";
@@ -84,6 +86,7 @@ import {
   deleteStaffUser,
   listStaffByClient,
   toggleUserActive,
+  setStaffApproval,
   updateStaffUser,
   type StaffUser,
 } from "../../services/users";
@@ -709,6 +712,7 @@ export function ClienteDetailPage() {
   const [staffSaving, setStaffSaving] = useState(false);
   const [staffSaveError, setStaffSaveError] = useState("");
   const [staffToggling, setStaffToggling] = useState<string | null>(null);
+  const [staffApproving, setStaffApproving] = useState<string | null>(null);
   const [staffDeleting, setStaffDeleting] = useState<string | null>(null);
   const [staffEditing, setStaffEditing] = useState<StaffUser | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
@@ -1552,6 +1556,49 @@ export function ClienteDetailPage() {
       );
     } finally {
       setStaffToggling(null);
+    }
+  }
+
+  async function handleSetStaffApproval(
+    member: StaffUser,
+    status: "approved" | "rejected",
+  ) {
+    const session = readStoredSession();
+    if (!session?.accessToken) return;
+    setStaffApproving(member.id);
+    setStaffError("");
+    try {
+      const result = await setStaffApproval(
+        session.accessToken,
+        member.id,
+        status,
+      );
+      setStaffList((prev) =>
+        prev.map((u) =>
+          u.id === member.id
+            ? {
+                ...u,
+                approval_status: status,
+                is_active: status === "approved",
+              }
+            : u,
+        ),
+      );
+      pushToast({
+        message:
+          status === "rejected"
+            ? `Cadastro de ${member.name} recusado.`
+            : result.email_sent
+              ? `${member.name} aprovado. E-mail para criar a senha enviado.`
+              : `${member.name} aprovado. O e-mail de criação de senha ainda não foi enviado.`,
+        type: status === "approved" && !result.email_sent ? "info" : "success",
+      });
+    } catch (err) {
+      setStaffError(
+        getErrorMessage(err, "Não foi possível alterar a aprovação."),
+      );
+    } finally {
+      setStaffApproving(null);
     }
   }
 
@@ -2923,6 +2970,22 @@ export function ClienteDetailPage() {
             </button>
           </div>
 
+          <div className="mb-5">
+            <VendorSignupLinkCard
+              clientId={client.id}
+              companyName={client.company_name}
+              signupToken={client.vendor_signup_token}
+              accessToken={readStoredSession()?.accessToken ?? ""}
+              canRotate
+              onRotated={(nextToken) =>
+                setApiClient((prev) =>
+                  prev ? { ...prev, vendor_signup_token: nextToken } : prev,
+                )
+              }
+              onNotify={(message, type) => pushToast({ message, type })}
+            />
+          </div>
+
           {staffError && (
             <Notice tone="error" className="mb-4 text-xs">
               {staffError}
@@ -2953,6 +3016,7 @@ export function ClienteDetailPage() {
                     <th className="px-4 py-3">WhatsApp</th>
                     <th className="px-4 py-3">Função</th>
                     <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Aprovação</th>
                     <th className="px-4 py-3 text-right">Ações</th>
                   </tr>
                 </thead>
@@ -3011,23 +3075,57 @@ export function ClienteDetailPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        {member.is_active ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700">
-                            <span className="h-1.5 w-1.5 rounded-full bg-green-500" />{" "}
-                            Ativo
-                          </span>
+                        <ApprovalStatusBadge
+                          status={member.approval_status}
+                          isActive={member.is_active}
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        {member.approval_status === "approved" ? (
+                          <span className="text-xs text-gray-400">—</span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-500">
-                            <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />{" "}
-                            Inativo
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              disabled={staffApproving === member.id}
+                              onClick={() =>
+                                void handleSetStaffApproval(member, "approved")
+                              }
+                              className="rounded-lg bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50"
+                            >
+                              {staffApproving === member.id ? "..." : "Aprovar"}
+                            </button>
+                            {member.approval_status === "pending" && (
+                              <button
+                                type="button"
+                                disabled={staffApproving === member.id}
+                                onClick={() =>
+                                  void handleSetStaffApproval(
+                                    member,
+                                    "rejected",
+                                  )
+                                }
+                                className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-100 disabled:opacity-50"
+                              >
+                                Recusar
+                              </button>
+                            )}
+                          </div>
                         )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
-                            disabled={staffToggling === member.id}
+                            disabled={
+                              staffToggling === member.id ||
+                              member.approval_status !== "approved"
+                            }
+                            title={
+                              member.approval_status !== "approved"
+                                ? "Aprove o cadastro primeiro"
+                                : undefined
+                            }
                             onClick={() =>
                               void handleToggleStaff(
                                 member.id,
@@ -3038,7 +3136,7 @@ export function ClienteDetailPage() {
                               member.is_active
                                 ? "bg-red-50 text-red-600 hover:bg-red-100"
                                 : "bg-green-50 text-green-700 hover:bg-green-100"
-                            } disabled:opacity-50`}
+                            } disabled:cursor-not-allowed disabled:opacity-50`}
                           >
                             {staffToggling === member.id
                               ? "..."

@@ -4,8 +4,6 @@ import { useOutletContext } from "react-router-dom";
 import {
   Plus,
   Mail,
-  Phone as PhoneIcon,
-  User,
   Building2,
   CalendarRange,
   CarFront,
@@ -21,13 +19,16 @@ import {
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { Modal } from "../../components/ui/Modal";
-import { Input } from "../../components/ui/Input";
 import { Card } from "../../components/ui/Card";
 import type { User as AppUser } from "../../types";
 import { MissingClientScope } from "../../components/shared/MissingClientScope";
 import { resolveClientId } from "../../utils/userContext";
 import { readStoredSession } from "../../services/auth";
 import { listClientStaff, mapStaffToUser } from "../../services/staff";
+import { getClient } from "../../services/clients";
+import { setStaffApproval } from "../../services/users";
+import { pushToast } from "../../components/ui/Toast";
+import { VendorSignupLinkCard } from "../../components/shared/VendorSignupLinkCard";
 import {
   getVendorScoreRanking,
   type VendorScoreRankingItem,
@@ -67,6 +68,60 @@ export function VendedoresPage() {
   const [rankingByVendorId, setRankingByVendorId] = useState<
     Record<string, VendorScoreRankingItem>
   >({});
+  const [signupToken, setSignupToken] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState("");
+  const [approving, setApproving] = useState<string | null>(null);
+  const [approvalError, setApprovalError] = useState("");
+
+  /** O link de cadastro so e necessario quando o modal abre; carrega sob demanda. */
+  useEffect(() => {
+    if (!showModal || !clientId || signupToken) return;
+    const t = readStoredSession()?.accessToken;
+    if (!t) return;
+    void getClient(clientId, t)
+      .then((row) => {
+        setSignupToken(row.vendor_signup_token);
+        setCompanyName(row.company_name);
+      })
+      .catch(() => undefined);
+  }, [showModal, clientId, signupToken]);
+
+  async function handleApproval(
+    pending: AppUser,
+    status: "approved" | "rejected",
+  ) {
+    const t = readStoredSession()?.accessToken;
+    if (!t) return;
+    setApproving(pending.id);
+    setApprovalError("");
+    try {
+      const result = await setStaffApproval(t, pending.id, status);
+      setStaffUsers((prev) =>
+        prev.map((u) =>
+          u.id === pending.id
+            ? {
+                ...u,
+                approval_status: status,
+                is_active: status === "approved",
+              }
+            : u,
+        ),
+      );
+      pushToast({
+        message:
+          status === "rejected"
+            ? `Cadastro de ${pending.name} recusado.`
+            : result.email_sent
+              ? `${pending.name} aprovado. E-mail para criar a senha enviado.`
+              : `${pending.name} aprovado. O e-mail de criação de senha ainda não foi enviado.`,
+        type: status === "approved" && !result.email_sent ? "info" : "success",
+      });
+    } catch {
+      setApprovalError("Não foi possível alterar a aprovação. Tente de novo.");
+    } finally {
+      setApproving(null);
+    }
+  }
 
   const refreshVendors = useCallback(() => {
     if (refreshingRef.current) return;
@@ -124,8 +179,18 @@ export function VendedoresPage() {
     };
   }, [user.id]);
 
-  const vendors = staffUsers.filter(
+  const clientVendors = staffUsers.filter(
     (u) => u.role === "vendedor" && u.client_id === clientId,
+  );
+
+  /** Só quem foi aprovado entra em cards, ranking e modo TV. */
+  const vendors = clientVendors.filter(
+    (u) =>
+      (u.approval_status ?? "approved") === "approved" && u.is_active !== false,
+  );
+
+  const pendingVendors = clientVendors.filter(
+    (u) => u.approval_status === "pending",
   );
 
   const vendorStats = vendors.map((vendor) => {
@@ -265,8 +330,6 @@ export function VendedoresPage() {
   if (!clientId) return <MissingClientScope />;
 
   const darkShell = isDarkMode && !isTvMode;
-  const secondaryBtnDark =
-    "!border-zinc-600 !bg-zinc-900 !text-zinc-200 hover:!bg-zinc-800 hover:!border-zinc-500";
 
   return (
     <div
@@ -403,12 +466,80 @@ export function VendedoresPage() {
                 icon={<Plus size={16} />}
                 onClick={() => setShowModal(true)}
               >
-                Novo Vendedor
+                Link de cadastro
               </Button>
             </div>
           }
         />
       )}
+
+      {!isTvMode && pendingVendors.length > 0 ? (
+        <Card className="mb-5 border-amber-200 bg-amber-50/60">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">
+                Cadastros pendentes
+              </h3>
+              <p className="mt-0.5 text-xs text-gray-600">
+                {pendingVendors.length}{" "}
+                {pendingVendors.length === 1
+                  ? "vendedor se cadastrou"
+                  : "vendedores se cadastraram"}{" "}
+                pelo link e aguarda aprovação. Só depois de aprovado ele recebe
+                o e-mail para criar a senha.
+              </p>
+            </div>
+          </div>
+
+          {approvalError ? (
+            <p className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+              {approvalError}
+            </p>
+          ) : null}
+
+          <div className="space-y-2">
+            {pendingVendors.map((pending) => (
+              <div
+                key={pending.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200/80 bg-white px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-gray-900">
+                    {pending.name}
+                  </p>
+                  <p className="truncate text-xs text-gray-500">
+                    {pending.email}
+                    {pending.phone ? ` · ${pending.phone}` : ""}
+                  </p>
+                  {pending.vendor_categories?.length ? (
+                    <p className="mt-0.5 text-xs text-gray-400">
+                      {pending.vendor_categories.join(", ")}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={approving === pending.id}
+                    onClick={() => void handleApproval(pending, "approved")}
+                    className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {approving === pending.id ? "..." : "Aprovar"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={approving === pending.id}
+                    onClick={() => void handleApproval(pending, "rejected")}
+                    className="rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-red-600 ring-1 ring-red-200 transition-colors hover:bg-red-50 disabled:opacity-50"
+                  >
+                    Recusar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       {isTvMode && tvScreen === "ranking" ? (
         <div
@@ -925,50 +1056,24 @@ export function VendedoresPage() {
       <Modal
         open={showModal}
         onClose={() => setShowModal(false)}
-        title="Novo Vendedor"
-        size="md"
+        title="Link de cadastro de vendedores"
+        size="lg"
         dark={darkShell}
         footer={
-          <>
-            <Button
-              variant="secondary"
-              className={darkShell ? secondaryBtnDark : undefined}
-              onClick={() => setShowModal(false)}
-            >
-              Cancelar
-            </Button>
-            <Button onClick={() => setShowModal(false)}>Cadastrar</Button>
-          </>
+          <Button variant="secondary" onClick={() => setShowModal(false)}>
+            Fechar
+          </Button>
         }
       >
-        <div className="space-y-4">
-          <Input
-            label="Nome completo"
-            placeholder="João Silva"
-            icon={<User size={16} />}
-            dark={darkShell}
-          />
-          <Input
-            label="E-mail"
-            type="email"
-            placeholder="joao@empresa.com"
-            icon={<Mail size={16} />}
-            dark={darkShell}
-          />
-          <Input
-            label="Telefone"
-            type="tel"
-            placeholder="(11) 9 9999-9999"
-            icon={<PhoneIcon size={16} />}
-            dark={darkShell}
-          />
-          <Input
-            label="Senha"
-            type="password"
-            placeholder="••••••••"
-            dark={darkShell}
-          />
-        </div>
+        <VendorSignupLinkCard
+          clientId={clientId ?? ""}
+          companyName={companyName}
+          signupToken={signupToken}
+          accessToken={readStoredSession()?.accessToken ?? ""}
+          canRotate
+          onRotated={setSignupToken}
+          onNotify={(message, type) => pushToast({ message, type })}
+        />
       </Modal>
     </div>
   );

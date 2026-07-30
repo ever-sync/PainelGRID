@@ -13,6 +13,7 @@ export type ApiClient = {
   facebook_ad_account_id: string | null;
   whatsapp_number: string | null;
   phone_number: string | null;
+  vendor_signup_token: string | null;
   settings: unknown;
   created_at: string;
   updated_at: string;
@@ -112,6 +113,14 @@ export function createIntegrationCredential(
       token,
       body: { name },
     },
+  );
+}
+
+/** Troca o token do link publico de auto-cadastro. O link antigo para de funcionar. */
+export function rotateVendorSignupLink(clientId: string, token: string) {
+  return httpRequest<{ vendor_signup_token: string }>(
+    `/clients/${clientId}/vendor-signup-link/rotate`,
+    { method: "POST", token },
   );
 }
 
@@ -266,6 +275,7 @@ export function mapApiClientToClient(row: ApiClient): Client {
     whatsapp_number: row.whatsapp_number,
     phone_number: row.phone_number,
     webhook_url_n8n: row.webhook_url_n8n,
+    vendor_signup_token: row.vendor_signup_token ?? null,
     address,
     contact_email: contactEmail,
     status: isActive ? "active" : "inactive",

@@ -1,6 +1,8 @@
 // ─── User & Auth ────────────────────────────────────────────────────────────
 
 export type UserRole = "gestor" | "cliente" | "vendedor" | "recepcao";
+/** Estado do auto-cadastro publico. Independente de `is_active`. */
+export type UserApprovalStatus = "pending" | "approved" | "rejected";
 export type VendorCategory =
   "novo" | "semininovo" | "pdc" | "consorcio" | "assinatura";
 
@@ -16,6 +18,9 @@ export interface User {
   /** Token do link publico de avaliacao de atendimento (somente vendedores). */
   rating_token?: string | null;
   phone?: string;
+  is_active?: boolean;
+  created_at?: string;
+  approval_status?: UserApprovalStatus;
 }
 
 // ─── Client (empresa) ───────────────────────────────────────────────────────
@@ -33,6 +38,8 @@ export interface Client {
   whatsapp_number: string | null;
   phone_number: string | null;
   webhook_url_n8n?: string | null;
+  /** Token do link publico de auto-cadastro de vendedores. */
+  vendor_signup_token?: string | null;
   address: string;
   contact_email: string;
   status: "active" | "inactive";
@@ -200,11 +207,7 @@ export type ConversationChannel = "whatsapp" | "internal";
 
 /** Envio próprio no painel: relógio (sending), checks (servidor confirmou), falha opcional */
 export type MessageSendStatus =
-  | "sending"
-  | "sent"
-  | "delivered"
-  | "read"
-  | "failed";
+  "sending" | "sent" | "delivered" | "read" | "failed";
 
 export interface Message {
   id: string;

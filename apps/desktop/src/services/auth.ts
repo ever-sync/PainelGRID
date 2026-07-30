@@ -276,6 +276,21 @@ export async function resetPassword(reset_token: string, new_password: string) {
   });
 }
 
+/** Valida o link de primeira senha e devolve so o primeiro nome. Rota publica. */
+export async function fetchPasswordSetupPreview(token: string) {
+  return httpRequest<{ first_name: string }>(
+    `/auth/password/setup/${encodeURIComponent(token)}`,
+    { method: "GET" },
+  );
+}
+
+export async function setupPassword(setup_token: string, new_password: string) {
+  return httpRequest<{ message: string }>("/auth/password/setup", {
+    method: "POST",
+    body: { setup_token, new_password },
+  });
+}
+
 export function readStoredSession(): AuthSession | null {
   return readPersistedSession();
 }

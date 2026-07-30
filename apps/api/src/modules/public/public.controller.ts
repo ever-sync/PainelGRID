@@ -4,6 +4,7 @@ import { Throttle } from '@nestjs/throttler';
 import { Public } from '../../common/decorators';
 import { PublicService } from './public.service';
 import { SubmitRatingDto } from './dto/submit-rating.dto';
+import { SubmitVendorSignupDto } from './dto/submit-vendor-signup.dto';
 
 @ApiTags('public')
 @Controller('public')
@@ -58,10 +59,52 @@ export class PublicController {
     );
   }
 
+  /** Preview do formulario publico de auto-cadastro de vendedor. */
+  @Public()
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @Get('vendor-signup/:token')
+  @ApiOperation({ summary: 'Retorna a empresa dona do link de cadastro' })
+  @ApiResponse({ status: 200, description: 'Empresa retornada com sucesso' })
+  @ApiResponse({ status: 404, description: 'Link de cadastro invalido' })
+  vendorSignupTarget(@Param('token') token: string, @Ip() ip: string) {
+    return this.publicService.vendorSignupTarget(
+      this.assertOpaqueToken(token, 'Link de cadastro invalido'),
+      ip || 'unknown',
+    );
+  }
+
+  /** Envio do auto-cadastro. Entra como pendente; nao concede acesso. */
+  @Public()
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @Post('vendor-signup/:token')
+  @ApiOperation({ summary: 'Envia um auto-cadastro de vendedor' })
+  @ApiResponse({ status: 201, description: 'Cadastro recebido' })
+  @ApiResponse({ status: 404, description: 'Link de cadastro invalido' })
+  @ApiResponse({ status: 429, description: 'Muitas tentativas' })
+  submitVendorSignup(
+    @Param('token') token: string,
+    @Body() dto: SubmitVendorSignupDto,
+    @Ip() ip: string,
+  ) {
+    return this.publicService.submitVendorSignup(
+      this.assertOpaqueToken(token, 'Link de cadastro invalido'),
+      dto,
+      ip || 'unknown',
+    );
+  }
+
   private assertRatingToken(token: string): string {
+    return this.assertOpaqueToken(token, 'Link de avaliacao invalido');
+  }
+
+  /**
+   * Valida o formato ANTES de qualquer query, e usa a mesma mensagem de "nao existe":
+   * quem tenta adivinhar nao distingue token malformado de token inexistente.
+   */
+  private assertOpaqueToken(token: string, message: string): string {
     const normalized = token.trim().toLowerCase();
     if (!/^[a-f0-9]{32}$/.test(normalized)) {
-      throw new NotFoundException('Link de avaliacao invalido');
+      throw new NotFoundException(message);
     }
     return normalized;
   }

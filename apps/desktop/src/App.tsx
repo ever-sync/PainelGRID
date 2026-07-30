@@ -188,6 +188,16 @@ const AvaliacaoPage = lazy(() =>
     default: module.AvaliacaoPage,
   })),
 );
+const CadastroVendedorPage = lazy(() =>
+  import("./pages/public/CadastroVendedorPage").then((module) => ({
+    default: module.CadastroVendedorPage,
+  })),
+);
+const DefinirSenhaPage = lazy(() =>
+  import("./pages/auth/DefinirSenhaPage").then((module) => ({
+    default: module.DefinirSenhaPage,
+  })),
+);
 const ConfiguracaoPage = lazy(() =>
   import("./pages/shared/ConfiguracaoPage").then((module) => ({
     default: module.ConfiguracaoPage,
@@ -374,6 +384,12 @@ export default function App() {
           <Route path="/esqueci-senha" element={<ForgotPasswordPage />} />
           <Route path="/convite" element={<ConvitePage />} />
           <Route path="/avaliacao/:token" element={<AvaliacaoPage />} />
+          {/* Fora do AppLayout e sem casar com PROTECTED_ROUTE_PATTERN. */}
+          <Route
+            path="/cadastro-vendedor/:token"
+            element={<CadastroVendedorPage />}
+          />
+          <Route path="/definir-senha/:token" element={<DefinirSenhaPage />} />
 
           {/* TV mode (fullscreen, sem AppLayout) — qualquer usuário logado */}
           <Route

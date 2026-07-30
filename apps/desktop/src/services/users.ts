@@ -1,5 +1,5 @@
 import { httpRequest } from "./http";
-import type { UserRole, VendorCategory } from "../types";
+import type { UserApprovalStatus, UserRole, VendorCategory } from "../types";
 
 export type CreatePrincipalClientAccessPayload = {
   name: string;
@@ -38,6 +38,7 @@ export type StaffUser = {
   phone?: string | null;
   created_at: string;
   rating_token?: string | null;
+  approval_status: UserApprovalStatus;
 };
 
 type ApiUser = {
@@ -51,6 +52,7 @@ type ApiUser = {
   phone?: string | null;
   created_at: string;
   rating_token?: string | null;
+  approval_status?: UserApprovalStatus;
 };
 
 function toStaffUser(u: ApiUser): StaffUser {
@@ -65,6 +67,7 @@ function toStaffUser(u: ApiUser): StaffUser {
     phone: u.phone,
     created_at: u.created_at,
     rating_token: u.rating_token,
+    approval_status: u.approval_status ?? "approved",
   };
 }
 
@@ -88,6 +91,18 @@ export function createStaffUser(
     token,
     body: payload,
   }).then(toStaffUser);
+}
+
+/** Aprova ou recusa um auto-cadastro. Gestor dono e o proprio cliente podem. */
+export function setStaffApproval(
+  token: string,
+  userId: string,
+  status: "approved" | "rejected",
+) {
+  return httpRequest<{ user: ApiUser; email_sent: boolean }>(
+    `/client-staff/${userId}/approval`,
+    { method: "PATCH", token, body: { status } },
+  );
 }
 
 export function toggleUserActive(

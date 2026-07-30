@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../config/prisma.service';
 import { PublicService } from './public.service';
+import { UsersService } from '../users/users.service';
 import * as checkinUtils from '../../common/checkin-voucher.util';
 
 jest.mock('../../common/checkin-voucher.util');
@@ -22,11 +23,16 @@ describe('PublicService', () => {
       get: jest.fn(),
     };
 
+    const mockUsers = {
+      createSelfSignupVendor: jest.fn().mockResolvedValue({ received: true }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PublicService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: ConfigService, useValue: mockConfig },
+        { provide: UsersService, useValue: mockUsers },
       ],
     }).compile();
 

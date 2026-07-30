@@ -8,6 +8,7 @@ import {
 import { Client, Prisma } from "@prisma/client";
 import { Role } from "../../common/types";
 import { assertSafeWebhookUrl } from "../../common/outbound-url.util";
+import { generateVendorSignupToken } from "../../common/utils/crypto.util";
 import { PrismaService } from "../../config/prisma.service";
 import { RedisService } from "../../config/redis.service";
 import { AuthenticatedUser } from "../auth/auth.types";
@@ -262,7 +263,57 @@ export class ClientsService {
       throw new NotFoundException("Cliente nao encontrado");
     }
 
+    row.vendor_signup_token = await this.ensureVendorSignupToken(
+      row.id,
+      row.vendor_signup_token,
+    );
+
     return this.toListItem(row);
+  }
+
+  /**
+   * Clientes criados antes do link de auto-cadastro existir nao tem token: gera sob demanda.
+   * So no detalhe — em findAllForUser viraria um UPDATE por cliente da lista.
+   */
+  private async ensureVendorSignupToken(
+    clientId: string,
+    currentToken: string | null,
+  ): Promise<string> {
+    if (currentToken) {
+      return currentToken;
+    }
+    const token = generateVendorSignupToken();
+    await this.prisma.client.update({
+      where: { id: clientId },
+      data: { vendor_signup_token: token },
+    });
+    return token;
+  }
+
+  /** Troca o token: o link antigo para de funcionar imediatamente. */
+  async rotateVendorSignupToken(
+    user: AuthenticatedUser,
+    id: string,
+  ): Promise<{ vendor_signup_token: string }> {
+    if (user.role === Role.GESTOR) {
+      await this.assertGestorOwnsClient(user.sub, id);
+    } else if (user.role !== Role.CLIENTE || user.client_id !== id) {
+      throw new ForbiddenException("Sem permissao para trocar o link");
+    }
+
+    const token = generateVendorSignupToken();
+    await this.prisma.client.update({
+      where: { id },
+      data: { vendor_signup_token: token },
+    });
+
+    // Obrigatorio: assertGestorOwnsClient guarda o row inteiro (token velho junto) por 5min.
+    await this.invalidateClientCache(
+      id,
+      user.role === Role.GESTOR ? user.sub : null,
+    );
+
+    return { vendor_signup_token: token };
   }
 
   async create(
@@ -300,6 +351,7 @@ export class ClientsService {
             webhook_url_n8n: webhookUrl,
             phone_number: dto.phone_number?.trim() ?? null,
             whatsapp_number: dto.whatsapp_number?.trim() ?? null,
+            vendor_signup_token: generateVendorSignupToken(),
             settings,
           },
           include: clientListInclude,

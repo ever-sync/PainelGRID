@@ -4,6 +4,7 @@ import {
   HttpStatus,
   Injectable,
   Logger,
+  NotFoundException,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -22,6 +23,8 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { SetupPasswordDto } from './dto/setup-password.dto';
+import { PasswordSetupService } from './password-setup.service';
 import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
 import { AuthTokenPayload, AuthenticatedUser } from './auth.types';
 
@@ -44,6 +47,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly redisService: RedisService,
     private readonly mailService: MailService,
+    private readonly passwordSetup: PasswordSetupService,
   ) {
     this.accessTokenSecret = this.configService.get<string>('JWT_SECRET', 'leadflow_access_secret');
     this.accessTokenExpiresIn = this.configService.get<JwtSignOptions['expiresIn']>(
@@ -436,6 +440,43 @@ export class AuthService {
 
   private getPasswordResetTokenKey(token: string) {
     return `auth:password-reset:${token}`;
+  }
+
+  /**
+   * Primeira senha do vendedor aprovado. Ao contrario do reset, NAO exige
+   * `password_hash` presente — e justamente para quem ainda nao tem senha.
+   */
+  async getPasswordSetupPreview(token: string) {
+    const userId = await this.passwordSetup.peekSetupToken(token.trim());
+    if (!userId) {
+      throw new NotFoundException('Link invalido, expirado ou ja utilizado');
+    }
+
+    const user = await this.usersService.getEntityById(userId).catch(() => null);
+    if (!user || !user.is_active || user.approval_status !== 'approved') {
+      throw new NotFoundException('Link invalido, expirado ou ja utilizado');
+    }
+
+    return { first_name: user.name.trim().split(/\s+/)[0] || user.name };
+  }
+
+  async setupPassword(dto: SetupPasswordDto) {
+    const userId = await this.passwordSetup.consumeSetupToken(dto.setup_token.trim());
+    if (!userId) {
+      throw new BadRequestException('Link invalido, expirado ou ja utilizado');
+    }
+
+    const user = await this.usersService.getEntityById(userId);
+    if (!user.is_active || user.approval_status !== 'approved') {
+      throw new UnauthorizedException('Cadastro nao esta ativo.');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.new_password, BCRYPT_SALT_ROUNDS);
+    await this.usersService.updatePasswordHash(user.id, passwordHash);
+    await this.revokeRefreshTokensForUser(user.id);
+
+    // Sem auto-login de proposito: a pessoa segue para a tela de login.
+    return { message: 'Senha criada com sucesso. Faca login para entrar.' };
   }
 
   private getFailedLoginKey(email: string) {
