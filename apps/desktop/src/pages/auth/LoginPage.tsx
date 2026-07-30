@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Mail,
@@ -10,12 +10,10 @@ import {
   ShieldCheck,
   ArrowLeft,
 } from "lucide-react";
-import clsx from "clsx";
 import { Notice } from "../../components/ui/Notice";
 import type { UserRole } from "../../types";
 import gpLogo from "../../assets/logo.png";
-import loginCharacterAvif from "../../assets/login-character.avif";
-import loginCharacterWebp from "../../assets/login-character.webp";
+import loginPoster from "../../assets/login-poster.jpg";
 import {
   loginWithPassword,
   verifyTwoFactorCode,
@@ -34,26 +32,6 @@ const roleRoutes: Record<UserRole, string> = {
   recepcao: "/recepcao/checkin",
 };
 
-const loginSlides = [
-  {
-    title: "Venda Mais na Loja",
-    description: "Ranking, metas e premiações para impulsionar resultados.",
-  },
-  {
-    title: "Sua Meta, Sua Venda",
-    description: "Competição, performance e time motivado na loja.",
-  },
-  {
-    title: "Mais Ranking. Mais Resultado.",
-    description: "Eventos com pontuação e metas em tempo real.",
-  },
-] as const;
-
-// O fallback embutido evita baixar a ilustração em telas onde o painel está oculto.
-// Em desktop, <picture> escolhe AVIF ou WebP conforme o suporte do navegador.
-const transparentPixel =
-  "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
-
 export function LoginPage({ onLogin }: LoginPageProps) {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -62,30 +40,12 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [rememberMe, setRememberMe] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState("");
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [isSlideVisible, setIsSlideVisible] = useState(true);
   const [isCapsLockOn, setIsCapsLockOn] = useState(false);
 
   // Estados do fluxo de 2FA obrigatório
   const [step2fa, setStep2fa] = useState(false);
   const [tempToken2fa, setTempToken2fa] = useState("");
   const [code2fa, setCode2fa] = useState("");
-
-  useEffect(() => {
-    let timeoutId: number | undefined;
-    const timer = window.setInterval(() => {
-      setIsSlideVisible(false);
-      timeoutId = window.setTimeout(() => {
-        setCurrentSlide((value) => (value + 1) % loginSlides.length);
-        setIsSlideVisible(true);
-      }, 140);
-    }, 4400);
-
-    return () => {
-      window.clearInterval(timer);
-      if (timeoutId) window.clearTimeout(timeoutId);
-    };
-  }, []);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -353,73 +313,16 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         </div>
       </div>
 
-      {/* ── Direita: Personagem + Copy ── */}
-      <div className="relative hidden min-h-screen w-1/2 overflow-hidden bg-[#060816] lg:flex lg:flex-col lg:items-center lg:justify-end">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,6,54,0.14),_transparent_35%),radial-gradient(circle_at_70%_30%,_rgba(61,86,162,0.18),_transparent_30%)]" />
-        <div className="relative flex w-full flex-1 items-end justify-center px-10 pt-12">
-          <picture>
-            <source
-              media="(min-width: 1024px)"
-              srcSet={loginCharacterAvif}
-              type="image/avif"
-            />
-            <source
-              media="(min-width: 1024px)"
-              srcSet={loginCharacterWebp}
-              type="image/webp"
-            />
-            <img
-              src={transparentPixel}
-              alt="Personagem GP de Vendas"
-              width={800}
-              height={755}
-              decoding="async"
-              className="pointer-events-none relative z-10 w-[min(100%,370px)] max-w-none -translate-y-4 drop-shadow-[0_30px_60px_rgba(0,0,0,0.5)] xl:w-[400px] xl:-translate-y-6"
-            />
-          </picture>
-        </div>
-
-        <div className="relative z-10 mb-8 flex flex-col items-center px-8 text-center">
-          <div
-            className={clsx(
-              "transition-all duration-500 ease-out",
-              isSlideVisible
-                ? "translate-y-0 scale-100 opacity-100"
-                : "translate-y-2 scale-[0.98] opacity-0",
-            )}
-          >
-            <h2 className="mx-auto max-w-[380px] text-balance text-[1.55rem] font-bold tracking-tight text-white xl:max-w-[420px] xl:text-[1.8rem]">
-              {loginSlides[currentSlide].title}
-            </h2>
-            <p className="mx-auto mt-3 max-w-[360px] text-balance text-sm leading-relaxed text-zinc-400 xl:max-w-[420px] xl:text-[0.95rem]">
-              {loginSlides[currentSlide].description}
-            </p>
-          </div>
-
-          <div className="mt-4 flex gap-1">
-            {loginSlides.map((_, index) => (
-              <button
-                key={index}
-                type="button"
-                aria-label={`Ir para o slide ${index + 1}`}
-                onClick={() => setCurrentSlide(index)}
-                aria-current={index === currentSlide ? "true" : undefined}
-                className="flex h-7 w-7 items-center justify-center rounded-full"
-              >
-                <span
-                  aria-hidden="true"
-                  className="h-2 w-2 rounded-full transition-all"
-                  style={{
-                    backgroundColor:
-                      index === currentSlide ? "#FF0636" : "#6b7280",
-                    transform:
-                      index === currentSlide ? "scale(1.2)" : "scale(1)",
-                  }}
-                />
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* ── Direita: arte institucional (copy ja faz parte da imagem) ── */}
+      <div className="hidden h-screen w-1/2 items-center justify-center bg-white p-6 lg:flex">
+        <img
+          src={loginPoster}
+          alt="Grand Prix de Vendas — a plataforma de alta performance para concessionárias"
+          width={1122}
+          height={1402}
+          decoding="async"
+          className="max-h-full max-w-full rounded-3xl object-contain"
+        />
       </div>
     </div>
   );
