@@ -310,7 +310,7 @@ export function EventDetailPage() {
   const [editTeamLogo, setEditTeamLogo] = useState("");
   const [editTeamSaving, setEditTeamSaving] = useState(false);
   const [editTeamError, setEditTeamError] = useState("");
-  const [addMemberSelectionId, setAddMemberSelectionId] = useState("");
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [memberToggling, setMemberToggling] = useState<string | null>(null);
   const [formName, setFormName] = useState("");
   const [formEventType, setFormEventType] = useState("");
@@ -466,7 +466,7 @@ export function EventDetailPage() {
       );
       hydrateForm(mappedEvent);
       setAddMemberTeamId(null);
-      setAddMemberSelectionId("");
+      setSelectedMemberIds([]);
     } catch (loadError) {
       setError(
         getErrorMessage(loadError, "Não foi possível carregar o evento."),
@@ -1026,22 +1026,28 @@ export function EventDetailPage() {
     }
   }
 
-  async function handleAddMember(teamId: string, userId: string) {
+  async function handleAddMembers(teamId: string, userIds: string[]) {
     const session = readStoredSession();
-    if (!session?.accessToken) return;
+    if (!session?.accessToken || userIds.length === 0) return;
 
-    setMemberToggling(userId);
+    setMemberToggling(teamId);
     setSettingsError("");
     try {
-      const updated = await addTeamMember(session.accessToken, teamId, userId);
-      setTeams((current) =>
-        current.map((team) => (team.id === teamId ? updated : team)),
-      );
+      let updatedTeam: SalesTeam | null = null;
+      for (const userId of userIds) {
+        updatedTeam = await addTeamMember(session.accessToken, teamId, userId);
+      }
+      if (updatedTeam) {
+        const finalTeam = updatedTeam;
+        setTeams((current) =>
+          current.map((team) => (team.id === teamId ? finalTeam : team)),
+        );
+      }
       setAddMemberTeamId(null);
-      setAddMemberSelectionId("");
+      setSelectedMemberIds([]);
     } catch (teamError) {
       setSettingsError(
-        getErrorMessage(teamError, "Não foi possível adicionar o vendedor."),
+        getErrorMessage(teamError, "Não foi possível adicionar os vendedores."),
       );
     } finally {
       setMemberToggling(null);
@@ -2190,8 +2196,8 @@ export function EventDetailPage() {
                               const nextOpen =
                                 addMemberTeamId === team.id ? null : team.id;
                               setAddMemberTeamId(nextOpen);
-                              setAddMemberSelectionId(
-                                nextOpen ? (available[0]?.id ?? "") : "",
+                              setSelectedMemberIds(
+                                nextOpen ? available.map((v) => v.id) : [],
                               );
                             }}
                             className={clsx(
@@ -2202,7 +2208,7 @@ export function EventDetailPage() {
                             )}
                           >
                             <Plus size={12} />
-                            Adicionar membro
+                            Adicionar membros
                           </button>
                         ) : (
                           <span
@@ -2236,49 +2242,113 @@ export function EventDetailPage() {
                     {addMemberOpen && (
                       <div
                         className={clsx(
-                          "border-b px-5 py-4",
+                          "border-b px-5 py-4 space-y-3",
                           isDarkMode
                             ? "border-zinc-800 bg-[#0b0b0b]"
                             : "border-zinc-100 bg-zinc-50/60",
                         )}
                       >
-                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-                          <Select
-                            label="Membro disponível"
-                            dark={isDarkMode}
-                            value={addMemberSelectionId}
-                            onChange={(e) =>
-                              setAddMemberSelectionId(e.target.value)
-                            }
-                            placeholder="Selecione um membro"
-                            options={available.map((vendor) => ({
-                              value: vendor.id,
-                              label: `${vendor.name} · ${vendor.email}`,
-                            }))}
-                          />
-                          <div className="flex gap-2">
-                            <Button
-                              variant="secondary"
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={clsx(
+                              "text-xs font-semibold uppercase tracking-wider",
+                              isDarkMode ? "text-zinc-400" : "text-zinc-500",
+                            )}
+                          >
+                            Selecione os vendedores para o time:
+                          </span>
+                          {available.length > 1 && (
+                            <button
+                              type="button"
                               onClick={() => {
-                                setAddMemberTeamId(null);
-                                setAddMemberSelectionId("");
+                                if (selectedMemberIds.length === available.length) {
+                                  setSelectedMemberIds([]);
+                                } else {
+                                  setSelectedMemberIds(available.map((v) => v.id));
+                                }
                               }}
+                              className="text-xs font-medium text-[#E51838] hover:underline"
                             >
-                              Fechar
-                            </Button>
-                            <Button
-                              loading={memberToggling === addMemberSelectionId}
-                              isDisabled={!addMemberSelectionId}
-                              onClick={() =>
-                                void handleAddMember(
-                                  team.id,
-                                  addMemberSelectionId,
-                                )
-                              }
-                            >
-                              Adicionar
-                            </Button>
-                          </div>
+                              {selectedMemberIds.length === available.length
+                                ? "Desmarcar todos"
+                                : "Selecionar todos"}
+                            </button>
+                          )}
+                        </div>
+
+                        <div
+                          className={clsx(
+                            "max-h-48 overflow-y-auto rounded-xl border p-2 space-y-1.5",
+                            isDarkMode
+                              ? "border-zinc-800 bg-[#121318]"
+                              : "border-zinc-200 bg-white",
+                          )}
+                        >
+                          {available.map((vendor) => {
+                            const isChecked = selectedMemberIds.includes(vendor.id);
+                            return (
+                              <label
+                                key={vendor.id}
+                                className={clsx(
+                                  "flex items-center gap-3 rounded-lg p-2 transition-colors cursor-pointer text-xs font-medium",
+                                  isChecked
+                                    ? isDarkMode
+                                      ? "bg-[#E51838]/10 text-white"
+                                      : "bg-red-50 text-zinc-900"
+                                    : isDarkMode
+                                      ? "text-zinc-300 hover:bg-zinc-800/60"
+                                      : "text-zinc-700 hover:bg-zinc-100",
+                                )}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedMemberIds((prev) => [
+                                        ...prev,
+                                        vendor.id,
+                                      ]);
+                                    } else {
+                                      setSelectedMemberIds((prev) =>
+                                        prev.filter((id) => id !== vendor.id),
+                                      );
+                                    }
+                                  }}
+                                  className="h-4 w-4 rounded border-zinc-700 text-[#E51838] focus:ring-[#E51838]"
+                                />
+                                <div className="flex flex-col">
+                                  <span className="font-semibold">{vendor.name}</span>
+                                  <span className="text-[11px] text-zinc-400">
+                                    {vendor.email}
+                                  </span>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="secondary"
+                            onClick={() => {
+                              setAddMemberTeamId(null);
+                              setSelectedMemberIds([]);
+                            }}
+                          >
+                            Fechar
+                          </Button>
+                          <Button
+                            loading={memberToggling === team.id}
+                            isDisabled={selectedMemberIds.length === 0}
+                            onClick={() =>
+                              void handleAddMembers(team.id, selectedMemberIds)
+                            }
+                          >
+                            {selectedMemberIds.length > 1
+                              ? `Adicionar (${selectedMemberIds.length}) vendedores`
+                              : "Adicionar vendedor"}
+                          </Button>
                         </div>
                       </div>
                     )}

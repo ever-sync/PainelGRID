@@ -21,11 +21,14 @@ import {
   Unplug,
   UserCheck,
   UserCog,
+  Users,
 } from "lucide-react";
 import { useOutletContext } from "react-router-dom";
 import type { AppOutletContext } from "../../layouts/AppLayout";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Card } from "../../components/ui/Card";
+import { ApprovalStatusBadge } from "../../components/ui/Badge";
+import { Notice } from "../../components/ui/Notice";
 import { Button } from "../../components/ui/Button";
 import { CopyableId } from "../../components/ui/CopyableId";
 import { Modal } from "../../components/ui/Modal";
@@ -46,12 +49,9 @@ import {
   mapApiClientToClient,
   updateClient,
 } from "../../services/clients";
+import { listUsers, type StaffUser } from "../../services/users";
 import { listCrmPipelines } from "../../services/crm";
-import {
-  listEvents,
-  updateEvent,
-  type ApiEvent,
-} from "../../services/events";
+import { listEvents, updateEvent, type ApiEvent } from "../../services/events";
 import {
   disconnectMetaGestor,
   getMetaGestorStatus,
@@ -85,12 +85,26 @@ type Preferences = {
   darkDashboard: boolean;
 };
 
+const ACCESS_ROLE_ORDER = [
+  "gestor",
+  "cliente",
+  "vendedor",
+  "recepcao",
+] as const;
+const ACCESS_ROLE_LABELS: Record<(typeof ACCESS_ROLE_ORDER)[number], string> = {
+  gestor: "Gestores",
+  cliente: "Acesso do cliente",
+  vendedor: "Vendedores",
+  recepcao: "Recepção",
+};
+
 type SettingsTab =
   | "perfil"
   | "ads"
   | "crm"
   | "pontuacao"
   | "evento"
+  | "acessos"
   | "preferencias";
 
 export type ClientScoreRules = {
@@ -230,6 +244,14 @@ export function ConfiguracaoPage() {
   const [metaMessage, setMetaMessage] = useState("");
   const metaConnectPollRef = useRef<number | null>(null);
 
+  // Aba "Acessos": quem tem conta no painel, carregado sob demanda.
+  const [accessUsers, setAccessUsers] = useState<StaffUser[]>([]);
+  const [accessCompanies, setAccessCompanies] = useState<
+    Record<string, string>
+  >({});
+  const [accessLoading, setAccessLoading] = useState(false);
+  const [accessError, setAccessError] = useState("");
+
   const [preferences, setPreferences] = useState<Preferences>(() => {
     const stored = parseStoredPreferences();
     return {
@@ -254,26 +276,31 @@ export function ConfiguracaoPage() {
     const token = readStoredSession()?.accessToken;
     if (!token) return;
 
-    void listClients(token).then((rows) => {
-      const mapped = rows.map(mapApiClientToClient);
-      setCrmClients(mapped);
+    void listClients(token)
+      .then((rows) => {
+        const mapped = rows.map(mapApiClientToClient);
+        setCrmClients(mapped);
 
-      const matched = mapped.find(
-        (c) =>
-          (user.client_id && c.id === user.client_id) ||
-          (user.company_name && c.company_name.toLowerCase() === user.company_name.toLowerCase()),
-      ) ?? mapped[0];
+        const matched =
+          mapped.find(
+            (c) =>
+              (user.client_id && c.id === user.client_id) ||
+              (user.company_name &&
+                c.company_name.toLowerCase() ===
+                  user.company_name.toLowerCase()),
+          ) ?? mapped[0];
 
-      if (matched) {
-        setProfile((prev) => ({
-          ...prev,
-          company: matched.company_name,
-        }));
-        setUserCompanyCnpj(matched.cnpj || "");
-      }
-    }).catch(() => {
-      // silent
-    });
+        if (matched) {
+          setProfile((prev) => ({
+            ...prev,
+            company: matched.company_name,
+          }));
+          setUserCompanyCnpj(matched.cnpj || "");
+        }
+      })
+      .catch(() => {
+        // silent
+      });
   }, [user.client_id, user.company_name]);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -292,7 +319,8 @@ export function ConfiguracaoPage() {
   const [crmMessage, setCrmMessage] = useState("");
   const [selectedCrmClientId, setSelectedCrmClientId] = useState("");
   const [selectedScoreClientId, setSelectedScoreClientId] = useState("");
-  const [scoreRules, setScoreRules] = useState<ClientScoreRules>(DEFAULT_SCORE_RULES);
+  const [scoreRules, setScoreRules] =
+    useState<ClientScoreRules>(DEFAULT_SCORE_RULES);
   const [scoreSaving, setScoreSaving] = useState(false);
   const [scoreMessage, setScoreMessage] = useState("");
   const [crmRuleDraft, setCrmRuleDraft] =
@@ -319,7 +347,9 @@ export function ConfiguracaoPage() {
   useEffect(() => {
     if (!selectedScoreClientId) return;
     try {
-      const raw = window.localStorage.getItem(`painelgrid:score_rules:${selectedScoreClientId}`);
+      const raw = window.localStorage.getItem(
+        `painelgrid:score_rules:${selectedScoreClientId}`,
+      );
       if (raw) {
         const parsed = JSON.parse(raw);
         setScoreRules({
@@ -343,7 +373,9 @@ export function ConfiguracaoPage() {
         `painelgrid:score_rules:${selectedScoreClientId}`,
         JSON.stringify(scoreRules),
       );
-      setScoreMessage("Regras de pontuação salvas com sucesso para esta empresa!");
+      setScoreMessage(
+        "Regras de pontuação salvas com sucesso para esta empresa!",
+      );
       setTimeout(() => setScoreMessage(""), 3500);
     } finally {
       setScoreSaving(false);
@@ -925,14 +957,44 @@ export function ConfiguracaoPage() {
       ? "border-zinc-700 bg-[#111111] text-zinc-100 hover:bg-[#1b1b1b]"
       : "border-zinc-200",
   );
+  /** Carrega a lista de acessos so quando a aba e aberta. */
+  useEffect(() => {
+    if (activeTab !== "acessos" || user.role !== "gestor") return;
+    if (accessUsers.length > 0 || accessLoading) return;
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+
+    setAccessLoading(true);
+    setAccessError("");
+    void Promise.all([listUsers(token), listClients(token).catch(() => [])])
+      .then(([users, clients]) => {
+        setAccessUsers(users);
+        setAccessCompanies(
+          Object.fromEntries(
+            clients.map((client) => [client.id, client.company_name]),
+          ),
+        );
+      })
+      .catch(() =>
+        setAccessError("Não foi possível carregar a lista de acessos."),
+      )
+      .finally(() => setAccessLoading(false));
+  }, [activeTab, user.role, accessUsers.length, accessLoading]);
+
   const settingsTabs = useMemo(() => {
-    const tabs: Array<{ id: SettingsTab; label: string; icon: React.ReactNode }> = [
-      { id: "perfil", label: "Perfil", icon: <UserCog size={15} /> },
-    ];
+    const tabs: Array<{
+      id: SettingsTab;
+      label: string;
+      icon: React.ReactNode;
+    }> = [{ id: "perfil", label: "Perfil", icon: <UserCog size={15} /> }];
 
     if (user.role === "gestor" || user.role === "cliente") {
       tabs.push({ id: "ads", label: "Ads", icon: <Building2 size={15} /> });
-      tabs.push({ id: "pontuacao", label: "Pontuação", icon: <Trophy size={15} /> });
+      tabs.push({
+        id: "pontuacao",
+        label: "Pontuação",
+        icon: <Trophy size={15} />,
+      });
       tabs.push({ id: "crm", label: "CRM", icon: <KanbanSquare size={15} /> });
     }
 
@@ -941,6 +1003,11 @@ export function ConfiguracaoPage() {
         id: "evento",
         label: "Config. evento",
         icon: <CalendarPlus size={15} />,
+      });
+      tabs.push({
+        id: "acessos",
+        label: "Acessos",
+        icon: <Users size={15} />,
       });
     }
 
@@ -1181,7 +1248,11 @@ export function ConfiguracaoPage() {
                     </span>
                   </div>
                   <input
-                    value={profile.company || user.company_name || "Empresa Vinculada"}
+                    value={
+                      profile.company ||
+                      user.company_name ||
+                      "Empresa Vinculada"
+                    }
                     readOnly
                     disabled
                     title="O nome da empresa é vinculado automaticamente à sua conta e não pode ser editado."
@@ -1746,6 +1817,136 @@ export function ConfiguracaoPage() {
           </div>
         ) : null}
 
+        {activeTab === "acessos" && user.role === "gestor" ? (
+          <div className="space-y-6">
+            <Card className={sectionCardClass} padding="lg">
+              <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2
+                    className={clsx(
+                      "flex items-center gap-2 text-base font-semibold",
+                      isDarkMode ? "text-zinc-100" : "text-gray-900",
+                    )}
+                  >
+                    <Users size={17} /> Acessos ao painel
+                  </h2>
+                  <p
+                    className={clsx(
+                      "mt-1 text-xs",
+                      isDarkMode ? "text-zinc-400" : "text-gray-500",
+                    )}
+                  >
+                    Todos os e-mails com conta no PainelGRID, por perfil.
+                  </p>
+                </div>
+                {!accessLoading && accessUsers.length > 0 ? (
+                  <span
+                    className={clsx(
+                      "rounded-full px-3 py-1 text-xs font-semibold",
+                      isDarkMode
+                        ? "bg-zinc-800 text-zinc-300"
+                        : "bg-gray-100 text-gray-600",
+                    )}
+                  >
+                    {accessUsers.length}{" "}
+                    {accessUsers.length === 1 ? "conta" : "contas"}
+                  </span>
+                ) : null}
+              </div>
+
+              {accessError ? (
+                <Notice tone="error" className="mb-4 text-xs">
+                  {accessError}
+                </Notice>
+              ) : null}
+
+              {accessLoading ? (
+                <p
+                  className={clsx(
+                    "py-10 text-center text-sm",
+                    isDarkMode ? "text-zinc-500" : "text-gray-400",
+                  )}
+                >
+                  Carregando acessos...
+                </p>
+              ) : accessUsers.length === 0 ? (
+                <p
+                  className={clsx(
+                    "py-10 text-center text-sm",
+                    isDarkMode ? "text-zinc-500" : "text-gray-400",
+                  )}
+                >
+                  Nenhuma conta encontrada.
+                </p>
+              ) : (
+                <div className="space-y-6">
+                  {ACCESS_ROLE_ORDER.map((roleKey) => {
+                    const rows = accessUsers.filter(
+                      (item) => item.role === roleKey,
+                    );
+                    if (rows.length === 0) return null;
+                    return (
+                      <div key={roleKey}>
+                        <h3
+                          className={clsx(
+                            "mb-2 text-xs font-bold tracking-wider uppercase",
+                            isDarkMode ? "text-zinc-400" : "text-gray-500",
+                          )}
+                        >
+                          {ACCESS_ROLE_LABELS[roleKey]} · {rows.length}
+                        </h3>
+                        <div className="space-y-2">
+                          {rows.map((item) => (
+                            <div
+                              key={item.id}
+                              className={clsx(
+                                "flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3",
+                                isDarkMode
+                                  ? "border-zinc-700 bg-[#141414]"
+                                  : "border-gray-200 bg-white",
+                              )}
+                            >
+                              <div className="min-w-0">
+                                <p
+                                  className={clsx(
+                                    "truncate text-sm font-semibold",
+                                    isDarkMode
+                                      ? "text-zinc-100"
+                                      : "text-gray-900",
+                                  )}
+                                >
+                                  {item.email}
+                                </p>
+                                <p
+                                  className={clsx(
+                                    "truncate text-xs",
+                                    isDarkMode
+                                      ? "text-zinc-400"
+                                      : "text-gray-500",
+                                  )}
+                                >
+                                  {item.name}
+                                  {item.client_id
+                                    ? ` · ${accessCompanies[item.client_id] ?? "empresa removida"}`
+                                    : " · acesso global"}
+                                </p>
+                              </div>
+                              <ApprovalStatusBadge
+                                status={item.approval_status}
+                                isActive={item.is_active}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+          </div>
+        ) : null}
+
         {activeTab === "preferencias" ? (
           <div className="space-y-6">
             <Card className={sectionCardClass} padding="lg">
@@ -1838,7 +2039,8 @@ export function ConfiguracaoPage() {
                       Configuração da Regra de Pontuação
                     </h2>
                     <p className="text-xs text-zinc-400">
-                      Defina a pontuação concedida por agendamento, check-in e venda para cada empresa.
+                      Defina a pontuação concedida por agendamento, check-in e
+                      venda para cada empresa.
                     </p>
                   </div>
                 </div>
@@ -1870,7 +2072,8 @@ export function ConfiguracaoPage() {
                       setSelectedScoreClientId(
                         typeof e === "string"
                           ? e
-                          : (e as React.ChangeEvent<HTMLSelectElement>).target.value,
+                          : (e as React.ChangeEvent<HTMLSelectElement>).target
+                              .value,
                       )
                     }
                     options={crmClientOptions}
@@ -1904,7 +2107,10 @@ export function ConfiguracaoPage() {
                       onChange={(e) =>
                         setScoreRules((prev) => ({
                           ...prev,
-                          scheduled_points: Math.max(0, parseInt(e.target.value) || 0),
+                          scheduled_points: Math.max(
+                            0,
+                            parseInt(e.target.value) || 0,
+                          ),
                         }))
                       }
                       className={profileFieldClass}
@@ -1936,7 +2142,10 @@ export function ConfiguracaoPage() {
                       onChange={(e) =>
                         setScoreRules((prev) => ({
                           ...prev,
-                          checkin_points: Math.max(0, parseInt(e.target.value) || 0),
+                          checkin_points: Math.max(
+                            0,
+                            parseInt(e.target.value) || 0,
+                          ),
                         }))
                       }
                       className={profileFieldClass}
@@ -1968,7 +2177,10 @@ export function ConfiguracaoPage() {
                       onChange={(e) =>
                         setScoreRules((prev) => ({
                           ...prev,
-                          sold_points: Math.max(0, parseInt(e.target.value) || 0),
+                          sold_points: Math.max(
+                            0,
+                            parseInt(e.target.value) || 0,
+                          ),
                         }))
                       }
                       className={profileFieldClass}
