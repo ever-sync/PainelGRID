@@ -390,7 +390,7 @@ export class CrmService {
 
     if (user.role === Role.GESTOR) {
       const ok = await this.prisma.client.count({
-        where: { id: lead.client_id, gestor_id: user.sub },
+        where: { id: lead.client_id },
       });
       if (!ok) throw new ForbiddenException('Sem permissao para este lead');
     } else if (user.client_id !== lead.client_id) {
@@ -461,7 +461,7 @@ export class CrmService {
 
     if (user.role === Role.GESTOR) {
       const ok = await this.prisma.client.count({
-        where: { id: lead.client_id, gestor_id: user.sub },
+        where: { id: lead.client_id },
       });
       if (!ok) throw new ForbiddenException('Sem permissao para este lead');
     } else if (user.client_id !== lead.client_id) {
@@ -1083,7 +1083,7 @@ export class CrmService {
 
   private async assertUserCanAccessPipelineClient(user: AuthenticatedUser, clientId: string) {
     if (user.role === Role.GESTOR) {
-      const ok = await this.prisma.client.count({ where: { id: clientId, gestor_id: user.sub } });
+      const ok = await this.prisma.client.count({ where: { id: clientId } });
       if (!ok) {
         throw new ForbiddenException('Sem permissao para este pipeline');
       }
@@ -1103,7 +1103,7 @@ export class CrmService {
   private async assertUserCanMoveLead(user: AuthenticatedUser, lead: Lead) {
     if (user.role === Role.GESTOR) {
       const ok = await this.prisma.client.count({
-        where: { id: lead.client_id, gestor_id: user.sub },
+        where: { id: lead.client_id },
       });
       if (!ok) {
         throw new ForbiddenException('Sem permissao para mover este lead');

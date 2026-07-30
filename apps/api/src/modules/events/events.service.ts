@@ -132,7 +132,7 @@ export class EventsService {
     if (user.role === Role.GESTOR) {
       const participantIds = this.getParticipantClientIds(event);
       const owned = await this.prisma.client.count({
-        where: { gestor_id: user.sub, id: { in: participantIds } },
+        where: { id: { in: participantIds } },
       });
       if (owned === 0) {
         throw new ForbiddenException('Sem permissao');

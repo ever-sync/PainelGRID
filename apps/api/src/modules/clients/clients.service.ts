@@ -22,8 +22,12 @@ import { UpdateClientDto } from "./dto/update-client.dto";
 
 const CLIENT_CACHE_TTL_SECONDS = 5 * 60; // 5 min
 const clientCacheKey = (clientId: string) => `clients:item:${clientId}`;
-const clientOwnerCacheKey = (gestorId: string, clientId: string) =>
-  `clients:owner:${gestorId}:${clientId}`;
+/**
+ * Gestor e papel global (todos veem todas as empresas), entao o cache de acesso
+ * nao varia por gestor. Chave agnostica: se fosse por gestor, o invalidate
+ * limparia so a entrada de um deles e os outros ficariam com dado velho.
+ */
+const clientAccessCacheKey = (clientId: string) => `clients:access:${clientId}`;
 
 /** API shape: never expose facebook_access_token; include primary ad account id for UI. */
 export type ClientListItem = Omit<Client, "facebook_access_token"> & {
@@ -59,15 +63,10 @@ export class ClientsService {
   ) {}
 
   /** Invalida cache para um cliente — chamado em update/delete. */
-  private async invalidateClientCache(
-    clientId: string,
-    gestorId?: string | null,
-  ) {
+  private async invalidateClientCache(clientId: string) {
     try {
       await this.redis.client.del(clientCacheKey(clientId));
-      if (gestorId) {
-        await this.redis.client.del(clientOwnerCacheKey(gestorId, clientId));
-      }
+      await this.redis.client.del(clientAccessCacheKey(clientId));
     } catch (err) {
       this.logger.warn(
         `Falha ao invalidar cache de cliente ${clientId}: ${(err as Error).message}`,
@@ -182,8 +181,14 @@ export class ClientsService {
     };
   }
 
-  async assertGestorOwnsClient(gestorId: string, clientId: string) {
-    const cacheKey = clientOwnerCacheKey(gestorId, clientId);
+  /**
+   * Gestor e papel GLOBAL: todos os gestores enxergam todas as empresas.
+   * O nome ficou por compatibilidade com os 19 pontos que chamam este metodo —
+   * hoje ele verifica existencia do cliente, nao propriedade.
+   * `Client.gestor_id` segue sendo quem criou a empresa e dono do token Meta.
+   */
+  async assertGestorOwnsClient(_gestorId: string, clientId: string) {
+    const cacheKey = clientAccessCacheKey(clientId);
 
     // Hot path: cache hit confirma ownership sem ir no Postgres.
     try {
@@ -196,7 +201,7 @@ export class ClientsService {
     }
 
     const client = await this.prisma.client.findFirst({
-      where: { id: clientId, gestor_id: gestorId },
+      where: { id: clientId },
     });
 
     if (!client) {
@@ -219,8 +224,8 @@ export class ClientsService {
 
   async findAllForUser(user: AuthenticatedUser): Promise<ClientListItem[]> {
     if (user.role === Role.GESTOR) {
+      // Gestor e papel global: lista todas as empresas, nao so as que criou.
       const rows = await this.prisma.client.findMany({
-        where: { gestor_id: user.sub },
         orderBy: { created_at: "desc" },
         include: clientListInclude,
       });
@@ -308,10 +313,7 @@ export class ClientsService {
     });
 
     // Obrigatorio: assertGestorOwnsClient guarda o row inteiro (token velho junto) por 5min.
-    await this.invalidateClientCache(
-      id,
-      user.role === Role.GESTOR ? user.sub : null,
-    );
+    await this.invalidateClientCache(id);
 
     return { vendor_signup_token: token };
   }
@@ -373,7 +375,7 @@ export class ClientsService {
   ): Promise<ClientListItem> {
     if (user.role === Role.GESTOR) {
       await this.assertGestorOwnsClient(user.sub, id);
-      await this.invalidateClientCache(id, user.sub);
+      await this.invalidateClientCache(id);
     } else if (user.role === Role.CLIENTE && user.client_id === id) {
       if (
         dto.plan !== undefined ||
@@ -562,7 +564,7 @@ export class ClientsService {
       { maxWait: 10_000, timeout: 60_000 },
     );
 
-    await this.invalidateClientCache(clientId, user.sub);
+    await this.invalidateClientCache(clientId);
 
     return { deleted: true };
   }

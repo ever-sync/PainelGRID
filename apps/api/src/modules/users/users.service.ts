@@ -366,9 +366,10 @@ export class UsersService {
     }
   }
 
-  private async ensureClientOwnedByGestor(clientId: string, gestorId: string) {
+  /** Gestor e papel global: valida existencia da empresa, nao propriedade. */
+  private async ensureClientOwnedByGestor(clientId: string, _gestorId: string) {
     const client = await this.prisma.client.findFirst({
-      where: { id: clientId, gestor_id: gestorId },
+      where: { id: clientId },
     });
 
     if (!client) {

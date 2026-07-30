@@ -78,9 +78,10 @@ export class IntegrationCredentialsService {
     return this.serialize(row);
   }
 
-  private async assertOwnedClient(gestorId: string, clientId: string): Promise<void> {
+  /** Gestor e papel global: valida existencia da empresa, nao propriedade. */
+  private async assertOwnedClient(_gestorId: string, clientId: string): Promise<void> {
     const client = await this.prisma.client.findFirst({
-      where: { id: clientId, gestor_id: gestorId },
+      where: { id: clientId },
       select: { id: true },
     });
     if (!client) {

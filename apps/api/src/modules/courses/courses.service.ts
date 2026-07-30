@@ -120,7 +120,7 @@ export class CoursesService {
 
     if (viewer.role === Role.GESTOR) {
       const client = await this.prisma.client.findFirst({
-        where: { id: vendor.client_id, gestor_id: viewer.sub },
+        where: { id: vendor.client_id },
       });
       if (!client) {
         throw new ForbiddenException('Sem permissao');

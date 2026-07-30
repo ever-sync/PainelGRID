@@ -45,7 +45,7 @@ describe("ClientsService", () => {
       const result = await service.assertGestorOwnsClient(gestorId, clientId);
 
       expect(redis.client.get).toHaveBeenCalledWith(
-        `clients:owner:${gestorId}:${clientId}`,
+        `clients:access:${clientId}`,
       );
       expect(prisma.client.findFirst).not.toHaveBeenCalled();
       expect(result).toMatchObject({ id: clientId });
@@ -60,18 +60,19 @@ describe("ClientsService", () => {
 
       await service.assertGestorOwnsClient(gestorId, clientId);
 
+      // Gestor e papel global: a checagem e de existencia, nao de propriedade.
       expect(prisma.client.findFirst).toHaveBeenCalledWith({
-        where: { id: clientId, gestor_id: gestorId },
+        where: { id: clientId },
       });
       expect(redis.client.set).toHaveBeenCalledWith(
-        `clients:owner:${gestorId}:${clientId}`,
+        `clients:access:${clientId}`,
         expect.any(String),
         "EX",
         300,
       );
     });
 
-    it("cliente sem ownership: lança ForbiddenException e não cacheia", async () => {
+    it("cliente inexistente: lança ForbiddenException e não cacheia", async () => {
       redis.client.get.mockResolvedValue(null);
       prisma.client.findFirst.mockResolvedValue(null);
 
@@ -148,7 +149,7 @@ describe("ClientsService", () => {
       ).toBeLessThan(tx.user.deleteMany.mock.invocationCallOrder[0]);
       expect(redis.client.del).toHaveBeenCalledWith(`clients:item:${clientId}`);
       expect(redis.client.del).toHaveBeenCalledWith(
-        `clients:owner:${gestorId}:${clientId}`,
+        `clients:access:${clientId}`,
       );
     });
   });

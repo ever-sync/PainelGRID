@@ -62,10 +62,10 @@ export class SalesTeamsService {
     throw new ForbiddenException('Sem permissão para gerenciar times');
   }
 
-  /** Garante que o gestor é dono da empresa. */
-  private async assertGestorOwns(gestorId: string, clientId: string) {
+  /** Gestor é papel global: valida existência da empresa, não propriedade. */
+  private async assertGestorOwns(_gestorId: string, clientId: string) {
     const client = await this.prisma.client.findFirst({
-      where: { id: clientId, gestor_id: gestorId },
+      where: { id: clientId },
     });
     if (!client) throw new ForbiddenException('Empresa não encontrada ou sem permissão');
   }
@@ -104,10 +104,7 @@ export class SalesTeamsService {
       if (user.role === Role.GESTOR) {
         const participantIds = this.getEventParticipantClientIds(event);
         const owned = await this.prisma.client.count({
-          where: {
-            gestor_id: user.sub,
-            id: { in: participantIds },
-          },
+          where: { id: { in: participantIds } },
         });
         if (owned === 0) {
           throw new ForbiddenException('Acesso negado a este evento');
@@ -126,10 +123,7 @@ export class SalesTeamsService {
       }
       const participantIds = this.getEventParticipantClientIds(event);
       const owned = await this.prisma.client.count({
-        where: {
-          gestor_id: user.sub,
-          id: { in: participantIds },
-        },
+        where: { id: { in: participantIds } },
       });
       if (owned !== participantIds.length) {
         throw new ForbiddenException('Sem permissão para gerenciar este evento');

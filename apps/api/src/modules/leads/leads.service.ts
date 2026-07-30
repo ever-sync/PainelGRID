@@ -2164,9 +2164,8 @@ export class LeadsService {
       if (query.client_id) {
         await this.clientsService.assertGestorOwnsClient(user.sub, query.client_id);
         where.client_id = query.client_id;
-      } else {
-        where.client = { gestor_id: user.sub };
       }
+      // Gestor e papel global: sem client_id na query, ve leads de todas as empresas.
     } else if (user.role === Role.CLIENTE) {
       if (!user.client_id) {
         throw new ForbiddenException('Usuario sem empresa vinculada');

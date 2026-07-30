@@ -506,8 +506,8 @@ export class EventDashboardService {
 
   private async resolveAccessibleClientIds(user: AuthenticatedUser): Promise<string[]> {
     if (user.role === Role.GESTOR) {
+      // Gestor e papel global: todas as empresas.
       const clients = await this.prisma.client.findMany({
-        where: { gestor_id: user.sub },
         select: { id: true },
       });
       return clients.map((client) => client.id);
@@ -796,7 +796,7 @@ export class EventDashboardService {
 
     if (user.role === Role.GESTOR) {
       const owned = await this.prisma.client.count({
-        where: { gestor_id: user.sub, id: { in: participantIds } },
+        where: { id: { in: participantIds } },
       });
       if (owned === 0) {
         throw new ForbiddenException('Sem permissao');

@@ -3322,16 +3322,14 @@ export class MetaService implements OnModuleInit {
   }
 
   private async assertMetaClientAccess(user: AuthenticatedUser, clientId: string) {
-    const client = await this.getClientOrThrow(clientId);
+    await this.getClientOrThrow(clientId);
     if (user.role === Role.CLIENTE) {
       if (user.client_id !== clientId) {
         throw new ForbiddenException('Acesso negado a este cliente');
       }
-    } else if (user.role === Role.GESTOR) {
-      if (client.gestor_id !== user.sub) {
-        throw new ForbiddenException('Este cliente nao pertence ao seu escritorio');
-      }
     }
+    // Gestor e papel global: qualquer gestor acessa qualquer empresa.
+    // O token do Meta continua do gestor que fez o OAuth (client.gestor_id).
   }
 
   private async getGestorMetaSelectionSessionOrThrow(
