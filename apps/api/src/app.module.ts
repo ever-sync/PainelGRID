@@ -1,4 +1,5 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { Logger, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import IORedis from 'ioredis';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
@@ -7,6 +8,7 @@ import { getApiEnvFilePaths } from './config/env-paths';
 import { validateEnvironment } from './config/env.validation';
 import { PrismaModule } from './config/prisma.module';
 import { RedisModule } from './config/redis.module';
+import { isUnreachableRedisUrl } from './config/in-memory-redis.client';
 import { StorageModule } from './config/storage.module';
 import { AgentModule } from './modules/agent/agent.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -55,27 +57,40 @@ const envFilePaths = getApiEnvFilePaths();
     ]),
     BullModule.forRootAsync({
       useFactory: () => {
-        let redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-        const isRailwayInternalUnreachable =
-          redisUrl.includes('.railway.internal') &&
-          !process.env.RAILWAY_ENVIRONMENT &&
-          !process.env.RAILWAY_STATIC_URL;
-        if (isRailwayInternalUnreachable) {
-          redisUrl = 'redis://localhost:6379';
+        const logger = new Logger('BullModule');
+        const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+
+        // Mesma regra do RedisService: reusar o helper em vez de reimplementar.
+        // A versao anterior so detectava *.railway.internal e, quando detectava,
+        // caia para redis://localhost:6379 — o mesmo valor inalcancavel.
+        if (isUnreachableRedisUrl(redisUrl)) {
+          logger.error(
+            `REDIS_URL inalcancavel (${redisUrl}). As filas BullMQ ficam desativadas: ` +
+              'renovacao de tokens Meta, cleanup de idempotencia e webhooks nao rodam. ' +
+              'Defina um REDIS_URL valido.',
+          );
         }
+
+        // A conexao e construida aqui, e nao via `connection: { url }`, para
+        // anexar um handler de erro. Sem ele, uma falha de conexao vira
+        // unhandled rejection e o Node derruba o processo inteiro — foi o que
+        // tirou producao do ar em 30/07 quando REDIS_URL apontava para localhost.
+        const connection = new IORedis(redisUrl, {
+          enableReadyCheck: false,
+          maxRetriesPerRequest: null,
+          enableOfflineQueue: false,
+          lazyConnect: true,
+          retryStrategy: () => null,
+        });
+        connection.on('error', (err: Error) => {
+          logger.warn(`Conexao BullMQ indisponivel: ${err.message}`);
+        });
 
         return {
           // BullMQ nao e compativel com as estruturas Redis do Bull. O prefixo
           // separado impede que workers novos consumam jobs antigos.
           prefix: process.env.BULLMQ_PREFIX || 'bullmq',
-          connection: {
-            url: redisUrl,
-            enableReadyCheck: false,
-            maxRetriesPerRequest: null,
-            enableOfflineQueue: false,
-            lazyConnect: true,
-            retryStrategy: () => null,
-          },
+          connection,
         };
       },
     }),

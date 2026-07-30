@@ -122,23 +122,38 @@ delete bater no `statement_timeout` de 60s da role `prisma_runtime`.
 operações de escrita mais complexas — em especial o `deleteForUser`, que mexe em
 ~30 tabelas.
 
-### 6. Bug de precedência no fallback de Redis
+### 6. BullMQ abre conexão própria e derruba o processo ~~[corrigido em 30/07]~~
 
-`redis.service.ts:170`:
+**Corrigido.** Registrado aqui porque a causa que este documento apontava na
+primeira versão estava errada, e a errada é plausível o bastante para alguém
+repetir o diagnóstico.
 
-```ts
-if (url && (isVercel && isLocalhostRedisUrl(url) || isUnreachableRedisUrl(url))) {
-```
+O que eu havia escrito: que o culpado era a precedência de operadores em
+`redis.service.ts:170`, onde o fallback em memória para Redis local só valeria
+na Vercel. **Isso não procede** — `isUnreachableRedisUrl` já retorna `true` para
+`localhost` e `127.0.0.1`, então o segundo operando cobre o caso
+independentemente. A precedência é confusa de ler, mas o comportamento está
+correto.
 
-Isso avalia como `(isVercel && isLocalhostRedisUrl(url)) || isUnreachableRedisUrl(url)`.
-O fallback em memória para Redis local **só vale na Vercel**. Em qualquer outro
-ambiente a aplicação tenta conectar de verdade, falha, e o Node mata o processo
-por unhandled rejection.
+A causa real estava em `app.module.ts`, no `BullModule.forRootAsync`. O BullMQ
+abre uma conexão ioredis **própria**, que não passa pelo `RedisService` nem pelo
+fallback em memória. E o único guard que existia detectava apenas
+`*.railway.internal` — quando detectava, caía para `redis://localhost:6379`, que
+é exatamente o valor inalcançável. Com `retryStrategy: () => null` e
+`enableOfflineQueue: false`, a falha de conexão virava unhandled rejection e o
+Node matava o processo inteiro.
 
-Foi a causa de produção ficar fora do ar em 30/07 às 04:06, quando `REDIS_URL`
-apontava para `localhost`.
+Foi o que tirou produção do ar em 30/07 às 04:06. Os avisos de "cleanup de
+idempotencia" e "renovacao de tokens Meta" no log eram os jobs recorrentes do
+BullMQ, não do `RedisService`.
 
-**Correção:** parênteses explícitos e decidir a regra pretendida.
+Correção aplicada: reusar `isUnreachableRedisUrl` em vez de reimplementar a
+regra, logar erro explícito nomeando o que para de funcionar, e construir a
+conexão com handler de `error` — sem ele, qualquer indisponibilidade de Redis
+derruba a API.
+
+**Fica em aberto:** a precedência em `redis.service.ts:170` continua confusa e
+merece parênteses explícitos, mas é legibilidade, não bug.
 
 ### 7. `FRONTEND_URL` faz dois trabalhos
 
