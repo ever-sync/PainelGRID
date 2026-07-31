@@ -7,7 +7,7 @@ export const VENDOR_CATEGORY_OPTIONS: Array<{
 }> = [
   { value: "novo", label: "Novo" },
   { value: "semininovo", label: "Semininovo" },
-  { value: "pdc", label: "PCD" },
+  { value: "pdc", label: "VD - Venda Direta" },
   { value: "consorcio", label: "Consorcio" },
   { value: "assinatura", label: "Assinatura" },
 ];

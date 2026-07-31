@@ -8,6 +8,8 @@ import {
   ArrowRight,
   Volume2,
   VolumeX,
+  BellRing,
+  Megaphone,
 } from "lucide-react";
 import {
   getEventDashboardTv,
@@ -16,6 +18,7 @@ import {
 import { fetchAllLeads, type ApiLead } from "../../services/leads";
 import { readStoredSession } from "../../services/auth";
 import { useLeadRealtimeSync } from "../../hooks/useLeadRealtimeSync";
+import { connectRealtime } from "../../services/realtime";
 import { createAudioContext } from "../../utils/audioContext";
 import { ConnectionDot } from "../../components/tv/ConnectionDot";
 import {
@@ -232,6 +235,32 @@ export function EventTVQueuePage() {
     },
     [audioEnabled],
   );
+
+  // ── Listener de Chamada de Vendedor para Exibição na TV ───────────────────
+  const [vendorCallBanner, setVendorCallBanner] = useState<{
+    id: string;
+    lead_name: string;
+    vendor_name: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const clientId = eventData?.event.participant_client_ids?.[0];
+    if (!clientId) return;
+
+    const socket = connectRealtime(clientId);
+
+    socket.on("vendor_called", (payload: { id: string; lead_name: string; vendor_name: string }) => {
+      setVendorCallBanner(payload);
+      playChimeAndSpeak(payload.lead_name, payload.vendor_name);
+      setTimeout(() => {
+        setVendorCallBanner(null);
+      }, 12000); // Exibe por 12 segundos em destaque na TV
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [eventData?.event.participant_client_ids, playChimeAndSpeak]);
 
   // ── Divide leads ───────────────────────────────────────────────────────────
   const checkedInLeads = useMemo(() => {
@@ -578,6 +607,24 @@ export function EventTVQueuePage() {
           </div>
         </section>
       </main>
+
+      {/* Banner Pop-up GIGANTE de Chamada de Vendedor na TV */}
+      {vendorCallBanner && (
+        <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[9999] w-[92%] max-w-4xl rounded-3xl border-4 border-amber-400 bg-gradient-to-r from-zinc-950 via-zinc-900 to-zinc-950 p-8 shadow-[0_0_80px_rgba(245,158,11,0.5)] text-white text-center animate-bounce">
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <span className="h-4 w-4 rounded-full bg-red-500 animate-ping" />
+            <span className="text-amber-400 text-lg font-black uppercase tracking-widest">
+              📢 ATENÇÃO VENDEDOR · CHAMADA NA RECEPÇÃO
+            </span>
+          </div>
+          <h2 className="text-4xl md:text-6xl font-black tracking-tight text-white mb-2">
+            {vendorCallBanner.vendor_name}
+          </h2>
+          <p className="text-xl md:text-2xl text-zinc-300 font-semibold">
+            Cliente <span className="text-amber-400 font-bold">{vendorCallBanner.lead_name}</span> aguarda seu atendimento na recepção!
+          </p>
+        </div>
+      )}
 
       {/* Styles for custom scrollbars */}
       <style

@@ -133,9 +133,9 @@ const VendedoresPage = lazy(() =>
     default: module.VendedoresPage,
   })),
 );
-const CampanhasPage = lazy(() =>
-  import("./pages/cliente/CampanhasPage").then((module) => ({
-    default: module.CampanhasPage,
+const EmailsEnviadosPage = lazy(() =>
+  import("./pages/cliente/EmailsEnviadosPage").then((module) => ({
+    default: module.EmailsEnviadosPage,
   })),
 );
 const CursosClientePage = lazy(() =>
@@ -146,6 +146,26 @@ const CursosClientePage = lazy(() =>
 const VeiculosPage = lazy(() =>
   import("./pages/cliente/VeiculosPage").then((module) => ({
     default: module.VeiculosPage,
+  })),
+);
+const LojasPage = lazy(() =>
+  import("./pages/cliente/LojasPage").then((module) => ({
+    default: module.LojasPage,
+  })),
+);
+const ConversasPage = lazy(() =>
+  import("./pages/cliente/ConversasPage").then((module) => ({
+    default: module.ConversasPage,
+  })),
+);
+const AuditoriaPage = lazy(() =>
+  import("./pages/cliente/AuditoriaPage").then((module) => ({
+    default: module.AuditoriaPage,
+  })),
+);
+const AjudaPage = lazy(() =>
+  import("./pages/cliente/AjudaPage").then((module) => ({
+    default: module.AjudaPage,
   })),
 );
 const DashboardVendedorPage = lazy(() =>
@@ -448,6 +468,7 @@ export default function App() {
                 element={<ClienteEventosPage />}
               />
               <Route path="/gestor/chat" element={<ChatPage />} />
+              <Route path="/gestor/lojas" element={<LojasPage />} />
               <Route path="/gestor/cursos" element={<CursosGestorPage />} />
               <Route path="/gestor/performance" element={<PerformancePage />} />
               <Route
@@ -462,11 +483,17 @@ export default function App() {
                 element={<DashboardClientePage />}
               />
               <Route path="/cliente/eventos" element={<ClienteEventosPage />} />
+              <Route path="/cliente/lojas" element={<LojasPage />} />
               <Route path="/cliente/leads" element={<LeadsPage />} />
               <Route path="/cliente/vendedores" element={<VendedoresPage />} />
-              <Route path="/cliente/campanhas" element={<CampanhasPage />} />
+              <Route path="/cliente/campanhas" element={<EmailsEnviadosPage />} />
+              <Route path="/cliente/emails" element={<EmailsEnviadosPage />} />
               <Route path="/cliente/veiculos" element={<VeiculosPage />} />
               <Route path="/cliente/cursos" element={<CursosClientePage />} />
+              <Route path="/cliente/faq-rag" element={<CursosClientePage />} />
+              <Route path="/cliente/conversas" element={<ConversasPage />} />
+              <Route path="/cliente/auditoria" element={<AuditoriaPage />} />
+              <Route path="/cliente/ajuda" element={<AjudaPage />} />
               <Route
                 path="/cliente/configuracao"
                 element={<ConfiguracaoPage />}

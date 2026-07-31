@@ -13,6 +13,7 @@ node_modules/
 # Build and output directories
 dist/
 build/
+apps/api/api/_nest/
 .next/
 out/
 .turbo/

@@ -104,6 +104,19 @@ export interface Lead {
   first_name?: string | null;
   last_name?: string | null;
   birth_date?: string | null;
+  cpf_validated?: boolean;
+  engagement_level?: "alto" | "medio" | "baixo";
+  sentiment?: "positivo" | "neutro" | "negativo";
+  contact_consent?: boolean;
+  brand_interest?: string;
+  model_interest?: string;
+  store_name?: string;
+  trade_vehicle?: string;
+  ai_status?: string;
+  ai_summary?: string;
+  city?: string;
+  state?: string;
+  channel_code?: string;
   /** Presente após confirmação de presença; usado no check-in por código na recepção. */
   checkin_token: string | null;
   /** JWT assinado (90d) com token + lead + cliente; preferir no QR e no link /convite. */

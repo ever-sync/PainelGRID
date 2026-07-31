@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CloseAttendanceDto {
   @ApiProperty({
@@ -28,4 +28,9 @@ export class CloseAttendanceDto {
   @ApiProperty({ description: 'Indica se houve venda ao finalizar o atendimento' })
   @IsBoolean()
   sold!: boolean;
+
+  @ApiProperty({ description: 'Duração do atendimento em segundos', required: false })
+  @IsNumber()
+  @IsOptional()
+  attendance_duration_seconds?: number;
 }

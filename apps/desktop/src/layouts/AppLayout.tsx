@@ -23,6 +23,20 @@ import {
   Settings,
   Trophy,
   Gauge,
+  BellRing,
+  CheckCircle2,
+  Clock,
+  ShoppingBag,
+  CheckSquare,
+  Home,
+  Store,
+  BookOpen,
+  MessagesSquare,
+  FileText,
+  Mail,
+  HelpCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import clsx from "clsx";
 import type { User } from "../types";
@@ -33,9 +47,13 @@ import {
   readDashboardDarkEnabled,
 } from "../lib/dashboard-dark-mode";
 import { LazyQrScanner } from "../components/shared/LazyQrScanner";
-import { checkInLeadByToken, queryFipeData } from "../services/leads";
+import { checkInLeadByToken, queryFipeData, closeLeadAttendance } from "../services/leads";
 import { readStoredSession } from "../services/auth";
 import { listEvents } from "../services/events";
+import { connectRealtime } from "../services/realtime";
+import { resolveClientId } from "../utils/userContext";
+import { createAudioContext } from "../utils/audioContext";
+import { triggerHapticFeedback } from "../utils/haptics";
 
 interface AppLayoutProps {
   user: User;
@@ -150,29 +168,53 @@ function getNavItems(user: User): NavItem[] {
       return [
         {
           href: "/cliente/dashboard",
-          icon: <LayoutDashboard size={18} />,
-          label: "Dashboard",
+          icon: <Home size={18} />,
+          label: "Início",
         },
         {
-          href: "/cliente/eventos",
-          icon: <Calendar size={18} />,
-          label: "Eventos",
-        },
-        { href: "/cliente/leads", icon: <Users size={18} />, label: "Leads" },
-        {
-          href: "/cliente/vendedores",
-          icon: <UserCheck size={18} />,
-          label: "Equipe",
-        },
-        {
-          href: "/cliente/campanhas",
-          icon: <Megaphone size={18} />,
-          label: "Campanhas",
+          href: "/cliente/lojas",
+          icon: <Store size={18} />,
+          label: "Lojas",
         },
         {
           href: "/cliente/veiculos",
           icon: <CarFront size={18} />,
           label: "Veículos",
+        },
+        {
+          href: "/cliente/cursos",
+          icon: <BookOpen size={18} />,
+          label: "FAQ / RAG",
+        },
+        {
+          href: "/cliente/conversas",
+          icon: <MessagesSquare size={18} />,
+          label: "Conversas",
+        },
+        {
+          href: "/cliente/leads",
+          icon: <Users size={18} />,
+          label: "Leads",
+        },
+        {
+          href: "/cliente/vendedores",
+          icon: <UserCheck size={18} />,
+          label: "Usuários",
+        },
+        {
+          href: "/cliente/auditoria",
+          icon: <FileText size={18} />,
+          label: "Auditoria",
+        },
+        {
+          href: "/cliente/campanhas",
+          icon: <Mail size={18} />,
+          label: "E-mails",
+        },
+        {
+          href: "/cliente/ajuda",
+          icon: <HelpCircle size={18} />,
+          label: "Ajuda",
         },
       ];
     case "vendedor":
@@ -212,7 +254,8 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
   const location = useLocation();
   const isImmersiveChatRoute =
     location.pathname.startsWith("/gestor/chat") ||
-    location.pathname.startsWith("/vendedor/chat");
+    location.pathname.startsWith("/vendedor/chat") ||
+    location.pathname.startsWith("/cliente/conversas");
   /** Kanban ocupa a altura toda e rola por dentro (sem scroll da pagina). */
   const isBoardRoute = location.pathname.startsWith("/gestor/crm");
   const [quickActionOpen, setQuickActionOpen] = useState(false);
@@ -226,6 +269,236 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
   );
   const [checkinMethod, setCheckinMethod] = useState<"qr" | "manual">("qr");
   const [checkinToken, setCheckinToken] = useState("");
+
+  // ── Listener Global de Chamada de Vendedor (Pop-up Vendedor) ───────────────
+  const [vendorCallAlert, setVendorCallAlert] = useState<{
+    id: string;
+    lead_id: string;
+    lead_name: string;
+    vendor_id: string;
+    vendor_name: string;
+    team_name?: string;
+  } | null>(null);
+
+  // Solicita permissão para Web Push Notifications ao carregar o aplicativo
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+      void Notification.requestPermission();
+    }
+  }, []);
+
+  useEffect(() => {
+    const clientId = resolveClientId(user);
+    if (!clientId) return;
+
+    const socket = connectRealtime(clientId);
+
+    const handleVendorCalled = (payload: {
+      id: string;
+      lead_id: string;
+      lead_name: string;
+      vendor_id: string;
+      vendor_name: string;
+      team_name?: string;
+    }) => {
+      // Exibe pop-up se a chamada for para o usuario logado (ou se for perfil de gestor/testes)
+      if (payload.vendor_id === user.id || user.role === "gestor") {
+        setVendorCallAlert(payload);
+        triggerHapticFeedback();
+
+        // Dispara notificação nativa do sistema (Web Push) mesmo com aba em segundo plano
+        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+          try {
+            const notif = new Notification("🚨 CHAMADA DA RECEPÇÃO!", {
+              body: `O cliente ${payload.lead_name} chegou na recepção e está aguardando você!`,
+              requireInteraction: true,
+            });
+            notif.onclick = () => {
+              window.focus();
+              notif.close();
+            };
+          } catch {
+            /* ignore notification error */
+          }
+        }
+
+        try {
+          const ctx = createAudioContext();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.setValueAtTime(880, ctx.currentTime);
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.4);
+        } catch {
+          /* ignore audio error */
+        }
+      }
+    };
+
+    socket.on("vendor_called", handleVendorCalled);
+
+    return () => {
+      socket.off("vendor_called", handleVendorCalled);
+      socket.disconnect();
+    };
+  }, [user]);
+
+  // Loop de alerta sonoro + vibração contínua estilo ligação enquanto vendorCallAlert estiver aberto
+  useEffect(() => {
+    if (!vendorCallAlert) return;
+
+    const playChime = () => {
+      triggerHapticFeedback();
+      try {
+        const ctx = createAudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        gain.gain.setValueAtTime(0.4, ctx.currentTime);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.5);
+      } catch {
+        /* ignore */
+      }
+    };
+
+    playChime();
+    const interval = setInterval(playChime, 1600);
+    return () => clearInterval(interval);
+  }, [vendorCallAlert]);
+
+  // ── Status do Vendedor (Online / Ausente / Offline) ────────────────────────
+  const [vendorStatus, setVendorStatusState] = useState<"online" | "away" | "offline">(() => {
+    return (localStorage.getItem(`vendor_status_${user.id}`) as "online" | "away" | "offline") || "online";
+  });
+
+  const handleUpdateVendorStatus = (newStatus: "online" | "away" | "offline") => {
+    setVendorStatusState(newStatus);
+    try {
+      localStorage.setItem(`vendor_status_${user.id}`, newStatus);
+    } catch {
+      /* ignore */
+    }
+    const clientId = resolveClientId(user);
+    if (clientId) {
+      const socket = connectRealtime(clientId);
+      socket.emit("vendor_status_change", { vendor_id: user.id, status: newStatus });
+    }
+  };
+
+  // ── Expand/Collapse Sidebar (Abrir e Fechar em todos os acessos) ──────────────
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(`sidebar_expanded_${user.id}`) === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebarExpanded = () => {
+    setIsSidebarExpanded((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(`sidebar_expanded_${user.id}`, String(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+
+  // ── Atendimento Ativo com Cronômetro do Vendedor ───────────────────────────
+  const [activeAttendance, setActiveAttendance] = useState<{
+    lead_id: string;
+    lead_name: string;
+    vendor_id: string;
+    startedAt: number; // timestamp ms
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem("active_vendor_attendance");
+      if (saved) return JSON.parse(saved);
+    } catch {
+      /* ignore */
+    }
+    return null;
+  });
+
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Timer em tempo real
+  useEffect(() => {
+    if (!activeAttendance) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const updateTimer = () => {
+      const secs = Math.max(0, Math.floor((Date.now() - activeAttendance.startedAt) / 1000));
+      setElapsedSeconds(secs);
+    };
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [activeAttendance]);
+
+  const handleAcceptAttendance = (call: typeof vendorCallAlert) => {
+    if (!call) return;
+    const session = {
+      lead_id: call.lead_id,
+      lead_name: call.lead_name,
+      vendor_id: call.vendor_id,
+      startedAt: Date.now(),
+    };
+    setActiveAttendance(session);
+    try {
+      localStorage.setItem("active_vendor_attendance", JSON.stringify(session));
+    } catch {
+      /* ignore */
+    }
+    setVendorCallAlert(null);
+  };
+
+  const handleFinishActiveAttendance = async (sold: boolean) => {
+    if (!activeAttendance) return;
+    const t = readStoredSession()?.accessToken;
+    if (t) {
+      const durationSecs = Math.max(1, Math.floor((Date.now() - activeAttendance.startedAt) / 1000));
+      try {
+        await closeLeadAttendance(
+          activeAttendance.lead_id,
+          {
+            sold,
+            attendance_duration_seconds: durationSecs,
+          },
+          t,
+        );
+      } catch (err) {
+        console.error("Erro ao encerrar atendimento:", err);
+      }
+    }
+    setActiveAttendance(null);
+    try {
+      localStorage.removeItem("active_vendor_attendance");
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const formatCronometer = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    const hrs = Math.floor(mins / 60);
+    const remMins = mins % 60;
+
+    if (hrs > 0) {
+      return `${String(hrs).padStart(2, "0")}:${String(remMins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    }
+    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  };
   const [checkinResult, setCheckinResult] = useState<{
     type: "success" | "error";
     text: string;
@@ -515,33 +788,161 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
 
   return (
     <div className="app-layout-root relative min-h-screen overflow-hidden bg-[#fafafa] text-zinc-900">
-      <header className="fixed inset-x-0 top-0 z-40 flex h-[calc(4rem+env(safe-area-inset-top))] items-center justify-between border-b border-[#E51838]/10 bg-[#0b0b0b] px-4 pt-[env(safe-area-inset-top)] md:hidden">
+      <header className="fixed inset-x-0 top-0 z-40 flex h-[calc(4rem+env(safe-area-inset-top))] items-center justify-between border-b border-[#E51838]/10 bg-[#0b0b0b] px-3 pt-[env(safe-area-inset-top)] md:hidden">
         <button
           type="button"
           aria-label="Perfil"
           onClick={() => setProfileOpen(true)}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-[#E51838] text-[11px] font-semibold text-white"
+          className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#E51838] text-[11px] font-semibold text-white"
         >
           {initials}
+          {user.role === "vendedor" && (
+            <span
+              className={clsx(
+                "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0b0b0b]",
+                vendorStatus === "online" && "bg-emerald-500",
+                vendorStatus === "away" && "bg-amber-500",
+                vendorStatus === "offline" && "bg-red-500",
+              )}
+            />
+          )}
         </button>
-        <img
-          src={sidebarLogo}
-          alt="GP de Vendas"
-          className="h-10 w-10 object-contain"
-        />
+
+        {user.role === "vendedor" ? (
+          <div className="flex items-center gap-1 rounded-full border border-white/10 bg-zinc-900/90 p-1">
+            <button
+              type="button"
+              onClick={() => handleUpdateVendorStatus("online")}
+              className={clsx(
+                "flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-extrabold transition-all",
+                vendorStatus === "online"
+                  ? "bg-emerald-500 text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200",
+              )}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+              <span>Online</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleUpdateVendorStatus("away")}
+              className={clsx(
+                "flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-extrabold transition-all",
+                vendorStatus === "away"
+                  ? "bg-amber-500 text-black shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200",
+              )}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-black/70" />
+              <span>Ausente</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleUpdateVendorStatus("offline")}
+              className={clsx(
+                "flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-extrabold transition-all",
+                vendorStatus === "offline"
+                  ? "bg-red-600 text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200",
+              )}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-white/70" />
+              <span>Offline</span>
+            </button>
+          </div>
+        ) : (
+          <img
+            src={sidebarLogo}
+            alt="GP de Vendas"
+            className="h-10 w-10 object-contain"
+          />
+        )}
+
         <button
           type="button"
           aria-label="Menu"
           onClick={() => setMenuOpen(true)}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white"
         >
           <Menu size={18} />
         </button>
       </header>
 
+      {/* Tela Inteira Escura de Atendimento Ativo com Cronômetro e Botões Gigantes */}
+      {activeAttendance && (
+        <div className="fixed inset-0 z-[9995] flex items-center justify-center p-4 bg-[#08090d]/95 backdrop-blur-2xl animate-fadeIn overflow-y-auto">
+          <div className="w-full max-w-lg rounded-3xl border-2 border-emerald-500/40 bg-gradient-to-b from-zinc-900 via-[#0d0f17] to-black p-6 sm:p-8 text-white shadow-[0_0_90px_rgba(16,185,129,0.3)] space-y-6 text-center">
+            {/* Badge Atendimento Em Andamento */}
+            <div className="inline-flex items-center justify-center gap-2 rounded-full bg-emerald-500/10 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-emerald-400 border border-emerald-500/30">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+              </span>
+              <span>Atendimento em Andamento</span>
+            </div>
+
+            {/* Alerta de Atendimento Longo (+40 min) */}
+            {elapsedSeconds >= 2400 && (
+              <div className="rounded-2xl border border-amber-500/50 bg-amber-500/15 p-3 text-xs font-bold text-amber-300 shadow-md animate-pulse">
+                ⚠️ ALERTA DE ATENDIMENTO LONGO (+40 MIN): Negociação em andamento estendida. Considere apoio do gestor na mesa!
+              </div>
+            )}
+
+            {/* Nome do Cliente GIGANTE */}
+            <div className="space-y-1">
+              <p className="text-xs uppercase font-extrabold tracking-widest text-zinc-400">
+                Você está em atendimento com:
+              </p>
+              <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-white drop-shadow-md">
+                {activeAttendance.lead_name}
+              </h1>
+            </div>
+
+            {/* CRONÔMETRO GIGANTE NO MEIO DA TELA */}
+            <div className="my-4 flex flex-col items-center justify-center gap-2 rounded-3xl bg-black/75 border-2 border-emerald-500/30 p-6 shadow-inner">
+              <div className="flex items-center gap-2 text-emerald-400">
+                <Clock size={28} className="animate-pulse" />
+                <span className="text-xs uppercase font-extrabold tracking-widest text-emerald-400/90">
+                  Tempo Decorrido
+                </span>
+              </div>
+              <div className="font-mono text-5xl sm:text-7xl font-black tracking-widest text-emerald-300 drop-shadow-[0_0_25px_rgba(16,185,129,0.5)]">
+                {formatCronometer(elapsedSeconds)}
+              </div>
+            </div>
+
+            {/* BOTÕES GIGANTES NO MEIO */}
+            <div className="space-y-3 pt-2">
+              {/* Botão Vender GIGANTE */}
+              <button
+                type="button"
+                onClick={() => void handleFinishActiveAttendance(true)}
+                className="w-full h-16 inline-flex items-center justify-center gap-3 rounded-2xl bg-emerald-600 px-6 text-lg sm:text-xl font-black text-white shadow-[0_10px_30px_rgba(16,185,129,0.4)] hover:bg-emerald-500 active:scale-95 transition-all cursor-pointer"
+              >
+                <ShoppingBag size={24} />
+                <span>Vender</span>
+              </button>
+
+              {/* Botão Finalizar Atendimento GIGANTE */}
+              <button
+                type="button"
+                onClick={() => void handleFinishActiveAttendance(false)}
+                className="w-full h-14 inline-flex items-center justify-center gap-3 rounded-2xl border border-zinc-700 bg-zinc-900/90 px-6 text-base font-bold text-zinc-300 hover:bg-zinc-800 active:scale-95 transition-all cursor-pointer"
+              >
+                <CheckSquare size={20} />
+                <span>Finalizar Atendimento</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div
         className={clsx(
-          "h-screen md:pl-[112px] md:pr-4 md:py-4",
+          "h-screen md:pr-4 md:py-4 transition-all duration-300",
+          isSidebarExpanded ? "md:pl-[280px]" : "md:pl-[112px]",
           isImmersiveChatRoute
             ? "overflow-hidden p-2 md:p-0"
             : "overflow-y-auto pt-[calc(4rem+env(safe-area-inset-top))] pb-0 md:pt-0",
@@ -568,54 +969,92 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
         </main>
       </div>
 
+      {/* SIDEBAR DESKTOP EXPANDÍVEL (ABRIR E FECHAR) */}
       <aside
         className={clsx(
-          "fixed bottom-4 left-4 top-4 z-50 hidden w-20 flex-col items-center overflow-visible rounded-[28px] py-5 shadow-xl transition-all border md:flex",
+          "fixed bottom-4 left-4 top-4 z-50 hidden flex-col overflow-visible rounded-[28px] py-5 shadow-xl transition-all duration-300 border md:flex",
+          isSidebarExpanded ? "w-64 px-4 items-start" : "w-20 px-0 items-center",
           dashboardDark
             ? "border-zinc-800/80 bg-[#0f1015] text-zinc-100"
             : "border-zinc-200/80 bg-white ring-1 ring-[#dfdfdf]/50 text-zinc-900",
         )}
       >
-        <div
-          className={clsx(
-            "mb-6 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-colors",
-            dashboardDark
-              ? "bg-zinc-800/80 text-white border border-zinc-700/50"
-              : "bg-zinc-900 text-white",
-          )}
-        >
-          <img
-            src={sidebarLogo}
-            alt="Logo"
-            className="h-6 w-6 object-contain"
-          />
+        {/* Cabeçalho do Sidebar com Logo + Botão de Abrir/Fechar */}
+        <div className={clsx("mb-6 flex items-center shrink-0 w-full", isSidebarExpanded ? "justify-between px-1" : "justify-center")}>
+          <div className="flex items-center gap-3">
+            <div
+              className={clsx(
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-colors",
+                dashboardDark
+                  ? "bg-zinc-800/80 text-white border border-zinc-700/50"
+                  : "bg-zinc-900 text-white",
+              )}
+            >
+              <img
+                src={sidebarLogo}
+                alt="Logo"
+                className="h-6 w-6 object-contain"
+              />
+            </div>
+            {isSidebarExpanded && (
+              <span className="font-extrabold text-sm tracking-tight text-zinc-900 dark:text-white truncate">
+                Painel GRID
+              </span>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={toggleSidebarExpanded}
+            className={clsx(
+              "flex h-8 w-8 items-center justify-center rounded-xl transition-all active:scale-95 cursor-pointer",
+              dashboardDark
+                ? "bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700 hover:text-white"
+                : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900",
+            )}
+            title={isSidebarExpanded ? "Recolher menu" : "Expandir menu"}
+          >
+            {isSidebarExpanded ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+          </button>
         </div>
 
-        <nav className="flex min-h-0 w-full flex-1 flex-col items-center gap-1.5 overflow-y-auto">
+        {/* Navegação Principal do Sidebar */}
+        <nav className="flex min-h-0 w-full flex-1 flex-col gap-1.5 overflow-y-auto px-0.5">
           {navItems.map((item) => {
             const isChat = item.href.endsWith("/chat");
             return (
               <NavLink
                 key={item.href}
                 to={item.href}
-                title={item.label}
+                title={!isSidebarExpanded ? item.label : undefined}
                 aria-label={item.label}
                 className={({ isActive }) =>
                   clsx(
-                    "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-all",
+                    "relative flex items-center transition-all cursor-pointer",
+                    isSidebarExpanded
+                      ? "h-11 w-full gap-3 rounded-2xl px-3.5 text-xs font-bold"
+                      : "h-11 w-11 justify-center rounded-full mx-auto",
                     isActive
                       ? dashboardDark
-                        ? "bg-[#FF0636] text-white shadow-md"
-                        : "bg-zinc-900 text-white"
+                        ? "bg-[#FF0636] text-white shadow-md font-bold"
+                        : "bg-zinc-900 text-white font-bold"
                       : dashboardDark
                         ? "text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-200"
-                        : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700",
+                        : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900",
                   )
                 }
               >
-                {item.icon}
+                <span className="shrink-0">{item.icon}</span>
+                {isSidebarExpanded && (
+                  <span className="truncate text-xs font-semibold">{item.label}</span>
+                )}
                 {isChat && (
-                  <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#FF0636] px-1 text-[9px] font-black text-white shadow-sm ring-2 ring-white dark:ring-[#0f1015] animate-pulse">
+                  <span
+                    className={clsx(
+                      "flex h-4 min-w-4 items-center justify-center rounded-full bg-[#FF0636] px-1 text-[9px] font-black text-white shadow-sm ring-2 ring-white dark:ring-[#0f1015] animate-pulse",
+                      isSidebarExpanded ? "ml-auto" : "absolute -top-0.5 -right-0.5",
+                    )}
+                  >
                     3
                   </span>
                 )}
@@ -697,6 +1136,57 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                 <p className="mt-0.5 text-[11px] text-zinc-400">
                   Perfil {roleLabels[user.role] ?? user.role}
                 </p>
+
+                {user.role === "vendedor" && (
+                  <div className="mt-2 pt-2 border-t border-zinc-700/50 space-y-1">
+                    <span className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">
+                      Status de Atendimento:
+                    </span>
+                    <div className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateVendorStatus("online")}
+                        className={clsx(
+                          "flex items-center gap-2 px-2 py-1 rounded-lg text-xs font-semibold w-full text-left transition-colors",
+                          vendorStatus === "online"
+                            ? "bg-emerald-500/20 text-emerald-300 font-bold"
+                            : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200",
+                        )}
+                      >
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>Online</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateVendorStatus("away")}
+                        className={clsx(
+                          "flex items-center gap-2 px-2 py-1 rounded-lg text-xs font-semibold w-full text-left transition-colors",
+                          vendorStatus === "away"
+                            ? "bg-amber-500/20 text-amber-300 font-bold"
+                            : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200",
+                        )}
+                      >
+                        <span className="h-2 w-2 rounded-full bg-amber-500" />
+                        <span>Ausente</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateVendorStatus("offline")}
+                        className={clsx(
+                          "flex items-center gap-2 px-2 py-1 rounded-lg text-xs font-semibold w-full text-left transition-colors",
+                          vendorStatus === "offline"
+                            ? "bg-red-500/20 text-red-300 font-bold"
+                            : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200",
+                        )}
+                      >
+                        <span className="h-2 w-2 rounded-full bg-red-500" />
+                        <span>Offline</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               <button
                 type="button"
@@ -1159,8 +1649,18 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
             </div>
 
             <div className="mb-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#E51838] text-sm font-bold text-white">
+              <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#E51838] text-sm font-bold text-white">
                 {initials}
+                {user.role === "vendedor" && (
+                  <span
+                    className={clsx(
+                      "absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#121212]",
+                      vendorStatus === "online" && "bg-emerald-500",
+                      vendorStatus === "away" && "bg-amber-500",
+                      vendorStatus === "offline" && "bg-red-500",
+                    )}
+                  />
+                )}
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-white">
@@ -1169,6 +1669,57 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                 <p className="truncate text-xs text-zinc-400">{user.email}</p>
               </div>
             </div>
+
+            {user.role === "vendedor" && (
+              <div className="mb-3 space-y-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block">
+                  Status de Atendimento
+                </span>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateVendorStatus("online")}
+                    className={clsx(
+                      "flex flex-col items-center justify-center gap-1 p-2 rounded-xl text-xs font-bold transition-all",
+                      vendorStatus === "online"
+                        ? "bg-emerald-500 text-white ring-2 ring-emerald-400"
+                        : "bg-white/5 text-zinc-400 hover:bg-white/10",
+                    )}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Online</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateVendorStatus("away")}
+                    className={clsx(
+                      "flex flex-col items-center justify-center gap-1 p-2 rounded-xl text-xs font-bold transition-all",
+                      vendorStatus === "away"
+                        ? "bg-amber-500 text-black ring-2 ring-amber-400"
+                        : "bg-white/5 text-zinc-400 hover:bg-white/10",
+                    )}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-amber-400" />
+                    <span>Ausente</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateVendorStatus("offline")}
+                    className={clsx(
+                      "flex flex-col items-center justify-center gap-1 p-2 rounded-xl text-xs font-bold transition-all",
+                      vendorStatus === "offline"
+                        ? "bg-red-600 text-white ring-2 ring-red-400"
+                        : "bg-white/5 text-zinc-400 hover:bg-white/10",
+                    )}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-red-400" />
+                    <span>Offline</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             <button
               type="button"
@@ -1272,6 +1823,48 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
           </div>
         </div>
       ) : null}
+
+      {/* Modal Pop-up GIGANTE de Chamada da Recepção na Tela do Vendedor */}
+      {vendorCallAlert && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+          <div className="w-full max-w-md rounded-3xl border-2 border-red-500/50 bg-gradient-to-b from-zinc-900 via-zinc-950 to-black p-6 text-white shadow-2xl space-y-5 text-center">
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-red-600/20 text-red-500 animate-bounce ring-8 ring-red-500/10">
+              <BellRing size={40} />
+            </div>
+
+            <div className="space-y-1">
+              <span className="inline-block rounded-full bg-red-500/20 px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-red-400">
+                🚨 Cliente na Recepção
+              </span>
+              <h2 className="text-2xl font-black tracking-tight text-white">
+                {vendorCallAlert.lead_name}
+              </h2>
+              <p className="text-xs sm:text-sm text-zinc-400">
+                A recepção está chamando você para atender este cliente agora!
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => handleAcceptAttendance(vendorCallAlert)}
+                className="w-full h-14 inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 text-sm font-bold text-white shadow-lg hover:bg-emerald-500 active:scale-95 transition-all"
+              >
+                <CheckCircle2 size={20} />
+                <span>Aceitar e Atender</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setVendorCallAlert(null)}
+                className="w-full h-14 inline-flex items-center justify-center gap-2 rounded-2xl border border-zinc-700 bg-zinc-900 px-5 text-xs sm:text-sm font-semibold text-zinc-300 hover:bg-zinc-800 active:scale-95 transition-all"
+              >
+                <span>Estou Ocupado</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

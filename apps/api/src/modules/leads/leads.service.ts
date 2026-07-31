@@ -1156,9 +1156,28 @@ export class LeadsService {
             dto.sold ? 'Atendimento encerrado com venda' : 'Atendimento encerrado sem venda'
           }${wristbandNumber ? `. Pulseira: ${wristbandNumber}` : ''}${
             cpf ? `, CPF: ${cpf}` : ''
+          }${
+            dto.attendance_duration_seconds != null
+              ? `. Duração do atendimento: ${Math.floor(dto.attendance_duration_seconds / 60)}m ${dto.attendance_duration_seconds % 60}s (${dto.attendance_duration_seconds}s)`
+              : ''
           }`,
         },
       });
+    }
+
+    if (dto.sold) {
+      const targetVendorId = lead.assigned_vendor_id || user.sub;
+      await this.scoreEvents
+        .award({
+          client_id: lead.client_id,
+          vendor_id: targetVendorId,
+          lead_id: lead.id,
+          kind: 'sold',
+          earned_at: new Date(),
+        })
+        .catch((err) => {
+          this.logger.warn(`Erro ao pontuar venda para o vendedor: ${(err as Error).message}`);
+        });
     }
 
     this.realtimeEvents.emitLeadUpdated(updated.client_id, {

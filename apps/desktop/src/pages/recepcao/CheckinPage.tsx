@@ -12,6 +12,9 @@ import {
   CalendarDays,
   QrCode,
   Camera,
+  ShoppingBag,
+  CheckSquare,
+  RefreshCw,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Button } from "../../components/ui/Button";
@@ -33,11 +36,14 @@ import { listEvents, mapApiEventToEvent } from "../../services/events";
 import {
   checkLeadPhone,
   checkInLeadByToken,
+  closeLeadAttendance,
   createLead,
   listLeads,
   mapApiLeadToLead,
   notifyVendorCall,
+  updateLead,
 } from "../../services/leads";
+import { createSale, type SaleType } from "../../services/sales";
 import { listClientStaff, mapStaffToUser } from "../../services/staff";
 import { useLeadRealtimeSync } from "../../hooks/useLeadRealtimeSync";
 import { LazyQrScanner } from "../../components/shared/LazyQrScanner";
@@ -140,8 +146,217 @@ export function CheckinPage() {
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [scannerTab, setScannerTab] = useState<"qr" | "manual">("qr");
   const [onlineVendorIds, setOnlineVendorIds] = useState<string[]>([]);
+  const [vendorStatuses, setVendorStatuses] = useState<Record<string, "online" | "away" | "offline">>({});
   const [scannerKey, setScannerKey] = useState(0);
   const [callingVendorId, setCallingVendorId] = useState<string | null>(null);
+  const [closingAttendanceId, setClosingAttendanceId] = useState<string | null>(null);
+
+  // Modal de Venda (Fluxo com Comprador Lead vs Outro)
+  const [saleModalLead, setSaleModalLead] = useState<Lead | null>(null);
+  const [buyerType, setBuyerType] = useState<"lead" | "outro">("lead");
+  const [saleNotes, setSaleNotes] = useState("");
+  const [saleCategory, setSaleCategory] = useState<SaleType>("NOVO");
+  const [saleVehicle, setSaleVehicle] = useState("");
+  const [saleValue, setSaleValue] = useState("");
+  const [wristbandNumber, setWristbandNumber] = useState("");
+  const [saleSubmitting, setSaleSubmitting] = useState(false);
+  const [saleError, setSaleError] = useState("");
+
+  // Modal de Venda Avulsa na Recepção (Busca Cliente + Seleciona Vendedor)
+  const [showStandaloneSaleModal, setShowStandaloneSaleModal] = useState(false);
+  const [standaloneLeadSearch, setStandaloneLeadSearch] = useState("");
+  const [selectedLeadForSale, setSelectedLeadForSale] = useState<Lead | null>(null);
+  const [selectedVendorIdForSale, setSelectedVendorIdForSale] = useState<string>("");
+  const [standaloneBuyerType, setStandaloneBuyerType] = useState<"lead" | "outro">("lead");
+  const [standaloneNotes, setStandaloneNotes] = useState("");
+  const [standaloneWristband, setStandaloneWristband] = useState("");
+  const [standaloneCategory, setStandaloneCategory] = useState<SaleType>("NOVO");
+  const [standaloneVehicle, setStandaloneVehicle] = useState("");
+  const [standaloneValue, setStandaloneValue] = useState("");
+  const [standaloneSubmitting, setStandaloneSubmitting] = useState(false);
+  const [standaloneError, setStandaloneError] = useState("");
+
+  const handleOpenStandaloneSaleModal = () => {
+    setShowStandaloneSaleModal(true);
+    setStandaloneLeadSearch("");
+    setSelectedLeadForSale(null);
+    setSelectedVendorIdForSale("");
+    setStandaloneBuyerType("lead");
+    setStandaloneNotes("");
+    setStandaloneWristband("");
+    setStandaloneCategory("NOVO");
+    setStandaloneVehicle("");
+    setStandaloneValue("");
+    setStandaloneError("");
+  };
+
+  const handleSelectLeadForStandaloneSale = (lead: Lead) => {
+    setSelectedLeadForSale(lead);
+    setSelectedVendorIdForSale(lead.assigned_vendor_id || "");
+    setStandaloneWristband(lead.wristband_number || "");
+  };
+
+  const handleConfirmStandaloneSale = async () => {
+    if (!selectedLeadForSale) {
+      setStandaloneError("Por favor, selecione o cliente.");
+      return;
+    }
+    if (!selectedVendorIdForSale) {
+      setStandaloneError("Por favor, selecione o vendedor vinculado.");
+      return;
+    }
+    if (requireWristband && !standaloneWristband.trim()) {
+      setStandaloneError("O número da pulseira é obrigatório para este evento.");
+      return;
+    }
+    if (!standaloneVehicle.trim()) {
+      setStandaloneError("Por favor, informe o veículo vendido.");
+      return;
+    }
+    if (standaloneBuyerType === "outro" && !standaloneNotes.trim()) {
+      setStandaloneError("Por favor, informe quem realizou a compra no campo observação.");
+      return;
+    }
+
+    const t = readStoredSession()?.accessToken;
+    if (!t) return;
+
+    setStandaloneSubmitting(true);
+    setStandaloneError("");
+
+    try {
+      const formattedNotes = standaloneBuyerType === "outro"
+        ? `Venda avulsa recepção (familiar/outro): ${standaloneNotes.trim()}`
+        : standaloneNotes.trim();
+
+      // Se o vendedor selecionado for diferente do atribuído originalmente, atualiza o assigned_vendor_id do lead
+      if (selectedLeadForSale.assigned_vendor_id !== selectedVendorIdForSale) {
+        await updateLead(selectedLeadForSale.id, { assigned_vendor_id: selectedVendorIdForSale }, t).catch(() => {});
+      }
+
+      // 1. Encerra atendimento registrando a venda
+      await closeLeadAttendance(
+        selectedLeadForSale.id,
+        {
+          sold: true,
+          wristband_number: standaloneWristband.trim() || undefined,
+        },
+        t,
+      );
+
+      // 2. Cria a venda no CRM
+      if (selectedLeadForSale.active_appointment?.id) {
+        const numericValue = standaloneValue.replace(/[R$\s.]/g, "").replace(",", ".") || "0";
+        await createSale(t, {
+          appointment_id: selectedLeadForSale.active_appointment.id,
+          type: standaloneCategory,
+          product: standaloneVehicle.trim(),
+          value: numericValue,
+          notes: formattedNotes || undefined,
+        }).catch(() => {});
+      }
+
+      setShowStandaloneSaleModal(false);
+      refreshCheckinData();
+    } catch (err) {
+      setStandaloneError(err instanceof Error ? err.message : "Erro ao registrar venda avulsa.");
+    } finally {
+      setStandaloneSubmitting(false);
+    }
+  };
+
+  const currentSelectedEvent = useMemo(() => {
+    return events.find((e) => e.id === selectedEventId) ?? null;
+  }, [events, selectedEventId]);
+
+  const requireWristband = currentSelectedEvent?.require_wristband ?? false;
+
+  const handleOpenSaleModal = (lead: Lead) => {
+    setSaleModalLead(lead);
+    setBuyerType("lead");
+    setSaleNotes("");
+    setSaleCategory("NOVO");
+    setSaleVehicle("");
+    setSaleValue("");
+    setWristbandNumber(lead.wristband_number ?? "");
+    setSaleError("");
+  };
+
+  const handleConfirmSale = async () => {
+    if (!saleModalLead) return;
+    const t = readStoredSession()?.accessToken;
+    if (!t) return;
+
+    if (requireWristband && !wristbandNumber.trim()) {
+      setSaleError("O número da pulseira é obrigatório para este evento.");
+      return;
+    }
+
+    if (!saleVehicle.trim()) {
+      setSaleError("Por favor, informe o veículo vendido.");
+      return;
+    }
+
+    if (buyerType === "outro" && !saleNotes.trim()) {
+      setSaleError("Por favor, informe quem realizou a compra no campo observação.");
+      return;
+    }
+
+    setSaleSubmitting(true);
+    setSaleError("");
+    try {
+      const formattedNotes = buyerType === "outro"
+        ? `Compra realizada por outro (familiar): ${saleNotes.trim()}`
+        : saleNotes.trim();
+
+      // 1. Encerra atendimento registrando a venda (e pulseira se houver)
+      await closeLeadAttendance(
+        saleModalLead.id,
+        {
+          sold: true,
+          wristband_number: wristbandNumber.trim() || undefined,
+        },
+        t,
+      );
+
+      // 2. Registra o detalhamento da venda se houver agendamento
+      if (saleModalLead.active_appointment?.id) {
+        const numericValue = saleValue.replace(/[R$\s.]/g, "").replace(",", ".") || "0";
+        await createSale(t, {
+          appointment_id: saleModalLead.active_appointment.id,
+          type: saleCategory,
+          product: saleVehicle.trim(),
+          value: numericValue,
+          notes: formattedNotes || undefined,
+        }).catch(() => {
+          /* ignora se erro secundario */
+        });
+      }
+
+      setSaleModalLead(null);
+      refreshCheckinData();
+    } catch (err) {
+      setSaleError(
+        err instanceof Error ? err.message : "Não foi possível registrar a venda.",
+      );
+    } finally {
+      setSaleSubmitting(false);
+    }
+  };
+
+  const handleCloseAttendance = async (lead: Lead, sold: boolean) => {
+    const t = readStoredSession()?.accessToken;
+    if (!t) return;
+    setClosingAttendanceId(lead.id);
+    try {
+      await closeLeadAttendance(lead.id, { sold }, t);
+      refreshCheckinData();
+    } catch (err) {
+      console.error("Erro ao finalizar atendimento:", err);
+    } finally {
+      setClosingAttendanceId(null);
+    }
+  };
 
   const refreshCheckinData = useCallback(() => {
     const t = readStoredSession()?.accessToken;
@@ -189,6 +404,26 @@ export function CheckinPage() {
   });
 
   useEffect(() => {
+    if (!clientId) return;
+    const socket = connectRealtime(clientId);
+    const handleStatusChange = (data: { vendor_id: string; status: "online" | "away" | "offline" }) => {
+      if (data?.vendor_id && data?.status) {
+        setVendorStatuses((prev) => ({ ...prev, [data.vendor_id]: data.status }));
+        try {
+          localStorage.setItem(`vendor_status_${data.vendor_id}`, data.status);
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+    socket.on("vendor_status_change", handleStatusChange);
+    return () => {
+      socket.off("vendor_status_change", handleStatusChange);
+      socket.disconnect();
+    };
+  }, [clientId]);
+
+  useEffect(() => {
     setIsDarkMode(readDashboardDarkEnabled(user.id));
   }, [user.id]);
 
@@ -210,6 +445,19 @@ export function CheckinPage() {
     () => leadsState.filter((l) => l.event_id === selectedEventId),
     [leadsState, selectedEventId],
   );
+
+  const filteredLeadsForSale = useMemo(() => {
+    if (!standaloneLeadSearch.trim()) return leadsForEvent.slice(0, 10);
+    const q = standaloneLeadSearch.toLowerCase();
+    return leadsForEvent
+      .filter(
+        (l) =>
+          l.name.toLowerCase().includes(q) ||
+          l.phone.includes(q) ||
+          (l.cpf && l.cpf.includes(q)),
+      )
+      .slice(0, 10);
+  }, [leadsForEvent, standaloneLeadSearch]);
 
   const today = new Date();
 
@@ -843,6 +1091,16 @@ export function CheckinPage() {
           >
             Cadastro Rápido
           </Button>
+
+          <button
+            type="button"
+            onClick={handleOpenStandaloneSaleModal}
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-md hover:bg-emerald-500 active:scale-95 transition-all cursor-pointer"
+            title="Registrar venda avulsa selecionando cliente e vendedor"
+          >
+            <ShoppingBag size={16} />
+            <span>+ Venda Avulsa</span>
+          </button>
         </div>
       </div>
 
@@ -972,72 +1230,180 @@ export function CheckinPage() {
                       </span>
                     )}
                     {vendorName && (
-                      <div
-                        className={clsx(
-                          "flex items-center gap-1 text-xs",
-                          isDarkMode ? "text-zinc-500" : "text-gray-400",
-                        )}
-                      >
-                        <User size={11} />
-                        <span className="flex items-center gap-1">
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                        <User size={11} className="text-zinc-400" />
+                        <span className={clsx("font-semibold", isDarkMode ? "text-zinc-300" : "text-zinc-700")}>
                           {vendorName.split(" ")[0]}
-                          <span
-                            className={clsx(
-                              "inline-block h-1.5 w-1.5 rounded-full",
-                              onlineVendorIds.includes(lead.assigned_vendor_id!)
-                                ? "bg-emerald-500"
-                                : "bg-zinc-350 dark:bg-zinc-650",
-                            )}
-                            title={
-                              onlineVendorIds.includes(lead.assigned_vendor_id!)
-                                ? "Vendedor Online"
-                                : "Vendedor Offline"
-                            }
-                          />
                         </span>
+
+                        {(() => {
+                          const vId = lead.assigned_vendor_id!;
+                          const storedStatus = vendorStatuses[vId] || (localStorage.getItem(`vendor_status_${vId}`) as "online" | "away" | "offline" | null);
+                          const isOnlineNetwork = onlineVendorIds.includes(vId);
+
+                          const finalStatus = storedStatus === "offline" || (!isOnlineNetwork && storedStatus !== "away")
+                            ? "offline"
+                            : storedStatus === "away"
+                              ? "away"
+                              : "online";
+
+                          if (finalStatus === "offline") {
+                            return (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-red-500 ring-1 ring-red-500/20">
+                                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                                O vendedor deste lead está offline
+                              </span>
+                            );
+                          }
+
+                          if (finalStatus === "away") {
+                            return (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500 ring-1 ring-amber-500/20">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                O vendedor está ausente, aguarde um pouco
+                              </span>
+                            );
+                          }
+
+                          return (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-500 ring-1 ring-emerald-500/20">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              Online
+                            </span>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
                 </div>
               </div>
 
-              <div className="w-full sm:w-auto shrink-0 mt-2 sm:mt-0">
+              <div className="w-full sm:w-auto shrink-0 mt-3 sm:mt-0 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 {isCheckedIn ? (
-                  <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+                  <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full">
                     <span
                       className={clsx(
-                        "flex sm:inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium w-full sm:w-auto",
+                        "inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold shrink-0",
                         isDarkMode
-                          ? "bg-emerald-950/60 text-emerald-300 ring-1 ring-emerald-500/30"
-                          : "bg-green-100 text-green-700",
+                          ? "bg-emerald-950/80 text-emerald-300 ring-1 ring-emerald-500/40"
+                          : "bg-emerald-100 text-emerald-800",
                       )}
                     >
-                      <CheckCircle2 size={14} />
+                      <CheckCircle2 size={15} />
                       Check-in feito
                     </span>
+
+                    {/* 1. Botão Chamar Vendedor (se houver vendedor) */}
                     {lead.assigned_vendor_id && (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        loading={callingVendorId === lead.id}
+                      <button
+                        type="button"
+                        disabled={callingVendorId === lead.id}
                         onClick={() => void handleCallVendor(lead.id)}
-                        className="w-full sm:w-auto text-xs"
+                        className={clsx(
+                          "flex-1 min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all active:scale-95",
+                          isDarkMode
+                            ? "border-zinc-700 bg-zinc-800/90 text-zinc-100 hover:bg-zinc-700"
+                            : "border-zinc-200 bg-gray-100 text-gray-800 hover:bg-gray-200",
+                        )}
                       >
-                        {callingVendorId === lead.id
-                          ? "Chamando..."
-                          : "Chamar Vendedor"}
-                      </Button>
+                        <Phone size={15} />
+                        <span>
+                          {callingVendorId === lead.id
+                            ? "Chamando..."
+                            : "Chamar Vendedor"}
+                        </span>
+                      </button>
                     )}
+
+                    {/* Botão Transferir Vendedor */}
+                    <button
+                      type="button"
+                      onClick={() => setReassignModalLead(lead)}
+                      className={clsx(
+                        "min-h-[42px] px-3.5 inline-flex items-center justify-center gap-1.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all active:scale-95",
+                        isDarkMode
+                          ? "border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+                          : "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100",
+                      )}
+                      title="Transferir lead para outro vendedor disponível"
+                    >
+                      <RefreshCw size={15} />
+                      <span>Transferir</span>
+                    </button>
+
+                    {/* Botão Re-engajar WhatsApp */}
+                    {lead.phone && (
+                      <a
+                        href={`https://wa.me/${lead.phone.replace(/\D/g, "")}?text=${encodeURIComponent(
+                          `Olá ${lead.name}, notamos que você não conseguiu comparecer ao nosso evento hoje. Gostaria de reagendar seu atendimento com exclusividade?`,
+                        )}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={clsx(
+                          "min-h-[42px] px-3.5 inline-flex items-center justify-center gap-1.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all active:scale-95",
+                          isDarkMode
+                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                            : "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
+                        )}
+                        title="Re-engajar cliente via WhatsApp com mensagem personalizada"
+                      >
+                        <MessageSquare size={15} />
+                        <span>Re-engajar</span>
+                      </a>
+                    )}
+
+                    {/* 2. Botão Vender */}
+                    <button
+                      type="button"
+                      disabled={closingAttendanceId === lead.id}
+                      onClick={() => handleOpenSaleModal(lead)}
+                      className="flex-1 min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs sm:text-sm font-semibold text-white transition-all hover:bg-emerald-700 active:scale-95 disabled:opacity-50 shadow-sm"
+                      title="Registrar venda para este lead"
+                    >
+                      <ShoppingBag size={16} />
+                      <span>Vender</span>
+                    </button>
+
+                    {/* 3. Botão Finalizar Atendimento */}
+                    <button
+                      type="button"
+                      disabled={closingAttendanceId === lead.id}
+                      onClick={() => void handleCloseAttendance(lead, false)}
+                      className={clsx(
+                        "flex-1 min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all active:scale-95 disabled:opacity-50",
+                        isDarkMode
+                          ? "border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                          : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100",
+                      )}
+                      title="Finalizar atendimento sem venda"
+                    >
+                      <CheckSquare size={16} />
+                      <span>Finalizar Atendimento</span>
+                    </button>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={openScanner}
-                    className="flex sm:inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#e51838] px-3 py-2 sm:py-1.5 text-xs font-semibold sm:font-medium text-white transition-colors hover:bg-[#c91432] w-full sm:w-auto"
-                  >
-                    <QrCode size={14} />
-                    Ler QR Code
-                  </button>
+                  <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
+                    {/* 1. Botão Ler QR Code */}
+                    <button
+                      type="button"
+                      onClick={openScanner}
+                      className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl bg-[#e51838] px-4 py-2.5 text-xs sm:text-sm font-semibold text-white transition-all hover:bg-[#c91432] active:scale-95 shadow-sm"
+                    >
+                      <QrCode size={16} />
+                      <span>Ler QR Code</span>
+                    </button>
+
+                    {/* 2. Botão Vender */}
+                    <button
+                      type="button"
+                      disabled={closingAttendanceId === lead.id}
+                      onClick={() => handleOpenSaleModal(lead)}
+                      className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs sm:text-sm font-semibold text-white transition-all hover:bg-emerald-700 active:scale-95 disabled:opacity-50 shadow-sm"
+                    >
+                      <ShoppingBag size={16} />
+                      <span>Vender</span>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -1139,6 +1505,424 @@ export function CheckinPage() {
               )}
             </div>
           )}
+        </div>
+      </Modal>
+
+      {/* Modal de Registro de Venda (Fluxo: Foi para o lead ou outro?) */}
+      <Modal
+        open={!!saleModalLead}
+        onClose={() => setSaleModalLead(null)}
+        title={`Registrar Venda · ${saleModalLead?.name ?? ""}`}
+        dark={isDarkMode}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setSaleModalLead(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => void handleConfirmSale()}
+              loading={saleSubmitting}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+            >
+              Confirmar Venda
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {saleError && (
+            <Notice tone="error" className="text-xs">
+              {saleError}
+            </Notice>
+          )}
+
+          {/* Quem realizou a compra */}
+          <div className="space-y-2">
+            <label
+              className={clsx(
+                "text-xs font-semibold uppercase tracking-wider block",
+                isDarkMode ? "text-zinc-300" : "text-zinc-700",
+              )}
+            >
+              Quem realizou a compra? *
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setBuyerType("lead")}
+                className={clsx(
+                  "flex flex-col items-center justify-center gap-1 rounded-xl border p-3 text-xs font-semibold transition-all text-center",
+                  buyerType === "lead"
+                    ? isDarkMode
+                      ? "border-emerald-500 bg-emerald-950/40 text-emerald-300 ring-2 ring-emerald-500/40"
+                      : "border-emerald-500 bg-emerald-50 text-emerald-900 ring-2 ring-emerald-500/30"
+                    : isDarkMode
+                      ? "border-zinc-800 bg-[#111111] text-zinc-400 hover:bg-zinc-800/50"
+                      : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50",
+                )}
+              >
+                <span>Foi para o lead</span>
+                <span className="text-[10px] font-normal opacity-80">
+                  (O próprio {saleModalLead?.name?.split(" ")[0]})
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setBuyerType("outro")}
+                className={clsx(
+                  "flex flex-col items-center justify-center gap-1 rounded-xl border p-3 text-xs font-semibold transition-all text-center",
+                  buyerType === "outro"
+                    ? isDarkMode
+                      ? "border-amber-500 bg-amber-950/40 text-amber-300 ring-2 ring-amber-500/40"
+                      : "border-amber-500 bg-amber-50 text-amber-900 ring-2 ring-amber-500/30"
+                    : isDarkMode
+                      ? "border-zinc-800 bg-[#111111] text-zinc-400 hover:bg-zinc-800/50"
+                      : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50",
+                )}
+              >
+                <span>Foi para outro</span>
+                <span className="text-[10px] font-normal opacity-80">
+                  (Familiar / Acompanhante)
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Campo Observação obrigatorio se for "outro" */}
+          {buyerType === "outro" && (
+            <div className="space-y-1.5 animate-fadeIn">
+              <label
+                className={clsx(
+                  "text-xs font-medium block",
+                  isDarkMode ? "text-zinc-300" : "text-zinc-700",
+                )}
+              >
+                Campo Observação (informe quem comprou) *
+              </label>
+              <textarea
+                rows={2}
+                value={saleNotes}
+                onChange={(e) => setSaleNotes(e.target.value)}
+                placeholder="Ex: Veículo adquirido em nome do cônjuge Maria Silva..."
+                className={clsx(
+                  "w-full rounded-xl border px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500",
+                  isDarkMode
+                    ? "border-zinc-700 bg-[#111111] text-zinc-100 placeholder-zinc-500"
+                    : "border-zinc-300 bg-white text-zinc-900 placeholder-zinc-400",
+                )}
+              />
+            </div>
+          )}
+
+          {/* Número da Pulseira (quando exigido pelo evento ou para cadastro) */}
+          <div className="space-y-1.5">
+            <Input
+              label={requireWristband ? "Número da Pulseira *" : "Número da Pulseira (opcional)"}
+              dark={isDarkMode}
+              value={wristbandNumber}
+              onChange={(e) => setWristbandNumber(e.target.value)}
+              placeholder="Ex: 12345"
+            />
+          </div>
+
+          {/* Categoria do Veículo */}
+          <div className="space-y-1.5">
+            <Select
+              label="Categoria *"
+              dark={isDarkMode}
+              value={saleCategory}
+              onChange={(e) => setSaleCategory(e.target.value as SaleType)}
+              options={[
+                { value: "NOVO", label: "Veículo Novo" },
+                { value: "SEMINOVO", label: "Seminovo" },
+                { value: "VENDA_DIRETA", label: "VD - Venda Direta" },
+              ]}
+            />
+          </div>
+
+          {/* Qual Veículo */}
+          <div className="space-y-1.5">
+            <Input
+              label="Qual veículo? *"
+              dark={isDarkMode}
+              value={saleVehicle}
+              onChange={(e) => setSaleVehicle(e.target.value)}
+              placeholder="Ex: Nissan Kicks Exclusive 2025"
+            />
+          </div>
+
+          {/* Qual Valor */}
+          <div className="space-y-1.5">
+            <Input
+              label="Qual valor (R$)"
+              dark={isDarkMode}
+              value={saleValue}
+              onChange={(e) => setSaleValue(e.target.value)}
+              placeholder="Ex: 145.000,00"
+            />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal de Reatribuição Rápida de Lead para Vendedor Online */}
+      <Modal
+        isOpen={Boolean(reassignModalLead)}
+        onClose={() => setReassignModalLead(null)}
+        title={`Transferir Lead: ${reassignModalLead?.name ?? ""}`}
+        dark={isDarkMode}
+      >
+        <div className="space-y-4 pt-2">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Selecione o novo vendedor para quem deseja transferir este lead. Os vendedores online estão em destaque no topo da lista.
+          </p>
+
+          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+            {staffList.map((v) => {
+              const isOnline = onlineVendorIds.includes(v.id);
+              const isCurrent = reassignModalLead?.assigned_vendor_id === v.id;
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  disabled={reassigning || isCurrent}
+                  onClick={() => void handleReassignVendor(v.id)}
+                  className={clsx(
+                    "w-full flex items-center justify-between p-3 rounded-2xl border text-left transition-all",
+                    isCurrent
+                      ? "opacity-50 border-zinc-300 dark:border-zinc-800 cursor-not-allowed bg-zinc-100 dark:bg-zinc-900"
+                      : isDarkMode
+                        ? "border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-white"
+                        : "border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900",
+                  )}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#E51838]/10 text-[#E51838] font-bold text-xs">
+                      {v.name.substring(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold">{v.name}</p>
+                      <p className="text-[10px] text-zinc-500">{v.email || "Vendedor"}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {isCurrent ? (
+                      <span className="text-[10px] font-semibold text-zinc-400">Atual</span>
+                    ) : isOnline ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-500">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Online
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2 py-0.5 text-[10px] font-bold text-zinc-500">
+                        Offline
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal Pop-up de Venda Avulsa na Recepção */}
+      <Modal
+        isOpen={showStandaloneSaleModal}
+        onClose={() => setShowStandaloneSaleModal(false)}
+        title="🛍️ Lançar Venda Avulsa na Recepção"
+        dark={isDarkMode}
+      >
+        <div className="space-y-4 pt-2">
+          {standaloneError && (
+            <Notice type="error" message={standaloneError} />
+          )}
+
+          {/* PASSO 1: Buscar e Selecionar o Cliente */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 block">
+              1. Encontrar o Cliente *
+            </label>
+
+            {!selectedLeadForSale ? (
+              <div className="space-y-2">
+                <Input
+                  placeholder="Digite nome, telefone ou CPF do cliente..."
+                  value={standaloneLeadSearch}
+                  onChange={(e) => setStandaloneLeadSearch(e.target.value)}
+                  icon={<Search size={16} />}
+                  dark={isDarkMode}
+                />
+
+                <div className="max-h-44 overflow-y-auto space-y-1 pr-1 border rounded-xl p-2 bg-zinc-500/5">
+                  {filteredLeadsForSale.length === 0 ? (
+                    <p className="text-xs text-zinc-500 text-center py-3">
+                      Nenhum cliente encontrado. Tente digitar o nome ou telefone.
+                    </p>
+                  ) : (
+                    filteredLeadsForSale.map((lead) => (
+                      <button
+                        key={lead.id}
+                        type="button"
+                        onClick={() => handleSelectLeadForStandaloneSale(lead)}
+                        className={clsx(
+                          "w-full flex items-center justify-between p-2.5 rounded-xl border text-left text-xs transition-all",
+                          isDarkMode
+                            ? "border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-white"
+                            : "border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900",
+                        )}
+                      >
+                        <div>
+                          <span className="font-bold block">{lead.name}</span>
+                          <span className="text-[10px] text-zinc-400">{lead.phone}</span>
+                        </div>
+                        <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                          Selecionar
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between p-3 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-300">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-emerald-400 block">Cliente Selecionado</span>
+                  <span className="font-extrabold text-sm text-white">{selectedLeadForSale.name}</span>
+                  <span className="text-xs text-emerald-200 block">{selectedLeadForSale.phone}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedLeadForSale(null)}
+                  className="text-xs font-bold underline text-emerald-400 hover:text-white"
+                >
+                  Trocar Cliente
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* PASSO 2: Selecionar o Vendedor Vinculado */}
+          <div className="space-y-1.5">
+            <Select
+              label="2. Vendedor Vinculado à Venda *"
+              dark={isDarkMode}
+              value={selectedVendorIdForSale}
+              onChange={(e) => setSelectedVendorIdForSale(e.target.value)}
+              options={[
+                { value: "", label: "Selecione um vendedor..." },
+                ...staffList.map((s) => ({
+                  value: s.id,
+                  label: `${s.name} ${onlineVendorIds.includes(s.id) ? "🟢 (Online)" : "🔴 (Offline)"}`,
+                })),
+              ]}
+            />
+          </div>
+
+          {/* PASSO 3: Dados da Venda */}
+          <div className="space-y-3 pt-2 border-t border-zinc-700/40">
+            {/* Quem comprou */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 block">
+                Quem realizou a compra? *
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStandaloneBuyerType("lead")}
+                  className={clsx(
+                    "p-2.5 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer",
+                    standaloneBuyerType === "lead"
+                      ? "border-emerald-500 bg-emerald-500/20 text-emerald-300"
+                      : "border-zinc-700 bg-zinc-900 text-zinc-400",
+                  )}
+                >
+                  Foi para o lead
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStandaloneBuyerType("outro")}
+                  className={clsx(
+                    "p-2.5 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer",
+                    standaloneBuyerType === "outro"
+                      ? "border-emerald-500 bg-emerald-500/20 text-emerald-300"
+                      : "border-zinc-700 bg-zinc-900 text-zinc-400",
+                  )}
+                >
+                  Foi para outro (Familiar)
+                </button>
+              </div>
+            </div>
+
+            {/* Se foi para outro, campo observação obrigatório */}
+            {standaloneBuyerType === "outro" && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium block text-zinc-300">
+                  Campo Observação (informe quem comprou) *
+                </label>
+                <textarea
+                  rows={2}
+                  value={standaloneNotes}
+                  onChange={(e) => setStandaloneNotes(e.target.value)}
+                  placeholder="Ex: Veículo adquirido em nome do cônjuge Maria Silva..."
+                  className="w-full rounded-xl border border-zinc-700 bg-[#111] px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+            )}
+
+            {/* Número da Pulseira */}
+            <Input
+              label={requireWristband ? "Número da Pulseira *" : "Número da Pulseira (opcional)"}
+              dark={isDarkMode}
+              value={standaloneWristband}
+              onChange={(e) => setStandaloneWristband(e.target.value)}
+              placeholder="Ex: 12345"
+            />
+
+            {/* Categoria */}
+            <Select
+              label="Categoria *"
+              dark={isDarkMode}
+              value={standaloneCategory}
+              onChange={(e) => setStandaloneCategory(e.target.value as SaleType)}
+              options={[
+                { value: "NOVO", label: "Veículo Novo" },
+                { value: "SEMINOVO", label: "Seminovo" },
+                { value: "VENDA_DIRETA", label: "VD - Venda Direta" },
+              ]}
+            />
+
+            {/* Veículo */}
+            <Input
+              label="Qual veículo? *"
+              dark={isDarkMode}
+              value={standaloneVehicle}
+              onChange={(e) => setStandaloneVehicle(e.target.value)}
+              placeholder="Ex: Nissan Kicks Exclusive 2025"
+            />
+
+            {/* Valor */}
+            <Input
+              label="Qual valor (R$)"
+              dark={isDarkMode}
+              value={standaloneValue}
+              onChange={(e) => setStandaloneValue(e.target.value)}
+              placeholder="Ex: 145.000,00"
+            />
+          </div>
+
+          <div className="pt-2">
+            <button
+              type="button"
+              disabled={standaloneSubmitting}
+              onClick={() => void handleConfirmStandaloneSale()}
+              className="w-full h-12 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm font-bold text-white shadow-lg active:scale-95 disabled:opacity-50 transition-all cursor-pointer"
+            >
+              <ShoppingBag size={18} />
+              <span>{standaloneSubmitting ? "Gravando Venda..." : "Confirmar e Lançar Venda"}</span>
+            </button>
+          </div>
         </div>
       </Modal>
     </div>

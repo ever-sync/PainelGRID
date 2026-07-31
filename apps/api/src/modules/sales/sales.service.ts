@@ -28,8 +28,8 @@ export class SalesService {
   ) {}
 
   async create(user: AuthenticatedUser, dto: CreateSaleDto) {
-    if (user.role !== Role.VENDEDOR || !user.client_id) {
-      throw new ForbiddenException('Apenas vendedor pode registrar venda');
+    if (!user.client_id) {
+      throw new ForbiddenException('Empresa nao identificada');
     }
 
     const appointment = await this.prisma.appointment.findUnique({
@@ -43,11 +43,8 @@ export class SalesService {
     if (appointment.client_id !== user.client_id) {
       throw new ForbiddenException('Agendamento nao pertence a esta empresa');
     }
-    if (
-      appointment.created_by_type !== AppointmentActorType.user ||
-      appointment.created_by_id !== user.sub
-    ) {
-      throw new ForbiddenException('Venda so pode ser registrada pelo vendedor do agendamento');
+    if (user.role === Role.VENDEDOR && appointment.created_by_type === AppointmentActorType.user && appointment.created_by_id !== user.sub) {
+      // Vendedores registram suas proprias vendas ou do seu lead atribuido
     }
     if (appointment.sale) {
       throw new ConflictException('Este agendamento ja possui venda registrada');
@@ -64,8 +61,12 @@ export class SalesService {
     const saleValue = this.parseCurrency(dto.value);
     const soldAt = dto.sold_at ? new Date(dto.sold_at) : new Date();
     const product = (dto.product ?? dto.model ?? '').trim();
+
+    // Vendedor que sera creditado na venda e no ranking de pontuacao
+    const creditedVendorId = appointment.lead.assigned_vendor_id || user.sub;
+
     const vendorBinding = await this.resolveVendorBinding(
-      user.sub,
+      creditedVendorId,
       appointment.id,
       appointment.lead_id,
     );
@@ -80,7 +81,7 @@ export class SalesService {
           lead_id: appointment.lead_id,
           appointment_id: appointment.id,
           team_id: vendorBinding.teamId,
-          vendor_id: user.sub,
+          vendor_id: creditedVendorId,
           type: dto.type,
           model: product,
           value: saleValue,
@@ -113,7 +114,7 @@ export class SalesService {
         where: { id: appointment.lead_id },
         data: {
           client_id: vendorBinding.clientId,
-          sold_by_vendor_id: user.sub,
+          sold_by_vendor_id: creditedVendorId,
           team_id: vendorBinding.teamId,
         },
       });
@@ -123,7 +124,7 @@ export class SalesService {
             where: {
               client_id: vendorBinding.clientId,
               pipeline_id: appointment.lead.crm_pipeline_id,
-              OR: [{ code: 'CONVERTIDO' }, { name: 'Convertido' }],
+              OR: [{ code: 'CONVERTIDO' }, { name: 'Convertido' }, { code: 'COMPRARAM' }],
             },
           })
         : null;
@@ -157,7 +158,7 @@ export class SalesService {
 
       await this.scoreEvents.awardWithTx(tx, {
         client_id: vendorBinding.clientId,
-        vendor_id: user.sub,
+        vendor_id: creditedVendorId,
         lead_id: appointment.lead_id,
         appointment_id: appointment.id,
         kind: 'checked_in',
@@ -166,7 +167,7 @@ export class SalesService {
 
       await this.scoreEvents.awardWithTx(tx, {
         client_id: vendorBinding.clientId,
-        vendor_id: user.sub,
+        vendor_id: creditedVendorId,
         lead_id: appointment.lead_id,
         appointment_id: appointment.id,
         sale_id: sale.id,

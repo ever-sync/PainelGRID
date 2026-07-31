@@ -421,6 +421,7 @@ export function closeLeadAttendance(
     cpf?: string;
     phone?: string;
     sold: boolean;
+    attendance_duration_seconds?: number;
   },
   accessToken: string,
 ) {
