@@ -10,8 +10,10 @@ import {
 import { Button } from "../../components/ui/Button";
 import { readStoredSession } from "../../services/auth";
 import {
+  fetchDatabaseConnections,
   fetchPerformanceOverview,
   type ApiPerformanceSummary,
+  type DatabaseConnections,
   type WebVitalsSummary,
 } from "../../services/performance";
 
@@ -29,6 +31,7 @@ export function PerformancePage() {
   const [hours, setHours] = useState(24);
   const [webVitals, setWebVitals] = useState<WebVitalsSummary | null>(null);
   const [api, setApi] = useState<ApiPerformanceSummary | null>(null);
+  const [conns, setConns] = useState<DatabaseConnections | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,6 +50,10 @@ export function PerformancePage() {
         const overview = await fetchPerformanceOverview(token, hours, signal);
         setWebVitals(overview.webVitals);
         setApi(overview.api);
+        // Falha aqui nao pode derrubar o resto da pagina.
+        void fetchDatabaseConnections(token)
+          .then(setConns)
+          .catch(() => setConns(null));
       } catch (loadError) {
         if (loadError instanceof Error && loadError.name === "AbortError")
           return;
@@ -118,6 +125,84 @@ export function PerformancePage() {
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {error}
         </div>
+      ) : null}
+
+      {conns ? (
+        <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="flex items-center gap-2 font-semibold text-zinc-800 dark:text-zinc-100">
+                <Database size={16} /> Conexões do banco
+              </h2>
+              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                O n8n fala direto com o Postgres, fora do pool da API. Se estourar
+                o limite, API e integração caem juntas.
+              </p>
+            </div>
+            <div className="text-right">
+              <p
+                className={`text-2xl font-bold ${
+                  conns.status === "critical"
+                    ? "text-red-600"
+                    : conns.status === "warning"
+                      ? "text-amber-600"
+                      : "text-emerald-600"
+                }`}
+              >
+                {conns.used}
+                <span className="text-base font-medium text-zinc-400">
+                  {" "}
+                  / {conns.maxConnections}
+                </span>
+              </p>
+              <p className="text-xs text-zinc-500">{conns.usedPercent}% em uso</p>
+            </div>
+          </div>
+
+          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div
+              className={`h-full rounded-full transition-all ${
+                conns.status === "critical"
+                  ? "bg-red-500"
+                  : conns.status === "warning"
+                    ? "bg-amber-500"
+                    : "bg-emerald-500"
+              }`}
+              style={{ width: `${Math.min(conns.usedPercent, 100)}%` }}
+            />
+          </div>
+
+          {conns.status !== "good" ? (
+            <p
+              className={`mt-3 rounded-xl px-3 py-2 text-xs font-medium ${
+                conns.status === "critical"
+                  ? "bg-red-50 text-red-700"
+                  : "bg-amber-50 text-amber-700"
+              }`}
+            >
+              {conns.status === "critical"
+                ? "Risco de recusa de conexão. Reduza o pool do n8n ou aumente a instância do Supabase."
+                : "Atenção: acima de 75%. Verifique quantas conexões o n8n está abrindo."}
+            </p>
+          ) : null}
+
+          <div className="mt-4 space-y-1.5">
+            {conns.byClient.map((row) => (
+              <div
+                key={`${row.user}-${row.application}`}
+                className="flex items-center justify-between gap-3 text-xs"
+              >
+                <span className="truncate text-zinc-600 dark:text-zinc-300">
+                  <strong className="font-semibold">{row.user}</strong>
+                  <span className="text-zinc-400"> · {row.application}</span>
+                </span>
+                <span className="shrink-0 font-mono font-semibold text-zinc-700 dark:text-zinc-200">
+                  {row.connections}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
       ) : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">

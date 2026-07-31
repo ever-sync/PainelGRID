@@ -48,6 +48,14 @@ export class PerformanceController {
     return this.performanceService.getWebVitalsSummary(query);
   }
 
+  @Get('database/connections')
+  @ApiBearerAuth()
+  @Roles(Role.GESTOR)
+  @ApiOperation({ summary: 'Uso do pool de conexões do Postgres' })
+  getDatabaseConnections() {
+    return this.performanceService.getDatabaseConnections();
+  }
+
   @Get('api/summary')
   @ApiBearerAuth()
   @Roles(Role.GESTOR)

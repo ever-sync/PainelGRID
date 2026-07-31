@@ -68,3 +68,23 @@ export async function fetchPerformanceOverview(
   ]);
   return { webVitals, api };
 }
+
+export interface DatabaseConnections {
+  generatedAt: string;
+  used: number;
+  maxConnections: number;
+  usedPercent: number;
+  status: "good" | "warning" | "critical";
+  byClient: Array<{
+    user: string;
+    application: string;
+    connections: number;
+  }>;
+}
+
+export function fetchDatabaseConnections(token: string) {
+  return httpRequest<DatabaseConnections>("/performance/database/connections", {
+    method: "GET",
+    token,
+  });
+}

@@ -217,6 +217,59 @@ export class PerformanceService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  /**
+   * Uso do pool de conexoes do Postgres.
+   *
+   * Existe porque o n8n fala DIRETO com o banco, fora do pool da API. Se ele
+   * abrir conexoes demais num pico, estoura o `max_connections` e derruba API
+   * e integracao ao mesmo tempo — e isso so aparece no momento de maior
+   * movimento. Este endpoint torna o risco visivel antes do incidente.
+   */
+  async getDatabaseConnections() {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ usename: string | null; application_name: string | null; total: number }>
+    >(Prisma.sql`
+      SELECT
+        "usename",
+        NULLIF("application_name", '') AS "application_name",
+        COUNT(*)::int AS "total"
+      FROM pg_stat_activity
+      WHERE "datname" = current_database()
+      GROUP BY "usename", "application_name"
+      ORDER BY "total" DESC
+      LIMIT 20
+    `);
+
+    const [limits] = await this.prisma.$queryRaw<
+      Array<{ used: number; max_connections: number }>
+    >(Prisma.sql`
+      SELECT
+        (SELECT COUNT(*)::int FROM pg_stat_activity WHERE "datname" = current_database()) AS "used",
+        current_setting('max_connections')::int AS "max_connections"
+    `);
+
+    const used = limits?.used ?? 0;
+    const max = limits?.max_connections ?? 0;
+    const usedPercent = max > 0 ? Math.round((used / max) * 100) : 0;
+
+    // 75% e o ponto em que ainda da tempo de agir; 90% ja e risco de recusa.
+    const status =
+      usedPercent >= 90 ? 'critical' : usedPercent >= 75 ? 'warning' : 'good';
+
+    return {
+      generatedAt: new Date().toISOString(),
+      used,
+      maxConnections: max,
+      usedPercent,
+      status,
+      byClient: rows.map((row) => ({
+        user: row.usename ?? 'desconhecido',
+        application: row.application_name ?? '-',
+        connections: Number(row.total),
+      })),
+    };
+  }
+
   async getApiSummary(query: PerformanceSummaryQueryDto) {
     await this.flushApiMetrics();
     const cutoff = new Date(Date.now() - query.hours * 60 * 60 * 1_000);
