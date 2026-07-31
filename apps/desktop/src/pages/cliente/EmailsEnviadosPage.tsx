@@ -145,7 +145,7 @@ export function EmailsEnviadosPage() {
     <div className="space-y-6">
       <PageHeader
         title="E-mails enviados"
-        description="Histórico e log completo de todos os e-mails disparados pelo sistema."
+        subtitle="Histórico e log completo de todos os e-mails disparados pelo sistema."
       />
 
       {/* PAINEL DE FILTROS DO TOPO (CONFORME IMAGEM DO USUÁRIO) */}
@@ -309,7 +309,7 @@ export function EmailsEnviadosPage() {
 
       {/* MODAL DE DETALHES DO E-MAIL SELECIONADO */}
       <Modal
-        isOpen={Boolean(selectedEmail)}
+        open={Boolean(selectedEmail)}
         onClose={() => setSelectedEmail(null)}
         title="Detalhes do E-mail Enviado"
         dark={isDarkMode}

@@ -54,7 +54,7 @@ export function AjudaPage() {
     <div className="space-y-6">
       <PageHeader
         title="Ajuda e Suporte"
-        description="Central de suporte, tutoriais rápidos e dúvidas frequentes."
+        subtitle="Central de suporte, tutoriais rápidos e dúvidas frequentes."
       />
 
       {/* CARDS DE SUPORTE RÁPIDO */}

@@ -104,7 +104,7 @@ export function AuditoriaPage() {
     <div className="space-y-6">
       <PageHeader
         title="Auditoria"
-        description="Histórico detalhado e registro inviolável de todas as ações realizadas no sistema."
+        subtitle="Histórico detalhado e registro inviolável de todas as ações realizadas no sistema."
       />
 
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">

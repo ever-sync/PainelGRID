@@ -504,7 +504,7 @@ export function LeadsPage() {
         <div className="space-y-4">
           <PageHeader
             title="Leads"
-            description="9980 lead(s). Espelho do Bitrix mantido pelo Rubinho (somente leitura)."
+            subtitle="9980 lead(s). Espelho do Bitrix mantido pelo Rubinho (somente leitura)."
           />
 
           {/* BARRA COM OS 11 FILTROS DO TOPO (CONFORME IMAGEM 1) */}

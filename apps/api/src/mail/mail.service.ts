@@ -300,6 +300,7 @@ export class MailService {
     vendorName: string | null;
     vendorAvatarUrl: string | null;
     clientName: string;
+    checkinToken?: string | null;
   }): Promise<void> {
     if (!this.apiKey) {
       this.logger.warn(
@@ -308,12 +309,12 @@ export class MailService {
       return;
     }
 
-    const subject = `Bem-vindo(a) ao ${params.eventName}! 🏁`;
+    const subject = `Bem-vindo(a) ao ${params.eventName}! 🏁 Seu QR Code de Check-in`;
     const html = this.buildAppointmentWelcomeHtml(params);
 
     try {
       await this.sendViaResend({ to: params.to, subject, html });
-      this.logger.log("Email de boas-vindas ao evento enviado");
+      this.logger.log("Email de boas-vindas ao evento enviado com QR Code");
     } catch (err) {
       this.logger.error(
         `Falha ao enviar email de boas-vindas ao evento: ${(err as Error).message}`,
@@ -363,6 +364,7 @@ export class MailService {
     vendorName: string | null;
     vendorAvatarUrl: string | null;
     clientName: string;
+    checkinToken?: string | null;
   }): string {
     const firstName = p.leadName.split(" ")[0];
     const vendorFirstName = p.vendorName?.split(" ")[0] ?? null;

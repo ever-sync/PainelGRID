@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import clsx from "clsx";
 import {
+  MessageSquare,
   Search,
   Plus,
   CheckCircle2,
@@ -1667,7 +1668,7 @@ export function CheckinPage() {
 
       {/* Modal de Reatribuição Rápida de Lead para Vendedor Online */}
       <Modal
-        isOpen={Boolean(reassignModalLead)}
+        open={Boolean(reassignModalLead)}
         onClose={() => setReassignModalLead(null)}
         title={`Transferir Lead: ${reassignModalLead?.name ?? ""}`}
         dark={isDarkMode}
@@ -1729,14 +1730,14 @@ export function CheckinPage() {
 
       {/* Modal Pop-up de Venda Avulsa na Recepção */}
       <Modal
-        isOpen={showStandaloneSaleModal}
+        open={showStandaloneSaleModal}
         onClose={() => setShowStandaloneSaleModal(false)}
         title="🛍️ Lançar Venda Avulsa na Recepção"
         dark={isDarkMode}
       >
         <div className="space-y-4 pt-2">
           {standaloneError && (
-            <Notice type="error" message={standaloneError} />
+            <Notice tone="error">{standaloneError}</Notice>
           )}
 
           {/* PASSO 1: Buscar e Selecionar o Cliente */}

@@ -446,7 +446,7 @@ export function LojasPage() {
     <div className="space-y-6">
       <PageHeader
         title="Lojas"
-        description={`${stores.length} loja(s). O agente só oferece lojas ativas.`}
+        subtitle={`${stores.length} loja(s). O agente só oferece lojas ativas.`}
       />
 
       {/* Visão de Formulário "Nova Loja" / "Editar Loja" (Conforme Imagem 2) */}
@@ -928,7 +928,7 @@ export function LojasPage() {
 
       {/* MODAL DE HORÁRIOS DA LOJA */}
       <Modal
-        isOpen={Boolean(hoursModalStore)}
+        open={Boolean(hoursModalStore)}
         onClose={() => setHoursModalStore(null)}
         title={`Horários de Funcionamento — ${hoursModalStore?.name ?? ""}`}
         dark={isDarkMode}
@@ -1025,7 +1025,7 @@ export function LojasPage() {
 
       {/* MODAL IMPORTAR CSV */}
       <Modal
-        isOpen={showCsvModal}
+        open={showCsvModal}
         onClose={() => setShowCsvModal(false)}
         title="Importar Lojas via CSV"
         dark={isDarkMode}
