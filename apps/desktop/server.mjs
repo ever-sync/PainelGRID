@@ -86,6 +86,9 @@ function applySecurityHeaders(response) {
     "Strict-Transport-Security",
     "max-age=31536000; includeSubDomains",
   );
+  // Redundante com o `frame-ancestors 'none'` do CSP acima em navegador
+  // moderno, mas cobre navegador antigo e e o que scanner de seguranca checa.
+  response.setHeader("X-Frame-Options", "DENY");
 }
 
 function resolveRequestPath(pathname) {
