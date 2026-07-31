@@ -32,6 +32,8 @@ const MIME_TYPES = new Map([
   [".mp4", "video/mp4"],
   [".png", "image/png"],
   [".svg", "image/svg+xml; charset=utf-8"],
+  [".txt", "text/plain; charset=utf-8"],
+  [".xml", "application/xml; charset=utf-8"],
   [".webmanifest", "application/manifest+json; charset=utf-8"],
   [".webp", "image/webp"],
   [".woff", "font/woff"],
@@ -77,6 +79,12 @@ function applySecurityHeaders(response) {
   response.setHeader(
     "Permissions-Policy",
     "camera=(self), microphone=(self), geolocation=()",
+  );
+  // Mesma politica da API (helmet em apps/api/src/main.ts), para os dois
+  // dominios do projeto se comportarem igual.
+  response.setHeader(
+    "Strict-Transport-Security",
+    "max-age=31536000; includeSubDomains",
   );
 }
 
