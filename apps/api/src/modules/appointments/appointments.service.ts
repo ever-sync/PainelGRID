@@ -482,6 +482,7 @@ export class AppointmentsService {
       vendorName: vendor?.name ?? null,
       vendorAvatarUrl: vendor?.avatar_url ?? null,
       clientName: client?.company_name ?? event.name,
+      checkinToken: lead.checkin_token || lead.id,
     });
   }
 

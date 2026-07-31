@@ -648,7 +648,9 @@ export function LeadsVendedorPage() {
       await refreshLeads();
       await refreshScore();
       setSuccessMessage(
-        `Lead cadastrado! Pré-agendamento confirmado com sucesso para ${next.name}.`,
+        next.email
+          ? `Lead cadastrado! Agendamento confirmado para ${next.name} e QR Code de credenciamento enviado por e-mail (${next.email}).`
+          : `Lead cadastrado! Pré-agendamento confirmado com sucesso para ${next.name}.`,
       );
       setTimeout(() => setSuccessMessage(""), 5000);
     } catch (error) {

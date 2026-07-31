@@ -419,6 +419,24 @@ export class MailService {
         </table>`
       : "";
 
+    const checkinToken = p.checkinToken?.trim() || `CHK-${firstName.toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const checkinUrl = `${this.frontendUrl.replace(/\/+$/, "")}/recepcao/checkin?v=${encodeURIComponent(checkinToken)}`;
+    const qrCodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(checkinUrl)}`;
+
+    const qrCodeBlock = `
+        <div style="background:#ffffff; border:2px dashed #FF0636; border-radius:18px; padding:24px 20px; margin:24px 0; text-align:center;">
+          <p style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:#FF0636; margin:0 0 12px 0;">
+            🎟️ SEU QR CODE DE CREDENCIAMENTO RÁPIDO
+          </p>
+          <img src="${qrCodeApiUrl}" alt="QR Code Check-in" width="200" height="200" style="border-radius:12px; border:1px solid #eee; display:block; margin:0 auto 12px; max-width:200px;" />
+          <p style="font-size:14px; font-weight:700; color:#111; font-family:monospace; margin:0 0 4px 0;">
+            Código: ${checkinToken}
+          </p>
+          <p style="font-size:12px; color:#666; margin:0;">
+            Apresente este QR Code na recepção para credenciamento imediato!
+          </p>
+        </div>`;
+
     return `
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -459,8 +477,10 @@ export class MailService {
         <h2>Olá, ${firstName}! 🏁</h2>
         <p class="lead">
           Recebemos sua pré-agenda e já reservamos seu horário. Confira os detalhes
-          abaixo e não esqueça de adicionar ao seu calendário.
+          abaixo e apresente seu QR Code na recepção para entrada rápida.
         </p>
+
+        ${qrCodeBlock}
 
         <div class="details">
           <div class="details-row">
