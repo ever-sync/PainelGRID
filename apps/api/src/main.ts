@@ -72,6 +72,18 @@ async function bootstrap() {
         },
       },
       crossOriginResourcePolicy: { policy: 'cross-origin' },
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+      },
+      referrerPolicy: {
+        policy: 'strict-origin-when-cross-origin',
+      },
+      frameguard: {
+        action: 'deny',
+      },
+      noSniff: true,
     }),
   );
   app.use(cookieParser());
