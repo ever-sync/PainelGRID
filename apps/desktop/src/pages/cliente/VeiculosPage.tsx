@@ -12,6 +12,12 @@ import {
   X,
   Upload,
   Image as ImageIcon,
+  Calendar,
+  DollarSign,
+  Gauge,
+  Palette,
+  FileText,
+  Hash,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Card } from "../../components/ui/Card";

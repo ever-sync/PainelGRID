@@ -3285,64 +3285,82 @@ export function ClienteDetailPage() {
           )}
 
           {/* Nome */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
               Nome completo
             </label>
-            <input
-              type="text"
-              value={staffFormName}
-              onChange={(e) => setStaffFormName(e.target.value)}
-              placeholder="Ex: João Silva"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#E51838]/30 focus:border-[#E51838]"
-            />
+            <div className="relative flex items-center">
+              <div className="absolute left-3.5 flex items-center pointer-events-none text-zinc-400">
+                <UserCheck size={16} />
+              </div>
+              <input
+                type="text"
+                value={staffFormName}
+                onChange={(e) => setStaffFormName(e.target.value)}
+                placeholder="Ex: João Silva"
+                className="w-full h-11 pl-10 pr-3 rounded-2xl border border-zinc-200 bg-white text-zinc-900 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#FF0636] focus:border-[#FF0636] shadow-sm"
+              />
+            </div>
           </div>
 
           {/* E-mail */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              E-mail
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+              E-mail de Acesso
             </label>
-            <input
-              type="email"
-              value={staffFormEmail}
-              onChange={(e) => setStaffFormEmail(e.target.value)}
-              placeholder="email@empresa.com"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#E51838]/30 focus:border-[#E51838]"
-            />
+            <div className="relative flex items-center">
+              <div className="absolute left-3.5 flex items-center pointer-events-none text-zinc-400">
+                <Mail size={16} />
+              </div>
+              <input
+                type="email"
+                value={staffFormEmail}
+                onChange={(e) => setStaffFormEmail(e.target.value)}
+                placeholder="email@empresa.com"
+                className="w-full h-11 pl-10 pr-3 rounded-2xl border border-zinc-200 bg-white text-zinc-900 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#FF0636] focus:border-[#FF0636] shadow-sm"
+              />
+            </div>
           </div>
 
           {/* WhatsApp */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              WhatsApp
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+              WhatsApp de Contato
             </label>
-            <input
-              type="text"
-              value={staffFormPhone}
-              onChange={(e) => setStaffFormPhone(formatPhoneBr(e.target.value))}
-              placeholder="(11) 99999-9999"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#E51838]/30 focus:border-[#E51838]"
-            />
+            <div className="relative flex items-center">
+              <div className="absolute left-3.5 flex items-center pointer-events-none text-zinc-400">
+                <Phone size={16} />
+              </div>
+              <input
+                type="text"
+                value={staffFormPhone}
+                onChange={(e) => setStaffFormPhone(formatPhoneBr(e.target.value))}
+                placeholder="(11) 99999-9999"
+                className="w-full h-11 pl-10 pr-3 rounded-2xl border border-zinc-200 bg-white text-zinc-900 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#FF0636] focus:border-[#FF0636] shadow-sm"
+              />
+            </div>
           </div>
 
           {/* Senha */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Senha provisória
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+              Senha Provisória
             </label>
             {staffEditing && (
-              <p className="mb-1 text-xs text-gray-400">
+              <p className="text-xs text-zinc-400">
                 Deixe em branco para manter a senha atual.
               </p>
             )}
-            <div className="relative">
+            <div className="relative flex items-center">
+              <div className="absolute left-3.5 flex items-center pointer-events-none text-zinc-400">
+                <Lock size={16} />
+              </div>
               <input
                 type={staffFormShowPassword ? "text" : "password"}
                 value={staffFormPassword}
                 onChange={(e) => setStaffFormPassword(e.target.value)}
-                placeholder="Minimo 10 caracteres: Maiuscula + minuscula + numero"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-[#E51838]/30 focus:border-[#E51838]"
+                placeholder="Mínimo 10 caracteres: Maiúscula + minúscula + número"
+                className="w-full h-11 pl-10 pr-10 rounded-2xl border border-zinc-200 bg-white text-zinc-900 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#FF0636] focus:border-[#FF0636] shadow-sm"
               />
               <button
                 type="button"
