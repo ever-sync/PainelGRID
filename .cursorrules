@@ -1,0 +1,18 @@
+# PainelGRID — Cursor AI Rules & Directives
+
+ALWAYS follow the official Design System specification defined in `DESIGN_SYSTEM.md`.
+
+Key UI/UX Rules:
+1. **Buttons**: Use standard button scale from `Button.tsx`:
+   - `xl`: `h-12` (48px)
+   - `lg`: `h-11` (44px)
+   - `default` / `md`: `h-10` (40px)
+   - `sm`: `h-8` (32px)
+   - Never create thin/undersized buttons for main actions.
+2. **Brand Color**: Red `#FF0636` for primary CTAs and focus rings.
+3. **Form Modals**:
+   - CNPJ at position #1 with auto-fill `[ 🔍 Buscar ]` lookup.
+   - Dedicated Lucide icon alinhado à esquerda inside every input.
+   - Inputs styled with `h-11 pl-10 pr-3 rounded-2xl border border-zinc-200 dark:border-zinc-800`.
+4. **Light/Dark Themes**: Pure white (`bg-white` / `border-zinc-200`) or clean dark (`bg-[#0c0d11]` / `border-zinc-800`). NO yellow or beige backgrounds.
+5. **Compilation Verification**: ALWAYS run `npm run build` after UI edits to verify 0 JSX compilation errors.
