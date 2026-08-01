@@ -37,6 +37,7 @@ import {
   HelpCircle,
   PanelLeftClose,
   PanelLeftOpen,
+  Bell,
 } from "lucide-react";
 import clsx from "clsx";
 import type { User } from "../types";
@@ -410,6 +411,48 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       }
       return next;
     });
+  };
+
+  // ── Central de Notificações ────────────────────────────────────────────────
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Array<{
+    id: string;
+    title: string;
+    description: string;
+    time: string;
+    read: boolean;
+    type: "info" | "alert" | "appointment";
+  }>>([
+    {
+      id: "notif-1",
+      title: "🎉 Novo agendamento de lead",
+      description: "Edney Ulisses agendou visita para Original Volkswagen | Guarulhos.",
+      time: "Há 10 min",
+      read: false,
+      type: "appointment",
+    },
+    {
+      id: "notif-2",
+      title: "🟢 Vendedor online",
+      description: "Vendedor Roberto ativou o status Online no painel.",
+      time: "Há 25 min",
+      read: false,
+      type: "info",
+    },
+    {
+      id: "notif-3",
+      title: "📧 E-mail de credenciamento enviado",
+      description: "QR Code de check-in enviado com sucesso para o lead.",
+      time: "Há 1 hora",
+      read: true,
+      type: "info",
+    },
+  ]);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const markAllNotificationsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
   // ── Atendimento Ativo com Cronômetro do Vendedor ───────────────────────────
@@ -1021,7 +1064,6 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
         {/* Navegação Principal do Sidebar */}
         <nav className="flex min-h-0 w-full flex-1 flex-col gap-1.5 overflow-y-auto px-0.5">
           {navItems.map((item) => {
-            const isChat = item.href.endsWith("/chat");
             return (
               <NavLink
                 key={item.href}
@@ -1048,16 +1090,6 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                 {isSidebarExpanded && (
                   <span className="truncate text-xs font-semibold">{item.label}</span>
                 )}
-                {isChat && (
-                  <span
-                    className={clsx(
-                      "flex h-4 min-w-4 items-center justify-center rounded-full bg-[#FF0636] px-1 text-[9px] font-black text-white shadow-sm ring-2 ring-white dark:ring-[#0f1015] animate-pulse",
-                      isSidebarExpanded ? "ml-auto" : "absolute -top-0.5 -right-0.5",
-                    )}
-                  >
-                    3
-                  </span>
-                )}
               </NavLink>
             );
           })}
@@ -1069,6 +1101,92 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
             dashboardDark ? "border-zinc-800" : "border-zinc-100",
           )}
         >
+          {/* BOTÃO SINO DE NOTIFICAÇÕES (ACIMA DO BOTÃO DARKMODE) */}
+          <div className="relative flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                setNotificationsOpen((prev) => !prev);
+                if (!notificationsOpen) {
+                  markAllNotificationsRead();
+                }
+              }}
+              className={clsx(
+                "relative flex h-11 w-11 items-center justify-center rounded-full transition-colors cursor-pointer",
+                dashboardDark
+                  ? "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                  : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900",
+              )}
+              title="Notificações do Sistema"
+              aria-label="Notificações do Sistema"
+            >
+              <Bell size={18} />
+              {unreadCount > 0 && (
+                <span className="absolute top-2.5 right-2.5 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF0636] opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#FF0636]" />
+                </span>
+              )}
+            </button>
+
+            {/* PAINEL POPOVER DE NOTIFICAÇÕES */}
+            {notificationsOpen && (
+              <div
+                className={clsx(
+                  "absolute bottom-0 left-[calc(100%+12px)] z-[200] w-80 rounded-2xl border shadow-2xl p-4 space-y-3 animate-fadeIn",
+                  dashboardDark
+                    ? "border-zinc-800 bg-[#15161b] text-zinc-100"
+                    : "border-zinc-200 bg-white text-zinc-900",
+                )}
+              >
+                <div className="flex items-center justify-between border-b pb-2.5 border-zinc-200 dark:border-zinc-800">
+                  <div className="flex items-center gap-2">
+                    <Bell size={16} className="text-[#FF0636]" />
+                    <span className="font-bold text-xs uppercase tracking-wider">
+                      Notificações
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNotificationsOpen(false)}
+                    className="text-zinc-400 hover:text-zinc-200 p-1 text-xs cursor-pointer"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+
+                <div className="max-h-72 overflow-y-auto space-y-2 text-xs divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                  {notifications.map((n) => (
+                    <div key={n.id} className="pt-2 first:pt-0 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-zinc-900 dark:text-zinc-100">
+                          {n.title}
+                        </span>
+                        <span className="text-[10px] text-zinc-400 font-mono">
+                          {n.time}
+                        </span>
+                      </div>
+                      <p className="text-zinc-500 dark:text-zinc-400 text-[11px] leading-relaxed">
+                        {n.description}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 flex justify-between items-center text-[11px]">
+                  <span className="text-zinc-400">Total: {notifications.length}</span>
+                  <button
+                    type="button"
+                    onClick={markAllNotificationsRead}
+                    className="text-[#FF0636] font-bold hover:underline cursor-pointer"
+                  >
+                    Marcar como lidas
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={() => {
