@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -792,6 +793,7 @@ export function ClienteDetailPage() {
     from: string | null;
     to: string | null;
   }>({ from: null, to: null });
+  const campaignsRequestRef = useRef(0);
 
   // Sub-abas internas da aba Ads (Facebook).
   const [adsSubTab, setAdsSubTab] = useState<AdsSubTab>("conexoes");
@@ -822,6 +824,11 @@ export function ClienteDetailPage() {
     const session = readStoredSession();
     if (!resolvedId || !isUuid(resolvedId) || !session?.accessToken) return;
 
+    // Sequencia a requisicao: trocar de filtro rapido fazia a resposta antiga
+    // chegar depois da nova e sobrescrever a tela com o resultado errado.
+    const requestId = ++campaignsRequestRef.current;
+    const isStale = () => requestId !== campaignsRequestRef.current;
+
     setReportLoading(true);
     setReportError(null);
     try {
@@ -829,15 +836,17 @@ export function ClienteDetailPage() {
         ...periodToRange(campaignPeriod, campaignCustomRange),
         objective: campaignObjective ?? undefined,
       });
+      if (isStale()) return;
       setCampaignsReport(data.campaigns ?? []);
       setAvailableRange(data.available_range ?? { from: null, to: null });
     } catch (error) {
+      if (isStale()) return;
       setCampaignsReport([]);
       setReportError(
         error instanceof Error ? error.message : "Falha ao carregar o relatório.",
       );
     } finally {
-      setReportLoading(false);
+      if (!isStale()) setReportLoading(false);
     }
   }, [resolvedId, campaignPeriod, campaignCustomRange, campaignObjective]);
 
@@ -856,6 +865,18 @@ export function ClienteDetailPage() {
    * A aba Campanhas mostra so o que foi vinculado a este cliente. O relatorio
    * traz a conta de anuncio inteira, entao o recorte e feito aqui.
    */
+  /**
+   * Recorte pedido que nao encosta no que foi sincronizado. Sem isso a tela
+   * mostra zeros e parece defeito, quando na verdade nao ha dado no periodo.
+   */
+  const rangeOutOfSync = useMemo(() => {
+    if (!availableRange.from || !availableRange.to) return false;
+    const { from, to } = periodToRange(campaignPeriod, campaignCustomRange);
+    if (!from && !to) return false;
+    if (to && to < availableRange.from) return true;
+    return Boolean(from && from > availableRange.to);
+  }, [campaignPeriod, campaignCustomRange, availableRange]);
+
   const availableObjectives = useMemo(() => {
     const objetivos = new Set<string>();
     for (const campaign of campaignsReport) {
@@ -4338,6 +4359,22 @@ export function ClienteDetailPage() {
                   />
 
                   {reportError ? <Notice tone="error">{reportError}</Notice> : null}
+
+                  {rangeOutOfSync ? (
+                    <p
+                      className={clsx(
+                        "rounded-2xl border px-4 py-3 text-xs",
+                        isDarkMode
+                          ? "border-amber-900/50 bg-amber-950/30 text-amber-300"
+                          : "border-amber-200 bg-amber-50 text-amber-800",
+                      )}
+                    >
+                      O período escolhido está fora do que foi sincronizado
+                      (&nbsp;{availableRange.from} a {availableRange.to}&nbsp;), por
+                      isso os valores aparecem zerados. Rode Sincronizar na aba
+                      Conexões para trazer um histórico maior.
+                    </p>
+                  ) : null}
 
                   {reportLoading ? (
                     <p className="py-12 text-center text-sm text-zinc-400">
