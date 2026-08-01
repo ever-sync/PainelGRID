@@ -1232,12 +1232,19 @@ export class MetaService implements OnModuleInit {
     data: Record<string, unknown>,
   ): Promise<InitialSyncResult> {
     try {
-      await this.metaSyncQueue.add(jobName, data, {
-        removeOnComplete: true,
-        removeOnFail: false,
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 30_000 },
-      });
+      // Timeout no lugar de `enableOfflineQueue: false` na conexao: com o Redis
+      // fora, o add ficaria esperando a reconexao e seguraria o request. Aqui a
+      // espera e limitada sem afetar a conexao que o Worker duplica.
+      await withTimeout(
+        this.metaSyncQueue.add(jobName, data, {
+          removeOnComplete: true,
+          removeOnFail: false,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 30_000 },
+        }),
+        5_000,
+        'Timeout ao enfileirar job na fila Meta',
+      );
       return { status: 'queued' };
     } catch (error) {
       const message = `Fila Meta indisponivel (Redis): ${this.getErrorMessage(error)}`;

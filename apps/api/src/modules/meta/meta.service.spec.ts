@@ -72,7 +72,9 @@ describe('MetaService', () => {
   };
 
   const metaSyncQueue = {
-    add: jest.fn(),
+    // `enqueueJob` envolve o add em `withTimeout`, que encadeia `.then`:
+    // o mock precisa devolver promise.
+    add: jest.fn().mockResolvedValue({ id: 'job-queue-1' }),
   };
 
   let service: MetaService;

@@ -77,19 +77,23 @@ const envFilePaths = getApiEnvFilePaths();
         // tirou producao do ar em 30/07 quando REDIS_URL apontava para localhost.
         const connection = new IORedis(redisUrl, {
           enableReadyCheck: false,
+          // Exigido pela BullMQ.
           maxRetriesPerRequest: null,
-          // Falha rapido em vez de segurar o request esperando o Redis voltar.
-          enableOfflineQueue: false,
-          // Reconecta sempre, com backoff ate 10s.
+          // NAO desabilitar `enableOfflineQueue` aqui.
           //
-          // Antes era `lazyConnect: true` + `retryStrategy: () => null`, para
-          // nao derrubar o processo com REDIS_URL invalido. So que a conexao
-          // so nascia no primeiro comando e, se aquele instante pegasse o
-          // socket ainda nao pronto, ela morria para sempre: todo sync da Meta
-          // falhava com "Fila Meta indisponivel" mesmo com o Redis no ar.
+          // O Worker duplica esta conexao para os comandos bloqueantes
+          // (worker.js:120) e `duplicate()` copia todas as opcoes. Com a fila
+          // offline desligada, o primeiro BZPOPMIN e disparado antes do socket
+          // ficar pronto e falha na hora com "Stream isn't writeable" — o
+          // worker nunca comeca a consumir. Os jobs ficam eternamente em
+          // `pending`, sem nenhum erro visivel, porque a fila *aceita* o job:
+          // so nao ha quem o processe.
           //
-          // Quem evita a queda do processo e o handler de 'error' abaixo, nao a
-          // ausencia de retry.
+          // Quem protege o request HTTP de travar esperando o Redis e o
+          // timeout no `queue.add`, nao esta opcao.
+          //
+          // Reconecta sempre, com backoff ate 10s: `retryStrategy: () => null`
+          // deixava a conexao morta para sempre depois da primeira falha.
           retryStrategy: (times: number) => Math.min(times * 500, 10_000),
         });
         connection.on('error', (err: Error) => {
