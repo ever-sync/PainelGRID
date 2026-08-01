@@ -78,9 +78,19 @@ const envFilePaths = getApiEnvFilePaths();
         const connection = new IORedis(redisUrl, {
           enableReadyCheck: false,
           maxRetriesPerRequest: null,
+          // Falha rapido em vez de segurar o request esperando o Redis voltar.
           enableOfflineQueue: false,
-          lazyConnect: true,
-          retryStrategy: () => null,
+          // Reconecta sempre, com backoff ate 10s.
+          //
+          // Antes era `lazyConnect: true` + `retryStrategy: () => null`, para
+          // nao derrubar o processo com REDIS_URL invalido. So que a conexao
+          // so nascia no primeiro comando e, se aquele instante pegasse o
+          // socket ainda nao pronto, ela morria para sempre: todo sync da Meta
+          // falhava com "Fila Meta indisponivel" mesmo com o Redis no ar.
+          //
+          // Quem evita a queda do processo e o handler de 'error' abaixo, nao a
+          // ausencia de retry.
+          retryStrategy: (times: number) => Math.min(times * 500, 10_000),
         });
         connection.on('error', (err: Error) => {
           logger.warn(`Conexao BullMQ indisponivel: ${err.message}`);
