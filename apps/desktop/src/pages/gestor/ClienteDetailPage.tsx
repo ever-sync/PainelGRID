@@ -821,6 +821,17 @@ export function ClienteDetailPage() {
     }
   }, [adsSubTab, refreshCampaignsReport]);
 
+  /**
+   * A aba Campanhas mostra so o que foi vinculado a este cliente. O relatorio
+   * traz a conta de anuncio inteira, entao o recorte e feito aqui.
+   */
+  const linkedCampaignsReport = useMemo(() => {
+    const vinculadas = new Set(
+      linkedCampaigns.map((campaign) => campaign.meta_campaign_id),
+    );
+    return campaignsReport.filter((campaign) => vinculadas.has(campaign.id));
+  }, [campaignsReport, linkedCampaigns]);
+
   const reportTotals = useMemo(() => {
     const totals = campaignsReport.reduce(
       (acc, campaign) => ({
@@ -4264,7 +4275,7 @@ export function ClienteDetailPage() {
                     <p className="py-12 text-center text-sm text-zinc-400">
                       Carregando campanhas...
                     </p>
-                  ) : campaignsReport.length > 0 ? (
+                  ) : linkedCampaignsReport.length > 0 ? (
                     <div
                       className={clsx(
                         "rounded-2xl border p-4 shadow-sm",
@@ -4277,7 +4288,7 @@ export function ClienteDetailPage() {
                         Clique na linha da campanha ou do conjunto para
                         expandir/recolher a estrutura de anúncios.
                       </p>
-                      <MetaCampaignTree campaigns={campaignsReport} />
+                      <MetaCampaignTree campaigns={linkedCampaignsReport} />
                     </div>
                   ) : (
                     <div
