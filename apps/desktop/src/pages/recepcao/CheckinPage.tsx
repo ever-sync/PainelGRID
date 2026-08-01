@@ -47,6 +47,7 @@ import {
 import { createSale, type SaleType } from "../../services/sales";
 import { listClientStaff, mapStaffToUser } from "../../services/staff";
 import { useLeadRealtimeSync } from "../../hooks/useLeadRealtimeSync";
+import { connectRealtime } from "../../services/realtime";
 import { LazyQrScanner } from "../../components/shared/LazyQrScanner";
 import type { Event } from "../../types";
 import {
@@ -167,6 +168,10 @@ export function CheckinPage() {
   const [showStandaloneSaleModal, setShowStandaloneSaleModal] = useState(false);
   const [standaloneLeadSearch, setStandaloneLeadSearch] = useState("");
   const [selectedLeadForSale, setSelectedLeadForSale] = useState<Lead | null>(null);
+
+  // Modal de transferencia rapida de lead para outro vendedor.
+  const [reassignModalLead, setReassignModalLead] = useState<Lead | null>(null);
+  const [reassigning, setReassigning] = useState(false);
   const [selectedVendorIdForSale, setSelectedVendorIdForSale] = useState<string>("");
   const [standaloneBuyerType, setStandaloneBuyerType] = useState<"lead" | "outro">("lead");
   const [standaloneNotes, setStandaloneNotes] = useState("");
@@ -356,6 +361,22 @@ export function CheckinPage() {
       console.error("Erro ao finalizar atendimento:", err);
     } finally {
       setClosingAttendanceId(null);
+    }
+  };
+
+  const handleReassignVendor = async (vendorId: string) => {
+    const t = readStoredSession()?.accessToken;
+    if (!t || !reassignModalLead) return;
+
+    setReassigning(true);
+    try {
+      await updateLead(reassignModalLead.id, { assigned_vendor_id: vendorId }, t);
+      refreshCheckinData();
+      setReassignModalLead(null);
+    } catch (err) {
+      console.error("Erro ao transferir lead:", err);
+    } finally {
+      setReassigning(false);
     }
   };
 
