@@ -1065,6 +1065,9 @@ export function ClientesPage() {
                     : "border-zinc-200 bg-white text-zinc-900 placeholder-zinc-400 focus:border-[#FF0636] shadow-sm",
                 )}
               />
+            </div>
+          </div>
+
           {createError ? <Notice tone="error">{createError}</Notice> : null}
         </div>
       </Modal>
