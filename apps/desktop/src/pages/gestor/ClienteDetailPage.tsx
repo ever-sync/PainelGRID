@@ -114,6 +114,10 @@ import {
   listMetaBusinesses,
   selectMetaAssets,
   syncMetaFull,
+  listAssignableCampaigns,
+  assignMetaCampaign,
+  unassignMetaCampaign,
+  type AssignableCampaign,
   type MetaBusinessApiOption,
 } from "../../services/meta";
 import {
@@ -725,6 +729,18 @@ export function ClienteDetailPage() {
   const resolvedId = id ?? "";
   const [metaConnection, setMetaConnection] =
     useState<MetaConnectionState | null>(null);
+
+  // Vinculo de campanhas da Meta a este cliente.
+  const [isCampaignLinkOpen, setIsCampaignLinkOpen] = useState(false);
+  const [campaignLinkLoading, setCampaignLinkLoading] = useState(false);
+  const [campaignLinkSaving, setCampaignLinkSaving] = useState(false);
+  const [campaignLinkError, setCampaignLinkError] = useState<string | null>(null);
+  const [assignableCampaigns, setAssignableCampaigns] = useState<
+    AssignableCampaign[]
+  >([]);
+  /** Ids marcados na tela. O que estava marcado ao abrir vira a base do diff. */
+  const [checkedCampaignIds, setCheckedCampaignIds] = useState<string[]>([]);
+  const [initialCampaignIds, setInitialCampaignIds] = useState<string[]>([]);
 
   const availableBusinesses = useMemo(() => apiBusinesses, [apiBusinesses]);
   const [draftBusinessId, setDraftBusinessId] = useState("");
@@ -1912,6 +1928,95 @@ export function ClienteDetailPage() {
 
     setIsSavingMeta(false);
     setIsMetaModalOpen(false);
+  }
+
+  async function handleOpenCampaignLink() {
+    const clientId = id ?? "";
+    const session = readStoredSession();
+
+    if (!clientId || !isUuid(clientId) || !session?.accessToken) {
+      pushToast({ type: "error", message: "Sessão expirada. Faça login novamente." });
+      return;
+    }
+
+    setIsCampaignLinkOpen(true);
+    setCampaignLinkLoading(true);
+    setCampaignLinkError(null);
+
+    try {
+      const rows = await listAssignableCampaigns(clientId, session.accessToken);
+      // So as ativas: campanha pausada ou arquivada nao interessa para vincular.
+      const active = rows.filter(
+        (row) => (row.status ?? "").toUpperCase() === "ACTIVE",
+      );
+      const alreadyMine = active
+        .filter((row) => row.assigned_client_id === clientId)
+        .map((row) => row.meta_campaign_id);
+
+      setAssignableCampaigns(active);
+      setCheckedCampaignIds(alreadyMine);
+      setInitialCampaignIds(alreadyMine);
+    } catch (error) {
+      setAssignableCampaigns([]);
+      setCampaignLinkError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar as campanhas.",
+      );
+    } finally {
+      setCampaignLinkLoading(false);
+    }
+  }
+
+  async function handleSaveCampaignLinks() {
+    const clientId = id ?? "";
+    const session = readStoredSession();
+    if (!clientId || !session?.accessToken) return;
+
+    const token = session.accessToken;
+    const toLink = checkedCampaignIds.filter(
+      (campaignId) => !initialCampaignIds.includes(campaignId),
+    );
+    const toUnlink = initialCampaignIds.filter(
+      (campaignId) => !checkedCampaignIds.includes(campaignId),
+    );
+
+    if (toLink.length === 0 && toUnlink.length === 0) {
+      setIsCampaignLinkOpen(false);
+      return;
+    }
+
+    setCampaignLinkSaving(true);
+    try {
+      // Sequencial de proposito: sao poucas campanhas, e em paralelo um erro
+      // no meio deixaria o resto num estado indefinido.
+      for (const campaignId of toLink) {
+        await assignMetaCampaign(
+          { meta_campaign_id: campaignId, client_id: clientId },
+          token,
+        );
+      }
+      for (const campaignId of toUnlink) {
+        await unassignMetaCampaign(campaignId, token);
+      }
+
+      pushToast({
+        type: "success",
+        message:
+          toUnlink.length === 0
+            ? `${toLink.length} campanha(s) vinculada(s) a este cliente.`
+            : `Vínculos atualizados: ${toLink.length} adicionada(s), ${toUnlink.length} removida(s).`,
+      });
+      setIsCampaignLinkOpen(false);
+    } catch (error) {
+      setCampaignLinkError(
+        error instanceof Error
+          ? error.message
+          : "Falha ao salvar os vínculos. Nenhuma alteração pendente foi perdida.",
+      );
+    } finally {
+      setCampaignLinkSaving(false);
+    }
   }
 
   async function handleSyncMeta() {
@@ -3829,13 +3934,33 @@ export function ClienteDetailPage() {
                             <td className="py-4 px-4 font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">
                               <div className="flex items-center gap-1.5">
                                 <Phone size={14} className="text-emerald-500" />
-                                <span>{metaConnection.whatsapp_number || "+55 (11) 98765-4321"}</span>
+                                <span>
+                                  {metaConnection.selected_whatsapp
+                                    ?.display_phone_number || "Não configurado"}
+                                </span>
                               </div>
                             </td>
 
                             {/* STATUS */}
                             <td className="py-4 px-4 text-right whitespace-nowrap">
-                              <Badge variant="green">🟢 Conectado</Badge>
+                              <div className="flex items-center justify-end gap-2">
+                                <Badge variant="green">🟢 Conectado</Badge>
+                                <button
+                                  type="button"
+                                  onClick={handleOpenCampaignLink}
+                                  className={clsx(
+                                    "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5",
+                                    "text-[11px] font-bold uppercase tracking-wide transition-colors",
+                                    isDarkMode
+                                      ? "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+                                      : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200",
+                                  )}
+                                  title="Vincular campanhas da Meta a este cliente"
+                                >
+                                  <Link2 size={13} />
+                                  Vincular
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ) : (
@@ -4867,6 +4992,111 @@ export function ClienteDetailPage() {
                 </div>
               </div>
             </>
+          )}
+        </div>
+      </Modal>
+
+      <Modal
+        open={isCampaignLinkOpen}
+        onClose={() => setIsCampaignLinkOpen(false)}
+        title="Vincular campanhas"
+        size="lg"
+        dark={isDarkMode}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setIsCampaignLinkOpen(false)}
+              disabled={campaignLinkSaving}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSaveCampaignLinks}
+              disabled={campaignLinkLoading || campaignLinkSaving}
+            >
+              {campaignLinkSaving ? "Salvando..." : "Salvar vínculos"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Marque as campanhas que estão rodando para{" "}
+            <span className="font-bold text-zinc-700 dark:text-zinc-200">
+              {client?.company_name ?? "este cliente"}
+            </span>
+            . Só aparecem campanhas ativas da conta de anúncio conectada.
+          </p>
+
+          {campaignLinkError ? (
+            <Notice tone="error">{campaignLinkError}</Notice>
+          ) : null}
+
+          {campaignLinkLoading ? (
+            <p className="py-8 text-center text-sm text-zinc-400">
+              Carregando campanhas da Meta...
+            </p>
+          ) : assignableCampaigns.length === 0 && !campaignLinkError ? (
+            <p className="py-8 text-center text-sm text-zinc-400">
+              Nenhuma campanha ativa encontrada nesta conta de anúncio.
+            </p>
+          ) : (
+            <ul className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
+              {assignableCampaigns.map((campaign) => {
+                const checked = checkedCampaignIds.includes(
+                  campaign.meta_campaign_id,
+                );
+                // Vinculada a outro cliente: avisa antes de roubar a campanha.
+                const takenByOther =
+                  campaign.assigned_client_id !== null &&
+                  campaign.assigned_client_id !== resolvedId;
+
+                return (
+                  <li key={campaign.meta_campaign_id}>
+                    <label
+                      className={clsx(
+                        "flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors",
+                        checked
+                          ? "border-[#FF0636] bg-[#FF0636]/5"
+                          : isDarkMode
+                            ? "border-zinc-800 hover:bg-zinc-900/60"
+                            : "border-zinc-200 hover:bg-zinc-50",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) => {
+                          setCheckedCampaignIds((current) =>
+                            event.target.checked
+                              ? [...current, campaign.meta_campaign_id]
+                              : current.filter(
+                                  (value) => value !== campaign.meta_campaign_id,
+                                ),
+                          );
+                        }}
+                        className="h-4 w-4 shrink-0 accent-[#FF0636]"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                          {campaign.name}
+                        </span>
+                        {takenByOther ? (
+                          <span className="block text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                            Hoje vinculada a outro cliente
+                          </span>
+                        ) : campaign.assigned_event_name ? (
+                          <span className="block text-[11px] text-zinc-400">
+                            Evento: {campaign.assigned_event_name}
+                          </span>
+                        ) : null}
+                      </span>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
       </Modal>

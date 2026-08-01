@@ -209,6 +209,50 @@ export function getMetaCampaignsReport(clientId: string, token: string) {
   );
 }
 
+export type AssignableCampaign = {
+  meta_campaign_id: string;
+  name: string;
+  status: string | null;
+  objective: string | null;
+  assigned_client_id: string | null;
+  assigned_event_id: string | null;
+  assigned_event_name: string | null;
+  /** Palpite pela pagina promovida; so pre-marca a tela, nao decide nada. */
+  suggested_client_id: string | null;
+  belongs_to_this_client: boolean;
+};
+
+export function listAssignableCampaigns(clientId: string, token: string) {
+  return httpRequest<AssignableCampaign[]>(
+    `/meta/campaign-assignments/${clientId}`,
+    {
+      method: "GET",
+      token,
+    },
+  );
+}
+
+export function assignMetaCampaign(
+  payload: { meta_campaign_id: string; client_id: string; event_id?: string | null },
+  token: string,
+) {
+  return httpRequest<Record<string, unknown>>("/meta/campaign-assignments", {
+    method: "POST",
+    token,
+    body: payload,
+  });
+}
+
+export function unassignMetaCampaign(metaCampaignId: string, token: string) {
+  return httpRequest<{ removed: boolean }>(
+    `/meta/campaign-assignments/${encodeURIComponent(metaCampaignId)}`,
+    {
+      method: "DELETE",
+      token,
+    },
+  );
+}
+
 export function syncMetaFull(clientId: string, token: string) {
   return httpRequest<SyncFullResponse>("/meta/sync/full", {
     method: "POST",
