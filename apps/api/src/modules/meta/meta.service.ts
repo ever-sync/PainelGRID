@@ -24,12 +24,14 @@ import { AuthenticatedUser } from '../auth/auth.types';
 import { ClientWebhookService } from '../crm/client-webhook.service';
 import { RealtimeEventsService } from '../realtime/realtime-events.service';
 import { AssignMetaCampaignDto } from './dto/assign-meta-campaign.dto';
+import { CampaignsReportQueryDto } from './dto/campaigns-report-query.dto';
 import { DisconnectMetaDto } from './dto/disconnect-meta.dto';
 import { ImportMetaLeadsDto } from './dto/import-meta-leads.dto';
 import { ListMetaBusinessesQueryDto } from './dto/list-meta-businesses-query.dto';
 import { MetaCallbackQueryDto } from './dto/meta-callback-query.dto';
 import { SelectMetaAssetsDto } from './dto/select-meta-assets.dto';
 import { StartMetaConnectDto } from './dto/start-meta-connect.dto';
+
 import { TriggerMetaSyncDto } from './dto/trigger-meta-sync.dto';
 import {
   type GraphErrorPayload,
@@ -56,6 +58,9 @@ import {
   type WhatsappSendMessageResponse,
   type WhatsappUploadMediaResponse,
 } from './meta.types';
+
+/** Janela historica buscada em cada sync de insights. */
+const INSIGHTS_HISTORY_MONTHS = 12;
 import { assertMetaGraphUrl, assertMetaMediaUrl } from './meta-url.util';
 
 @Injectable()
@@ -884,7 +889,11 @@ export class MetaService implements OnModuleInit {
   }
 
   /** Relatorio hierarquico Campanha -> Conjunto de anuncios -> Anuncio, com metricas agregadas. */
-  async getCampaignsReport(user: AuthenticatedUser, clientId: string) {
+  async getCampaignsReport(
+    user: AuthenticatedUser,
+    clientId: string,
+    query: CampaignsReportQueryDto = {},
+  ) {
     await this.assertMetaClientAccess(user, clientId);
 
     const connection = await this.db.metaConnection.findFirst({
@@ -899,21 +908,48 @@ export class MetaService implements OnModuleInit {
       return { client_id: clientId, connected: false, campaigns: [] };
     }
 
-    const [campaigns, adSets, ads, insights] = await Promise.all([
-      this.db.metaCampaign.findMany({ where: { meta_connection_id: connection.id } }),
+    // Periodo vazio = tudo que foi sincronizado.
+    const dateFilter: { gte?: Date; lte?: Date } = {};
+    if (query.from) {
+      dateFilter.gte = new Date(`${query.from.slice(0, 10)}T00:00:00.000Z`);
+    }
+    if (query.to) {
+      dateFilter.lte = new Date(`${query.to.slice(0, 10)}T23:59:59.999Z`);
+    }
+    const hasDateFilter = Object.keys(dateFilter).length > 0;
+
+    const [campaigns, adSets, ads, insights, range] = await Promise.all([
+      this.db.metaCampaign.findMany({
+        where: {
+          meta_connection_id: connection.id,
+          ...(query.objective ? { objective: query.objective } : {}),
+        },
+      }),
       this.db.metaAdSet.findMany({ where: { meta_connection_id: connection.id } }),
       this.db.metaAd.findMany({ where: { meta_connection_id: connection.id } }),
       this.db.metaDailyInsight.findMany({
-        where: { meta_connection_id: connection.id },
+        where: {
+          meta_connection_id: connection.id,
+          ...(hasDateFilter ? { date: dateFilter } : {}),
+        },
         select: {
           level: true,
           entity_id: true,
           spend: true,
           impressions: true,
+          clicks: true,
           leads: true,
           reach: true,
+          frequency: true,
           raw_payload: true,
         },
+      }),
+      // Amplitude do que existe no banco, para a tela nao oferecer um periodo
+      // que nunca foi sincronizado.
+      this.db.metaDailyInsight.aggregate({
+        where: { meta_connection_id: connection.id },
+        _min: { date: true },
+        _max: { date: true },
       }),
     ]);
 
@@ -921,53 +957,102 @@ export class MetaService implements OnModuleInit {
       spend: number;
       leads: number;
       impressions: number;
+      clicks: number;
       reach: number;
+      frequency: number;
+      frequencySamples: number;
       conversations: number;
+      // Metricas que so fazem sentido em certos objetivos, todas ja presentes
+      // em `raw_payload.actions` — nao exigem nada novo do sync.
+      linkClicks: number;
+      videoViews: number;
+      postEngagement: number;
+      pageEngagement: number;
+      messagingReplies: number;
     };
 
     const metricsByEntity = new Map<string, EntityMetrics>();
 
+    const emptyMetrics = (): EntityMetrics => ({
+      spend: 0,
+      leads: 0,
+      impressions: 0,
+      clicks: 0,
+      reach: 0,
+      frequency: 0,
+      frequencySamples: 0,
+      conversations: 0,
+      linkClicks: 0,
+      videoViews: 0,
+      postEngagement: 0,
+      pageEngagement: 0,
+      messagingReplies: 0,
+    });
+
     for (const row of insights) {
       const key = `${row.level}:${row.entity_id}`;
-      const current = metricsByEntity.get(key) ?? {
-        spend: 0,
-        leads: 0,
-        impressions: 0,
-        reach: 0,
-        conversations: 0,
-      };
+      const current = metricsByEntity.get(key) ?? emptyMetrics();
+
       current.spend += Number(row.spend ?? 0);
       current.leads += row.leads ?? 0;
       current.impressions += row.impressions ?? 0;
+      current.clicks += row.clicks ?? 0;
       current.reach += row.reach ?? 0;
+      if (row.frequency != null) {
+        // Frequencia e media, nao soma: acumula para dividir no final.
+        current.frequency += Number(row.frequency);
+        current.frequencySamples += 1;
+      }
+
       const rawActions = (
         row.raw_payload as { actions?: Array<{ action_type?: string; value?: string }> } | null
       )?.actions;
       current.conversations += this.extractConversationCount(rawActions) ?? 0;
+      current.linkClicks += this.sumAction(rawActions, 'link_click');
+      current.videoViews += this.sumAction(rawActions, 'video_view');
+      current.postEngagement += this.sumAction(rawActions, 'post_engagement');
+      current.pageEngagement += this.sumAction(rawActions, 'page_engagement');
+      current.messagingReplies += this.sumAction(
+        rawActions,
+        'onsite_conversion.messaging_first_reply',
+      );
+
       metricsByEntity.set(key, current);
     }
 
     const round2 = (value: number) => Math.round(value * 100) / 100;
 
+    /** Custo unitario so existe quando ha denominador; 0 mentiria de eficiencia. */
+    const costPer = (spend: number, count: number) =>
+      count > 0 ? round2(spend / count) : 0;
+
     const buildRow = (id: string, name: string, level: MetaInsightLevel) => {
-      const m = metricsByEntity.get(`${level}:${id}`) ?? {
-        spend: 0,
-        leads: 0,
-        impressions: 0,
-        reach: 0,
-        conversations: 0,
-      };
+      const m = metricsByEntity.get(`${level}:${id}`) ?? emptyMetrics();
       return {
         id,
         name,
         spend: round2(m.spend),
         leads: m.leads,
-        cost_per_lead: m.leads > 0 ? round2(m.spend / m.leads) : 0,
+        cost_per_lead: costPer(m.spend, m.leads),
         impressions: m.impressions,
         conversations: m.conversations,
-        cost_per_conversation:
-          m.conversations > 0 ? round2(m.spend / m.conversations) : 0,
+        cost_per_conversation: costPer(m.spend, m.conversations),
         reach: m.reach,
+        // Colunas adicionais, usadas conforme o objetivo da campanha.
+        clicks: m.clicks,
+        cost_per_click: costPer(m.spend, m.clicks),
+        ctr: m.impressions > 0 ? round2((m.clicks / m.impressions) * 100) : 0,
+        cpm: m.impressions > 0 ? round2((m.spend / m.impressions) * 1000) : 0,
+        frequency:
+          m.frequencySamples > 0 ? round2(m.frequency / m.frequencySamples) : 0,
+        link_clicks: m.linkClicks,
+        cost_per_link_click: costPer(m.spend, m.linkClicks),
+        video_views: m.videoViews,
+        cost_per_video_view: costPer(m.spend, m.videoViews),
+        post_engagement: m.postEngagement,
+        page_engagement: m.pageEngagement,
+        cost_per_engagement: costPer(m.spend, m.postEngagement),
+        messaging_replies: m.messagingReplies,
       };
     };
 
@@ -990,6 +1075,7 @@ export class MetaService implements OnModuleInit {
     const report = campaigns.map((campaign) => ({
       ...buildRow(campaign.meta_campaign_id, campaign.name, 'campaign'),
       status: campaign.status,
+      objective: campaign.objective,
       ad_sets: (adSetsByCampaignId.get(campaign.meta_campaign_id) ?? []).map((adSet) => ({
         ...buildRow(adSet.meta_ad_set_id, adSet.name, 'adset'),
         status: adSet.status,
@@ -1000,7 +1086,30 @@ export class MetaService implements OnModuleInit {
       })),
     }));
 
-    return { client_id: clientId, connected: true, campaigns: report };
+    return {
+      client_id: clientId,
+      connected: true,
+      campaigns: report,
+      /** Amplitude realmente sincronizada, para a tela nao oferecer vazio. */
+      available_range: {
+        from: range._min.date ? this.toIsoDate(range._min.date) : null,
+        to: range._max.date ? this.toIsoDate(range._max.date) : null,
+      },
+    };
+  }
+
+  /** Soma um `action_type` do payload de insights da Meta. */
+  private sumAction(
+    actions: Array<{ action_type?: string; value?: string }> | undefined,
+    actionType: string,
+  ): number {
+    if (!actions) {
+      return 0;
+    }
+    const total = actions
+      .filter((action) => action.action_type === actionType)
+      .reduce((sum, action) => sum + Number(action.value ?? 0), 0);
+    return Number.isFinite(total) && total >= 0 ? total : 0;
   }
 
   async syncFull(user: AuthenticatedUser, dto: TriggerMetaSyncDto) {
@@ -3449,11 +3558,22 @@ export class MetaService implements OnModuleInit {
           ? 'campaign_id,campaign_name,adset_id,adset_name'
           : 'campaign_id,campaign_name';
 
+    // 12 meses em vez de `date_preset: 'last_30d'`. Com a janela de 30 dias,
+    // tudo anterior a isso nunca era buscado: relatorio de evento passado
+    // ficava sem investimento e o buraco era permanente, porque cada sync so
+    // enxergava o mes corrente.
+    const until = new Date();
+    const since = new Date(until);
+    since.setMonth(since.getMonth() - INSIGHTS_HISTORY_MONTHS);
+
     return this.safeGraphGetAll<MetaInsightPayload>(`act_${adAccountId}/insights`, accessToken, {
       fields: `${levelFields},date_start,spend,impressions,clicks,cpc,ctr,reach,frequency,actions`,
       level,
       time_increment: 1,
-      date_preset: 'last_30d',
+      time_range: JSON.stringify({
+        since: this.toIsoDate(since),
+        until: this.toIsoDate(until),
+      }),
       limit: 500,
     });
   }
@@ -4064,6 +4184,11 @@ export class MetaService implements OnModuleInit {
 
     const parsed = Number.parseInt(String(value), 10);
     return Number.isNaN(parsed) ? undefined : parsed;
+  }
+
+  /** `YYYY-MM-DD`, formato que a Graph API espera em `time_range`. */
+  private toIsoDate(date: Date) {
+    return date.toISOString().slice(0, 10);
   }
 
   /** Corta no limite da coluna. Devolve undefined/null como veio. */

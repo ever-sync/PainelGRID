@@ -22,6 +22,7 @@ import { Role } from '../../common/types';
 import { parseAllowedOrigins } from '../../config/cors-origins';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { AssignMetaCampaignDto } from './dto/assign-meta-campaign.dto';
+import { CampaignsReportQueryDto } from './dto/campaigns-report-query.dto';
 import { DisconnectMetaDto } from './dto/disconnect-meta.dto';
 import { ListMetaBusinessesQueryDto } from './dto/list-meta-businesses-query.dto';
 import { MetaCallbackQueryDto } from './dto/meta-callback-query.dto';
@@ -170,8 +171,9 @@ export class MetaController {
   getCampaignsReport(
     @CurrentUser() user: AuthenticatedUser,
     @Param('clientId', new ParseUUIDPipe()) clientId: string,
+    @Query() query: CampaignsReportQueryDto,
   ): Promise<Record<string, unknown>> {
-    return this.metaService.getCampaignsReport(user, clientId);
+    return this.metaService.getCampaignsReport(user, clientId, query);
   }
 
   @Roles(Role.GESTOR)
