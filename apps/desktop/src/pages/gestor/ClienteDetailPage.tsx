@@ -67,6 +67,7 @@ import { Button } from "../../components/ui/Button";
 import { CopyableId } from "../../components/ui/CopyableId";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { VendorSignupLinkCard } from "../../components/shared/VendorSignupLinkCard";
+import { listEvents } from "../../services/events";
 import { MetaCampaignTree } from "../../components/shared/MetaCampaignTree";
 import {
   MetaCampaignFilters,
@@ -786,6 +787,7 @@ export function ClienteDetailPage() {
     to: "",
   });
   const [campaignObjective, setCampaignObjective] = useState<string | null>(null);
+  const [campaignStatus, setCampaignStatus] = useState<string | null>("ACTIVE");
   const [campaignColumns, setCampaignColumns] = useState<MetaColumnId[]>(
     () => readStoredColumns(resolvedId) ?? DEFAULT_COLUMNS,
   );
@@ -794,6 +796,15 @@ export function ClienteDetailPage() {
     to: string | null;
   }>({ from: null, to: null });
   const campaignsRequestRef = useRef(0);
+
+  // Eventos do cliente, para vincular campanha -> evento no modal.
+  const [clientEvents, setClientEvents] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  /** meta_campaign_id -> event_id escolhido na tela ("" = sem evento). */
+  const [campaignEventChoice, setCampaignEventChoice] = useState<
+    Record<string, string>
+  >({});
 
   // Sub-abas internas da aba Ads (Facebook).
   const [adsSubTab, setAdsSubTab] = useState<AdsSubTab>("conexoes");
@@ -835,6 +846,9 @@ export function ClienteDetailPage() {
       const data = await getMetaCampaignsReport(resolvedId, session.accessToken, {
         ...periodToRange(campaignPeriod, campaignCustomRange),
         objective: campaignObjective ?? undefined,
+        status: campaignStatus ?? undefined,
+        // Filtra no banco: a conta inteira nao precisa trafegar.
+        only_linked: adsSubTab === "campanhas",
       });
       if (isStale()) return;
       setCampaignsReport(data.campaigns ?? []);
@@ -848,7 +862,14 @@ export function ClienteDetailPage() {
     } finally {
       if (!isStale()) setReportLoading(false);
     }
-  }, [resolvedId, campaignPeriod, campaignCustomRange, campaignObjective]);
+  }, [
+    resolvedId,
+    campaignPeriod,
+    campaignCustomRange,
+    campaignObjective,
+    campaignStatus,
+    adsSubTab,
+  ]);
 
   useEffect(() => {
     // So busca quando a sub-aba que usa o relatorio esta aberta.
@@ -2128,6 +2149,14 @@ export function ClienteDetailPage() {
     setCampaignLinkLoading(true);
     setCampaignLinkError(null);
 
+    listEvents({ client_id: clientId }, session.accessToken)
+      .then((rows) =>
+        setClientEvents(
+          rows.map((row) => ({ id: row.id, name: row.name as string })),
+        ),
+      )
+      .catch(() => setClientEvents([]));
+
     try {
       const rows = await listAssignableCampaigns(clientId, session.accessToken);
       // So as ativas: campanha pausada ou arquivada nao interessa para vincular.
@@ -2141,6 +2170,14 @@ export function ClienteDetailPage() {
       setAssignableCampaigns(active);
       setCheckedCampaignIds(alreadyMine);
       setInitialCampaignIds(alreadyMine);
+      setCampaignEventChoice(
+        Object.fromEntries(
+          active.map((row) => [
+            row.meta_campaign_id,
+            row.assigned_event_id ?? "",
+          ]),
+        ),
+      );
     } catch (error) {
       setAssignableCampaigns([]);
       setCampaignLinkError(
@@ -2165,8 +2202,16 @@ export function ClienteDetailPage() {
     const toUnlink = initialCampaignIds.filter(
       (campaignId) => !checkedCampaignIds.includes(campaignId),
     );
+    // Ja vinculada, mas o evento mudou: regrava sem passar por toLink.
+    const toRelink = checkedCampaignIds.filter((campaignId) => {
+      if (!initialCampaignIds.includes(campaignId)) return false;
+      const atual = assignableCampaigns.find(
+        (row) => row.meta_campaign_id === campaignId,
+      );
+      return (campaignEventChoice[campaignId] ?? "") !== (atual?.assigned_event_id ?? "");
+    });
 
-    if (toLink.length === 0 && toUnlink.length === 0) {
+    if (toLink.length === 0 && toUnlink.length === 0 && toRelink.length === 0) {
       setIsCampaignLinkOpen(false);
       return;
     }
@@ -2175,7 +2220,7 @@ export function ClienteDetailPage() {
     try {
       // Sequencial de proposito: sao poucas campanhas, e em paralelo um erro
       // no meio deixaria o resto num estado indefinido.
-      for (const campaignId of toLink) {
+      for (const campaignId of [...toLink, ...toRelink]) {
         await assignMetaCampaign(
           {
             meta_campaign_id: campaignId,
@@ -2184,6 +2229,7 @@ export function ClienteDetailPage() {
               (row) => row.meta_campaign_id === campaignId,
             )?.name,
             client_id: clientId,
+            event_id: campaignEventChoice[campaignId] || null,
           },
           token,
         );
@@ -2194,10 +2240,7 @@ export function ClienteDetailPage() {
 
       pushToast({
         type: "success",
-        message:
-          toUnlink.length === 0
-            ? `${toLink.length} campanha(s) vinculada(s) a este cliente.`
-            : `Vínculos atualizados: ${toLink.length} adicionada(s), ${toUnlink.length} removida(s).`,
+        message: `Vínculos atualizados: ${toLink.length} adicionada(s), ${toRelink.length} alterada(s), ${toUnlink.length} removida(s).`,
       });
       await refreshLinkedCampaigns();
       setIsCampaignLinkOpen(false);
@@ -4351,6 +4394,8 @@ export function ClienteDetailPage() {
                     onCustomRangeChange={setCampaignCustomRange}
                     objective={campaignObjective}
                     onObjectiveChange={handleObjectiveChange}
+                    statusFilter={campaignStatus}
+                    onStatusChange={setCampaignStatus}
                     availableObjectives={availableObjectives}
                     columnIds={campaignColumns}
                     onColumnsChange={setCampaignColumns}
@@ -5713,12 +5758,37 @@ export function ClienteDetailPage() {
                           <span className="block text-[11px] font-medium text-amber-600 dark:text-amber-400">
                             Hoje vinculada a outro cliente
                           </span>
-                        ) : campaign.assigned_event_name ? (
-                          <span className="block text-[11px] text-zinc-400">
-                            Evento: {campaign.assigned_event_name}
-                          </span>
                         ) : null}
                       </span>
+
+                      {/* O evento e o que permite somar investimento por evento. */}
+                      {checked ? (
+                        <select
+                          value={campaignEventChoice[campaign.meta_campaign_id] ?? ""}
+                          onChange={(event) => {
+                            event.stopPropagation();
+                            setCampaignEventChoice((current) => ({
+                              ...current,
+                              [campaign.meta_campaign_id]: event.target.value,
+                            }));
+                          }}
+                          onClick={(event) => event.stopPropagation()}
+                          className={clsx(
+                            "h-8 max-w-[190px] shrink-0 cursor-pointer rounded-lg border px-2 text-[11px] font-medium",
+                            isDarkMode
+                              ? "border-zinc-700 bg-zinc-900 text-zinc-200"
+                              : "border-zinc-200 bg-white text-zinc-700",
+                          )}
+                          title="Evento ao qual esta campanha pertence"
+                        >
+                          <option value="">Sem evento</option>
+                          {clientEvents.map((eventOption) => (
+                            <option key={eventOption.id} value={eventOption.id}>
+                              {eventOption.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : null}
                     </label>
                   </li>
                 );

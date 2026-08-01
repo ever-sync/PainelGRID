@@ -50,6 +50,8 @@ export type MetaCampaignReportRow = {
   page_engagement: number;
   cost_per_engagement: number;
   messaging_replies: number;
+  /** So no nivel de campanha; conjunto e anuncio nao tem atribuicao por lead. */
+  leads_in_system?: number;
 };
 
 export type MetaAdReportRow = MetaCampaignReportRow;
@@ -60,6 +62,7 @@ export type MetaAdSetReportRow = MetaCampaignReportRow & {
 
 export type MetaCampaignsReportItem = MetaCampaignReportRow & {
   objective: string | null;
+  leads_in_system: number;
   ad_sets: MetaAdSetReportRow[];
 };
 
@@ -75,6 +78,9 @@ export type CampaignsReportFilters = {
   from?: string;
   to?: string;
   objective?: string;
+  status?: string;
+  /** Traz so as campanhas vinculadas a este cliente (filtro no banco). */
+  only_linked?: boolean;
 };
 
 export type MetaBusinessApiOption = {
@@ -231,6 +237,8 @@ export function getMetaCampaignsReport(
   if (filters.from) params.set("from", filters.from);
   if (filters.to) params.set("to", filters.to);
   if (filters.objective) params.set("objective", filters.objective);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.only_linked) params.set("only_linked", "true");
   const qs = params.toString();
 
   return httpRequest<MetaCampaignsReportResponse>(

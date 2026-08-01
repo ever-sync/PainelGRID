@@ -929,11 +929,25 @@ export class MetaService implements OnModuleInit {
     }
     const hasDateFilter = Object.keys(dateFilter).length > 0;
 
-    const [campaigns, adSets, ads, insights, range] = await Promise.all([
+    // Filtro por vinculo no banco, e nao no front: sem isso a conta de anuncio
+    // inteira trafega so para a tela descartar quase tudo.
+    const linkedIds = query.only_linked
+      ? (
+          await this.db.metaCampaignAssignment.findMany({
+            where: { client_id: clientId },
+            select: { meta_campaign_id: true },
+          })
+        ).map((row: { meta_campaign_id: string }) => row.meta_campaign_id)
+      : null;
+
+    const [campaigns, adSets, ads, insights, range, importedLeads] =
+      await Promise.all([
       this.db.metaCampaign.findMany({
         where: {
           meta_connection_id: connection.id,
           ...(query.objective ? { objective: query.objective } : {}),
+          ...(query.status ? { status: query.status } : {}),
+          ...(linkedIds ? { meta_campaign_id: { in: linkedIds } } : {}),
         },
       }),
       this.db.metaAdSet.findMany({ where: { meta_connection_id: connection.id } }),
@@ -962,7 +976,30 @@ export class MetaService implements OnModuleInit {
         _min: { date: true },
         _max: { date: true },
       }),
+      // Leads que de fato viraram registro no sistema. A Meta conta o envio do
+      // formulario; aqui conta o que chegou. A diferenca entre os dois e
+      // exatamente o que se perdeu no caminho.
+      this.db.metaLeadImport.groupBy({
+        by: ['meta_campaign_id'],
+        where: {
+          meta_connection_id: connection.id,
+          lead_id: { not: null },
+          ...(hasDateFilter ? { created_at: dateFilter } : {}),
+        },
+        _count: { _all: true },
+      }),
     ]);
+
+    const importedByCampaign = new Map<string, number>(
+      (
+        importedLeads as Array<{
+          meta_campaign_id: string | null;
+          _count: { _all: number };
+        }>
+      )
+        .filter((row) => row.meta_campaign_id)
+        .map((row) => [row.meta_campaign_id as string, row._count._all]),
+    );
 
     type EntityMetrics = {
       spend: number;
@@ -1087,6 +1124,8 @@ export class MetaService implements OnModuleInit {
       ...buildRow(campaign.meta_campaign_id, campaign.name, 'campaign'),
       status: campaign.status,
       objective: campaign.objective,
+      /** Leads da Meta que viraram registro aqui. So no nivel de campanha. */
+      leads_in_system: importedByCampaign.get(campaign.meta_campaign_id) ?? 0,
       ad_sets: (adSetsByCampaignId.get(campaign.meta_campaign_id) ?? []).map((adSet) => ({
         ...buildRow(adSet.meta_ad_set_id, adSet.name, 'adset'),
         status: adSet.status,

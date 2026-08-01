@@ -47,6 +47,8 @@ export function MetaCampaignFilters({
   onCustomRangeChange,
   objective,
   onObjectiveChange,
+  statusFilter,
+  onStatusChange,
   availableObjectives,
   columnIds,
   onColumnsChange,
@@ -59,6 +61,8 @@ export function MetaCampaignFilters({
   onCustomRangeChange: (range: { from: string; to: string }) => void;
   objective: string | null;
   onObjectiveChange: (objective: string | null) => void;
+  statusFilter: string | null;
+  onStatusChange: (status: string | null) => void;
   availableObjectives: string[];
   columnIds: MetaColumnId[];
   onColumnsChange: (columns: MetaColumnId[]) => void;
@@ -138,6 +142,17 @@ export function MetaCampaignFilters({
         </button>
 
         <span className="mx-1 h-6 w-px bg-zinc-200 dark:bg-zinc-700" />
+
+        <select
+          value={statusFilter ?? ""}
+          onChange={(event) => onStatusChange(event.target.value || null)}
+          className={clsx(field, "cursor-pointer")}
+          title="Status da campanha"
+        >
+          <option value="">Todos os status</option>
+          <option value="ACTIVE">Só ativas</option>
+          <option value="PAUSED">Só pausadas</option>
+        </select>
 
         <select
           value={objective ?? ""}

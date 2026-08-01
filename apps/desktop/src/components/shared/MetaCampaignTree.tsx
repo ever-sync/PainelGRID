@@ -1,5 +1,11 @@
 import { Fragment, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 import type {
   MetaAdSetReportRow,
   MetaCampaignReportRow,
@@ -30,7 +36,11 @@ function formatNumber(value: number) {
  * "R$ 0" na tela pareceria eficiencia perfeita, e nao ausencia de dado.
  */
 function renderCell(row: MetaCampaignReportRow, column: MetaColumn) {
-  const value = Number(row[column.id] ?? 0);
+  const raw = row[column.id];
+  // Metrica que so existe em certo nivel (leads no sistema e por campanha).
+  if (raw === undefined || raw === null) return "—";
+
+  const value = Number(raw);
 
   if (column.denominator) {
     const divisor = Number(row[column.denominator] ?? 0);
@@ -95,6 +105,11 @@ export function MetaCampaignTree({
     {},
   );
 
+  const [sort, setSort] = useState<{
+    column: MetaColumnId;
+    direction: "asc" | "desc";
+  } | null>(null);
+
   const columns = useMemo(
     () =>
       columnIds
@@ -102,6 +117,42 @@ export function MetaCampaignTree({
         .filter((column): column is MetaColumn => Boolean(column)),
     [columnIds],
   );
+
+  const sorted = useMemo(() => {
+    if (!sort) return campaigns;
+    const factor = sort.direction === "desc" ? -1 : 1;
+    return [...campaigns].sort(
+      (a, b) =>
+        (Number(a[sort.column] ?? 0) - Number(b[sort.column] ?? 0)) * factor,
+    );
+  }, [campaigns, sort]);
+
+  /** Totais somam so o nivel de campanha: conjunto e anuncio ja estao dentro. */
+  const totals = useMemo(() => {
+    const acc: Record<string, number> = {};
+    for (const column of columns) {
+      acc[column.id] = campaigns.reduce(
+        (sum, campaign) => sum + Number(campaign[column.id] ?? 0),
+        0,
+      );
+    }
+    // Custo unitario e razao, nao soma: recalcula sobre os totais.
+    for (const column of columns) {
+      if (column.denominator) {
+        const divisor = acc[column.denominator] ?? 0;
+        acc[column.id] = divisor > 0 ? (acc.spend ?? 0) / divisor : 0;
+      }
+    }
+    return acc;
+  }, [campaigns, columns]);
+
+  function toggleSort(column: MetaColumnId) {
+    setSort((current) => {
+      if (current?.column !== column) return { column, direction: "desc" };
+      if (current.direction === "desc") return { column, direction: "asc" };
+      return null;
+    });
+  }
 
   const allIds = useMemo(() => {
     const campaignIds: string[] = [];
@@ -151,15 +202,34 @@ export function MetaCampaignTree({
           <thead>
             <tr className="border-b border-gray-100 font-semibold uppercase tracking-wider text-gray-500 dark:border-zinc-800 dark:text-zinc-400">
               <th className="px-3 pb-3">Nome (Campanha / Conjunto / Anúncio)</th>
-              {columns.map((column) => (
-                <th key={column.id} className="px-3 pb-3 text-right">
-                  {column.label}
-                </th>
-              ))}
+              {columns.map((column) => {
+                const active = sort?.column === column.id;
+                return (
+                  <th key={column.id} className="px-3 pb-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort(column.id)}
+                      className={`inline-flex cursor-pointer items-center gap-1 uppercase tracking-wider transition-colors hover:text-[#FF0636] ${active ? "text-[#FF0636]" : ""}`}
+                      title="Ordenar por esta coluna"
+                    >
+                      {column.label}
+                      {active ? (
+                        sort?.direction === "desc" ? (
+                          <ArrowDown size={11} />
+                        ) : (
+                          <ArrowUp size={11} />
+                        )
+                      ) : (
+                        <ArrowUpDown size={11} className="opacity-30" />
+                      )}
+                    </button>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-zinc-800/60">
-            {campaigns.map((campaign) => {
+            {sorted.map((campaign) => {
               const campaignOpen = Boolean(expandedCampaigns[campaign.id]);
               const adSets: MetaAdSetReportRow[] = campaign.ad_sets ?? [];
 
@@ -244,6 +314,31 @@ export function MetaCampaignTree({
               );
             })}
           </tbody>
+
+          {campaigns.length > 1 ? (
+            <tfoot>
+              <tr
+                className={
+                  "border-t-2 border-zinc-200 bg-zinc-50 font-bold dark:border-zinc-700 dark:bg-zinc-900/80"
+                }
+              >
+                <td className="px-3 py-3 text-gray-900 dark:text-zinc-100">
+                  Total ({campaigns.length} campanhas)
+                </td>
+                {columns.map((column) => (
+                  <td
+                    key={column.id}
+                    className={`px-3 py-3 text-right font-mono ${cellTone(column)}`}
+                  >
+                    {renderCell(
+                      totals as unknown as MetaCampaignReportRow,
+                      column,
+                    )}
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          ) : null}
         </table>
       </div>
     </div>

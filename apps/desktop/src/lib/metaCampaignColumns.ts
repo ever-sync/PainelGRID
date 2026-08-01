@@ -3,6 +3,7 @@ import type { MetaCampaignReportRow } from "../services/meta";
 export type MetaColumnId =
   | "spend"
   | "leads"
+  | "leads_in_system"
   | "cost_per_lead"
   | "conversations"
   | "cost_per_conversation"
@@ -36,7 +37,8 @@ export type MetaColumn = {
 export const META_COLUMNS: MetaColumn[] = [
   { id: "spend", label: "Valor investido", format: "currency", group: "Investimento" },
 
-  { id: "leads", label: "Leads", format: "number", group: "Formulário" },
+  { id: "leads", label: "Leads (Meta)", format: "number", group: "Formulário" },
+  { id: "leads_in_system", label: "Leads no sistema", format: "number", group: "Formulário" },
   { id: "cost_per_lead", label: "Custo por lead", format: "currency", denominator: "leads", group: "Formulário" },
 
   { id: "conversations", label: "Conversas", format: "number", group: "Mensagens" },
@@ -79,7 +81,7 @@ export const OBJECTIVE_PRESETS: MetaObjectivePreset[] = [
   {
     label: "Formulário (Leads)",
     matches: ["OUTCOME_LEADS", "LEAD_GENERATION"],
-    columns: ["spend", "leads", "cost_per_lead", "impressions", "clicks", "ctr", "reach"],
+    columns: ["spend", "leads", "leads_in_system", "cost_per_lead", "impressions", "clicks", "ctr"],
   },
   {
     label: "Mensagens / WhatsApp",
@@ -112,6 +114,7 @@ export const OBJECTIVE_PRESETS: MetaObjectivePreset[] = [
 export const DEFAULT_COLUMNS: MetaColumnId[] = [
   "spend",
   "leads",
+  "leads_in_system",
   "cost_per_lead",
   "impressions",
   "conversations",
