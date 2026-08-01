@@ -21,6 +21,9 @@ describe('MetaService', () => {
     metaAssetSelection: {
       findMany: jest.fn(),
     },
+    metaCampaignAssignment: {
+      findMany: jest.fn(),
+    },
     metaSyncJob: {
       create: jest.fn(),
       update: jest.fn(),
@@ -264,7 +267,14 @@ describe('MetaService', () => {
     ];
 
     /** Prepara o sync isolando as chamadas de rede; devolve os spies de gravacao. */
-    function armarSync({ compartilhada }: { compartilhada: boolean }) {
+    function armarSync({
+      compartilhada,
+      vinculos = [],
+    }: {
+      compartilhada: boolean;
+      vinculos?: Array<{ meta_campaign_id: string; client_id: string }>;
+    }) {
+      prisma.metaCampaignAssignment.findMany.mockResolvedValue(vinculos);
       prisma.metaConnection.findUnique.mockResolvedValue({
         id: 'conn-1',
         client_id: 'client-1',
@@ -345,6 +355,34 @@ describe('MetaService', () => {
       for (const [, insights] of spies.syncInsights.mock.calls) {
         expect(insights).toEqual([{ campaign_id: 'campaign-1', spend: '10' }]);
       }
+    });
+
+    it('o vinculo explicito traz campanha que a inferencia descartaria', async () => {
+      // campaign-3 nao tem promoted_object: so entra porque foi vinculada.
+      const spies = armarSync({
+        compartilhada: true,
+        vinculos: [{ meta_campaign_id: 'campaign-3', client_id: 'client-1' }],
+      });
+
+      await service.runFullSyncForConnection('conn-1', 'job-1');
+
+      expect(spies.syncCampaigns).toHaveBeenCalledWith(expect.anything(), [
+        { id: 'campaign-1' },
+        { id: 'campaign-3' },
+      ]);
+    });
+
+    it('o vinculo a outro cliente exclui a campanha mesmo com a pagina batendo', async () => {
+      // campaign-1 promove page-A (deste cliente), mas foi dada ao client-2.
+      const spies = armarSync({
+        compartilhada: true,
+        vinculos: [{ meta_campaign_id: 'campaign-1', client_id: 'client-2' }],
+      });
+
+      await service.runFullSyncForConnection('conn-1', 'job-1');
+
+      expect(spies.syncCampaigns).toHaveBeenCalledWith(expect.anything(), []);
+      expect(spies.syncAdSets).toHaveBeenCalledWith(expect.anything(), []);
     });
 
     it('com conta dedicada nao descarta nada, mesmo sem promoted_object', async () => {

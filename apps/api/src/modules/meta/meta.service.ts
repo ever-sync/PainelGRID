@@ -1661,6 +1661,26 @@ export class MetaService implements OnModuleInit {
   }
 
   /**
+   * Separa as campanhas ja vinculadas: as deste cliente e as de qualquer outro.
+   * Vinculo e decisao manual do gestor, entao vence a inferencia — inclusive
+   * para excluir, quando a campanha foi dada a outro cliente.
+   */
+  private async resolveCampaignAssignments(clientId: string) {
+    const rows = await this.db.metaCampaignAssignment.findMany({
+      select: { meta_campaign_id: true, client_id: true },
+    });
+
+    const mine = new Set<string>();
+    const others = new Set<string>();
+
+    for (const row of rows as Array<{ meta_campaign_id: string; client_id: string }>) {
+      (row.client_id === clientId ? mine : others).add(row.meta_campaign_id);
+    }
+
+    return { mine, others };
+  }
+
+  /**
    * Decide se o conjunto de anuncios pertence ao cliente, olhando a pagina e o
    * formulario que ele promove. Conjunto sem `promoted_object` (trafego,
    * reconhecimento) nao tem como ser atribuido e fica de fora.
@@ -1734,17 +1754,35 @@ export class MetaService implements OnModuleInit {
         const allAdSets = await this.fetchAdSetsForAccount(adAccountId, connection.access_token);
         const isShared = await this.isAdAccountSharedBetweenClients(adAccountId);
 
-        const adSets = isShared
-          ? allAdSets.filter((adSet) => this.adSetBelongsToClient(adSet, pageIds, selectedFormIds))
-          : allAdSets;
-
-        // `null` = sem particionamento (conta dedicada): nada e descartado.
-        const allowedCampaignIds = isShared
-          ? new Set(this.uniqueStrings(adSets.map((adSet) => adSet.campaign_id)))
+        // O vinculo explicito decide; o `promoted_object` so opina sobre o que
+        // ainda nao foi vinculado. `null` = conta dedicada, nada e descartado.
+        const assigned = isShared
+          ? await this.resolveCampaignAssignments(connection.client_id)
           : null;
 
-        const keepCampaign = (campaignId?: string | null) =>
-          !allowedCampaignIds || (Boolean(campaignId) && allowedCampaignIds.has(campaignId!));
+        const inferred = new Set(
+          this.uniqueStrings(
+            allAdSets
+              .filter((adSet) => this.adSetBelongsToClient(adSet, pageIds, selectedFormIds))
+              .map((adSet) => adSet.campaign_id),
+          ),
+        );
+
+        const keepCampaign = (campaignId?: string | null) => {
+          if (!assigned) {
+            return true;
+          }
+          if (!campaignId) {
+            return false;
+          }
+          if (assigned.mine.has(campaignId)) {
+            return true;
+          }
+          // Vinculada a outro cliente e decisao final: nao cai no fallback.
+          return !assigned.others.has(campaignId) && inferred.has(campaignId);
+        };
+
+        const adSets = allAdSets.filter((adSet) => keepCampaign(adSet.campaign_id));
 
         if (isShared && allAdSets.length !== adSets.length) {
           this.logger.log(
