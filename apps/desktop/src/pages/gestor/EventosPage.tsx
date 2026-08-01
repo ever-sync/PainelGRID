@@ -140,6 +140,7 @@ export function EventosPage() {
   const [teamAction, setTeamAction] = useState<TeamAction | null>(null);
   const [teamActionLoading, setTeamActionLoading] = useState(false);
   const [addMemberTeamId, setAddMemberTeamId] = useState<string | null>(null);
+  const [addMemberSelectionId, setAddMemberSelectionId] = useState<string>("");
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [memberToggling, setMemberToggling] = useState<string | null>(null);
   const [availableVendors, setAvailableVendors] = useState<StaffUser[]>([]);
