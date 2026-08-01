@@ -23,6 +23,7 @@ import { RedisService } from '../../config/redis.service';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { ClientWebhookService } from '../crm/client-webhook.service';
 import { RealtimeEventsService } from '../realtime/realtime-events.service';
+import { AssignMetaCampaignDto } from './dto/assign-meta-campaign.dto';
 import { DisconnectMetaDto } from './dto/disconnect-meta.dto';
 import { ImportMetaLeadsDto } from './dto/import-meta-leads.dto';
 import { ListMetaBusinessesQueryDto } from './dto/list-meta-businesses-query.dto';
@@ -1658,6 +1659,210 @@ export class MetaService implements OnModuleInit {
     );
 
     return clientIds.size > 1;
+  }
+
+  /**
+   * Lista as campanhas da conta de anuncio do cliente para a tela de vinculo.
+   *
+   * Busca ao vivo na Graph API de proposito: o gestor precisa ver tambem as
+   * campanhas que o sync descartou, que sao justamente as que faltam vincular.
+   */
+  async listAssignableCampaigns(user: AuthenticatedUser, clientId: string) {
+    await this.assertMetaClientAccess(user, clientId);
+
+    const connection = await this.db.metaConnection.findFirst({
+      where: { client_id: clientId, status: 'connected' },
+    });
+
+    if (!connection) {
+      throw new BadRequestException('Cliente sem conexao Meta ativa');
+    }
+
+    const selections = await this.db.metaAssetSelection.findMany({
+      where: { meta_connection_id: connection.id },
+    });
+
+    const adAccountIds = this.uniqueStrings(
+      selections.map((asset: { ad_account_id?: string | null }) => asset.ad_account_id),
+    );
+
+    const campaigns: MetaCampaignPayload[] = [];
+    const pageByCampaign = new Map<string, string>();
+
+    for (const adAccountId of adAccountIds) {
+      campaigns.push(
+        ...(await this.fetchCampaignsForAccount(adAccountId, connection.access_token)),
+      );
+
+      const adSets = await this.fetchAdSetsForAccount(adAccountId, connection.access_token);
+      for (const adSet of adSets) {
+        const pageId = adSet.promoted_object?.page_id;
+        if (pageId && adSet.campaign_id && !pageByCampaign.has(adSet.campaign_id)) {
+          pageByCampaign.set(adSet.campaign_id, pageId);
+        }
+      }
+    }
+
+    // Mapa pagina -> cliente, para sugerir o dono do que ainda nao foi vinculado.
+    const allSelections = await this.db.metaAssetSelection.findMany({
+      where: { page_id: { in: Array.from(new Set(pageByCampaign.values())) } },
+      select: { page_id: true, meta_connection: { select: { client_id: true } } },
+    });
+
+    const clientByPage = new Map<string, string>();
+    for (const row of allSelections as Array<{
+      page_id: string | null;
+      meta_connection: { client_id: string };
+    }>) {
+      if (row.page_id) {
+        clientByPage.set(row.page_id, row.meta_connection.client_id);
+      }
+    }
+
+    const assignments = await this.db.metaCampaignAssignment.findMany({
+      where: { meta_campaign_id: { in: campaigns.map((campaign) => campaign.id) } },
+      include: { event: { select: { id: true, name: true } } },
+    });
+
+    const assignmentByCampaign = new Map(
+      (
+        assignments as Array<{
+          meta_campaign_id: string;
+          client_id: string;
+          event_id: string | null;
+          event: { id: string; name: string } | null;
+        }>
+      ).map((row) => [row.meta_campaign_id, row]),
+    );
+
+    return campaigns.map((campaign) => {
+      const assignment = assignmentByCampaign.get(campaign.id);
+      const suggestedClientId = clientByPage.get(pageByCampaign.get(campaign.id) ?? '') ?? null;
+
+      return {
+        meta_campaign_id: campaign.id,
+        name: campaign.name ?? `Campaign ${campaign.id}`,
+        status: campaign.status ?? null,
+        objective: campaign.objective ?? null,
+        assigned_client_id: assignment?.client_id ?? null,
+        assigned_event_id: assignment?.event_id ?? null,
+        assigned_event_name: assignment?.event?.name ?? null,
+        /** Palpite pela pagina promovida; so preenche a tela, nao decide nada. */
+        suggested_client_id: suggestedClientId,
+        belongs_to_this_client: assignment
+          ? assignment.client_id === clientId
+          : suggestedClientId === clientId,
+      };
+    });
+  }
+
+  /** Vincula (ou revincula) uma campanha a um cliente e, opcionalmente, a um evento. */
+  async assignCampaign(user: AuthenticatedUser, dto: AssignMetaCampaignDto) {
+    await this.assertMetaClientAccess(user, dto.client_id);
+
+    if (dto.event_id) {
+      const event = await this.db.event.findUnique({
+        where: { id: dto.event_id },
+        select: { client_id: true },
+      });
+
+      if (!event) {
+        throw new NotFoundException('Evento nao encontrado');
+      }
+
+      // Evita atribuir o gasto de um cliente ao evento de outro.
+      if (event.client_id !== dto.client_id) {
+        throw new BadRequestException('Evento pertence a outro cliente');
+      }
+    }
+
+    const data = {
+      client_id: dto.client_id,
+      event_id: dto.event_id ?? null,
+      assigned_by_id: user.sub,
+    };
+
+    return this.db.metaCampaignAssignment.upsert({
+      where: { meta_campaign_id: dto.meta_campaign_id },
+      create: { meta_campaign_id: dto.meta_campaign_id, ...data },
+      update: data,
+    });
+  }
+
+  /** Remove o vinculo. A campanha volta a depender da inferencia por pagina. */
+  async unassignCampaign(user: AuthenticatedUser, metaCampaignId: string) {
+    const existing = await this.db.metaCampaignAssignment.findUnique({
+      where: { meta_campaign_id: metaCampaignId },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Vinculo nao encontrado');
+    }
+
+    await this.assertMetaClientAccess(user, existing.client_id);
+    await this.db.metaCampaignAssignment.delete({
+      where: { meta_campaign_id: metaCampaignId },
+    });
+
+    return { removed: true };
+  }
+
+  /**
+   * Investimento e retorno de midia paga de um evento, somando o gasto diario
+   * real das campanhas vinculadas a ele.
+   *
+   * Nao ha recorte por data: a campanha pertence a um unico evento, entao todo
+   * o gasto dela e daquele evento — inclusive o que veio antes da data, que e
+   * exatamente o investimento feito para o evento acontecer.
+   */
+  async getEventAdSpend(user: AuthenticatedUser, eventId: string) {
+    const event = await this.db.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, client_id: true, paid_traffic_investment: true },
+    });
+
+    if (!event) {
+      throw new NotFoundException('Evento nao encontrado');
+    }
+
+    await this.assertMetaClientAccess(user, event.client_id);
+
+    const assignments = await this.db.metaCampaignAssignment.findMany({
+      where: { event_id: eventId },
+      select: { meta_campaign_id: true },
+    });
+
+    const campaignIds = assignments.map(
+      (row: { meta_campaign_id: string }) => row.meta_campaign_id,
+    );
+
+    if (campaignIds.length === 0) {
+      return {
+        event_id: eventId,
+        linked_campaigns: 0,
+        // Sem campanha vinculada, vale o valor digitado a mao no evento.
+        spend: this.toNumber(event.paid_traffic_investment) ?? 0,
+        source: 'manual' as const,
+        impressions: 0,
+        clicks: 0,
+        leads: 0,
+      };
+    }
+
+    const totals = await this.db.metaDailyInsight.aggregate({
+      where: { level: 'campaign', entity_id: { in: campaignIds } },
+      _sum: { spend: true, impressions: true, clicks: true, leads: true },
+    });
+
+    return {
+      event_id: eventId,
+      linked_campaigns: campaignIds.length,
+      spend: this.toNumber(totals._sum.spend) ?? 0,
+      source: 'meta' as const,
+      impressions: totals._sum.impressions ?? 0,
+      clicks: totals._sum.clicks ?? 0,
+      leads: totals._sum.leads ?? 0,
+    };
   }
 
   /**
@@ -3788,6 +3993,16 @@ export class MetaService implements OnModuleInit {
 
     const parsed = Number.parseInt(String(value), 10);
     return Number.isNaN(parsed) ? undefined : parsed;
+  }
+
+  /** Decimal do Prisma -> number, para o JSON da resposta nao virar string. */
+  private toNumber(value?: Prisma.Decimal | number | null) {
+    if (value === undefined || value === null) {
+      return null;
+    }
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
   private toDecimalValue(value?: string | number | null) {

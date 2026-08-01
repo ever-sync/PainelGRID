@@ -23,6 +23,15 @@ describe('MetaService', () => {
     },
     metaCampaignAssignment: {
       findMany: jest.fn(),
+      findUnique: jest.fn(),
+      upsert: jest.fn(),
+      delete: jest.fn(),
+    },
+    metaDailyInsight: {
+      aggregate: jest.fn(),
+    },
+    event: {
+      findUnique: jest.fn(),
     },
     metaSyncJob: {
       create: jest.fn(),
@@ -244,6 +253,72 @@ describe('MetaService', () => {
         meta_lead_id: 'meta-lead-1',
         meta_form_id: 'form-1',
       }),
+    });
+  });
+
+  describe('investimento do evento', () => {
+    const gestor = { sub: 'gestor-1', role: Role.GESTOR } as AuthenticatedUser;
+
+    beforeEach(() => {
+      prisma.client.findUnique.mockResolvedValue({ id: 'client-1', gestor_id: 'gestor-1' });
+    });
+
+    it('soma o gasto real das campanhas vinculadas ao evento', async () => {
+      prisma.event.findUnique.mockResolvedValue({
+        id: 'event-1',
+        client_id: 'client-1',
+        paid_traffic_investment: 500,
+      });
+      prisma.metaCampaignAssignment.findMany.mockResolvedValue([
+        { meta_campaign_id: 'campaign-1' },
+        { meta_campaign_id: 'campaign-2' },
+      ]);
+      prisma.metaDailyInsight.aggregate.mockResolvedValue({
+        _sum: { spend: 1234.56, impressions: 9000, clicks: 300, leads: 42 },
+      });
+
+      const result = await service.getEventAdSpend(gestor, 'event-1');
+
+      expect(result).toMatchObject({
+        linked_campaigns: 2,
+        spend: 1234.56,
+        source: 'meta',
+        leads: 42,
+      });
+      // O gasto vem das campanhas do evento, nao da conta inteira.
+      expect(prisma.metaDailyInsight.aggregate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { level: 'campaign', entity_id: { in: ['campaign-1', 'campaign-2'] } },
+        }),
+      );
+    });
+
+    it('sem campanha vinculada, cai no valor digitado a mao no evento', async () => {
+      prisma.event.findUnique.mockResolvedValue({
+        id: 'event-1',
+        client_id: 'client-1',
+        paid_traffic_investment: 500,
+      });
+      prisma.metaCampaignAssignment.findMany.mockResolvedValue([]);
+
+      const result = await service.getEventAdSpend(gestor, 'event-1');
+
+      expect(result).toMatchObject({ linked_campaigns: 0, spend: 500, source: 'manual' });
+      expect(prisma.metaDailyInsight.aggregate).not.toHaveBeenCalled();
+    });
+
+    it('recusa vincular campanha a evento de outro cliente', async () => {
+      prisma.event.findUnique.mockResolvedValue({ client_id: 'client-2' });
+
+      await expect(
+        service.assignCampaign(gestor, {
+          meta_campaign_id: 'campaign-1',
+          client_id: 'client-1',
+          event_id: 'event-de-outro',
+        }),
+      ).rejects.toThrow('Evento pertence a outro cliente');
+
+      expect(prisma.metaCampaignAssignment.upsert).not.toHaveBeenCalled();
     });
   });
 

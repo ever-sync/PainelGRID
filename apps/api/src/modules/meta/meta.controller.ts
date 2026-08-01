@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   Param,
@@ -20,6 +21,7 @@ import { CurrentUser, Public, Roles } from '../../common/decorators';
 import { Role } from '../../common/types';
 import { parseAllowedOrigins } from '../../config/cors-origins';
 import { AuthenticatedUser } from '../auth/auth.types';
+import { AssignMetaCampaignDto } from './dto/assign-meta-campaign.dto';
 import { DisconnectMetaDto } from './dto/disconnect-meta.dto';
 import { ListMetaBusinessesQueryDto } from './dto/list-meta-businesses-query.dto';
 import { MetaCallbackQueryDto } from './dto/meta-callback-query.dto';
@@ -170,6 +172,54 @@ export class MetaController {
     @Param('clientId', new ParseUUIDPipe()) clientId: string,
   ): Promise<Record<string, unknown>> {
     return this.metaService.getCampaignsReport(user, clientId);
+  }
+
+  @Roles(Role.GESTOR)
+  @Get('campaign-assignments/:clientId')
+  @ApiOperation({
+    summary: 'Lista campanhas da conta de anuncio com o vinculo atual de cliente e evento',
+  })
+  @ApiResponse({ status: 200, description: 'Campanhas retornadas com sucesso' })
+  listAssignableCampaigns(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('clientId', new ParseUUIDPipe()) clientId: string,
+  ): Promise<Record<string, unknown>[]> {
+    return this.metaService.listAssignableCampaigns(user, clientId);
+  }
+
+  @Roles(Role.GESTOR)
+  @Post('campaign-assignments')
+  @ApiOperation({ summary: 'Vincula uma campanha da Meta a um cliente e, opcionalmente, a um evento' })
+  @ApiResponse({ status: 201, description: 'Vinculo gravado com sucesso' })
+  assignCampaign(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: AssignMetaCampaignDto,
+  ): Promise<Record<string, unknown>> {
+    return this.metaService.assignCampaign(user, dto);
+  }
+
+  @Roles(Role.GESTOR)
+  @Delete('campaign-assignments/:metaCampaignId')
+  @ApiOperation({ summary: 'Remove o vinculo de uma campanha' })
+  @ApiResponse({ status: 200, description: 'Vinculo removido com sucesso' })
+  unassignCampaign(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('metaCampaignId') metaCampaignId: string,
+  ): Promise<Record<string, unknown>> {
+    return this.metaService.unassignCampaign(user, metaCampaignId);
+  }
+
+  @Roles(Role.GESTOR, Role.CLIENTE)
+  @Get('events/:eventId/spend')
+  @ApiOperation({
+    summary: 'Investimento em midia paga do evento, somando as campanhas vinculadas',
+  })
+  @ApiResponse({ status: 200, description: 'Investimento retornado com sucesso' })
+  getEventAdSpend(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('eventId', new ParseUUIDPipe()) eventId: string,
+  ): Promise<Record<string, unknown>> {
+    return this.metaService.getEventAdSpend(user, eventId);
   }
 
   @Roles(Role.GESTOR, Role.CLIENTE)
