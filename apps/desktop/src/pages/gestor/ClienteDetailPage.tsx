@@ -26,6 +26,7 @@ import {
   Layers3,
   Link2,
   Lock,
+  DollarSign,
   Megaphone,
   Sparkles,
   Mail,
@@ -4366,12 +4367,16 @@ export function ClienteDetailPage() {
                         <MetaStatCard
                           label="Investido"
                           value={formatCurrency(reportTotals.spend)}
-                          isDarkMode={isDarkMode}
+                          helper="Soma das campanhas da conta"
+                          icon={<DollarSign size={16} />}
+                          dark={isDarkMode}
                         />
                         <MetaStatCard
                           label="Leads"
                           value={String(reportTotals.leads)}
-                          isDarkMode={isDarkMode}
+                          helper="Gerados pelos anúncios"
+                          icon={<UserRound size={16} />}
+                          dark={isDarkMode}
                         />
                         <MetaStatCard
                           label="Custo por lead"
@@ -4380,7 +4385,9 @@ export function ClienteDetailPage() {
                               ? "—"
                               : formatCurrency(reportTotals.costPerLead)
                           }
-                          isDarkMode={isDarkMode}
+                          helper="Investido dividido por leads"
+                          icon={<BarChart3 size={16} />}
+                          dark={isDarkMode}
                         />
                         <MetaStatCard
                           label="Custo por conversa"
@@ -4389,7 +4396,9 @@ export function ClienteDetailPage() {
                               ? "—"
                               : formatCurrency(reportTotals.costPerConversation)
                           }
-                          isDarkMode={isDarkMode}
+                          helper="Investido por conversa iniciada"
+                          icon={<MessageCircle size={16} />}
+                          dark={isDarkMode}
                         />
                       </div>
 
