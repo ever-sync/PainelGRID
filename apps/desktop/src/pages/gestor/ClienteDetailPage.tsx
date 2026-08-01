@@ -2126,15 +2126,67 @@ export function ClienteDetailPage() {
     }
   }
 
+  /**
+   * Aguarda o worker terminar, observando `last_sync_at` avancar.
+   * Devolve false no estouro do prazo — a sincronizacao segue rodando, so
+   * nao deu tempo de esperar.
+   */
+  async function waitForSyncToFinish(
+    clientId: string,
+    token: string,
+    previousSyncedAt: string | null,
+  ) {
+    const deadline = Date.now() + 60_000;
+
+    while (Date.now() < deadline) {
+      await sleep(3_000);
+      try {
+        const status = await getMetaStatus(clientId, token);
+        const syncedAt = (status.connection as { last_sync_at?: string } | null)
+          ?.last_sync_at;
+        if (syncedAt && syncedAt !== previousSyncedAt) {
+          return true;
+        }
+      } catch {
+        // Falha pontual de rede nao encerra a espera.
+      }
+    }
+
+    return false;
+  }
+
   async function handleSyncMeta() {
     const clientId = id ?? "";
     const session = readStoredSession();
     if (clientId && isUuid(clientId) && session?.accessToken) {
+      const token = session.accessToken;
+      const syncedAtBefore = metaConnection?.last_sync_at ?? null;
+
       setIsSyncingMeta(true);
+      setMetaStatusMessage("Sincronizando com a Meta...");
       try {
-        await syncMetaFull(clientId, session.accessToken);
-        await refreshMetaStatusFromApi(clientId, session.accessToken);
-        setMetaStatusMessage("Sincronização Meta solicitada com sucesso.");
+        await syncMetaFull(clientId, token);
+
+        // `syncMetaFull` so enfileira o job; quem sincroniza e o worker.
+        // Atualizar a tela agora leria o estado antigo, entao esperamos o
+        // `last_sync_at` avancar antes de recarregar.
+        const concluiu = await waitForSyncToFinish(
+          clientId,
+          token,
+          syncedAtBefore,
+        );
+
+        await Promise.all([
+          refreshMetaStatusFromApi(clientId, token),
+          refreshLinkedCampaigns(),
+          refreshCampaignsReport(),
+        ]);
+
+        setMetaStatusMessage(
+          concluiu
+            ? "Sincronização concluída."
+            : "A sincronização foi enfileirada e ainda está rodando. Os dados aparecem assim que ela terminar.",
+        );
       } catch {
         setMetaStatusMessage("Falha ao sincronizar Meta neste cliente.");
       } finally {
@@ -4413,11 +4465,18 @@ export function ClienteDetailPage() {
                         />
                       </div>
 
-                      <Notice tone="info">
+                      <p
+                        className={clsx(
+                          "rounded-2xl border px-4 py-3 text-[11px] leading-relaxed",
+                          isDarkMode
+                            ? "border-zinc-800 bg-zinc-900/40 text-zinc-400"
+                            : "border-zinc-200 bg-zinc-50 text-zinc-500",
+                        )}
+                      >
                         Os valores somam todas as campanhas da conta de anúncio
                         deste cliente. Para ver o investimento de um evento
                         específico, vincule a campanha ao evento.
-                      </Notice>
+                      </p>
                     </>
                   )}
                 </div>
