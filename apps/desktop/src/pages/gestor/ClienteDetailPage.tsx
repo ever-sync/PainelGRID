@@ -3670,10 +3670,10 @@ export function ClienteDetailPage() {
         <div className="space-y-6">
           <Card
             className={clsx(
-              "overflow-hidden border",
+              "overflow-hidden border shadow-sm",
               isDarkMode
-                ? "border-zinc-800 bg-[radial-gradient(circle_at_top_right,rgba(61,86,162,0.12),transparent_42%),linear-gradient(145deg,#0a0a0d,#111217)] shadow-[0_25px_60px_rgba(0,0,0,0.5)]"
-                : "border-[#f0e4d4] bg-[linear-gradient(135deg,rgba(255,249,240,0.98),rgba(255,255,255,0.96))]",
+                ? "border-zinc-800 bg-[#0c0d11]"
+                : "border-zinc-200 bg-white",
             )}
           >
             <div className="space-y-6">
@@ -3685,61 +3685,33 @@ export function ClienteDetailPage() {
                     : "border-zinc-200 bg-white text-zinc-900",
                 )}
               >
-                {/* CABEÇALHO DO PERFIL COM APENAS OS 2 BOTÕES: SINCRONIZA E CONECTA */}
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b pb-5 border-zinc-200 dark:border-zinc-800">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="orange">Integração Oficial Meta Ads</Badge>
-                      <span className="text-xs font-semibold text-zinc-400">
-                        • Conexão Graph API
-                      </span>
-                    </div>
-                    <h3
-                      className={clsx(
-                        "text-xl sm:text-2xl font-black tracking-tight",
-                        isDarkMode ? "text-zinc-100" : "text-zinc-950",
-                      )}
-                    >
-                      Integração Meta Ads e Business Manager
-                    </h3>
-                    <p
-                      className={clsx(
-                        "text-xs sm:text-sm max-w-3xl",
-                        isDarkMode ? "text-zinc-400" : "text-zinc-600",
-                      )}
-                    >
-                      Gerenciamento centralizado de contas de anúncio, páginas do Facebook, formulários de leads e números de WhatsApp Business API deste cliente.
-                    </p>
-                  </div>
+                {/* APENAS OS 2 BOTÕES ALINHADOS À DIREITA E LINHA DIVISÓRIA */}
+                <div className="flex items-center justify-end gap-2 border-b pb-5 border-zinc-200 dark:border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => void handleSyncMeta()}
+                    disabled={isSyncingMeta || !metaConnection}
+                    className={clsx(
+                      "h-11 px-5 rounded-2xl border text-xs font-bold transition-all active:scale-95 cursor-pointer inline-flex items-center gap-2 shadow-sm disabled:opacity-60",
+                      isDarkMode
+                        ? "border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+                        : "border-zinc-200 bg-zinc-50 text-zinc-800 hover:bg-zinc-100",
+                    )}
+                    title="Sincronizar Ativos da Meta"
+                  >
+                    <RefreshCcw size={15} className={isSyncingMeta ? "animate-spin text-[#FF0636]" : ""} />
+                    <span>{isSyncingMeta ? "Sincronizando..." : "Sincronizar"}</span>
+                  </button>
 
-                  {/* OS 2 BOTÕES SOLICITADOS PELO USUÁRIO: SINCRONIZA E CONECTA */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => void handleSyncMeta()}
-                      disabled={isSyncingMeta || !metaConnection}
-                      className={clsx(
-                        "h-11 px-5 rounded-2xl border text-xs font-bold transition-all active:scale-95 cursor-pointer inline-flex items-center gap-2 shadow-sm disabled:opacity-60",
-                        isDarkMode
-                          ? "border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
-                          : "border-zinc-200 bg-zinc-50 text-zinc-800 hover:bg-zinc-100",
-                      )}
-                      title="Sincronizar Ativos da Meta"
-                    >
-                      <RefreshCcw size={15} className={isSyncingMeta ? "animate-spin text-[#FF0636]" : ""} />
-                      <span>{isSyncingMeta ? "Sincronizando..." : "Sincronizar"}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => void openMetaManager()}
-                      className="h-11 px-6 rounded-2xl bg-[#FF0636] hover:bg-[#e1002d] text-white text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer inline-flex items-center gap-2"
-                      title="Conectar / Selecionar Business Manager"
-                    >
-                      <Link2 size={15} />
-                      <span>{metaConnection ? "Conectar / Trocar BM" : "Conectar BM"}</span>
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void openMetaManager()}
+                    className="h-11 px-6 rounded-2xl bg-[#FF0636] hover:bg-[#e1002d] text-white text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer inline-flex items-center gap-2"
+                    title="Conectar / Selecionar Business Manager"
+                  >
+                    <Link2 size={15} />
+                    <span>{metaConnection ? "Conectar / Trocar BM" : "Conectar BM"}</span>
+                  </button>
                 </div>
 
                 {(metaStatusLoading || metaStatusMessage) && (
