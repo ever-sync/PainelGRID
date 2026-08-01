@@ -66,7 +66,12 @@ describe('LeadsService', () => {
       prisma as never,
       clientsService as never,
       { get: jest.fn() } as never,
-      { awardWithTx: jest.fn() } as never,
+      // `closeAttendance` pontua a venda por fora da transacao, via `award`, e
+      // encadeia `.catch` no retorno — o mock precisa devolver promise.
+      {
+        awardWithTx: jest.fn(),
+        award: jest.fn().mockResolvedValue(undefined),
+      } as never,
       { emitLeadCheckin: jest.fn(), emitLeadUpdated: jest.fn(), emitVendorCalled: jest.fn() } as never,
       { dispatch: jest.fn() } as never,
       {

@@ -2002,7 +2002,11 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
         isOpen={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
         isDarkMode={dashboardDark}
-        onToggleDarkMode={() => toggleDarkMode(!dashboardDark)}
+        onToggleDarkMode={() => {
+          const next = !dashboardDark;
+          applyDashboardDarkEnabled(user.id, next);
+          setDashboardDark(next);
+        }}
       />
     </div>
   );
