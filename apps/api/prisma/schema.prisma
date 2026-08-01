@@ -731,7 +731,9 @@ model MetaCreative {
   name               String?        @db.VarChar(255)
   title              String?        @db.VarChar(255)
   body               String?
-  image_url          String?        @db.VarChar(500)
+  /// Sem limite: URL assinada da Meta passa de 500 caracteres com facilidade,
+  /// e truncar uma URL a deixa invalida.
+  image_url          String?
   video_id           String?        @db.VarChar(100)
   url_tags           String?
   object_story_id    String?        @db.VarChar(100)

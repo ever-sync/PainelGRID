@@ -1803,18 +1803,37 @@ export class MetaService implements OnModuleInit {
       orderBy: { created_at: 'asc' },
     });
 
-    return (
-      rows as Array<{
-        meta_campaign_id: string;
-        campaign_name: string | null;
-        event_id: string | null;
-        event: { id: string; name: string } | null;
-        created_at: Date;
-      }>
-    ).map((row) => ({
+    const typedRows = rows as Array<{
+      meta_campaign_id: string;
+      campaign_name: string | null;
+      event_id: string | null;
+      event: { id: string; name: string } | null;
+      created_at: Date;
+    }>;
+
+    // Vinculo gravado antes da coluna `campaign_name` existir fica sem nome.
+    // Em vez de exibir o id cru, busca o nome que o sync ja trouxe.
+    const semNome = typedRows
+      .filter((row) => !row.campaign_name)
+      .map((row) => row.meta_campaign_id);
+
+    const nomeSincronizado = new Map<string, string>();
+    if (semNome.length > 0) {
+      const synced = await this.db.metaCampaign.findMany({
+        where: { client_id: clientId, meta_campaign_id: { in: semNome } },
+        select: { meta_campaign_id: true, name: true },
+      });
+      for (const row of synced as Array<{ meta_campaign_id: string; name: string }>) {
+        nomeSincronizado.set(row.meta_campaign_id, row.name);
+      }
+    }
+
+    return typedRows.map((row) => ({
       meta_campaign_id: row.meta_campaign_id,
-      // Vinculo antigo, gravado antes da coluna existir: mostra o id.
-      name: row.campaign_name ?? `Campanha ${row.meta_campaign_id}`,
+      name:
+        row.campaign_name ??
+        nomeSincronizado.get(row.meta_campaign_id) ??
+        `Campanha ${row.meta_campaign_id}`,
       event_id: row.event_id,
       event_name: row.event?.name ?? null,
       linked_at: row.created_at,
@@ -2262,6 +2281,10 @@ export class MetaService implements OnModuleInit {
 
       const creativeId = ad.creative?.id;
       if (creativeId && !syncedCreativeIds.has(creativeId)) {
+        // Um criativo problematico nao pode abortar o sync inteiro: as etapas
+        // seguintes (insights) valem mais, e era exatamente ai que o sync
+        // morria, deixando todas as metricas zeradas.
+        try {
         const creative = await this.fetchCreative(creativeId, connection.access_token);
         if (creative) {
           const creativeExisting = await this.db.metaCreative.findFirst({
@@ -2274,14 +2297,17 @@ export class MetaService implements OnModuleInit {
           const creativeData = {
             client_id: connection.client_id,
             meta_connection_id: connection.id,
-            meta_creative_id: creative.id,
-            name: creative.name ?? null,
-            title: creative.title ?? null,
+            meta_creative_id: this.cut(creative.id, 100)!,
+            // Corte defensivo: os tamanhos vem da Meta e nao estao sob nosso
+            // controle. `body`, `url_tags` e `image_url` sao TEXT e ficam
+            // inteiros; o resto tem limite na coluna.
+            name: this.cut(creative.name, 255),
+            title: this.cut(creative.title, 255),
             body: creative.body ?? null,
             image_url: creative.image_url ?? null,
-            video_id: creative.video_id ?? null,
+            video_id: this.cut(creative.video_id, 100),
             url_tags: creative.url_tags ?? null,
-            object_story_id: creative.object_story_id ?? null,
+            object_story_id: this.cut(creative.object_story_id, 100),
             raw_payload: this.toJsonValue(creative),
           };
 
@@ -2298,6 +2324,12 @@ export class MetaService implements OnModuleInit {
 
           syncedCreativeIds.add(creative.id);
           syncedCreatives += 1;
+        }
+        } catch (error) {
+          this.logger.warn(
+            `Criativo ${creativeId} ignorado: ${this.getErrorMessage(error)}`,
+          );
+          syncedCreativeIds.add(creativeId);
         }
       }
     }
@@ -4025,6 +4057,14 @@ export class MetaService implements OnModuleInit {
 
     const parsed = Number.parseInt(String(value), 10);
     return Number.isNaN(parsed) ? undefined : parsed;
+  }
+
+  /** Corta no limite da coluna. Devolve undefined/null como veio. */
+  private cut(value: string | null | undefined, max: number) {
+    if (value === undefined || value === null) {
+      return null;
+    }
+    return value.length > max ? value.slice(0, max) : value;
   }
 
   /** Decimal do Prisma -> number, para o JSON da resposta nao virar string. */
