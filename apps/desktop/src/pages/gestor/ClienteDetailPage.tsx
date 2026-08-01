@@ -3895,7 +3895,6 @@ export function ClienteDetailPage() {
                   </div>
                 </div>
               </div>
-              </div>
             </div>
           </Card>
         </div>
