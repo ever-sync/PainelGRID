@@ -1779,6 +1779,7 @@ export class MetaService implements OnModuleInit {
     const data = {
       client_id: dto.client_id,
       event_id: dto.event_id ?? null,
+      campaign_name: dto.campaign_name ?? null,
       assigned_by_id: user.sub,
     };
 
@@ -1787,6 +1788,37 @@ export class MetaService implements OnModuleInit {
       create: { meta_campaign_id: dto.meta_campaign_id, ...data },
       update: data,
     });
+  }
+
+  /**
+   * Campanhas ja vinculadas ao cliente. Le so do banco — e chamada a cada
+   * abertura da aba, entao nao pode depender da Graph API.
+   */
+  async listLinkedCampaigns(user: AuthenticatedUser, clientId: string) {
+    await this.assertMetaClientAccess(user, clientId);
+
+    const rows = await this.db.metaCampaignAssignment.findMany({
+      where: { client_id: clientId },
+      include: { event: { select: { id: true, name: true } } },
+      orderBy: { created_at: 'asc' },
+    });
+
+    return (
+      rows as Array<{
+        meta_campaign_id: string;
+        campaign_name: string | null;
+        event_id: string | null;
+        event: { id: string; name: string } | null;
+        created_at: Date;
+      }>
+    ).map((row) => ({
+      meta_campaign_id: row.meta_campaign_id,
+      // Vinculo antigo, gravado antes da coluna existir: mostra o id.
+      name: row.campaign_name ?? `Campanha ${row.meta_campaign_id}`,
+      event_id: row.event_id,
+      event_name: row.event?.name ?? null,
+      linked_at: row.created_at,
+    }));
   }
 
   /** Remove o vinculo. A campanha volta a depender da inferencia por pagina. */

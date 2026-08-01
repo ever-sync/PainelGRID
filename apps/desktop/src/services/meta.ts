@@ -232,8 +232,31 @@ export function listAssignableCampaigns(clientId: string, token: string) {
   );
 }
 
+export type LinkedCampaign = {
+  meta_campaign_id: string;
+  name: string;
+  event_id: string | null;
+  event_name: string | null;
+  linked_at: string;
+};
+
+export function listLinkedCampaigns(clientId: string, token: string) {
+  return httpRequest<LinkedCampaign[]>(
+    `/meta/campaign-assignments/${clientId}/linked`,
+    {
+      method: "GET",
+      token,
+    },
+  );
+}
+
 export function assignMetaCampaign(
-  payload: { meta_campaign_id: string; client_id: string; event_id?: string | null },
+  payload: {
+    meta_campaign_id: string;
+    campaign_name?: string;
+    client_id: string;
+    event_id?: string | null;
+  },
   token: string,
 ) {
   return httpRequest<Record<string, unknown>>("/meta/campaign-assignments", {

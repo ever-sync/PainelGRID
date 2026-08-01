@@ -187,6 +187,17 @@ export class MetaController {
     return this.metaService.listAssignableCampaigns(user, clientId);
   }
 
+  @Roles(Role.GESTOR, Role.CLIENTE)
+  @Get('campaign-assignments/:clientId/linked')
+  @ApiOperation({ summary: 'Campanhas ja vinculadas ao cliente (somente banco)' })
+  @ApiResponse({ status: 200, description: 'Vinculos retornados com sucesso' })
+  listLinkedCampaigns(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('clientId', new ParseUUIDPipe()) clientId: string,
+  ): Promise<Record<string, unknown>[]> {
+    return this.metaService.listLinkedCampaigns(user, clientId);
+  }
+
   @Roles(Role.GESTOR)
   @Post('campaign-assignments')
   @ApiOperation({ summary: 'Vincula uma campanha da Meta a um cliente e, opcionalmente, a um evento' })

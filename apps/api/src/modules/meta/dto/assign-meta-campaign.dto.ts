@@ -7,6 +7,12 @@ export class AssignMetaCampaignDto {
   @MaxLength(100)
   meta_campaign_id!: string;
 
+  @ApiPropertyOptional({ description: 'Nome da campanha, para exibir sem consultar a Meta' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  campaign_name?: string;
+
   @ApiProperty({ description: 'Cliente dono da campanha' })
   @IsUUID()
   client_id!: string;

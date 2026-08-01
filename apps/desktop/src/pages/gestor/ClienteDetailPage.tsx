@@ -26,6 +26,7 @@ import {
   Layers3,
   Link2,
   Lock,
+  Megaphone,
   Mail,
   MessageCircle,
   Pencil,
@@ -115,9 +116,11 @@ import {
   selectMetaAssets,
   syncMetaFull,
   listAssignableCampaigns,
+  listLinkedCampaigns,
   assignMetaCampaign,
   unassignMetaCampaign,
   type AssignableCampaign,
+  type LinkedCampaign,
   type MetaBusinessApiOption,
 } from "../../services/meta";
 import {
@@ -741,6 +744,7 @@ export function ClienteDetailPage() {
   /** Ids marcados na tela. O que estava marcado ao abrir vira a base do diff. */
   const [checkedCampaignIds, setCheckedCampaignIds] = useState<string[]>([]);
   const [initialCampaignIds, setInitialCampaignIds] = useState<string[]>([]);
+  const [linkedCampaigns, setLinkedCampaigns] = useState<LinkedCampaign[]>([]);
 
   const availableBusinesses = useMemo(() => apiBusinesses, [apiBusinesses]);
   const [draftBusinessId, setDraftBusinessId] = useState("");
@@ -1930,6 +1934,23 @@ export function ClienteDetailPage() {
     setIsMetaModalOpen(false);
   }
 
+  const refreshLinkedCampaigns = useCallback(async () => {
+    const session = readStoredSession();
+    if (!resolvedId || !isUuid(resolvedId) || !session?.accessToken) return;
+
+    try {
+      setLinkedCampaigns(
+        await listLinkedCampaigns(resolvedId, session.accessToken),
+      );
+    } catch {
+      setLinkedCampaigns([]);
+    }
+  }, [resolvedId]);
+
+  useEffect(() => {
+    void refreshLinkedCampaigns();
+  }, [refreshLinkedCampaigns]);
+
   async function handleOpenCampaignLink() {
     const clientId = id ?? "";
     const session = readStoredSession();
@@ -1992,7 +2013,14 @@ export function ClienteDetailPage() {
       // no meio deixaria o resto num estado indefinido.
       for (const campaignId of toLink) {
         await assignMetaCampaign(
-          { meta_campaign_id: campaignId, client_id: clientId },
+          {
+            meta_campaign_id: campaignId,
+            // Guarda o nome junto: a tela mostra o vinculo sem ir na Meta.
+            campaign_name: assignableCampaigns.find(
+              (row) => row.meta_campaign_id === campaignId,
+            )?.name,
+            client_id: clientId,
+          },
           token,
         );
       }
@@ -2007,6 +2035,7 @@ export function ClienteDetailPage() {
             ? `${toLink.length} campanha(s) vinculada(s) a este cliente.`
             : `Vínculos atualizados: ${toLink.length} adicionada(s), ${toUnlink.length} removida(s).`,
       });
+      await refreshLinkedCampaigns();
       setIsCampaignLinkOpen(false);
     } catch (error) {
       setCampaignLinkError(
@@ -3865,6 +3894,7 @@ export function ClienteDetailPage() {
                           <th className="py-3.5 px-4">CA (Conta Anúncio)</th>
                           <th className="py-3.5 px-4">FORM (Formulários)</th>
                           <th className="py-3.5 px-4">WHATSAPP</th>
+                          <th className="py-3.5 px-4">CAMPANHAS</th>
                           <th className="py-3.5 px-4 text-right">STATUS</th>
                         </tr>
                       </thead>
@@ -3941,6 +3971,32 @@ export function ClienteDetailPage() {
                               </div>
                             </td>
 
+                            {/* CAMPANHAS */}
+                            <td className="py-4 px-4 text-zinc-700 dark:text-zinc-300">
+                              {linkedCampaigns.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {linkedCampaigns.map((campaign) => (
+                                    <span
+                                      key={campaign.meta_campaign_id}
+                                      title={
+                                        campaign.event_name
+                                          ? `Evento: ${campaign.event_name}`
+                                          : "Sem evento vinculado"
+                                      }
+                                      className="inline-flex max-w-[220px] items-center gap-1 rounded-lg bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+                                    >
+                                      <Megaphone size={11} className="shrink-0" />
+                                      <span className="truncate">{campaign.name}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs italic text-zinc-400">
+                                  Nenhuma vinculada
+                                </span>
+                              )}
+                            </td>
+
                             {/* STATUS */}
                             <td className="py-4 px-4 text-right whitespace-nowrap">
                               <div className="flex items-center justify-end gap-2">
@@ -3975,6 +4031,7 @@ export function ClienteDetailPage() {
                             <td className="py-4 px-4 text-zinc-400 font-mono text-xs">—</td>
                             <td className="py-4 px-4 text-zinc-400 italic text-xs">—</td>
                             <td className="py-4 px-4 font-mono text-xs text-zinc-400">—</td>
+                            <td className="py-4 px-4 text-xs italic text-zinc-400">—</td>
                             <td className="py-4 px-4 text-right whitespace-nowrap">
                               <button
                                 type="button"
