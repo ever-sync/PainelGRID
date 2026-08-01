@@ -27,6 +27,7 @@ import {
   Link2,
   Lock,
   Megaphone,
+  Sparkles,
   Mail,
   MessageCircle,
   Pencil,
@@ -111,6 +112,7 @@ import {
   importMetaLeads,
   getMetaGestorStatus,
   getMetaSummary,
+  getMetaCampaignsReport,
   getMetaStatus,
   listMetaBusinesses,
   selectMetaAssets,
@@ -121,6 +123,7 @@ import {
   unassignMetaCampaign,
   type AssignableCampaign,
   type LinkedCampaign,
+  type MetaCampaignsReportItem,
   type MetaBusinessApiOption,
 } from "../../services/meta";
 import {
@@ -374,6 +377,21 @@ function mapMetaBusinessFromApi(
     })),
   };
 }
+
+type AdsSubTab =
+  | "conexoes"
+  | "campanhas"
+  | "relatorios"
+  | "financeiro"
+  | "ia";
+
+const ADS_SUB_TABS: Array<{ id: AdsSubTab; label: string }> = [
+  { id: "conexoes", label: "Conexões" },
+  { id: "campanhas", label: "Campanhas" },
+  { id: "relatorios", label: "Relatórios" },
+  { id: "financeiro", label: "Financeiro" },
+  { id: "ia", label: "IA Análise" },
+];
 
 function MetaStatCard({
   label,
@@ -746,6 +764,14 @@ export function ClienteDetailPage() {
   const [initialCampaignIds, setInitialCampaignIds] = useState<string[]>([]);
   const [linkedCampaigns, setLinkedCampaigns] = useState<LinkedCampaign[]>([]);
 
+  // Sub-abas internas da aba Ads (Facebook).
+  const [adsSubTab, setAdsSubTab] = useState<AdsSubTab>("conexoes");
+  const [campaignsReport, setCampaignsReport] = useState<
+    MetaCampaignsReportItem[]
+  >([]);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+
   const refreshLinkedCampaigns = useCallback(async () => {
     const session = readStoredSession();
     if (!resolvedId || !isUuid(resolvedId) || !session?.accessToken) return;
@@ -762,6 +788,52 @@ export function ClienteDetailPage() {
   useEffect(() => {
     void refreshLinkedCampaigns();
   }, [refreshLinkedCampaigns]);
+
+  const refreshCampaignsReport = useCallback(async () => {
+    const session = readStoredSession();
+    if (!resolvedId || !isUuid(resolvedId) || !session?.accessToken) return;
+
+    setReportLoading(true);
+    setReportError(null);
+    try {
+      const data = await getMetaCampaignsReport(resolvedId, session.accessToken);
+      setCampaignsReport(data.campaigns ?? []);
+    } catch (error) {
+      setCampaignsReport([]);
+      setReportError(
+        error instanceof Error ? error.message : "Falha ao carregar o relatório.",
+      );
+    } finally {
+      setReportLoading(false);
+    }
+  }, [resolvedId]);
+
+  useEffect(() => {
+    // So busca quando a sub-aba que usa o relatorio esta aberta.
+    if (adsSubTab === "relatorios" || adsSubTab === "financeiro") {
+      void refreshCampaignsReport();
+    }
+  }, [adsSubTab, refreshCampaignsReport]);
+
+  const reportTotals = useMemo(() => {
+    const totals = campaignsReport.reduce(
+      (acc, campaign) => ({
+        spend: acc.spend + (campaign.spend ?? 0),
+        leads: acc.leads + (campaign.leads ?? 0),
+        conversations: acc.conversations + (campaign.conversations ?? 0),
+        impressions: acc.impressions + (campaign.impressions ?? 0),
+      }),
+      { spend: 0, leads: 0, conversations: 0, impressions: 0 },
+    );
+
+    return {
+      ...totals,
+      // Divisao guardada: sem lead, custo por lead nao existe (nao e zero).
+      costPerLead: totals.leads > 0 ? totals.spend / totals.leads : null,
+      costPerConversation:
+        totals.conversations > 0 ? totals.spend / totals.conversations : null,
+    };
+  }, [campaignsReport]);
 
   const availableBusinesses = useMemo(() => apiBusinesses, [apiBusinesses]);
   const [draftBusinessId, setDraftBusinessId] = useState("");
@@ -3811,6 +3883,42 @@ export function ClienteDetailPage() {
             )}
           >
             <div className="space-y-6">
+              {/* SUB-ABAS INTERNAS DA ABA ADS */}
+              <div
+                className={clsx(
+                  "flex flex-wrap items-center gap-1 border-b pb-0",
+                  isDarkMode ? "border-zinc-800" : "border-zinc-200",
+                )}
+                role="tablist"
+              >
+                {ADS_SUB_TABS.map((tab) => {
+                  const active = adsSubTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setAdsSubTab(tab.id)}
+                      className={clsx(
+                        "relative px-4 py-2.5 text-xs font-bold transition-colors cursor-pointer",
+                        active
+                          ? "text-[#FF0636]"
+                          : isDarkMode
+                            ? "text-zinc-400 hover:text-zinc-200"
+                            : "text-zinc-500 hover:text-zinc-800",
+                      )}
+                    >
+                      {tab.label}
+                      {active ? (
+                        <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-[#FF0636]" />
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {adsSubTab === "conexoes" && (
               <div
                 className={clsx(
                   "rounded-[28px] border p-6 space-y-6 shadow-sm animate-fadeIn",
@@ -4049,6 +4157,270 @@ export function ClienteDetailPage() {
                   </div>
                 </div>
               </div>
+              )}
+
+              {adsSubTab === "campanhas" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                        Campanhas vinculadas
+                      </h4>
+                      <p className="mt-1 text-[11px] text-zinc-400">
+                        Quais campanhas da Meta estão rodando para este cliente.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleOpenCampaignLink}
+                      disabled={!metaConnection}
+                      className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-2xl bg-[#FF0636] px-5 text-xs font-bold text-white shadow-md transition-all active:scale-95 disabled:opacity-50"
+                    >
+                      <Link2 size={15} />
+                      Vincular campanhas
+                    </button>
+                  </div>
+
+                  {linkedCampaigns.length === 0 ? (
+                    <div
+                      className={clsx(
+                        "rounded-2xl border border-dashed px-6 py-12 text-center",
+                        isDarkMode ? "border-zinc-800" : "border-zinc-200",
+                      )}
+                    >
+                      <Megaphone size={28} className="mx-auto text-zinc-300" />
+                      <p className="mt-3 text-sm font-semibold text-zinc-500 dark:text-zinc-400">
+                        Nenhuma campanha vinculada
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-400">
+                        {metaConnection
+                          ? "Clique em Vincular campanhas para escolher quais são deste cliente."
+                          : "Conecte uma BM na aba Conexões primeiro."}
+                      </p>
+                    </div>
+                  ) : (
+                    <div
+                      className={clsx(
+                        "overflow-hidden rounded-2xl border shadow-sm",
+                        isDarkMode
+                          ? "border-zinc-800 bg-[#121212]"
+                          : "border-zinc-200 bg-white",
+                      )}
+                    >
+                      <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                        {linkedCampaigns.map((campaign) => (
+                          <li
+                            key={campaign.meta_campaign_id}
+                            className="flex items-center gap-3 px-4 py-3.5"
+                          >
+                            <Megaphone
+                              size={16}
+                              className="shrink-0 text-[#FF0636]"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-bold text-zinc-800 dark:text-zinc-100">
+                                {campaign.name}
+                              </p>
+                              <p className="mt-0.5 font-mono text-[10px] text-zinc-400">
+                                ID: {campaign.meta_campaign_id}
+                              </p>
+                            </div>
+                            {campaign.event_name ? (
+                              <Badge variant="blue">{campaign.event_name}</Badge>
+                            ) : (
+                              <span className="text-[11px] italic text-zinc-400">
+                                Sem evento
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {adsSubTab === "relatorios" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                      Desempenho por campanha
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={() => void refreshCampaignsReport()}
+                      disabled={reportLoading}
+                      className={clsx(
+                        "inline-flex h-10 cursor-pointer items-center gap-2 rounded-2xl border px-4 text-xs font-bold shadow-sm transition-all active:scale-95 disabled:opacity-60",
+                        isDarkMode
+                          ? "border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+                          : "border-zinc-200 bg-zinc-50 text-zinc-800 hover:bg-zinc-100",
+                      )}
+                    >
+                      <RefreshCcw
+                        size={14}
+                        className={reportLoading ? "animate-spin text-[#FF0636]" : ""}
+                      />
+                      Atualizar
+                    </button>
+                  </div>
+
+                  {reportError ? <Notice tone="error">{reportError}</Notice> : null}
+
+                  {reportLoading ? (
+                    <p className="py-12 text-center text-sm text-zinc-400">
+                      Carregando relatório...
+                    </p>
+                  ) : campaignsReport.length === 0 ? (
+                    <div
+                      className={clsx(
+                        "rounded-2xl border border-dashed px-6 py-12 text-center",
+                        isDarkMode ? "border-zinc-800" : "border-zinc-200",
+                      )}
+                    >
+                      <BarChart3 size={28} className="mx-auto text-zinc-300" />
+                      <p className="mt-3 text-sm font-semibold text-zinc-500 dark:text-zinc-400">
+                        Sem dados de campanha
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-400">
+                        Rode uma sincronização na aba Conexões para trazer as métricas da Meta.
+                      </p>
+                    </div>
+                  ) : (
+                    <div
+                      className={clsx(
+                        "overflow-x-auto rounded-2xl border shadow-sm",
+                        isDarkMode
+                          ? "border-zinc-800 bg-[#121212]"
+                          : "border-zinc-200 bg-white",
+                      )}
+                    >
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr
+                            className={clsx(
+                              "border-b text-[11px] font-extrabold uppercase tracking-wider",
+                              isDarkMode
+                                ? "border-zinc-800 bg-zinc-900/60 text-zinc-400"
+                                : "border-zinc-100 bg-zinc-50 text-zinc-600",
+                            )}
+                          >
+                            <th className="px-4 py-3">Campanha</th>
+                            <th className="px-4 py-3 text-right">Investido</th>
+                            <th className="px-4 py-3 text-right">Leads</th>
+                            <th className="px-4 py-3 text-right">Custo/Lead</th>
+                            <th className="px-4 py-3 text-right">Conversas</th>
+                            <th className="px-4 py-3 text-right">Impressões</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                          {campaignsReport.map((campaign) => (
+                            <tr key={campaign.id}>
+                              <td className="px-4 py-3">
+                                <p className="font-bold text-zinc-800 dark:text-zinc-100">
+                                  {campaign.name}
+                                </p>
+                                <p className="text-[10px] text-zinc-400">
+                                  {campaign.status ?? "—"}
+                                </p>
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono">
+                                {formatCurrency(campaign.spend)}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono">
+                                {campaign.leads}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono">
+                                {campaign.leads > 0
+                                  ? formatCurrency(campaign.cost_per_lead)
+                                  : "—"}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono">
+                                {campaign.conversations}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono">
+                                {campaign.impressions.toLocaleString("pt-BR")}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {adsSubTab === "financeiro" && (
+                <div className="space-y-4">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                    Investimento e retorno
+                  </h4>
+
+                  {reportLoading ? (
+                    <p className="py-12 text-center text-sm text-zinc-400">
+                      Calculando...
+                    </p>
+                  ) : (
+                    <>
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <MetaStatCard
+                          label="Investido"
+                          value={formatCurrency(reportTotals.spend)}
+                          isDarkMode={isDarkMode}
+                        />
+                        <MetaStatCard
+                          label="Leads"
+                          value={String(reportTotals.leads)}
+                          isDarkMode={isDarkMode}
+                        />
+                        <MetaStatCard
+                          label="Custo por lead"
+                          value={
+                            reportTotals.costPerLead === null
+                              ? "—"
+                              : formatCurrency(reportTotals.costPerLead)
+                          }
+                          isDarkMode={isDarkMode}
+                        />
+                        <MetaStatCard
+                          label="Custo por conversa"
+                          value={
+                            reportTotals.costPerConversation === null
+                              ? "—"
+                              : formatCurrency(reportTotals.costPerConversation)
+                          }
+                          isDarkMode={isDarkMode}
+                        />
+                      </div>
+
+                      <Notice tone="info">
+                        Os valores somam todas as campanhas da conta de anúncio
+                        deste cliente. Para ver o investimento de um evento
+                        específico, vincule a campanha ao evento.
+                      </Notice>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {adsSubTab === "ia" && (
+                <div
+                  className={clsx(
+                    "rounded-2xl border border-dashed px-6 py-16 text-center",
+                    isDarkMode ? "border-zinc-800" : "border-zinc-200",
+                  )}
+                >
+                  <Sparkles size={28} className="mx-auto text-zinc-300" />
+                  <p className="mt-3 text-sm font-semibold text-zinc-500 dark:text-zinc-400">
+                    Análise por IA ainda não disponível
+                  </p>
+                  <p className="mx-auto mt-2 max-w-md text-xs text-zinc-400">
+                    Esta aba vai cruzar investimento, leads e vendas para apontar
+                    o que está performando e o que sugerir ajustar. Ainda não há
+                    nada implementado no backend.
+                  </p>
+                </div>
+              )}
             </div>
           </Card>
         </div>
