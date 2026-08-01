@@ -59,8 +59,19 @@ import {
   type WhatsappUploadMediaResponse,
 } from './meta.types';
 
-/** Janela historica buscada em cada sync de insights. */
-const INSIGHTS_HISTORY_MONTHS = 12;
+/**
+ * Janela historica dos insights, por nivel.
+ *
+ * Profundo so em campanha: e o que alimenta investimento por evento e ROI.
+ * Conjunto e anuncio servem para otimizar o que esta rodando agora, e 12 meses
+ * de detalhe diario neles explodiria o volume — 192 anuncios x 365 dias sao ~70
+ * mil linhas, gravadas uma a uma.
+ */
+const INSIGHTS_HISTORY_MONTHS: Record<MetaInsightLevel, number> = {
+  campaign: 12,
+  adset: 2,
+  ad: 2,
+};
 import { assertMetaGraphUrl, assertMetaMediaUrl } from './meta-url.util';
 
 @Injectable()
@@ -2522,15 +2533,6 @@ export class MetaService implements OnModuleInit {
         continue;
       }
 
-      const existing = await this.db.metaDailyInsight.findFirst({
-        where: {
-          meta_connection_id: connection.id,
-          level,
-          entity_id: entityId,
-          date,
-        },
-      });
-
       const data = {
         client_id: connection.client_id,
         meta_connection_id: connection.id,
@@ -2549,14 +2551,21 @@ export class MetaService implements OnModuleInit {
         raw_payload: this.toJsonValue(insight),
       };
 
-      if (existing) {
-        await this.db.metaDailyInsight.update({
-          where: { id: existing.id },
-          data,
-        });
-      } else {
-        await this.db.metaDailyInsight.create({ data });
-      }
+      // Upsert pela chave unica em vez de findFirst + create/update: metade das
+      // idas ao banco, e a Meta reescreve numeros retroativamente (janela de
+      // atribuicao ate 28 dias), entao re-sincronizar tem que atualizar.
+      await this.db.metaDailyInsight.upsert({
+        where: {
+          meta_connection_id_level_entity_id_date: {
+            meta_connection_id: connection.id,
+            level,
+            entity_id: entityId,
+            date,
+          },
+        },
+        create: data,
+        update: data,
+      });
 
       synced += 1;
     }
@@ -3564,7 +3573,7 @@ export class MetaService implements OnModuleInit {
     // enxergava o mes corrente.
     const until = new Date();
     const since = new Date(until);
-    since.setMonth(since.getMonth() - INSIGHTS_HISTORY_MONTHS);
+    since.setMonth(since.getMonth() - INSIGHTS_HISTORY_MONTHS[level]);
 
     return this.safeGraphGetAll<MetaInsightPayload>(`act_${adAccountId}/insights`, accessToken, {
       fields: `${levelFields},date_start,spend,impressions,clicks,cpc,ctr,reach,frequency,actions`,

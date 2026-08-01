@@ -67,6 +67,18 @@ import { CopyableId } from "../../components/ui/CopyableId";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { VendorSignupLinkCard } from "../../components/shared/VendorSignupLinkCard";
 import { MetaCampaignTree } from "../../components/shared/MetaCampaignTree";
+import {
+  MetaCampaignFilters,
+  periodToRange,
+  type PeriodPreset,
+} from "../../components/shared/MetaCampaignFilters";
+import {
+  DEFAULT_COLUMNS,
+  presetForObjective,
+  readStoredColumns,
+  storeColumns,
+  type MetaColumnId,
+} from "../../lib/metaCampaignColumns";
 import { Modal } from "../../components/ui/Modal";
 import { Notice } from "../../components/ui/Notice";
 import { pushToast } from "../../components/ui/Toast";
@@ -766,6 +778,21 @@ export function ClienteDetailPage() {
   const [initialCampaignIds, setInitialCampaignIds] = useState<string[]>([]);
   const [linkedCampaigns, setLinkedCampaigns] = useState<LinkedCampaign[]>([]);
 
+  // Filtros da aba Campanhas: periodo, tipo e colunas visiveis.
+  const [campaignPeriod, setCampaignPeriod] = useState<PeriodPreset>(30);
+  const [campaignCustomRange, setCampaignCustomRange] = useState({
+    from: "",
+    to: "",
+  });
+  const [campaignObjective, setCampaignObjective] = useState<string | null>(null);
+  const [campaignColumns, setCampaignColumns] = useState<MetaColumnId[]>(
+    () => readStoredColumns(resolvedId) ?? DEFAULT_COLUMNS,
+  );
+  const [availableRange, setAvailableRange] = useState<{
+    from: string | null;
+    to: string | null;
+  }>({ from: null, to: null });
+
   // Sub-abas internas da aba Ads (Facebook).
   const [adsSubTab, setAdsSubTab] = useState<AdsSubTab>("conexoes");
   const [campaignsReport, setCampaignsReport] = useState<
@@ -798,8 +825,12 @@ export function ClienteDetailPage() {
     setReportLoading(true);
     setReportError(null);
     try {
-      const data = await getMetaCampaignsReport(resolvedId, session.accessToken);
+      const data = await getMetaCampaignsReport(resolvedId, session.accessToken, {
+        ...periodToRange(campaignPeriod, campaignCustomRange),
+        objective: campaignObjective ?? undefined,
+      });
       setCampaignsReport(data.campaigns ?? []);
+      setAvailableRange(data.available_range ?? { from: null, to: null });
     } catch (error) {
       setCampaignsReport([]);
       setReportError(
@@ -808,7 +839,7 @@ export function ClienteDetailPage() {
     } finally {
       setReportLoading(false);
     }
-  }, [resolvedId]);
+  }, [resolvedId, campaignPeriod, campaignCustomRange, campaignObjective]);
 
   useEffect(() => {
     // So busca quando a sub-aba que usa o relatorio esta aberta.
@@ -825,6 +856,29 @@ export function ClienteDetailPage() {
    * A aba Campanhas mostra so o que foi vinculado a este cliente. O relatorio
    * traz a conta de anuncio inteira, entao o recorte e feito aqui.
    */
+  const availableObjectives = useMemo(() => {
+    const objetivos = new Set<string>();
+    for (const campaign of campaignsReport) {
+      if (campaign.objective) objetivos.add(campaign.objective);
+    }
+    return Array.from(objetivos).sort();
+  }, [campaignsReport]);
+
+  useEffect(() => {
+    if (resolvedId) storeColumns(resolvedId, campaignColumns);
+  }, [resolvedId, campaignColumns]);
+
+  /**
+   * Trocar o tipo troca as colunas para as que importam naquele objetivo:
+   * custo por lead nao diz nada numa campanha de alcance. O configurador
+   * manual continua valendo depois.
+   */
+  function handleObjectiveChange(objective: string | null) {
+    setCampaignObjective(objective);
+    const preset = presetForObjective(objective);
+    setCampaignColumns(preset ? [...preset.columns] : DEFAULT_COLUMNS);
+  }
+
   const linkedCampaignsReport = useMemo(() => {
     const vinculadas = new Set(
       linkedCampaigns.map((campaign) => campaign.meta_campaign_id),
@@ -4269,6 +4323,20 @@ export function ClienteDetailPage() {
                     </div>
                   ) : null}
 
+                  <MetaCampaignFilters
+                    period={campaignPeriod}
+                    onPeriodChange={setCampaignPeriod}
+                    customRange={campaignCustomRange}
+                    onCustomRangeChange={setCampaignCustomRange}
+                    objective={campaignObjective}
+                    onObjectiveChange={handleObjectiveChange}
+                    availableObjectives={availableObjectives}
+                    columnIds={campaignColumns}
+                    onColumnsChange={setCampaignColumns}
+                    availableRange={availableRange}
+                    isDarkMode={isDarkMode}
+                  />
+
                   {reportError ? <Notice tone="error">{reportError}</Notice> : null}
 
                   {reportLoading ? (
@@ -4288,7 +4356,10 @@ export function ClienteDetailPage() {
                         Clique na linha da campanha ou do conjunto para
                         expandir/recolher a estrutura de anúncios.
                       </p>
-                      <MetaCampaignTree campaigns={linkedCampaignsReport} />
+                      <MetaCampaignTree
+                        campaigns={linkedCampaignsReport}
+                        columnIds={campaignColumns}
+                      />
                     </div>
                   ) : (
                     <div

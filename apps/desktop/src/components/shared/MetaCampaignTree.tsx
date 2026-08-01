@@ -5,6 +5,11 @@ import type {
   MetaCampaignReportRow,
   MetaCampaignsReportItem,
 } from "../../services/meta";
+import {
+  META_COLUMN_BY_ID,
+  type MetaColumn,
+  type MetaColumnId,
+} from "../../lib/metaCampaignColumns";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -21,67 +26,67 @@ function formatNumber(value: number) {
 }
 
 /**
- * Custo por lead so existe quando ha lead. Sem isso a Meta devolve 0 e a
- * tabela mostraria "R$ 0" como se fosse eficiencia perfeita.
+ * Custo unitario so existe quando ha denominador. A Meta devolve 0 nesse caso e
+ * "R$ 0" na tela pareceria eficiencia perfeita, e nao ausencia de dado.
  */
-function formatCost(value: number, divisor: number) {
-  return divisor > 0 ? formatCurrency(value) : "—";
+function renderCell(row: MetaCampaignReportRow, column: MetaColumn) {
+  const value = Number(row[column.id] ?? 0);
+
+  if (column.denominator) {
+    const divisor = Number(row[column.denominator] ?? 0);
+    if (divisor <= 0) return "—";
+  }
+
+  switch (column.format) {
+    case "currency":
+      return formatCurrency(value);
+    case "percent":
+      return `${value.toFixed(2)}%`;
+    case "decimal":
+      return value.toFixed(2);
+    default:
+      return formatNumber(value);
+  }
 }
 
-const HEADERS = [
-  "Nome (Campanha / Conjunto / Anúncio)",
-  "Valor Investido",
-  "Quantidade Leads",
-  "Custo por Lead",
-  "Impressões",
-  "Nº Conversas",
-  "Custo / Conversa",
-  "Contas Alcançadas",
-];
+/** Cor por natureza da metrica, para a tabela nao virar um bloco cinza. */
+function cellTone(column: MetaColumn, muted?: boolean) {
+  if (muted) return "text-gray-600 dark:text-zinc-400";
+  if (column.id === "spend") return "font-bold text-amber-600 dark:text-amber-400";
+  if (column.format === "currency") return "text-rose-600 dark:text-rose-400";
+  if (column.group === "Mensagens") return "font-bold text-blue-600 dark:text-blue-400";
+  return "text-gray-700 dark:text-zinc-300";
+}
 
-/** Colunas numericas, iguais nos tres niveis da arvore. */
 function MetricCells({
   row,
+  columns,
   muted,
 }: {
   row: MetaCampaignReportRow;
+  columns: MetaColumn[];
   muted?: boolean;
 }) {
   return (
     <>
-      <td
-        className={`py-2.5 px-3 text-right font-mono ${muted ? "text-amber-600/80 dark:text-amber-400/80" : "font-bold text-amber-600 dark:text-amber-400"}`}
-      >
-        {formatCurrency(row.spend)}
-      </td>
-      <td
-        className={`py-2.5 px-3 text-right ${muted ? "text-gray-600 dark:text-zinc-400" : "font-bold text-gray-800 dark:text-zinc-200"}`}
-      >
-        {formatNumber(row.leads)}
-      </td>
-      <td className="py-2.5 px-3 text-right font-mono text-rose-600 dark:text-rose-400">
-        {formatCost(row.cost_per_lead, row.leads)}
-      </td>
-      <td className="py-2.5 px-3 text-right font-mono text-gray-600 dark:text-zinc-400">
-        {formatNumber(row.impressions)}
-      </td>
-      <td className="py-2.5 px-3 text-right font-bold text-blue-600 dark:text-blue-400">
-        {formatNumber(row.conversations)}
-      </td>
-      <td className="py-2.5 px-3 text-right font-mono text-blue-700 dark:text-blue-400">
-        {formatCost(row.cost_per_conversation, row.conversations)}
-      </td>
-      <td className="py-2.5 px-3 text-right font-mono text-gray-600 dark:text-zinc-400">
-        {formatNumber(row.reach)}
-      </td>
+      {columns.map((column) => (
+        <td
+          key={column.id}
+          className={`px-3 py-2.5 text-right font-mono ${cellTone(column, muted)}`}
+        >
+          {renderCell(row, column)}
+        </td>
+      ))}
     </>
   );
 }
 
 export function MetaCampaignTree({
   campaigns,
+  columnIds,
 }: {
   campaigns: MetaCampaignsReportItem[];
+  columnIds: MetaColumnId[];
 }) {
   const [expandedCampaigns, setExpandedCampaigns] = useState<
     Record<string, boolean>
@@ -90,17 +95,21 @@ export function MetaCampaignTree({
     {},
   );
 
+  const columns = useMemo(
+    () =>
+      columnIds
+        .map((id) => META_COLUMN_BY_ID.get(id))
+        .filter((column): column is MetaColumn => Boolean(column)),
+    [columnIds],
+  );
+
   const allIds = useMemo(() => {
     const campaignIds: string[] = [];
     const adSetIds: string[] = [];
-
     for (const campaign of campaigns) {
       campaignIds.push(campaign.id);
-      for (const adSet of campaign.ad_sets ?? []) {
-        adSetIds.push(adSet.id);
-      }
+      for (const adSet of campaign.ad_sets ?? []) adSetIds.push(adSet.id);
     }
-
     return { campaignIds, adSetIds };
   }, [campaigns]);
 
@@ -141,12 +150,10 @@ export function MetaCampaignTree({
         <table className="w-full text-left text-xs">
           <thead>
             <tr className="border-b border-gray-100 font-semibold uppercase tracking-wider text-gray-500 dark:border-zinc-800 dark:text-zinc-400">
-              {HEADERS.map((header, index) => (
-                <th
-                  key={header}
-                  className={`px-3 pb-3 ${index === 0 ? "" : "text-right"}`}
-                >
-                  {header}
+              <th className="px-3 pb-3">Nome (Campanha / Conjunto / Anúncio)</th>
+              {columns.map((column) => (
+                <th key={column.id} className="px-3 pb-3 text-right">
+                  {column.label}
                 </th>
               ))}
             </tr>
@@ -180,7 +187,7 @@ export function MetaCampaignTree({
                       </span>
                       <span>{campaign.name}</span>
                     </td>
-                    <MetricCells row={campaign} />
+                    <MetricCells row={campaign} columns={columns} />
                   </tr>
 
                   {campaignOpen &&
@@ -211,7 +218,7 @@ export function MetaCampaignTree({
                               </span>
                               <span>{adSet.name}</span>
                             </td>
-                            <MetricCells row={adSet} />
+                            <MetricCells row={adSet} columns={columns} />
                           </tr>
 
                           {adSetOpen &&
@@ -227,7 +234,7 @@ export function MetaCampaignTree({
                                   </span>
                                   <span>{ad.name}</span>
                                 </td>
-                                <MetricCells row={ad} muted />
+                                <MetricCells row={ad} columns={columns} muted />
                               </tr>
                             ))}
                         </Fragment>

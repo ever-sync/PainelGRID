@@ -36,6 +36,20 @@ export type MetaCampaignReportRow = {
   conversations: number;
   cost_per_conversation: number;
   reach: number;
+  // Colunas por tipo de campanha (extraidas de raw_payload.actions no backend).
+  clicks: number;
+  cost_per_click: number;
+  ctr: number;
+  cpm: number;
+  frequency: number;
+  link_clicks: number;
+  cost_per_link_click: number;
+  video_views: number;
+  cost_per_video_view: number;
+  post_engagement: number;
+  page_engagement: number;
+  cost_per_engagement: number;
+  messaging_replies: number;
 };
 
 export type MetaAdReportRow = MetaCampaignReportRow;
@@ -45,6 +59,7 @@ export type MetaAdSetReportRow = MetaCampaignReportRow & {
 };
 
 export type MetaCampaignsReportItem = MetaCampaignReportRow & {
+  objective: string | null;
   ad_sets: MetaAdSetReportRow[];
 };
 
@@ -52,6 +67,14 @@ export type MetaCampaignsReportResponse = {
   client_id: string;
   connected: boolean;
   campaigns: MetaCampaignsReportItem[];
+  /** Amplitude realmente sincronizada; limita o seletor de datas. */
+  available_range: { from: string | null; to: string | null };
+};
+
+export type CampaignsReportFilters = {
+  from?: string;
+  to?: string;
+  objective?: string;
 };
 
 export type MetaBusinessApiOption = {
@@ -199,9 +222,19 @@ export function getMetaSummary(clientId: string, token: string) {
   });
 }
 
-export function getMetaCampaignsReport(clientId: string, token: string) {
+export function getMetaCampaignsReport(
+  clientId: string,
+  token: string,
+  filters: CampaignsReportFilters = {},
+) {
+  const params = new URLSearchParams();
+  if (filters.from) params.set("from", filters.from);
+  if (filters.to) params.set("to", filters.to);
+  if (filters.objective) params.set("objective", filters.objective);
+  const qs = params.toString();
+
   return httpRequest<MetaCampaignsReportResponse>(
-    `/meta/campaigns-report/${clientId}`,
+    `/meta/campaigns-report/${clientId}${qs ? `?${qs}` : ""}`,
     {
       method: "GET",
       token,
