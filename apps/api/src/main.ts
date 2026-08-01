@@ -1,10 +1,10 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
-import { json, urlencoded } from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
@@ -43,7 +43,7 @@ function shouldEnableSwagger(configService: ConfigService): boolean {
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   initSentryFromEnv();
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
     logger: new JsonLogger('App'),
   });
@@ -119,8 +119,17 @@ async function bootstrap() {
     }),
   );
   // Acomoda payloads com data URLs de imagem (ex.: logo de time em base64).
-  app.use(json({ limit: '2mb' }));
-  app.use(urlencoded({ extended: true, limit: '2mb' }));
+  //
+  // `useBodyParser` e nao `app.use(json())`: com `rawBody: true`, o Nest aplica
+  // os parsers dele no init(), DEPOIS dos app.use(). Um json() registrado a mao
+  // roda primeiro, consome o stream e marca req._body — o parser do Nest entao
+  // pula e `req.rawBody` fica vazio para sempre.
+  //
+  // Consequencia real: o webhook da Meta exige rawBody para validar a assinatura,
+  // e o guard rejeitava TODO POST com 413. As mensagens do WhatsApp chegavam e
+  // eram descartadas.
+  app.useBodyParser('json', { limit: '2mb' });
+  app.useBodyParser('urlencoded', { extended: true, limit: '2mb' });
 
   app.setGlobalPrefix(apiPrefix);
   app.useGlobalPipes(
