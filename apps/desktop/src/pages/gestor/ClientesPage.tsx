@@ -8,6 +8,18 @@ import {
   Plus,
   Search,
   Trash2,
+  Store,
+  Phone,
+  MessageSquare,
+  Mail,
+  MapPin,
+  Hash,
+  Building,
+  Home,
+  Globe,
+  Navigation,
+  FileText,
+  Workflow,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Card } from "../../components/ui/Card";
@@ -731,231 +743,328 @@ export function ClientesPage() {
           </>
         }
       >
-        <div className="space-y-4">
-          <div>
-            <label className={modalLabelClass}>Empresa</label>
-            <input
-              value={newClientName}
-              onChange={(event) => setNewClientName(event.target.value)}
-              placeholder="Ex.: Empresa Demo"
-              className={modalInputClass}
-            />
+        <div className="space-y-4 pt-1">
+          {/* 1º CNPJ PRIMEIRO NO TOPO DA TELA */}
+          <div className="space-y-1.5">
+            <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+              CNPJ (Preenchimento Automático)
+            </label>
+            <div className="relative flex items-center">
+              <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                <Building2 size={16} />
+              </div>
+              <input
+                value={newClientCnpj}
+                onChange={(event) => setNewClientCnpj(event.target.value)}
+                onBlur={handleAutofillByCnpj}
+                placeholder="Digite o CNPJ"
+                className={clsx(
+                  "w-full h-11 pl-10 pr-28 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
+                  isDarkMode
+                    ? "border-zinc-800 bg-[#121212] text-zinc-100 placeholder-zinc-600 focus:border-[#FF0636]"
+                    : "border-zinc-200 bg-white text-zinc-900 placeholder-zinc-400 focus:border-[#FF0636] shadow-sm",
+                )}
+              />
+              <button
+                type="button"
+                onClick={handleAutofillByCnpj}
+                disabled={cnpjLoading || createLoading}
+                className="absolute right-1.5 h-8 px-4 rounded-xl bg-[#FF0636] hover:bg-[#e1002d] text-white text-xs font-bold shadow-sm transition-all active:scale-95 disabled:opacity-60 cursor-pointer inline-flex items-center gap-1.5"
+              >
+                {cnpjLoading ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <>
+                    <Search size={13} />
+                    <span>Buscar</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
+
+          {/* 2º EMPRESA */}
+          <div className="space-y-1.5">
+            <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+              Empresa (Nome Fantasia)
+            </label>
+            <div className="relative flex items-center">
+              <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                <Store size={16} />
+              </div>
+              <input
+                value={newClientName}
+                onChange={(event) => setNewClientName(event.target.value)}
+                placeholder="Ex.: Concessionária Demo"
+                className={clsx(
+                  "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
+                  isDarkMode
+                    ? "border-zinc-800 bg-[#121212] text-zinc-100 placeholder-zinc-600 focus:border-[#FF0636]"
+                    : "border-zinc-200 bg-white text-zinc-900 placeholder-zinc-400 focus:border-[#FF0636] shadow-sm",
+                )}
+              />
+            </div>
+          </div>
+
+          {/* 3º TELEFONE & WHATSAPP */}
           <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className={modalLabelClass}>CNPJ</label>
-              <div className="flex gap-2">
+            <div className="space-y-1.5">
+              <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                Telefone
+              </label>
+              <div className="relative flex items-center">
+                <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                  <Phone size={16} />
+                </div>
                 <input
-                  value={newClientCnpj}
-                  onChange={(event) => setNewClientCnpj(event.target.value)}
-                  onBlur={handleAutofillByCnpj}
-                  placeholder="Digite o CNPJ"
-                  className={modalInputClass}
-                />
-                <button
-                  type="button"
-                  onClick={handleAutofillByCnpj}
-                  disabled={cnpjLoading || createLoading}
+                  value={newClientPhone}
+                  onChange={(event) => setNewClientPhone(event.target.value)}
+                  placeholder="(11) 99999-9999"
                   className={clsx(
-                    "inline-flex items-center justify-center rounded-xl border px-3 py-2 text-xs font-semibold disabled:opacity-60",
+                    "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
                     isDarkMode
-                      ? "border-zinc-700 text-zinc-200 hover:bg-[#1a1a1a]"
-                      : "border-zinc-200 text-zinc-700 hover:bg-zinc-50",
+                      ? "border-zinc-800 bg-[#121212] text-zinc-100 placeholder-zinc-600 focus:border-[#FF0636]"
+                      : "border-zinc-200 bg-white text-zinc-900 placeholder-zinc-400 focus:border-[#FF0636] shadow-sm",
                   )}
-                >
-                  {cnpjLoading ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    "Buscar"
-                  )}
-                </button>
+                />
               </div>
             </div>
-            <div>
-              <label className={modalLabelClass}>Telefone</label>
-              <input
-                value={newClientPhone}
-                onChange={(event) => setNewClientPhone(event.target.value)}
-                placeholder="Opcional"
-                className={modalInputClass}
-              />
+
+            <div className="space-y-1.5">
+              <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                WhatsApp
+              </label>
+              <div className="relative flex items-center">
+                <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                  <MessageSquare size={16} />
+                </div>
+                <input
+                  value={newClientWhatsapp}
+                  onChange={(event) => setNewClientWhatsapp(event.target.value)}
+                  placeholder="(11) 99999-9999"
+                  className={clsx(
+                    "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
+                    isDarkMode
+                      ? "border-zinc-800 bg-[#121212] text-zinc-100 placeholder-zinc-600 focus:border-[#FF0636]"
+                      : "border-zinc-200 bg-white text-zinc-900 placeholder-zinc-400 focus:border-[#FF0636] shadow-sm",
+                  )}
+                />
+              </div>
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className={modalLabelClass}>WhatsApp</label>
-              <input
-                value={newClientWhatsapp}
-                onChange={(event) => setNewClientWhatsapp(event.target.value)}
-                placeholder="Opcional"
-                className={modalInputClass}
-              />
-            </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className={modalLabelClass}>E-mail de contato</label>
+
+          {/* 4º E-MAIL DE CONTATO */}
+          <div className="space-y-1.5">
+            <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+              E-mail de Contato
+            </label>
+            <div className="relative flex items-center">
+              <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                <Mail size={16} />
+              </div>
               <input
                 type="email"
                 value={newClientEmail}
                 onChange={(event) => setNewClientEmail(event.target.value)}
                 placeholder="contato@empresa.com"
-                className={modalInputClass}
+                className={clsx(
+                  "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
+                  isDarkMode
+                    ? "border-zinc-800 bg-[#121212] text-zinc-100 placeholder-zinc-600 focus:border-[#FF0636]"
+                    : "border-zinc-200 bg-white text-zinc-900 placeholder-zinc-400 focus:border-[#FF0636] shadow-sm",
+                )}
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <p
-              className={clsx(
-                "text-xs font-semibold uppercase tracking-[0.14em]",
-                isDarkMode ? "text-zinc-400" : "text-zinc-500",
-              )}
-            >
-              Endereço (cartão CNPJ)
+
+          {/* 5º ENDEREÇO (CARTÃO CNPJ) */}
+          <div className="space-y-3 pt-2">
+            <p className={clsx("text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-500")}>
+              📍 Endereço (Cartão CNPJ)
             </p>
+
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="sm:col-span-2">
-                <label
-                  className={clsx(
-                    "mb-1 block text-xs font-semibold",
-                    isDarkMode ? "text-zinc-400" : "text-zinc-500",
-                  )}
-                >
+              <div className="sm:col-span-2 space-y-1.5">
+                <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
                   Logradouro
                 </label>
-                <input
-                  value={newClientAddressStreet}
-                  onChange={(event) =>
-                    setNewClientAddressStreet(event.target.value)
-                  }
-                  placeholder="Rua/Avenida"
-                  className={modalInputClass}
-                />
+                <div className="relative flex items-center">
+                  <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                    <MapPin size={15} />
+                  </div>
+                  <input
+                    value={newClientAddressStreet}
+                    onChange={(event) => setNewClientAddressStreet(event.target.value)}
+                    placeholder="Rua/Avenida"
+                    className={clsx(
+                      "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
+                      isDarkMode
+                        ? "border-zinc-800 bg-[#121212] text-zinc-100 placeholder-zinc-600 focus:border-[#FF0636]"
+                        : "border-zinc-200 bg-white text-zinc-900 placeholder-zinc-400 focus:border-[#FF0636] shadow-sm",
+                    )}
+                  />
+                </div>
               </div>
-              <div>
-                <label
-                  className={clsx(
-                    "mb-1 block text-xs font-semibold",
-                    isDarkMode ? "text-zinc-400" : "text-zinc-500",
-                  )}
-                >
+
+              <div className="space-y-1.5">
+                <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
                   Número
                 </label>
-                <input
-                  value={newClientAddressNumber}
-                  onChange={(event) =>
-                    setNewClientAddressNumber(event.target.value)
-                  }
-                  placeholder="123"
-                  className={modalInputClass}
-                />
+                <div className="relative flex items-center">
+                  <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                    <Hash size={15} />
+                  </div>
+                  <input
+                    value={newClientAddressNumber}
+                    onChange={(event) => setNewClientAddressNumber(event.target.value)}
+                    placeholder="123"
+                    className={clsx(
+                      "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
+                      isDarkMode
+                        ? "border-zinc-800 bg-[#121212] text-zinc-100 placeholder-zinc-600 focus:border-[#FF0636]"
+                        : "border-zinc-200 bg-white text-zinc-900 placeholder-zinc-400 focus:border-[#FF0636] shadow-sm",
+                    )}
+                  />
+                </div>
               </div>
             </div>
+
             <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label
-                  className={clsx(
-                    "mb-1 block text-xs font-semibold",
-                    isDarkMode ? "text-zinc-400" : "text-zinc-500",
-                  )}
-                >
+              <div className="space-y-1.5">
+                <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
                   Complemento
                 </label>
-                <input
-                  value={newClientAddressComplement}
-                  onChange={(event) =>
-                    setNewClientAddressComplement(event.target.value)
-                  }
-                  placeholder="Sala, bloco, etc."
-                  className={modalInputClass}
-                />
+                <div className="relative flex items-center">
+                  <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                    <Building size={15} />
+                  </div>
+                  <input
+                    value={newClientAddressComplement}
+                    onChange={(event) => setNewClientAddressComplement(event.target.value)}
+                    placeholder="Sala, bloco, etc."
+                    className={clsx(
+                      "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
+                      isDarkMode
+                        ? "border-zinc-800 bg-[#121212] text-zinc-100 placeholder-zinc-600 focus:border-[#FF0636]"
+                        : "border-zinc-200 bg-white text-zinc-900 placeholder-zinc-400 focus:border-[#FF0636] shadow-sm",
+                    )}
+                  />
+                </div>
               </div>
-              <div>
-                <label
-                  className={clsx(
-                    "mb-1 block text-xs font-semibold",
-                    isDarkMode ? "text-zinc-400" : "text-zinc-500",
-                  )}
-                >
+
+              <div className="space-y-1.5">
+                <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
                   Bairro
                 </label>
-                <input
-                  value={newClientAddressDistrict}
-                  onChange={(event) =>
-                    setNewClientAddressDistrict(event.target.value)
-                  }
-                  placeholder="Bairro"
-                  className={modalInputClass}
-                />
+                <div className="relative flex items-center">
+                  <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                    <Home size={15} />
+                  </div>
+                  <input
+                    value={newClientAddressDistrict}
+                    onChange={(event) => setNewClientAddressDistrict(event.target.value)}
+                    placeholder="Bairro"
+                    className={clsx(
+                      "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
+                      isDarkMode
+                        ? "border-zinc-800 bg-[#121212] text-zinc-100 placeholder-zinc-600 focus:border-[#FF0636]"
+                        : "border-zinc-200 bg-white text-zinc-900 placeholder-zinc-400 focus:border-[#FF0636] shadow-sm",
+                    )}
+                  />
+                </div>
               </div>
             </div>
+
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="sm:col-span-2">
-                <label
-                  className={clsx(
-                    "mb-1 block text-xs font-semibold",
-                    isDarkMode ? "text-zinc-400" : "text-zinc-500",
-                  )}
-                >
+              <div className="sm:col-span-2 space-y-1.5">
+                <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
                   Cidade
                 </label>
-                <input
-                  value={newClientAddressCity}
-                  onChange={(event) =>
-                    setNewClientAddressCity(event.target.value)
-                  }
-                  placeholder="Cidade"
-                  className={modalInputClass}
-                />
+                <div className="relative flex items-center">
+                  <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                    <Globe size={15} />
+                  </div>
+                  <input
+                    value={newClientAddressCity}
+                    onChange={(event) => setNewClientAddressCity(event.target.value)}
+                    placeholder="Cidade"
+                    className={clsx(
+                      "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
+                      isDarkMode
+                        ? "border-zinc-800 bg-[#121212] text-zinc-100 placeholder-zinc-600 focus:border-[#FF0636]"
+                        : "border-zinc-200 bg-white text-zinc-900 placeholder-zinc-400 focus:border-[#FF0636] shadow-sm",
+                    )}
+                  />
+                </div>
               </div>
-              <div>
-                <label
-                  className={clsx(
-                    "mb-1 block text-xs font-semibold",
-                    isDarkMode ? "text-zinc-400" : "text-zinc-500",
-                  )}
-                >
+
+              <div className="space-y-1.5">
+                <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
                   UF
                 </label>
+                <div className="relative flex items-center">
+                  <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                    <Navigation size={15} />
+                  </div>
+                  <input
+                    value={newClientAddressState}
+                    onChange={(event) => setNewClientAddressState(event.target.value.toUpperCase())}
+                    placeholder="UF"
+                    maxLength={2}
+                    className={clsx(
+                      "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
+                      isDarkMode
+                        ? "border-zinc-800 bg-[#121212] text-zinc-100 placeholder-zinc-600 focus:border-[#FF0636]"
+                        : "border-zinc-200 bg-white text-zinc-900 placeholder-zinc-400 focus:border-[#FF0636] shadow-sm",
+                    )}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                CEP
+              </label>
+              <div className="relative flex items-center">
+                <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                  <FileText size={15} />
+                </div>
                 <input
-                  value={newClientAddressState}
-                  onChange={(event) =>
-                    setNewClientAddressState(event.target.value.toUpperCase())
-                  }
-                  placeholder="UF"
-                  maxLength={2}
-                  className={modalInputClass}
+                  value={newClientAddressZipcode}
+                  onChange={(event) => setNewClientAddressZipcode(event.target.value)}
+                  placeholder="00000-000"
+                  className={clsx(
+                    "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
+                    isDarkMode
+                      ? "border-zinc-800 bg-[#121212] text-zinc-100 placeholder-zinc-600 focus:border-[#FF0636]"
+                      : "border-zinc-200 bg-white text-zinc-900 placeholder-zinc-400 focus:border-[#FF0636] shadow-sm",
+                  )}
                 />
               </div>
             </div>
-            <div>
-              <label
-                className={clsx(
-                  "mb-1 block text-xs font-semibold",
-                  isDarkMode ? "text-zinc-400" : "text-zinc-500",
-                )}
-              >
-                CEP
-              </label>
+          </div>
+
+          {/* 6º WEBHOOK N8N */}
+          <div className="space-y-1.5">
+            <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+              Webhook N8N
+            </label>
+            <div className="relative flex items-center">
+              <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                <Workflow size={16} />
+              </div>
               <input
-                value={newClientAddressZipcode}
-                onChange={(event) =>
-                  setNewClientAddressZipcode(event.target.value)
-                }
-                placeholder="00000000"
-                className={modalInputClass}
+                value={newClientWebhook}
+                onChange={(event) => setNewClientWebhook(event.target.value)}
+                placeholder="https://seu-n8n/webhook/..."
+                className={clsx(
+                  "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
+                  isDarkMode
+                    ? "border-zinc-800 bg-[#121212] text-zinc-100 placeholder-zinc-600 focus:border-[#FF0636]"
+                    : "border-zinc-200 bg-white text-zinc-900 placeholder-zinc-400 focus:border-[#FF0636] shadow-sm",
+                )}
               />
-            </div>
-          </div>
-          <div>
-            <label className={modalLabelClass}>Webhook n8n</label>
-            <input
-              value={newClientWebhook}
-              onChange={(event) => setNewClientWebhook(event.target.value)}
-              placeholder="https://seu-n8n/webhook/..."
-              className={modalInputClass}
-            />
-          </div>
           {createError ? <Notice tone="error">{createError}</Notice> : null}
         </div>
       </Modal>
