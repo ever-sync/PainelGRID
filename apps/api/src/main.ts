@@ -15,15 +15,17 @@ import { initSentryFromEnv } from './config/sentry';
 process.on('unhandledRejection', (reason: unknown) => {
   const details =
     reason && typeof reason === 'object'
-      ? (reason as { code?: unknown; errors?: Array<{ code?: unknown }> })
+      ? (reason as { code?: unknown; errors?: Array<{ code?: unknown }>; name?: string; message?: string })
       : null;
   if (
     details?.code === 'ECONNREFUSED' ||
+    details?.name === 'ConnectionClosedError' ||
+    details?.message?.includes('Connection is closed') ||
     details?.errors?.some((error) => error.code === 'ECONNREFUSED')
   ) {
     return;
   }
-  console.error('Unhandled promise rejection');
+  console.error('Unhandled promise rejection', reason);
 });
 
 function shouldEnableSwagger(configService: ConfigService): boolean {
