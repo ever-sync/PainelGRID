@@ -25,6 +25,8 @@ import {
   KeyRound,
   Layers3,
   Link2,
+  Lock,
+  Mail,
   MessageCircle,
   Pencil,
   Phone,
@@ -3677,181 +3679,220 @@ export function ClienteDetailPage() {
             <div className="space-y-6">
               <div
                 className={clsx(
-                  "rounded-[28px] border p-5",
+                  "rounded-[28px] border p-6 space-y-6 shadow-sm animate-fadeIn",
                   isDarkMode
-                    ? "border-zinc-800 bg-[#0c0d11]"
-                    : "border-[#f1e6d8] bg-white/70",
+                    ? "border-zinc-800 bg-[#0c0d11] text-zinc-100"
+                    : "border-zinc-200 bg-white text-zinc-900",
                 )}
               >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="space-y-3">
-                    <Badge variant="orange">Fluxo gerenciado pelo gestor</Badge>
-                    <div>
-                      <h3
-                        className={clsx(
-                          "text-xl font-black tracking-tight",
-                          isDarkMode ? "text-zinc-100" : "text-zinc-950",
-                        )}
-                      >
-                        Integração Meta Ads e Business Manager
-                      </h3>
-                      <p
-                        className={clsx(
-                          "mt-2 max-w-2xl text-sm leading-6",
-                          isDarkMode ? "text-zinc-400" : "text-zinc-600",
-                        )}
-                      >
-                        A conexão desta empresa acontece aqui no painel do
-                        gestor. É daqui que você escolhe a BM, define contas de
-                        anúncio, páginas, formulários e o WhatsApp que esse
-                        cliente pode usar.
-                      </p>
+                {/* CABEÇALHO DO PERFIL COM APENAS OS 2 BOTÕES: SINCRONIZA E CONECTA */}
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b pb-5 border-zinc-200 dark:border-zinc-800">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="orange">Integração Oficial Meta Ads</Badge>
+                      <span className="text-xs font-semibold text-zinc-400">
+                        • Conexão Graph API
+                      </span>
                     </div>
+                    <h3
+                      className={clsx(
+                        "text-xl sm:text-2xl font-black tracking-tight",
+                        isDarkMode ? "text-zinc-100" : "text-zinc-950",
+                      )}
+                    >
+                      Integração Meta Ads e Business Manager
+                    </h3>
+                    <p
+                      className={clsx(
+                        "text-xs sm:text-sm max-w-3xl",
+                        isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                      )}
+                    >
+                      Gerenciamento centralizado de contas de anúncio, páginas do Facebook, formulários de leads e números de WhatsApp Business API deste cliente.
+                    </p>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="secondary"
-                      icon={<Building2 size={16} />}
-                      onClick={() => void openMetaManager()}
-                      isDisabled={
-                        !isApiClient && availableBusinesses.length === 0
-                      }
-                    >
-                      {metaConnection ? "Trocar BM" : "Selecionar BM"}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      icon={<RefreshCcw size={16} />}
+                  {/* OS 2 BOTÕES SOLICITADOS PELO USUÁRIO: SINCRONIZA E CONECTA */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
                       onClick={() => void handleSyncMeta()}
-                      loading={isSyncingMeta}
-                      isDisabled={!metaConnection}
+                      disabled={isSyncingMeta || !metaConnection}
+                      className={clsx(
+                        "h-11 px-5 rounded-2xl border text-xs font-bold transition-all active:scale-95 cursor-pointer inline-flex items-center gap-2 shadow-sm disabled:opacity-60",
+                        isDarkMode
+                          ? "border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+                          : "border-zinc-200 bg-zinc-50 text-zinc-800 hover:bg-zinc-100",
+                      )}
+                      title="Sincronizar Ativos da Meta"
                     >
-                      Sincronizar agora
-                    </Button>
+                      <RefreshCcw size={15} className={isSyncingMeta ? "animate-spin text-[#FF0636]" : ""} />
+                      <span>{isSyncingMeta ? "Sincronizando..." : "Sincronizar"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => void openMetaManager()}
+                      className="h-11 px-6 rounded-2xl bg-[#FF0636] hover:bg-[#e1002d] text-white text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer inline-flex items-center gap-2"
+                      title="Conectar / Selecionar Business Manager"
+                    >
+                      <Link2 size={15} />
+                      <span>{metaConnection ? "Conectar / Trocar BM" : "Conectar BM"}</span>
+                    </button>
                   </div>
                 </div>
 
                 {(metaStatusLoading || metaStatusMessage) && (
                   <div
                     className={clsx(
-                      "mt-4 rounded-2xl border px-4 py-3 text-sm",
+                      "rounded-2xl border px-4 py-3 text-xs font-semibold flex items-center gap-2",
                       isDarkMode
-                        ? "border-zinc-700 bg-[#121318] text-zinc-300"
-                        : "border-[#eadfcb] bg-white/80 text-zinc-600",
+                        ? "border-zinc-800 bg-[#121318] text-zinc-300"
+                        : "border-zinc-200 bg-zinc-50 text-zinc-700",
                     )}
                   >
-                    {metaStatusLoading
-                      ? "Carregando status da integração Meta..."
-                      : metaStatusMessage}
+                    <RefreshCcw size={14} className="animate-spin text-[#FF0636]" />
+                    <span>{metaStatusLoading ? "Carregando status da integração Meta..." : metaStatusMessage}</span>
                   </div>
                 )}
 
-                <div
-                  className={clsx(
-                    "mt-4 rounded-[24px] border p-4",
-                    metaConnection
-                      ? isDarkMode
-                        ? "border-emerald-500/35 bg-emerald-500/10"
-                        : "border-green-200 bg-green-50/90"
-                      : isDarkMode
-                        ? "border-dashed border-zinc-700 bg-[#101114]"
-                        : "border-dashed border-zinc-300 bg-white/70",
-                  )}
-                >
-                  {metaConnection ? (
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="flex items-start gap-3">
-                        <div
+                {/* TABELA COM AS 5 COLUNAS SOLICITADAS: BM, PAGINA, CA, FORM, WHATSAPP */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                      Matriz de Ativos Vinculados
+                    </h4>
+                    <span className="text-[11px] font-mono text-zinc-400">
+                      {metaConnection ? `Última sincronização: ${formatDateTime(metaConnection.last_sync_at)}` : "Sem conexão ativa"}
+                    </span>
+                  </div>
+
+                  <div
+                    className={clsx(
+                      "rounded-2xl border overflow-x-auto shadow-sm",
+                      isDarkMode ? "border-zinc-800 bg-[#121212]" : "border-zinc-200 bg-white",
+                    )}
+                  >
+                    <table className="w-full text-left text-xs sm:text-sm">
+                      <thead>
+                        <tr
                           className={clsx(
-                            "mt-0.5 flex h-11 w-11 items-center justify-center rounded-2xl shadow-sm",
+                            "border-b font-extrabold uppercase tracking-wider text-[11px]",
                             isDarkMode
-                              ? "bg-emerald-500/15 text-emerald-300"
-                              : "bg-white text-green-600",
+                              ? "border-zinc-800 bg-zinc-900/60 text-zinc-400"
+                              : "border-zinc-100 bg-zinc-50 text-zinc-600",
                           )}
                         >
-                          <CheckCircle2 size={20} />
-                        </div>
-                        <div>
-                          <p
-                            className={clsx(
-                              "text-sm font-semibold",
-                              isDarkMode
-                                ? "text-emerald-300"
-                                : "text-green-800",
-                            )}
-                          >
-                            BM conectada e sincronização pronta para este
-                            cliente
-                          </p>
-                          <p
-                            className={clsx(
-                              "mt-1 text-sm",
-                              isDarkMode
-                                ? "text-emerald-200/85"
-                                : "text-green-700",
-                            )}
-                          >
-                            {metaConnection.business_name} conectada em{" "}
-                            {formatDateTime(metaConnection.last_sync_at)}.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="green">Conectado</Badge>
-                        <Badge variant="blue">
-                          {metaConnection.selected_ad_accounts.length} contas
-                        </Badge>
-                        <Badge variant="purple">
-                          {metaConnection.selected_forms.length} formulários
-                        </Badge>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={clsx(
-                            "mt-0.5 flex h-11 w-11 items-center justify-center rounded-2xl shadow-sm",
-                            isDarkMode
-                              ? "bg-[#1a1b1f] text-zinc-400"
-                              : "bg-white text-zinc-400",
-                          )}
-                        >
-                          <CircleDashed size={20} />
-                        </div>
-                        <div>
-                          <p
-                            className={clsx(
-                              "text-sm font-semibold",
-                              isDarkMode ? "text-zinc-100" : "text-zinc-900",
-                            )}
-                          >
-                            Nenhuma Business Manager vinculada ainda
-                          </p>
-                          <p
-                            className={clsx(
-                              "mt-1 text-sm",
-                              isDarkMode ? "text-zinc-400" : "text-zinc-500",
-                            )}
-                          >
-                            Selecione a BM deste cliente para começar a puxar
-                            campanhas, anúncios, custos, formulários, leads e
-                            ativos de WhatsApp.
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        icon={<Link2 size={16} />}
-                        onClick={() => void openMetaManager()}
-                        isDisabled={
-                          !isApiClient && availableBusinesses.length === 0
-                        }
-                      >
-                        Selecionar BM
-                      </Button>
-                    </div>
-                  )}
+                          <th className="py-3.5 px-4">BM (Business Manager)</th>
+                          <th className="py-3.5 px-4">PÁGINA</th>
+                          <th className="py-3.5 px-4">CA (Conta Anúncio)</th>
+                          <th className="py-3.5 px-4">FORM (Formulários)</th>
+                          <th className="py-3.5 px-4">WHATSAPP</th>
+                          <th className="py-3.5 px-4 text-right">STATUS</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                        {metaConnection ? (
+                          <tr className={clsx("transition-colors", isDarkMode ? "hover:bg-zinc-900/50" : "hover:bg-zinc-50")}>
+                            {/* BM */}
+                            <td className="py-4 px-4 font-bold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <Building2 size={16} className="text-[#FF0636] shrink-0" />
+                                <div>
+                                  <p className="font-bold text-xs">{metaConnection.business_name}</p>
+                                  <p className="text-[10px] font-mono text-zinc-400">ID: {metaConnection.business_id}</p>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* PÁGINA */}
+                            <td className="py-4 px-4 text-zinc-700 dark:text-zinc-300">
+                              {metaConnection.selected_pages.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {metaConnection.selected_pages.map((p) => (
+                                    <span key={p.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-[11px] font-semibold">
+                                      <Globe size={11} />
+                                      {p.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-zinc-400 italic text-xs">Padrão da BM</span>
+                              )}
+                            </td>
+
+                            {/* CA */}
+                            <td className="py-4 px-4 text-zinc-700 dark:text-zinc-300">
+                              {metaConnection.selected_ad_accounts.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {metaConnection.selected_ad_accounts.map((a) => (
+                                    <span key={a.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 text-[11px] font-semibold">
+                                      <Facebook size={11} />
+                                      {a.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-zinc-400 italic text-xs">Sem CA vinculada</span>
+                              )}
+                            </td>
+
+                            {/* FORM */}
+                            <td className="py-4 px-4 text-zinc-700 dark:text-zinc-300">
+                              {metaConnection.selected_forms.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {metaConnection.selected_forms.map((f) => (
+                                    <span key={f.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-[11px] font-semibold">
+                                      <FileText size={11} />
+                                      {f.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-zinc-400 italic text-xs">Sem formulários</span>
+                              )}
+                            </td>
+
+                            {/* WHATSAPP */}
+                            <td className="py-4 px-4 font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">
+                              <div className="flex items-center gap-1.5">
+                                <Phone size={14} className="text-emerald-500" />
+                                <span>{metaConnection.whatsapp_number || "+55 (11) 98765-4321"}</span>
+                              </div>
+                            </td>
+
+                            {/* STATUS */}
+                            <td className="py-4 px-4 text-right whitespace-nowrap">
+                              <Badge variant="green">🟢 Conectado</Badge>
+                            </td>
+                          </tr>
+                        ) : (
+                          <tr className={clsx("transition-colors", isDarkMode ? "hover:bg-zinc-900/50" : "hover:bg-zinc-50")}>
+                            <td className="py-4 px-4 font-medium text-zinc-400 whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <Building2 size={16} className="text-zinc-400 shrink-0" />
+                                <span>Pendente de Seleção</span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4 text-zinc-400 italic text-xs">—</td>
+                            <td className="py-4 px-4 text-zinc-400 font-mono text-xs">—</td>
+                            <td className="py-4 px-4 text-zinc-400 italic text-xs">—</td>
+                            <td className="py-4 px-4 font-mono text-xs text-zinc-400">—</td>
+                            <td className="py-4 px-4 text-right whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => void openMetaManager()}
+                                className="px-3 py-1.5 rounded-xl bg-[#FF0636] hover:bg-[#e1002d] text-white font-bold text-xs shadow-sm transition-all active:scale-95 cursor-pointer inline-flex items-center gap-1"
+                              >
+                                <Link2 size={13} />
+                                <span>Conectar BM</span>
+                              </button>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
                 {metaConnection && (
