@@ -1642,6 +1642,46 @@ export class MetaService implements OnModuleInit {
     return timingSafeEqual(left, right);
   }
 
+  /**
+   * Uma conta de anuncio e "compartilhada" quando aparece na selecao de assets
+   * de mais de um cliente. So nesse caso vale filtrar as campanhas: com conta
+   * dedicada, tudo que esta la dentro e do dono, e filtrar so criaria buraco.
+   */
+  private async isAdAccountSharedBetweenClients(adAccountId: string) {
+    const rows = await this.db.metaAssetSelection.findMany({
+      where: { ad_account_id: adAccountId },
+      select: { meta_connection: { select: { client_id: true } } },
+    });
+
+    const clientIds = new Set(
+      rows.map((row: { meta_connection: { client_id: string } }) => row.meta_connection.client_id),
+    );
+
+    return clientIds.size > 1;
+  }
+
+  /**
+   * Decide se o conjunto de anuncios pertence ao cliente, olhando a pagina e o
+   * formulario que ele promove. Conjunto sem `promoted_object` (trafego,
+   * reconhecimento) nao tem como ser atribuido e fica de fora.
+   */
+  private adSetBelongsToClient(
+    adSet: MetaAdSetPayload,
+    pageIds: string[],
+    formIds: string[],
+  ) {
+    const promoted = adSet.promoted_object;
+    if (!promoted) {
+      return false;
+    }
+
+    if (promoted.page_id && pageIds.includes(promoted.page_id)) {
+      return true;
+    }
+
+    return Boolean(promoted.lead_gen_form_id && formIds.includes(promoted.lead_gen_form_id));
+  }
+
   /** Executado pelo worker (meta-sync). NAO chamar direto de um request HTTP. */
   async runFullSyncForConnection(metaConnectionId: string, jobId: string) {
     const connection = await this.db.metaConnection.findUnique({
@@ -1689,14 +1729,43 @@ export class MetaService implements OnModuleInit {
       };
 
       for (const adAccountId of adAccountIds) {
-        const campaigns = await this.fetchCampaignsForAccount(adAccountId, connection.access_token);
-        summary.campaigns += await this.syncCampaigns(connection, campaigns);
+        // Os conjuntos vem primeiro: e o `promoted_object` deles que revela a
+        // quem cada campanha pertence quando a conta e dividida entre clientes.
+        const allAdSets = await this.fetchAdSetsForAccount(adAccountId, connection.access_token);
+        const isShared = await this.isAdAccountSharedBetweenClients(adAccountId);
 
-        const adSets = await this.fetchAdSetsForAccount(adAccountId, connection.access_token);
+        const adSets = isShared
+          ? allAdSets.filter((adSet) => this.adSetBelongsToClient(adSet, pageIds, selectedFormIds))
+          : allAdSets;
+
+        // `null` = sem particionamento (conta dedicada): nada e descartado.
+        const allowedCampaignIds = isShared
+          ? new Set(this.uniqueStrings(adSets.map((adSet) => adSet.campaign_id)))
+          : null;
+
+        const keepCampaign = (campaignId?: string | null) =>
+          !allowedCampaignIds || (Boolean(campaignId) && allowedCampaignIds.has(campaignId!));
+
+        if (isShared && allAdSets.length !== adSets.length) {
+          this.logger.log(
+            `Conta ${adAccountId} compartilhada: ${adSets.length}/${allAdSets.length} conjuntos ` +
+              `atribuidos ao cliente ${connection.client_id}`,
+          );
+        }
+
+        const campaigns = await this.fetchCampaignsForAccount(adAccountId, connection.access_token);
+        summary.campaigns += await this.syncCampaigns(
+          connection,
+          campaigns.filter((campaign) => keepCampaign(campaign.id)),
+        );
+
         summary.ad_sets += await this.syncAdSets(connection, adSets);
 
         const ads = await this.fetchAdsForAccount(adAccountId, connection.access_token);
-        const adsSummary = await this.syncAdsAndCreatives(connection, ads);
+        const adsSummary = await this.syncAdsAndCreatives(
+          connection,
+          ads.filter((ad) => keepCampaign(ad.campaign_id)),
+        );
         summary.ads += adsSummary.ads;
         summary.creatives += adsSummary.creatives;
 
@@ -1707,7 +1776,7 @@ export class MetaService implements OnModuleInit {
         );
         summary.insight_rows += await this.syncInsights(
           connection,
-          campaignInsights,
+          campaignInsights.filter((insight) => keepCampaign(insight.campaign_id)),
           'campaign',
         );
 
@@ -1716,14 +1785,22 @@ export class MetaService implements OnModuleInit {
           connection.access_token,
           'adset',
         );
-        summary.insight_rows += await this.syncInsights(connection, adSetInsights, 'adset');
+        summary.insight_rows += await this.syncInsights(
+          connection,
+          adSetInsights.filter((insight) => keepCampaign(insight.campaign_id)),
+          'adset',
+        );
 
         const adInsights = await this.fetchInsightsForAccount(
           adAccountId,
           connection.access_token,
           'ad',
         );
-        summary.insight_rows += await this.syncInsights(connection, adInsights, 'ad');
+        summary.insight_rows += await this.syncInsights(
+          connection,
+          adInsights.filter((insight) => keepCampaign(insight.campaign_id)),
+          'ad',
+        );
       }
 
       const forms = await this.fetchLeadForms(pageIds, connection.access_token);
@@ -3020,7 +3097,8 @@ export class MetaService implements OnModuleInit {
 
   private async fetchAdSetsForAccount(adAccountId: string, accessToken: string) {
     return this.safeGraphGetAll<MetaAdSetPayload>(`act_${adAccountId}/adsets`, accessToken, {
-      fields: 'id,name,status,campaign_id,daily_budget,lifetime_budget',
+      // `promoted_object` alimenta o particionamento por cliente em conta compartilhada.
+      fields: 'id,name,status,campaign_id,daily_budget,lifetime_budget,promoted_object',
       limit: 500,
     });
   }

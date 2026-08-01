@@ -102,6 +102,19 @@ export interface MetaCampaignPayload {
   stop_time?: string;
 }
 
+/**
+ * `promoted_object` diz qual pagina/formulario/numero o conjunto promove.
+ * E o unico dado que a Meta expoe para saber a quem um anuncio pertence
+ * quando varios clientes dividem a mesma conta de anuncio.
+ */
+export interface MetaPromotedObject {
+  page_id?: string;
+  lead_gen_form_id?: string;
+  whatsapp_phone_number?: string;
+  pixel_id?: string;
+  object_store_url?: string;
+}
+
 export interface MetaAdSetPayload {
   id: string;
   name?: string;
@@ -109,6 +122,7 @@ export interface MetaAdSetPayload {
   campaign_id?: string;
   daily_budget?: string;
   lifetime_budget?: string;
+  promoted_object?: MetaPromotedObject;
 }
 
 export interface MetaAdPayload {

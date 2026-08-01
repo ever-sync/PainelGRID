@@ -29,6 +29,7 @@ describe('MetaService', () => {
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      count: jest.fn(),
     },
     lead: {
       findUnique: jest.fn(),
@@ -240,6 +241,123 @@ describe('MetaService', () => {
         meta_lead_id: 'meta-lead-1',
         meta_form_id: 'form-1',
       }),
+    });
+  });
+
+  describe('runFullSyncForConnection com conta de anuncio compartilhada', () => {
+    const ADSET_DA_CASA = {
+      id: 'adset-1',
+      campaign_id: 'campaign-1',
+      promoted_object: { page_id: 'page-A' },
+    };
+    const ADSET_DE_OUTRO_CLIENTE = {
+      id: 'adset-2',
+      campaign_id: 'campaign-2',
+      promoted_object: { page_id: 'page-B' },
+    };
+    const ADSET_SEM_ATRIBUICAO = { id: 'adset-3', campaign_id: 'campaign-3' };
+
+    const TODAS_AS_CAMPANHAS = [
+      { id: 'campaign-1' },
+      { id: 'campaign-2' },
+      { id: 'campaign-3' },
+    ];
+
+    /** Prepara o sync isolando as chamadas de rede; devolve os spies de gravacao. */
+    function armarSync({ compartilhada }: { compartilhada: boolean }) {
+      prisma.metaConnection.findUnique.mockResolvedValue({
+        id: 'conn-1',
+        client_id: 'client-1',
+        access_token: 'token-1',
+      });
+      prisma.metaSyncJob.update.mockResolvedValue({});
+      prisma.metaConnection.update.mockResolvedValue({});
+      prisma.metaLeadImport.count.mockResolvedValue(0);
+
+      prisma.metaAssetSelection.findMany.mockImplementation(
+        ({ where }: { where: Record<string, unknown> }) => {
+          // Chamada do particionamento: quantos clientes usam esta conta.
+          if ('ad_account_id' in where) {
+            return Promise.resolve(
+              compartilhada
+                ? [
+                    { meta_connection: { client_id: 'client-1' } },
+                    { meta_connection: { client_id: 'client-2' } },
+                  ]
+                : [{ meta_connection: { client_id: 'client-1' } }],
+            );
+          }
+          // Chamada dos assets selecionados da conexao.
+          return Promise.resolve([
+            { ad_account_id: 'act1', page_id: 'page-A', form_id: 'form-A' },
+          ]);
+        },
+      );
+
+      jest
+        .spyOn(service as any, 'fetchAdSetsForAccount')
+        .mockResolvedValue([ADSET_DA_CASA, ADSET_DE_OUTRO_CLIENTE, ADSET_SEM_ATRIBUICAO]);
+      jest
+        .spyOn(service as any, 'fetchCampaignsForAccount')
+        .mockResolvedValue(TODAS_AS_CAMPANHAS);
+      jest
+        .spyOn(service as any, 'fetchAdsForAccount')
+        .mockResolvedValue([
+          { id: 'ad-1', campaign_id: 'campaign-1' },
+          { id: 'ad-2', campaign_id: 'campaign-2' },
+        ]);
+      jest
+        .spyOn(service as any, 'fetchInsightsForAccount')
+        .mockResolvedValue([
+          { campaign_id: 'campaign-1', spend: '10' },
+          { campaign_id: 'campaign-2', spend: '999' },
+        ]);
+      jest.spyOn(service as any, 'fetchLeadForms').mockResolvedValue([]);
+      jest.spyOn(service as any, 'syncLeadForms').mockResolvedValue(0);
+
+      return {
+        syncCampaigns: jest.spyOn(service as any, 'syncCampaigns').mockResolvedValue(0),
+        syncAdSets: jest.spyOn(service as any, 'syncAdSets').mockResolvedValue(0),
+        syncAdsAndCreatives: jest
+          .spyOn(service as any, 'syncAdsAndCreatives')
+          .mockResolvedValue({ ads: 0, creatives: 0 }),
+        syncInsights: jest.spyOn(service as any, 'syncInsights').mockResolvedValue(0),
+      };
+    }
+
+    it('grava apenas as campanhas atribuidas ao cliente', async () => {
+      const spies = armarSync({ compartilhada: true });
+
+      await service.runFullSyncForConnection('conn-1', 'job-1');
+
+      expect(spies.syncCampaigns).toHaveBeenCalledWith(expect.anything(), [{ id: 'campaign-1' }]);
+      expect(spies.syncAdSets).toHaveBeenCalledWith(expect.anything(), [ADSET_DA_CASA]);
+      expect(spies.syncAdsAndCreatives).toHaveBeenCalledWith(expect.anything(), [
+        { id: 'ad-1', campaign_id: 'campaign-1' },
+      ]);
+    });
+
+    it('nao vaza o investimento de outro cliente nos insights', async () => {
+      const spies = armarSync({ compartilhada: true });
+
+      await service.runFullSyncForConnection('conn-1', 'job-1');
+
+      for (const [, insights] of spies.syncInsights.mock.calls) {
+        expect(insights).toEqual([{ campaign_id: 'campaign-1', spend: '10' }]);
+      }
+    });
+
+    it('com conta dedicada nao descarta nada, mesmo sem promoted_object', async () => {
+      const spies = armarSync({ compartilhada: false });
+
+      await service.runFullSyncForConnection('conn-1', 'job-1');
+
+      expect(spies.syncCampaigns).toHaveBeenCalledWith(expect.anything(), TODAS_AS_CAMPANHAS);
+      expect(spies.syncAdSets).toHaveBeenCalledWith(expect.anything(), [
+        ADSET_DA_CASA,
+        ADSET_DE_OUTRO_CLIENTE,
+        ADSET_SEM_ATRIBUICAO,
+      ]);
     });
   });
 });
