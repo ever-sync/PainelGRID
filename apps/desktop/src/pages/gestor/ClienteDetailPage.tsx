@@ -66,6 +66,7 @@ import { Button } from "../../components/ui/Button";
 import { CopyableId } from "../../components/ui/CopyableId";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { VendorSignupLinkCard } from "../../components/shared/VendorSignupLinkCard";
+import { MetaCampaignTree } from "../../components/shared/MetaCampaignTree";
 import { Modal } from "../../components/ui/Modal";
 import { Notice } from "../../components/ui/Notice";
 import { pushToast } from "../../components/ui/Toast";
@@ -811,7 +812,11 @@ export function ClienteDetailPage() {
 
   useEffect(() => {
     // So busca quando a sub-aba que usa o relatorio esta aberta.
-    if (adsSubTab === "relatorios" || adsSubTab === "financeiro") {
+    if (
+      adsSubTab === "campanhas" ||
+      adsSubTab === "relatorios" ||
+      adsSubTab === "financeiro"
+    ) {
       void refreshCampaignsReport();
     }
   }, [adsSubTab, refreshCampaignsReport]);
@@ -4182,7 +4187,47 @@ export function ClienteDetailPage() {
                     </button>
                   </div>
 
-                  {linkedCampaigns.length === 0 ? (
+                  {linkedCampaigns.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {linkedCampaigns.map((campaign) => (
+                        <span
+                          key={campaign.meta_campaign_id}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+                        >
+                          <Megaphone size={11} />
+                          {campaign.name}
+                          {campaign.event_name ? (
+                            <span className="text-rose-400">
+                              · {campaign.event_name}
+                            </span>
+                          ) : null}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {reportError ? <Notice tone="error">{reportError}</Notice> : null}
+
+                  {reportLoading ? (
+                    <p className="py-12 text-center text-sm text-zinc-400">
+                      Carregando campanhas...
+                    </p>
+                  ) : campaignsReport.length > 0 ? (
+                    <div
+                      className={clsx(
+                        "rounded-2xl border p-4 shadow-sm",
+                        isDarkMode
+                          ? "border-zinc-800 bg-[#121212]"
+                          : "border-zinc-200 bg-white",
+                      )}
+                    >
+                      <p className="mb-3 text-[11px] text-zinc-400">
+                        Clique na linha da campanha ou do conjunto para
+                        expandir/recolher a estrutura de anúncios.
+                      </p>
+                      <MetaCampaignTree campaigns={campaignsReport} />
+                    </div>
+                  ) : (
                     <div
                       className={clsx(
                         "rounded-2xl border border-dashed px-6 py-12 text-center",
@@ -4191,51 +4236,17 @@ export function ClienteDetailPage() {
                     >
                       <Megaphone size={28} className="mx-auto text-zinc-300" />
                       <p className="mt-3 text-sm font-semibold text-zinc-500 dark:text-zinc-400">
-                        Nenhuma campanha vinculada
+                        {linkedCampaigns.length === 0
+                          ? "Nenhuma campanha vinculada"
+                          : "Sem métricas sincronizadas"}
                       </p>
                       <p className="mt-1 text-xs text-zinc-400">
-                        {metaConnection
-                          ? "Clique em Vincular campanhas para escolher quais são deste cliente."
-                          : "Conecte uma BM na aba Conexões primeiro."}
+                        {linkedCampaigns.length === 0
+                          ? metaConnection
+                            ? "Clique em Vincular campanhas para escolher quais são deste cliente."
+                            : "Conecte uma BM na aba Conexões primeiro."
+                          : "As campanhas estão vinculadas, mas ainda não houve sincronização. Rode Sincronizar na aba Conexões."}
                       </p>
-                    </div>
-                  ) : (
-                    <div
-                      className={clsx(
-                        "overflow-hidden rounded-2xl border shadow-sm",
-                        isDarkMode
-                          ? "border-zinc-800 bg-[#121212]"
-                          : "border-zinc-200 bg-white",
-                      )}
-                    >
-                      <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                        {linkedCampaigns.map((campaign) => (
-                          <li
-                            key={campaign.meta_campaign_id}
-                            className="flex items-center gap-3 px-4 py-3.5"
-                          >
-                            <Megaphone
-                              size={16}
-                              className="shrink-0 text-[#FF0636]"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-bold text-zinc-800 dark:text-zinc-100">
-                                {campaign.name}
-                              </p>
-                              <p className="mt-0.5 font-mono text-[10px] text-zinc-400">
-                                ID: {campaign.meta_campaign_id}
-                              </p>
-                            </div>
-                            {campaign.event_name ? (
-                              <Badge variant="blue">{campaign.event_name}</Badge>
-                            ) : (
-                              <span className="text-[11px] italic text-zinc-400">
-                                Sem evento
-                              </span>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
                     </div>
                   )}
                 </div>
