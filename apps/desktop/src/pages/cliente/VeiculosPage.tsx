@@ -905,12 +905,14 @@ export function VeiculosPage() {
           <>
             <Button
               variant="secondary"
+              size="lg"
               onClick={() => setIsVehicleModalOpen(false)}
               isDisabled={isResizingImages}
             >
               Cancelar
             </Button>
             <Button
+              size="lg"
               onClick={() => void handleSaveVehicle()}
               isDisabled={isResizingImages}
             >

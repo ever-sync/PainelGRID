@@ -251,7 +251,7 @@ export function EventTVQueuePage() {
 
     socket.on("vendor_called", (payload: { id: string; lead_name: string; vendor_name: string }) => {
       setVendorCallBanner(payload);
-      playChimeAndSpeak(payload.lead_name, payload.vendor_name);
+      announceLead(payload.lead_name, payload.vendor_name);
       setTimeout(() => {
         setVendorCallBanner(null);
       }, 12000); // Exibe por 12 segundos em destaque na TV
@@ -260,7 +260,7 @@ export function EventTVQueuePage() {
     return () => {
       socket.disconnect();
     };
-  }, [eventData?.event.participant_client_ids, playChimeAndSpeak]);
+  }, [eventData?.event.participant_client_ids, announceLead]);
 
   // ── Divide leads ───────────────────────────────────────────────────────────
   const checkedInLeads = useMemo(() => {

@@ -38,6 +38,7 @@ import {
 export type StoreItem = {
   id: string;
   brand: string;
+  cnpj?: string;
   name: string;
   street: string;
   number: string;
@@ -255,6 +256,7 @@ export function LojasPage() {
   // Form State
   const [formData, setFormData] = useState<{
     brand: string;
+    cnpj: string;
     name: string;
     street: string;
     number: string;
@@ -268,6 +270,7 @@ export function LojasPage() {
     instagram: string;
   }>({
     brand: "",
+    cnpj: "",
     name: "",
     street: "",
     number: "",

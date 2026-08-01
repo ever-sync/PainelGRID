@@ -55,6 +55,7 @@ import { connectRealtime } from "../services/realtime";
 import { resolveClientId } from "../utils/userContext";
 import { createAudioContext } from "../utils/audioContext";
 import { triggerHapticFeedback } from "../utils/haptics";
+import { CommandPalette } from "../components/shared/CommandPalette";
 
 interface AppLayoutProps {
   user: User;
@@ -270,6 +271,19 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
   );
   const [checkinMethod, setCheckinMethod] = useState<"qr" | "manual">("qr");
   const [checkinToken, setCheckinToken] = useState("");
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  // ── Atalho Global Cmd + K / Ctrl + K ─────────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // ── Listener Global de Chamada de Vendedor (Pop-up Vendedor) ───────────────
   const [vendorCallAlert, setVendorCallAlert] = useState<{
@@ -1983,6 +1997,13 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
           </div>
         </div>
       )}
+      {/* Command Palette (Busca Global Cmd+K) */}
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        isDarkMode={dashboardDark}
+        onToggleDarkMode={() => toggleDarkMode(!dashboardDark)}
+      />
     </div>
   );
 }
