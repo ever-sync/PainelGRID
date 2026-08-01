@@ -746,6 +746,23 @@ export function ClienteDetailPage() {
   const [initialCampaignIds, setInitialCampaignIds] = useState<string[]>([]);
   const [linkedCampaigns, setLinkedCampaigns] = useState<LinkedCampaign[]>([]);
 
+  const refreshLinkedCampaigns = useCallback(async () => {
+    const session = readStoredSession();
+    if (!resolvedId || !isUuid(resolvedId) || !session?.accessToken) return;
+
+    try {
+      setLinkedCampaigns(
+        await listLinkedCampaigns(resolvedId, session.accessToken),
+      );
+    } catch {
+      setLinkedCampaigns([]);
+    }
+  }, [resolvedId]);
+
+  useEffect(() => {
+    void refreshLinkedCampaigns();
+  }, [refreshLinkedCampaigns]);
+
   const availableBusinesses = useMemo(() => apiBusinesses, [apiBusinesses]);
   const [draftBusinessId, setDraftBusinessId] = useState("");
   const [draftAdAccountIds, setDraftAdAccountIds] = useState<string[]>([]);
@@ -1933,23 +1950,6 @@ export function ClienteDetailPage() {
     setIsSavingMeta(false);
     setIsMetaModalOpen(false);
   }
-
-  const refreshLinkedCampaigns = useCallback(async () => {
-    const session = readStoredSession();
-    if (!resolvedId || !isUuid(resolvedId) || !session?.accessToken) return;
-
-    try {
-      setLinkedCampaigns(
-        await listLinkedCampaigns(resolvedId, session.accessToken),
-      );
-    } catch {
-      setLinkedCampaigns([]);
-    }
-  }, [resolvedId]);
-
-  useEffect(() => {
-    void refreshLinkedCampaigns();
-  }, [refreshLinkedCampaigns]);
 
   async function handleOpenCampaignLink() {
     const clientId = id ?? "";
