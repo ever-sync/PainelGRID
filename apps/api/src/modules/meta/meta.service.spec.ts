@@ -29,6 +29,16 @@ describe('MetaService', () => {
     },
     metaDailyInsight: {
       aggregate: jest.fn(),
+      findMany: jest.fn(),
+    },
+    metaCampaign: {
+      findMany: jest.fn(),
+    },
+    metaAdSet: {
+      findMany: jest.fn(),
+    },
+    metaAd: {
+      findMany: jest.fn(),
     },
     event: {
       findUnique: jest.fn(),
@@ -42,6 +52,7 @@ describe('MetaService', () => {
       create: jest.fn(),
       update: jest.fn(),
       count: jest.fn(),
+      groupBy: jest.fn(),
     },
     lead: {
       findUnique: jest.fn(),
@@ -255,6 +266,70 @@ describe('MetaService', () => {
         meta_lead_id: 'meta-lead-1',
         meta_form_id: 'form-1',
       }),
+    });
+  });
+
+  describe('getCampaignsReport com filtros', () => {
+    const gestor = { sub: 'gestor-1', role: Role.GESTOR } as AuthenticatedUser;
+
+    beforeEach(() => {
+      prisma.client.findUnique.mockResolvedValue({ id: 'client-1', gestor_id: 'gestor-1' });
+      prisma.metaConnection.findFirst.mockResolvedValue({ id: 'conn-1', client_id: 'client-1' });
+      prisma.metaCampaign.findMany.mockResolvedValue([]);
+      prisma.metaAdSet.findMany.mockResolvedValue([]);
+      prisma.metaAd.findMany.mockResolvedValue([]);
+      prisma.metaDailyInsight.findMany.mockResolvedValue([]);
+      prisma.metaDailyInsight.aggregate.mockResolvedValue({
+        _min: { date: null },
+        _max: { date: null },
+      });
+      prisma.metaLeadImport.groupBy.mockResolvedValue([]);
+      prisma.metaCampaignAssignment.findMany.mockResolvedValue([]);
+    });
+
+    it('filtra os leads importados por `imported_at`, o campo real do modelo', async () => {
+      await service.getCampaignsReport(gestor, 'client-1', {
+        from: '2026-07-04',
+        to: '2026-08-02',
+      });
+
+      const [args] = prisma.metaLeadImport.groupBy.mock.calls[0] as [
+        { where: Record<string, unknown> },
+      ];
+      // `created_at` nao existe em MetaLeadImport e quebrava a query em runtime.
+      expect(args.where).not.toHaveProperty('created_at');
+      expect(args.where.imported_at).toEqual({
+        gte: new Date('2026-07-04T00:00:00.000Z'),
+        lte: new Date('2026-08-02T23:59:59.999Z'),
+      });
+    });
+
+    it('sem periodo, nao aplica recorte de data nos leads importados', async () => {
+      await service.getCampaignsReport(gestor, 'client-1', {});
+
+      const [args] = prisma.metaLeadImport.groupBy.mock.calls[0] as [
+        { where: Record<string, unknown> },
+      ];
+      expect(args.where).not.toHaveProperty('imported_at');
+    });
+
+    it('only_linked restringe as campanhas no banco, nao no front', async () => {
+      prisma.metaCampaignAssignment.findMany.mockResolvedValue([
+        { meta_campaign_id: 'campaign-1' },
+      ]);
+
+      await service.getCampaignsReport(gestor, 'client-1', {
+        only_linked: true,
+        status: 'ACTIVE',
+      });
+
+      const [args] = prisma.metaCampaign.findMany.mock.calls[0] as [
+        { where: Record<string, unknown> },
+      ];
+      expect(args.where).toMatchObject({
+        status: 'ACTIVE',
+        meta_campaign_id: { in: ['campaign-1'] },
+      });
     });
   });
 

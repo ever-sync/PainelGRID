@@ -929,6 +929,17 @@ export class MetaService implements OnModuleInit {
     }
     const hasDateFilter = Object.keys(dateFilter).length > 0;
 
+    // Tipado de proposito em vez de spread condicional: `{ ...(x ? {a} : {}) }`
+    // escapa da checagem de propriedade do TS, e foi assim que um `created_at`
+    // inexistente neste modelo passou pelo typecheck e so quebrou em producao.
+    const importWhere: Prisma.MetaLeadImportWhereInput = {
+      meta_connection_id: connection.id,
+      lead_id: { not: null },
+    };
+    if (hasDateFilter) {
+      importWhere.imported_at = dateFilter;
+    }
+
     // Filtro por vinculo no banco, e nao no front: sem isso a conta de anuncio
     // inteira trafega so para a tela descartar quase tudo.
     const linkedIds = query.only_linked
@@ -981,11 +992,7 @@ export class MetaService implements OnModuleInit {
       // exatamente o que se perdeu no caminho.
       this.db.metaLeadImport.groupBy({
         by: ['meta_campaign_id'],
-        where: {
-          meta_connection_id: connection.id,
-          lead_id: { not: null },
-          ...(hasDateFilter ? { created_at: dateFilter } : {}),
-        },
+        where: importWhere,
         _count: { _all: true },
       }),
     ]);
