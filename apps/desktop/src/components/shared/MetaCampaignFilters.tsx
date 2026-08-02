@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Columns3, Check } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -71,17 +72,54 @@ export function MetaCampaignFilters({
 }) {
   const [columnsOpen, setColumnsOpen] = useState(false);
   const columnsRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+
+  /**
+   * O menu vai para um portal no body porque o Card da aba usa
+   * `overflow-hidden` e o wrapper da tabela `overflow-x-auto`: em fluxo normal
+   * o dropdown era cortado e as ultimas opcoes ficavam inalcancaveis.
+   */
+  const positionMenu = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setMenuPos({
+      top: rect.bottom + 8,
+      right: Math.max(8, window.innerWidth - rect.right),
+    });
+  }, []);
 
   useEffect(() => {
     if (!columnsOpen) return;
+
+    positionMenu();
+
     const onClickOutside = (event: MouseEvent) => {
-      if (!columnsRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        !columnsRef.current?.contains(target) &&
+        !triggerRef.current?.contains(target)
+      ) {
         setColumnsOpen(false);
       }
     };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setColumnsOpen(false);
+    };
+
     document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [columnsOpen]);
+    document.addEventListener("keydown", onKey);
+    // `true` para capturar scroll de qualquer container, nao so o da janela.
+    window.addEventListener("scroll", positionMenu, true);
+    window.addEventListener("resize", positionMenu);
+
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", positionMenu, true);
+      window.removeEventListener("resize", positionMenu);
+    };
+  }, [columnsOpen, positionMenu]);
 
   const grouped = META_COLUMNS.reduce<Record<string, typeof META_COLUMNS>>(
     (acc, column) => {
@@ -168,8 +206,9 @@ export function MetaCampaignFilters({
           ))}
         </select>
 
-        <div className="relative ml-auto" ref={columnsRef}>
+        <div className="ml-auto">
           <button
+            ref={triggerRef}
             type="button"
             onClick={() => setColumnsOpen((open) => !open)}
             className={clsx(
@@ -183,10 +222,17 @@ export function MetaCampaignFilters({
             Colunas ({columnIds.length})
           </button>
 
-          {columnsOpen ? (
+          {columnsOpen
+            ? createPortal(
             <div
+              ref={columnsRef}
+              style={{
+                top: menuPos.top,
+                right: menuPos.right,
+                maxHeight: `calc(100vh - ${menuPos.top + 16}px)`,
+              }}
               className={clsx(
-                "absolute right-0 z-30 mt-2 max-h-80 w-64 overflow-y-auto rounded-2xl border p-2 shadow-xl",
+                "fixed z-[70] w-64 overflow-y-auto rounded-2xl border p-2 shadow-xl",
                 isDarkMode
                   ? "border-zinc-700 bg-[#121212]"
                   : "border-zinc-200 bg-white",
@@ -229,8 +275,10 @@ export function MetaCampaignFilters({
                   })}
                 </div>
               ))}
-            </div>
-          ) : null}
+            </div>,
+            document.body,
+          )
+            : null}
         </div>
       </div>
 
