@@ -6,6 +6,10 @@ O receptor global do n8n deve enviar os leads para:
 POST https://api.gpdevendas.app/api/integrations/v1/leads/facebook/auto
 ```
 
+O workflow termina nessa chamada. Vínculo ao evento e movimentação de CRM são
+responsabilidades da API, usando o mapeamento salvo no painel do gestor; não
+adicione IDs fixos ou chamadas complementares no n8n.
+
 ## Autenticacao
 
 Use um Header Auth do n8n, sem gravar o segredo diretamente no workflow:

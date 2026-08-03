@@ -12,7 +12,10 @@
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
-      "position": [0, 0],
+      "position": [
+        0,
+        0
+      ],
       "id": "35a6412e-a596-4cc1-a62a-febf07cda101",
       "name": "Webhook",
       "webhookId": "7e32c76f-12ed-4a1a-b328-4f643326b101"
@@ -23,7 +26,10 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [240, 0],
+      "position": [
+        240,
+        0
+      ],
       "id": "35a6412e-a596-4cc1-a62a-febf07cda102",
       "name": "Code in JavaScript"
     },
@@ -45,7 +51,10 @@
       },
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
-      "position": [480, 0],
+      "position": [
+        480,
+        0
+      ],
       "id": "35a6412e-a596-4cc1-a62a-febf07cda103",
       "name": "Respond to Webhook"
     }

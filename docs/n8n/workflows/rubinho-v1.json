@@ -1,6 +1,6 @@
 {
   "sourceWorkflowId": "MWIRTrZl44bVjTZW",
-  "sourceUpdatedAt": "2026-08-03T21:44:17.182Z",
+  "sourceUpdatedAt": "2026-08-03T22:48:34.568Z",
   "name": "Rubinho v1",
   "active": true,
   "nodes": [
@@ -15,7 +15,10 @@
       "name": "Redis6",
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
-      "position": [-2560, 1104],
+      "position": [
+        -2560,
+        1104
+      ],
       "credentials": {
         "redis": {
           "id": "<CREDENTIAL_ID>",
@@ -158,7 +161,10 @@
       "name": "Switch4",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
-      "position": [-3680, 960]
+      "position": [
+        -3680,
+        960
+      ]
     },
     {
       "parameters": {
@@ -178,7 +184,10 @@
       "name": "OpenAI2",
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1.6,
-      "position": [-3008, 1104],
+      "position": [
+        -3008,
+        1104
+      ],
       "credentials": {
         "openAiApi": {
           "id": "<CREDENTIAL_ID>",
@@ -197,7 +206,10 @@
       "name": "Text Memory",
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
-      "position": [-2560, 544],
+      "position": [
+        -2560,
+        544
+      ],
       "credentials": {
         "redis": {
           "id": "<CREDENTIAL_ID>",
@@ -216,7 +228,10 @@
       "name": "Audio Memory",
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
-      "position": [-2560, 912],
+      "position": [
+        -2560,
+        912
+      ],
       "credentials": {
         "redis": {
           "id": "<CREDENTIAL_ID>",
@@ -232,7 +247,10 @@
       "name": "Loop Over Items",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [528, 640]
+      "position": [
+        -32,
+        640
+      ]
     },
     {
       "parameters": {
@@ -245,7 +263,10 @@
       "name": "Split de Mensagem1",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
-      "position": [-6592, 1328]
+      "position": [
+        -6592,
+        1328
+      ]
     },
     {
       "parameters": {
@@ -263,7 +284,10 @@
       },
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-6592, 224],
+      "position": [
+        -6592,
+        224
+      ],
       "id": "3b01c281-0332-4114-81e3-fa451d2c2946",
       "name": "Edit Fields3"
     },
@@ -280,7 +304,10 @@
       "name": "Pega-Memoria-text-2",
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
-      "position": [-1888, 832],
+      "position": [
+        -1888,
+        832
+      ],
       "credentials": {
         "redis": {
           "id": "<CREDENTIAL_ID>",
@@ -296,7 +323,10 @@
       "name": "Espera para responder",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [-2112, 832],
+      "position": [
+        -2112,
+        832
+      ],
       "webhookId": "5cc56d19-f403-42a5-a95d-df7b9735a336"
     },
     {
@@ -327,7 +357,10 @@
       "name": "Compara Get Memory",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [-1664, 832]
+      "position": [
+        -1664,
+        832
+      ]
     },
     {
       "parameters": {
@@ -425,7 +458,10 @@
       "name": "Dados Unicos",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-6368, 592]
+      "position": [
+        -6368,
+        592
+      ]
     },
     {
       "parameters": {
@@ -449,7 +485,10 @@
       },
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-2784, 544],
+      "position": [
+        -2784,
+        544
+      ],
       "id": "9c6e20ee-272b-4de5-bc8a-6dff396821a5",
       "name": "Edit Fields1"
     },
@@ -471,7 +510,10 @@
       "name": "Extrair Dados",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-3456, 912]
+      "position": [
+        -3456,
+        912
+      ]
     },
     {
       "parameters": {
@@ -482,7 +524,10 @@
       },
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
-      "position": [-2336, 832],
+      "position": [
+        -2336,
+        832
+      ],
       "id": "4bf50a1b-2c6a-418f-b5e0-c28af2c85107",
       "name": "Pega-Memoria-text",
       "credentials": {
@@ -504,7 +549,10 @@
       "name": "OpenAI Whisper1",
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1.3,
-      "position": [-2784, 912],
+      "position": [
+        -2784,
+        912
+      ],
       "credentials": {
         "openAiApi": {
           "id": "<CREDENTIAL_ID>",
@@ -518,7 +566,10 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-6368, 224],
+      "position": [
+        -6368,
+        224
+      ],
       "id": "270a5201-3117-407d-9c66-f2042f43d6e5",
       "name": "Code in JavaScript"
     },
@@ -548,7 +599,10 @@
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [-5472, 832],
+      "position": [
+        -5472,
+        832
+      ],
       "id": "68fa2fe7-70cc-4c22-a248-6e413c7cb5a1",
       "name": "If"
     },
@@ -586,7 +640,10 @@
       },
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-5920, 832],
+      "position": [
+        -5920,
+        832
+      ],
       "id": "7eb55b75-1e2e-420c-b9bd-f257df2a78cc",
       "name": "EverSync"
     },
@@ -608,11 +665,16 @@
       "name": "mensagemcompleta1",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-1440, 832]
+      "position": [
+        -1440,
+        832
+      ]
     },
     {
       "parameters": {
         "url": "={{ $json.urlapi }}api/integrations/v1/leads",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -634,15 +696,16 @@
         "headerParameters": {
           "parameters": []
         },
-        "options": {},
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+        "options": {}
       },
       "id": "27a03243-efd6-4c8c-a44d-93d9740df769",
       "name": "Consultar se o lead existe",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-5696, 832],
+      "position": [
+        -5696,
+        832
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "<CREDENTIAL_ID>",
@@ -677,7 +740,10 @@
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [-6144, 592],
+      "position": [
+        -6144,
+        592
+      ],
       "id": "7bb9aff1-19fc-4d0a-93df-6ea508ef24ee",
       "name": "IA ou Humano?"
     },
@@ -708,7 +774,10 @@
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [-5920, 448],
+      "position": [
+        -5920,
+        448
+      ],
       "id": "1f0639eb-b951-4eda-a3e8-701027d3560d",
       "name": "IA ou Humano?1"
     },
@@ -716,6 +785,8 @@
       "parameters": {
         "method": "POST",
         "url": "=https://api.gpdevendas.app/api/agent/conversations/{{ $json.conversation_id }}/handoff",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -728,13 +799,14 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "{\n  \"reason\": \"Atendimento humano assumido\"\n}",
-        "options": {},
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
-      "position": [-4800, 448],
+      "position": [
+        -4800,
+        448
+      ],
       "id": "c18821ad-2db0-45e6-92ac-744afa108140",
       "name": "HTTP Request2",
       "credentials": {
@@ -747,6 +819,8 @@
     {
       "parameters": {
         "url": "https://api.gpdevendas.app/api/integrations/v1/leads",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -768,15 +842,16 @@
         "headerParameters": {
           "parameters": []
         },
-        "options": {},
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+        "options": {}
       },
       "id": "5ae2f8d2-b3db-409f-8ab2-6784817f0cae",
       "name": "Consultar se o lead existe1",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-5024, 448],
+      "position": [
+        -5024,
+        448
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "<CREDENTIAL_ID>",
@@ -902,7 +977,10 @@
       },
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-5472, 640],
+      "position": [
+        -5472,
+        640
+      ],
       "id": "2be10a67-f37d-44b0-a2a1-c0a36dbac615",
       "name": "Ford Sonnervig"
     },
@@ -910,7 +988,10 @@
       "parameters": {},
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
-      "position": [-5248, 448],
+      "position": [
+        -5248,
+        448
+      ],
       "id": "27a26840-06d9-46a1-b1fe-fd2c0931a8c8",
       "name": "Merge"
     },
@@ -973,7 +1054,10 @@
       },
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
-      "position": [-5696, 448],
+      "position": [
+        -5696,
+        448
+      ],
       "id": "34a78b77-eeb5-4e9c-8209-c790333313e7",
       "name": "Switch5"
     },
@@ -1005,24 +1089,30 @@
       },
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-5472, 448],
+      "position": [
+        -5472,
+        448
+      ],
       "id": "451999da-9c78-453d-95d2-92ecead4aff5",
       "name": "EverSync1"
     },
     {
       "parameters": {
         "url": "={{ $('EverSync').item.json.urlapi }}api/integrations/v1/events/{{ $json.items[0].event_id }}?client_id={{ $json.items[0].client_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": []
         },
-        "options": {},
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
-      "position": [-4128, 1008],
+      "position": [
+        -4128,
+        1008
+      ],
       "id": "3084c69a-7e28-4d1d-95a4-fa018f4658c9",
       "name": "Consultar - EVENTO",
       "credentials": {
@@ -1180,7 +1270,10 @@
       },
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-3904, 1008],
+      "position": [
+        -3904,
+        1008
+      ],
       "id": "02ce5cf8-0357-4a9a-a469-1c16ae1e8970",
       "name": "RESUMO DO LEAD/EVENTO/RUBINHO"
     },
@@ -1194,7 +1287,10 @@
       },
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
-      "position": [752, 640],
+      "position": [
+        192,
+        640
+      ],
       "id": "0faec567-f584-4ba6-a942-accb000f752c",
       "name": "Send message and wait for response",
       "webhookId": "37de6fb4-cee7-43a7-adcf-c58463861e19",
@@ -1315,7 +1411,10 @@
       "name": "Switch",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
-      "position": [304, 800]
+      "position": [
+        -256,
+        800
+      ]
     },
     {
       "parameters": {
@@ -1325,7 +1424,10 @@
       },
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
-      "position": [-3232, 912],
+      "position": [
+        -3232,
+        912
+      ],
       "id": "847a3a79-fe2e-41f4-83af-e5e3361b3718",
       "name": "Download media",
       "webhookId": "73919f83-90f5-440d-bd6c-23eebf190f1a",
@@ -1339,17 +1441,20 @@
     {
       "parameters": {
         "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": []
         },
-        "options": {},
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [-3008, 912],
+      "position": [
+        -3008,
+        912
+      ],
       "id": "f9959f14-347f-4064-b04b-0a9f2e193d83",
       "name": "HTTP Request",
       "credentials": {
@@ -1371,7 +1476,10 @@
       },
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
-      "position": [1200, 832],
+      "position": [
+        640,
+        832
+      ],
       "id": "a104e291-0f5b-45a7-b9fa-da13927df8e6",
       "name": "Send message and wait for response1",
       "webhookId": "37de6fb4-cee7-43a7-adcf-c58463861e19",
@@ -1388,7 +1496,10 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [752, 832],
+      "position": [
+        192,
+        832
+      ],
       "id": "19279e00-7115-4fc8-b1ed-eb7dbd2c90d8",
       "name": "Code in JavaScript1"
     },
@@ -1400,7 +1511,10 @@
       },
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
-      "position": [976, 832],
+      "position": [
+        416,
+        832
+      ],
       "id": "e35d0ba8-3120-4495-8444-8416a578bc8a",
       "name": "Upload media",
       "webhookId": "d54d60cd-a435-4b5a-abed-8edf864a330c",
@@ -1420,7 +1534,10 @@
       },
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 2.3,
-      "position": [528, 832],
+      "position": [
+        -32,
+        832
+      ],
       "id": "5dba637f-9c1f-4dcb-a78b-541546625b3e",
       "name": "Generate audio",
       "credentials": {
@@ -1438,7 +1555,10 @@
       },
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
-      "position": [-3456, 1104],
+      "position": [
+        -3456,
+        1104
+      ],
       "id": "bea46f2f-e567-4da3-82f0-8d91601582b3",
       "name": "Download media1",
       "webhookId": "73919f83-90f5-440d-bd6c-23eebf190f1a",
@@ -1452,17 +1572,20 @@
     {
       "parameters": {
         "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": []
         },
-        "options": {},
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [-3232, 1104],
+      "position": [
+        -3232,
+        1104
+      ],
       "id": "ceab746f-4fe1-4095-a5be-7a0316fe62cb",
       "name": "HTTP Request1",
       "credentials": {
@@ -1488,7 +1611,10 @@
       },
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-2784, 1104],
+      "position": [
+        -2784,
+        1104
+      ],
       "id": "eea9179e-ee4e-44c4-a063-839a83cb9277",
       "name": "Edit Fields"
     },
@@ -1513,7 +1639,10 @@
       },
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.2,
-      "position": [-6592, 1552],
+      "position": [
+        -6592,
+        1552
+      ],
       "id": "d8d08472-9948-4b32-8c0b-5901e11470fa",
       "name": "QRCODE"
     },
@@ -1521,6 +1650,8 @@
       "parameters": {
         "method": "POST",
         "url": "={{ $('EverSync').item.json.urlapi }}api/integrations/v1/leads/{{ $json.id }}/crm/move",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -1533,15 +1664,16 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"pipeline_code\": \"PL_{{ $json.client_id.replace(/-/g, '').toUpperCase().slice(0, 16) }}\",\n  \"stage_code\": \"{{ $json.client_id.replace(/-/g, '').toUpperCase().slice(0, 16) }}_EM_CONTATO\"\n}",
-        "options": {},
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+        "options": {}
       },
       "id": "72ba2736-dbc4-4a16-a65e-33196b9a4143",
       "name": "ETAPA - EM CONTATO",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-5024, 960],
+      "position": [
+        -5024,
+        960
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "<CREDENTIAL_ID>",
@@ -1580,7 +1712,10 @@
       "name": "Consultar - ETAPA3",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-6368, 1552]
+      "position": [
+        -6368,
+        1552
+      ]
     },
     {
       "parameters": {
@@ -1589,7 +1724,10 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [-6144, 1552],
+      "position": [
+        -6144,
+        1552
+      ],
       "id": "0c5b3382-3758-464c-adef-e695be19a5aa",
       "name": "HTTP Request3"
     },
@@ -1606,7 +1744,10 @@
       },
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
-      "position": [-5920, 1552],
+      "position": [
+        -5920,
+        1552
+      ],
       "id": "60da32aa-1f3a-4af9-92b7-973a04101882",
       "name": "enviar qrcode",
       "webhookId": "37de6fb4-cee7-43a7-adcf-c58463861e19",
@@ -1619,12 +1760,17 @@
     },
     {
       "parameters": {
-        "updates": ["messages"],
+        "updates": [
+          "messages"
+        ],
         "options": {}
       },
       "type": "n8n-nodes-base.whatsAppTrigger",
       "typeVersion": 1,
-      "position": [-6592, 592],
+      "position": [
+        -6592,
+        592
+      ],
       "id": "9f2e15ef-5aaa-4a0f-995e-5f2d49e620fb",
       "name": "WhatsApp Trigger",
       "webhookId": "1cf82714-56d5-492f-9ca3-ffcb2950e213",
@@ -1642,7 +1788,10 @@
       },
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
-      "position": [-1216, 832],
+      "position": [
+        -1216,
+        832
+      ],
       "id": "a60c9aff-723e-4500-a856-ab6829a75202",
       "name": "Redis",
       "credentials": {
@@ -1662,7 +1811,10 @@
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
-      "position": [-288, 832],
+      "position": [
+        -592,
+        832
+      ],
       "id": "2c1036a5-08e1-4bba-b9a5-1c300a237cc1",
       "name": "AI Agent1"
     },
@@ -1684,7 +1836,10 @@
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.3,
-      "position": [-544, 1056],
+      "position": [
+        -848,
+        1056
+      ],
       "id": "f5edf8c5-daf5-4b89-82fe-d4156176ab9f",
       "name": "OpenAI Chat Model",
       "notesInFlow": false,
@@ -1721,7 +1876,10 @@
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [-4576, 832],
+      "position": [
+        -4576,
+        832
+      ],
       "id": "708a7c85-81cc-4b43-b8d4-187e71ba5b3f",
       "name": "If1"
     },
@@ -1734,7 +1892,10 @@
       },
       "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
       "typeVersion": 1.4,
-      "position": [-416, 1056],
+      "position": [
+        -720,
+        1056
+      ],
       "id": "6bb1a9d1-28c7-4849-bd49-696344a91c99",
       "name": "Postgres Chat Memory",
       "credentials": {
@@ -1749,6 +1910,8 @@
         "toolDescription": "Sufixo da etapa destino no funil. Valores: PRESENCA_AGENDADA, PRESENCA_CANCELADA, PRESENCA_REAGENDADA",
         "method": "POST",
         "url": "=https://api.gpdevendas.app/api/integrations/v1/leads/{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}/crm/move-by-suffix",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": []
@@ -1758,17 +1921,18 @@
           "parameters": [
             {
               "name": "stage_suffix",
-              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', ``, 'string') }}"
+              "value": "={{ $fromAI('parameters0_Value', ``, 'string') }}"
             }
           ]
         },
-        "options": {},
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.3,
-      "position": [-288, 1056],
+      "position": [
+        -592,
+        1056
+      ],
       "id": "48dce849-be3f-47fe-90f8-ca855f16c8c1",
       "name": "mover_lead_crm",
       "credentials": {
@@ -1783,6 +1947,8 @@
         "toolDescription": "Use para salvar Nome, Sobrenome, Placa do veículo, Acompanhantes e data da visita",
         "method": "PATCH",
         "url": "=https://api.gpdevendas.app/api/integrations/v1/leads/{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": []
@@ -1816,17 +1982,18 @@
             },
             {
               "name": "vehicle_year",
-              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters6_Value', ``, 'string') }}"
+              "value": "={{ $fromAI('parameters6_Value', ``, 'string') }}"
             }
           ]
         },
-        "options": {},
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.4,
-      "position": [-160, 1056],
+      "position": [
+        -464,
+        1056
+      ],
       "id": "011c172f-681a-46d0-bac4-8ac714e759aa",
       "name": "atualizar_dados_lead",
       "credentials": {
@@ -1841,6 +2008,8 @@
         "toolDescription": "Atualiza o status do lead. Quando mudar para confirmed envia o QR Code de acesso automaticamente por WhatsApp. Valores: pending, scheduled, confirmed, cancelled.",
         "method": "PATCH",
         "url": "=https://api.gpdevendas.app/api/integrations/v1/leads/{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": []
@@ -1850,17 +2019,18 @@
           "parameters": [
             {
               "name": "confirmation_status",
-              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', ``, 'string') }}"
+              "value": "={{ $fromAI('parameters0_Value', ``, 'string') }}"
             }
           ]
         },
-        "options": {},
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.3,
-      "position": [-32, 1056],
+      "position": [
+        -336,
+        1056
+      ],
       "id": "fc344ccf-38c2-4ddc-97b1-85c8d1d0a21d",
       "name": "atualizar_status_lead",
       "credentials": {
@@ -1886,7 +2056,10 @@
       },
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-992, 832],
+      "position": [
+        -992,
+        832
+      ],
       "id": "129a0aed-1eca-4302-8c9f-cc64fc8d2589",
       "name": "Edit Fields2"
     },
@@ -1900,7 +2073,10 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [-768, 832],
+      "position": [
+        -768,
+        832
+      ],
       "id": "e8509581-7f2b-4812-81e2-1b1bd76b891c",
       "name": "Execute a SQL query",
       "credentials": {
@@ -1945,7 +2121,10 @@
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [-4352, 816],
+      "position": [
+        -4352,
+        816
+      ],
       "id": "81373b86-4a1f-47da-a2c2-36bedd1963da",
       "name": "If2"
     },
@@ -1953,6 +2132,8 @@
       "parameters": {
         "method": "POST",
         "url": "={{ $('EverSync').item.json.urlapi }}api/integrations/v1/leads/{{ $json.items[0].id }}/crm/move-by-suffix",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -1965,15 +2146,16 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"stage_suffix\": \"AGENDADOS_CONFIRMADOS\"\n}",
-        "options": {},
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+        "options": {}
       },
       "id": "ff93aab7-b666-4fe3-b1a5-8d03ed4d67ee",
       "name": "ETAPA - EM CONTATO1",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-4128, 768],
+      "position": [
+        -4128,
+        768
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "<CREDENTIAL_ID>",
@@ -2045,7 +2227,10 @@
       },
       "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
       "typeVersion": 2.2,
-      "position": [96, 1056],
+      "position": [
+        -208,
+        1056
+      ],
       "id": "dd8489e4-884c-4cae-aaca-56df4529d516",
       "name": "enviar_qrcode"
     },
@@ -2059,7 +2244,10 @@
       },
       "type": "n8n-nodes-base.whatsApp",
       "typeVersion": 1.1,
-      "position": [-3680, 768],
+      "position": [
+        -3680,
+        768
+      ],
       "id": "98f980e7-323a-48d0-98e2-64c411c8c2ec",
       "name": "Send message and wait for response2",
       "webhookId": "37de6fb4-cee7-43a7-adcf-c58463861e19",
@@ -2073,17 +2261,20 @@
     {
       "parameters": {
         "url": "={{ $('EverSync').item.json.urlapi }}api/integrations/v1/events/{{ $('CONSULTAR ETAPA').item.json.items[0].event_id }}?client_id={{ $('CONSULTAR ETAPA').item.json.items[0].client_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": []
         },
-        "options": {},
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
-      "position": [-3904, 768],
+      "position": [
+        -3904,
+        768
+      ],
       "id": "fa670675-ca4f-4288-b5a4-59bfa4e504ea",
       "name": "Consultar - EVENTO1",
       "credentials": {
@@ -2097,6 +2288,8 @@
       "parameters": {
         "method": "POST",
         "url": "={{ $('EverSync').item.json.urlapi }}api/integrations/v1/leads ",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -2109,15 +2302,16 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"client_id\": \"{{ $('EverSync').item.json.id_cliente }}\",\n  \"name\": \"{{ $('Dados Unicos').item.json.nome }}\",\n  \"phone\": \"{{ $('Dados Unicos').item.json['telefone-cliente-gp'] }}\",\n  \"source\": \"facebook_ads\",\n  \"event_interest_id\": \"{{ $('EverSync').item.json.id_evento }}\"\n}",
-        "options": {},
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+        "options": {}
       },
       "id": "a3178f57-adf8-433a-9f63-fb889a577536",
       "name": "CRIAR LEAD",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-5248, 960],
+      "position": [
+        -5248,
+        960
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "<CREDENTIAL_ID>",
@@ -2128,6 +2322,8 @@
     {
       "parameters": {
         "url": "={{ $('EverSync').item.json.urlapi }}api/integrations/v1/leads",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -2145,15 +2341,16 @@
         "headerParameters": {
           "parameters": []
         },
-        "options": {},
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+        "options": {}
       },
       "id": "96f310c1-ad51-4237-9d5c-9941d6ffed94",
       "name": "CONSULTAR ETAPA",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-4800, 832],
+      "position": [
+        -4800,
+        832
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "<CREDENTIAL_ID>",
@@ -2172,7 +2369,10 @@
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
-      "position": [-6592, 1776],
+      "position": [
+        -6592,
+        1776
+      ],
       "id": "a12788c9-0cad-4792-8b1d-c6cf7eccc87e",
       "name": "VERSAO RAPHAEL"
     },
@@ -2184,7 +2384,10 @@
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
-      "position": [-6592, -224],
+      "position": [
+        -6592,
+        -224
+      ],
       "id": "f381f7fe-db1a-49e6-b754-0ebb41b85329",
       "name": "Webhook",
       "webhookId": "018b703c-2d17-4b1e-b54e-79fd741172a3"
@@ -2193,6 +2396,8 @@
       "parameters": {
         "method": "POST",
         "url": "https://graph.facebook.com/v21.0/1158769897321849/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -2213,13 +2418,14 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"<PHONE_REDACTED>\",\n  \"type\": \"template\",\n  \"template\": {\n    \"name\": \"atualizacao_credencial\",\n    \"language\": { \"code\": \"pt_BR\" },\n    \"components\": [\n      {\n        \"type\": \"body\",\n        \"parameters\": [\n          { \"type\": \"text\", \"text\": \"Raphael\" },\n          { \"type\": \"text\", \"text\": \"Grand Prix de Vendas\" }\n        ]\n      }\n    ]\n  }\n}",
-        "options": {},
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
+        "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [-6592, 0],
+      "position": [
+        -6592,
+        0
+      ],
       "id": "88f8edbf-02ee-4b3e-a95f-4974e81af2a9",
       "name": "Enviar Template",
       "credentials": {
@@ -2320,7 +2526,9 @@
       ]
     },
     "Split de Mensagem1": {
-      "main": [[]]
+      "main": [
+        []
+      ]
     },
     "Edit Fields3": {
       "main": [
@@ -2422,7 +2630,9 @@
       ]
     },
     "Code in JavaScript": {
-      "main": [[]]
+      "main": [
+        []
+      ]
     },
     "If": {
       "main": [

@@ -1,22 +1,41 @@
 {
   "sourceWorkflowId": "xrF95mmbiH38K1kS",
-  "sourceUpdatedAt": "2026-08-03T22:09:33.559Z",
+  "sourceUpdatedAt": "2026-08-03T23:00:24.465Z",
   "name": "Form - EVENTO",
   "active": true,
   "nodes": [
     {
       "parameters": {
-        "jsCode": "const body = $json.body ?? $json;\n\nconst change = body.entry?.[0]?.changes?.[0];\n\nif (!change || change.field !== 'leadgen') {\n  return [];\n}\n\nconst value = change.value ?? {};\n\nreturn [\n  {\n    json: {\n      leadgen_id: value.leadgen_id,\n      page_id: value.page_id,\n      form_id: value.form_id,\n      ad_id: value.ad_id,\n      adgroup_id: value.adgroup_id,\n      created_time: value.created_time,\n      payload_original: body\n    }\n  }\n];"
+        "httpMethod": "POST",
+        "path": "meta-leads",
+        "options": {}
       },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [-1712, -304],
-      "id": "554c7667-90ac-4446-ac3f-5af784ba6260",
-      "name": "Code in JavaScript1"
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -960,
+        0
+      ],
+      "id": "74b93160-bc88-47af-9d32-8ec2e1770818",
+      "name": "RECEBER LEAD META",
+      "webhookId": "ded2b859-a6d3-4da5-b41f-94e43ea8c1c5"
     },
     {
       "parameters": {
-        "url": "=https://graph.facebook.com/v25.0/{{ $json.leadgen_id }}",
+        "jsCode": "const body = $json.body ?? $json;\nconst leadgenEvents = (body.entry ?? [])\n  .flatMap((entry) => entry.changes ?? [])\n  .filter((change) => change.field === \"leadgen\")\n  .map((change) => change.value)\n  .filter((value) => value?.leadgen_id);\n\nreturn leadgenEvents.map((leadgen) => ({\n  json: {\n    leadgen_id: String(leadgen.leadgen_id),\n    page_id: leadgen.page_id ? String(leadgen.page_id) : null,\n    form_id: leadgen.form_id ? String(leadgen.form_id) : null,\n    ad_id: leadgen.ad_id ? String(leadgen.ad_id) : null,\n    adgroup_id: leadgen.adgroup_id ? String(leadgen.adgroup_id) : null,\n    created_time: leadgen.created_time ?? null,\n    payload_original: body,\n  },\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        0
+      ],
+      "id": "554c7667-90ac-4446-ac3f-5af784ba6260",
+      "name": "EXTRAIR EVENTO LEADGEN"
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v26.0/{{ $json.leadgen_id }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -32,9 +51,12 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [-1504, -304],
+      "position": [
+        -480,
+        0
+      ],
       "id": "2655ee48-8b46-449c-96a8-3b10f2cf1d5d",
-      "name": "HTTP Request",
+      "name": "BUSCAR DADOS DO LEAD NA META",
       "credentials": {
         "httpHeaderAuth": {
           "id": "<CREDENTIAL_ID>",
@@ -44,18 +66,34 @@
     },
     {
       "parameters": {
-        "jsCode": "const fieldData = $json.field_data || [];\n\nconst todosOsCampos = {};\nfor (const field of fieldData) {\n  todosOsCampos[field.name] = field.values?.[0] ?? null;\n}\n\nconst normalizeKey = (value) => String(value ?? \"\")\n  .normalize(\"NFD\")\n  .replace(/[\\u0300-\\u036f]/g, \"\")\n  .replace(/:\\s*$/, \"\")\n  .trim()\n  .toLowerCase();\n\nconst getFieldValue = (...aliases) => {\n  const normalizedAliases = aliases.map(normalizeKey);\n  const exact = fieldData.find(field => normalizedAliases.includes(normalizeKey(field.name)));\n  if (exact) return exact.values?.[0] ?? null;\n  const partial = fieldData.find(field => normalizedAliases.some(alias => normalizeKey(field.name).includes(alias)));\n  return partial?.values?.[0] ?? null;\n};\n\nreturn {\n  lead_id: $json.id,\n  nome: getFieldValue(\"full_name\", \"nome_completo\"),\n  email: getFieldValue(\"email\"),\n  telefone: getFieldValue(\"phone_number\", \"telefone\"),\n  preferencia_atendimento: getFieldValue(\"prefere_ser_atendido_por\", \"gostaria_de_confirmar_sua_credencial_por\"),\n  formulario_id: $json.form_id,\n  anuncio_id: $json.ad_id,\n  anuncio: $json.ad_name,\n  campanha_id: $json.campaign_id,\n  campanha: $json.campaign_name,\n  criado_em: $json.created_time,\n  origem: \"facebook_lead_ads\",\n  todos_os_campos: todosOsCampos\n};"
+        "jsCode": "const fieldData = Array.isArray($json.field_data) ? $json.field_data : [];\nconst normalize = (value) => String(value ?? \"\")\n  .normalize(\"NFD\")\n  .replace(/[\\u0300-\\u036f]/g, \"\")\n  .replace(/:\\s*$/, \"\")\n  .trim()\n  .toLowerCase();\n\nconst allFields = {};\nfor (const field of fieldData) {\n  allFields[field.name] = field.values?.[0] ?? null;\n}\n\nconst getField = (...aliases) => {\n  const wanted = aliases.map(normalize);\n  const exact = fieldData.find((field) => wanted.includes(normalize(field.name)));\n  if (exact) return exact.values?.[0] ?? null;\n  const partial = fieldData.find((field) =>\n    wanted.some((alias) => normalize(field.name).includes(alias)),\n  );\n  return partial?.values?.[0] ?? null;\n};\n\nconst rawChannel = getField(\n  \"prefere_ser_atendido_por\",\n  \"preferencia_atendimento\",\n  \"gostaria_de_confirmar_sua_credencial_por\",\n);\nconst normalizedChannel = normalize(rawChannel);\nconst preferredChannel = normalizedChannel.includes(\"whatsapp\")\n  ? \"whatsapp\"\n  : normalizedChannel.includes(\"ligacao\") || normalizedChannel.includes(\"telefone\")\n    ? \"ligacao\"\n    : rawChannel;\nconst fullName = getField(\"full_name\", \"nome_completo\", \"nome\")\n  ?? [getField(\"first_name\", \"primeiro_nome\"), getField(\"last_name\", \"sobrenome\")]\n    .filter(Boolean)\n    .join(\" \")\n    .trim();\n\nreturn {\n  lead_id: String($json.id ?? \"\"),\n  nome: fullName,\n  email: getField(\"email\"),\n  telefone: getField(\"phone_number\", \"telefone\", \"celular\"),\n  preferencia_atendimento: preferredChannel,\n  formulario_id: String($json.form_id ?? \"\"),\n  anuncio_id: $json.ad_id ? String($json.ad_id) : null,\n  anuncio: $json.ad_name ?? null,\n  campanha_id: $json.campaign_id ? String($json.campaign_id) : null,\n  campanha: $json.campaign_name ?? null,\n  criado_em: $json.created_time ?? null,\n  origem: \"facebook_lead_ads\",\n  todos_os_campos: allFields,\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-1296, -304],
+      "position": [
+        -240,
+        0
+      ],
       "id": "bafe6133-126f-4c97-be02-0936822d57bd",
-      "name": "Code in JavaScript2"
+      "name": "MAPEAR CAMPOS DO LEAD"
+    },
+    {
+      "parameters": {
+        "jsCode": "const required = {\n  lead_id: $json.lead_id,\n  formulario_id: $json.formulario_id,\n  nome: $json.nome,\n};\nconst missing = Object.entries(required)\n  .filter(([, value]) => !String(value ?? \"\").trim())\n  .map(([key]) => key);\n\nif (missing.length > 0) {\n  throw new Error(`Payload Meta incompleto: ${missing.join(\", \")}`);\n}\n\nif (!$json.telefone && !$json.email) {\n  throw new Error(\"Payload Meta sem telefone e sem email\");\n}\n\nreturn $json;"
+      },
+      "id": "6d1cb3ab-6062-4f20-b3df-838c74a53802",
+      "name": "VALIDAR PAYLOAD DO LEAD",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.gpdevendas.app/api/integrations/v1/leads/facebook",
+        "url": "https://api.gpdevendas.app/api/integrations/v1/leads/facebook/auto",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -69,461 +107,75 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ [$(\"Code in JavaScript2\").item.json] }}",
+        "jsonBody": "={{ [$(\"VALIDAR PAYLOAD DO LEAD\").item.json] }}",
         "options": {}
       },
       "id": "9c069ab5-290b-4ddf-a3d6-9981681da869",
-      "name": "CRIAR LEAD - GPDEVENDAS1",
+      "name": "IMPORTAR LEAD - ROTEAMENTO AUTOMATICO",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-656, -304],
+      "position": [
+        240,
+        0
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "<CREDENTIAL_ID>",
-          "name": "PainelGRID - Integration Key"
+          "name": "PainelGRID - Meta Lead Ingestion"
         }
       }
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://graph.facebook.com/v21.0/1158769897321849/messages",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "fields",
-              "value": "name,language,status"
-            },
-            {
-              "name": "limit",
-              "value": "50"
-            }
-          ]
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": []
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"<PHONE_REDACTED>\",\n  \"type\": \"template\",\n  \"template\": {\n    \"name\": \"atualizacao_credencial\",\n    \"language\": { \"code\": \"pt_BR\" },\n    \"components\": [\n      {\n        \"type\": \"body\",\n        \"parameters\": [\n          { \"type\": \"text\", \"text\": \"{{ $('CRIAR LEAD - GPDEVENDAS1').item.json.items[0].name }}\" },\n          { \"type\": \"text\", \"text\": \"{{ $('VINCULAR EVENTO E ETAPA - GPDEVENDAS').item.json.event_interest_name }}\" }\n        ]\n      }\n    ]\n  }\n}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [176, -304],
-      "id": "fe59fc07-31b9-495f-a992-8706106a664f",
-      "name": "Enviar Template",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "<CREDENTIAL_ID>",
-          "name": "PainelGRID - WhatsApp Cloud API"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "content": "# VALIDAR WEBHOOK - PAGE FACEBOOK (FORMS)\n",
-        "height": 240,
-        "width": 672
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "position": [-1968, 32],
-      "typeVersion": 1,
-      "id": "7dbc43cc-a214-474c-a3de-e0ba4c144d27",
-      "name": "Sticky Note"
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "849d8ce3-fc0d-49e8-9557-cca710706d38",
-              "name": "id_cliente",
-              "value": "99640561-bdb7-4bfb-9236-f27ecaedf538",
-              "type": "string"
-            },
-            {
-              "id": "53d7cde1-5109-487d-8a61-af4e56cd8d9d",
-              "name": "id_evento",
-              "value": "20bb5e36-1bbb-4f4e-956f-93e34969f2de",
-              "type": "string"
-            },
-            {
-              "id": "a84ebc79-a5a9-434c-a60b-41bd66d59bf1",
-              "name": "id_crm",
-              "value": "PL_99640561BDB74BFB",
-              "type": "string"
-            },
-            {
-              "id": "8d0c236c-4ee8-4faa-800d-45b64ef34b90",
-              "name": "urlapi",
-              "value": "https://api.gpdevendas.app/",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [-864, -304],
-      "id": "00eff214-5566-47cb-a484-06b3e7e6617f",
-      "name": "EverSync"
-    },
-    {
-      "parameters": {
-        "method": "PATCH",
-        "url": "=https://api.gpdevendas.app/api/integrations/v1/leads/{{ $json.items[0].id }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"email\": \"{{ $(\"Code in JavaScript2\").item.json.email }}\",\n  \"event_interest_id\": \"20bb5e36-1bbb-4f4e-956f-93e34969f2de\"\n}",
-        "options": {}
-      },
-      "id": "f47f46fd-c80a-46ac-a11e-226d8cf6db96",
-      "name": "VINCULAR EVENTO E ETAPA - GPDEVENDAS",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [-448, -304],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "<CREDENTIAL_ID>",
-          "name": "PainelGRID - Integration Key"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "const formId = String($json.formulario_id ?? \"\").trim();\nif (!formId) {\n  throw new Error(\"Payload Meta sem formulario_id\");\n}\n\n// A API valida dinamicamente se este formulario esta selecionado no cliente\n// autenticado pela chave de integracao. Nao mantenha IDs fixos neste node.\nreturn { ...$json, formulario_id: formId };"
-      },
-      "id": "6d1cb3ab-6062-4f20-b3df-838c74a53802",
-      "name": "VALIDAR FORMULARIO - GPDEVENDAS",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [-1072, -304]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "const canal = String($(\"Code in JavaScript2\").item.json.preferencia_atendimento ?? \"\")\n  .normalize(\"NFD\")\n  .replace(/[\\u0300-\\u036f]/g, \"\")\n  .trim()\n  .toLowerCase();\n\nlet stageCode;\nif (canal.includes(\"ligacao\") || canal.includes(\"telefone\")) {\n  stageCode = \"99640561BDB74BFB_LIGACAO\";\n} else if (canal.includes(\"whatsapp\")) {\n  stageCode = \"99640561BDB74BFB_TENTATIVA_CONTATO\";\n} else {\n  throw new Error(`Canal de atendimento invalido: ${canal || \"vazio\"}`);\n}\n\nreturn { ...$json, canal_normalizado: canal, stage_code_destino: stageCode };"
-      },
-      "id": "95b4b364-11f2-4753-a8b3-87754188f3e1",
-      "name": "MAPEAR CANAL PARA ETAPA - GPDEVENDAS",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [-240, -304]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=https://api.gpdevendas.app/api/integrations/v1/leads/{{ $json.id }}/crm/move",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"pipeline_code\": \"PL_99640561BDB74BFB\",\n  \"stage_code\": \"{{ $json.stage_code_destino }}\",\n  \"notes\": \"Roteamento automatico pelo canal escolhido no formulario Meta\",\n  \"source\": \"facebook_lead_ads\",\n  \"force\": true\n}",
-        "options": {}
-      },
-      "id": "34acda86-87c4-49c5-863e-88a63b58e87b",
-      "name": "MOVER ETAPA - GPDEVENDAS",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [-32, -304],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "<CREDENTIAL_ID>",
-          "name": "PainelGRID - Integration Key"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "url": "https://graph.facebook.com/me/accounts",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": []
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "{\n    \"data\": [\n      {\n        \"id\": \"108387448777036\",\n        \"name\": \"Original VW\",\n        \"access_token\": \"EAA...\"\n      }\n    ]\n  }",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [-1200, 80],
-      "id": "ea1f9a66-3aae-4382-8ea5-d91154ba86df",
-      "name": "Encontrar TOKEN - PAGINAS",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "<CREDENTIAL_ID>",
-          "name": "PainelGRID - Meta Account Discovery"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "url": "=https://graph.facebook.com/108387448777036/leadgen_forms",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "=Authorization",
-              "value": "<CREDENTIAL_REQUIRED>"
-            }
-          ]
-        },
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "fields",
-              "value": "id,name,status,created_time"
-            },
-            {
-              "name": "limit",
-              "value": "100"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "b3b78c2a-36d7-4012-85a8-d43a87a192dd",
-      "name": "PEGAR FORMULARIO",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [-976, 80]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://graph.facebook.com/v23.0/108387448777036/subscribed_apps",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "subscribed_fields",
-              "value": "leadgen"
-            }
-          ]
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "={{ 'Bearer ' + $('Encontrar TOKEN - PAGINAS').item.json.data.find(pagina => pagina.id === '108387448777036').access_token }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [-768, 80],
-      "id": "ff68d9fc-772a-4622-bfb0-763dd174b91e",
-      "name": "HTTP Request1"
-    },
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "meta-leads",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
-      "position": [-1920, -304],
-      "id": "74b93160-bc88-47af-9d32-8ec2e1770818",
-      "name": "Webhook1",
-      "webhookId": "ded2b859-a6d3-4da5-b41f-94e43ea8c1c5"
-    },
-    {
-      "parameters": {
-        "url": "https://graph.facebook.com/v23.0/108387448777036/subscribed_apps",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": []
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "={{ 'Bearer ' + $('Encontrar TOKEN - PAGINAS').item.json.data.find(pagina => pagina.id === '108387448777036').access_token }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [-544, 80],
-      "id": "a0b5c901-86f4-4f54-93f6-d153a06432b9",
-      "name": "HTTP Request2"
     }
   ],
   "connections": {
-    "Code in JavaScript1": {
+    "RECEBER LEAD META": {
       "main": [
         [
           {
-            "node": "HTTP Request",
+            "node": "EXTRAIR EVENTO LEADGEN",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "HTTP Request": {
+    "EXTRAIR EVENTO LEADGEN": {
       "main": [
         [
           {
-            "node": "Code in JavaScript2",
+            "node": "BUSCAR DADOS DO LEAD NA META",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Code in JavaScript2": {
+    "BUSCAR DADOS DO LEAD NA META": {
       "main": [
         [
           {
-            "node": "VALIDAR FORMULARIO - GPDEVENDAS",
+            "node": "MAPEAR CAMPOS DO LEAD",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "CRIAR LEAD - GPDEVENDAS1": {
+    "MAPEAR CAMPOS DO LEAD": {
       "main": [
         [
           {
-            "node": "VINCULAR EVENTO E ETAPA - GPDEVENDAS",
+            "node": "VALIDAR PAYLOAD DO LEAD",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "EverSync": {
+    "VALIDAR PAYLOAD DO LEAD": {
       "main": [
         [
           {
-            "node": "CRIAR LEAD - GPDEVENDAS1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "VINCULAR EVENTO E ETAPA - GPDEVENDAS": {
-      "main": [
-        [
-          {
-            "node": "MAPEAR CANAL PARA ETAPA - GPDEVENDAS",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "VALIDAR FORMULARIO - GPDEVENDAS": {
-      "main": [
-        [
-          {
-            "node": "EverSync",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "MAPEAR CANAL PARA ETAPA - GPDEVENDAS": {
-      "main": [
-        [
-          {
-            "node": "MOVER ETAPA - GPDEVENDAS",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "MOVER ETAPA - GPDEVENDAS": {
-      "main": [
-        [
-          {
-            "node": "Enviar Template",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Encontrar TOKEN - PAGINAS": {
-      "main": [
-        [
-          {
-            "node": "PEGAR FORMULARIO",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "PEGAR FORMULARIO": {
-      "main": [
-        [
-          {
-            "node": "HTTP Request1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Webhook1": {
-      "main": [
-        [
-          {
-            "node": "Code in JavaScript1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "HTTP Request1": {
-      "main": [
-        [
-          {
-            "node": "HTTP Request2",
+            "node": "IMPORTAR LEAD - ROTEAMENTO AUTOMATICO",
             "type": "main",
             "index": 0
           }
