@@ -38,7 +38,8 @@
     "test:integration": "npm run test:integration --workspace=apps/api",
     "test:e2e": "npm run test:e2e --workspace=apps/api",
     "test:e2e:ui": "playwright test -c e2e/playwright.config.ts",
-    "lighthouse:ci": "npx --yes @lhci/cli@0.15.1 autorun --config=lighthouserc.cjs"
+    "lighthouse:ci": "npx --yes @lhci/cli@0.15.1 autorun --config=lighthouserc.cjs",
+    "n8n:export": "node scripts/export-n8n-workflows.mjs"
   },
   "overrides": {
     "rxjs": "^7.8.2"

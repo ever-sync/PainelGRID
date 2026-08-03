@@ -10,6 +10,10 @@ node_modules/
 .env.production.local
 *.env
 
+# n8n exports that may contain credentials or execution data
+docs/n8n/raw/
+*.n8n-raw.json
+
 # Build and output directories
 dist/
 build/

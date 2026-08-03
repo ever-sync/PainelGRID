@@ -1,0 +1,2980 @@
+{
+  "sourceWorkflowId": "MWIRTrZl44bVjTZW",
+  "sourceUpdatedAt": "2026-08-03T21:44:17.182Z",
+  "name": "Rubinho v1",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "push",
+        "list": "={{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].phone }}",
+        "messageData": "={{ $json.content.replace(/\\n/g, \"\\\\n\").replace(/['\"]/g, '').trim()  }}",
+        "tail": true
+      },
+      "id": "3196606c-63a8-47ce-83fe-a335bd3df0f0",
+      "name": "Redis6",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [-2560, 1104],
+      "credentials": {
+        "redis": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "Redis account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "52aaf749-fe4f-44e4-880e-15b2bfc027f1",
+                    "leftValue": "={{ $('Dados Unicos').item.json.body.message.messageType }}",
+                    "rightValue": "text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "text"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Dados Unicos').item.json.body.message.messageType }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "a2dec084-4744-4d63-8cc5-5a36be50ed7c"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "audio"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "c0e434dd-1268-421d-b81b-3a5e90ed9550",
+                    "leftValue": "={{ $('Dados Unicos').item.json.body.message.messageType }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "image"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "22a756b1-a0e1-4a03-9f2f-993919140a40",
+                    "leftValue": "={{ $('Dados Unicos').item.json.body.message.messageType }}",
+                    "rightValue": "ExtendedTextMessage",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Texto"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "b1e7a7fb-990d-48ed-bcbb-643fddbd77bf",
+                    "leftValue": "={{ $('Dados Unicos').item.json.body.message.messageType }}",
+                    "rightValue": "document",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "document"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "79c94b2a-6a49-459e-a407-f34a2127b6fb",
+      "name": "Switch4",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [-3680, 960]
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "text": "Analise a imagem e me traga um resumo simples e o mais curto possível do que ela é",
+        "inputType": "base64",
+        "options": {}
+      },
+      "id": "26cac32c-1cbb-4081-80fc-9f7885fb9064",
+      "name": "OpenAI2",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.6,
+      "position": [-3008, 1104],
+      "credentials": {
+        "openAiApi": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "push",
+        "list": "={{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].phone }}",
+        "messageData": "={{ $json.mensagem }}",
+        "tail": true
+      },
+      "id": "394028be-30e8-4582-a850-50ac84f5beb3",
+      "name": "Text Memory",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [-2560, 544],
+      "credentials": {
+        "redis": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "Redis account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "push",
+        "list": "={{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].phone }}",
+        "messageData": "={{ $json.text }}",
+        "tail": true
+      },
+      "id": "d5657cce-ccdf-4631-970b-b70f2d6aa277",
+      "name": "Audio Memory",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [-2560, 912],
+      "credentials": {
+        "redis": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "Redis account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "5f79f73f-b640-4d37-8626-5066d0ccaf1f",
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [528, 640]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "output-men",
+        "options": {
+          "destinationFieldName": "output"
+        }
+      },
+      "id": "cb6dbc9c-1b8a-45b3-bf79-01de36dc3f82",
+      "name": "Split de Mensagem1",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [-6592, 1328]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e3c37f5a-13b2-4606-8299-23709e3a237a",
+              "name": "output-men",
+              "value": "={{ $json.output.split(\"\\n\\n\") }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-6592, 224],
+      "id": "3b01c281-0332-4114-81e3-fa451d2c2946",
+      "name": "Edit Fields3"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "propertyName": "Pega-Memoria-text-2",
+        "key": "={{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].phone }}",
+        "options": {
+          "dotNotation": false
+        }
+      },
+      "id": "912b71cb-af02-463d-bcee-30b2ddf1de0c",
+      "name": "Pega-Memoria-text-2",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [-1888, 832],
+      "credentials": {
+        "redis": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "Redis account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": "=10"
+      },
+      "id": "89a7c325-dec8-4193-b9be-db2fa9e440cc",
+      "name": "Espera para responder",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [-2112, 832],
+      "webhookId": "5cc56d19-f403-42a5-a95d-df7b9735a336"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d5a342e9-585b-42ea-be44-644adae10199",
+              "leftValue": "={{ $json['Pega-Memoria-text-2'].last() }}",
+              "rightValue": "={{ $('Espera para responder').item.json['Pega-Memoria-text'].last() }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "bcb59455-2976-4504-9639-2302ffe9a994",
+      "name": "Compara Get Memory",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-1664, 832]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fdb16265-6065-402e-a898-7b24ad7a36dd",
+              "name": "telefone-grapix",
+              "value": "={{ $json.metadata.display_phone_number }}",
+              "type": "string"
+            },
+            {
+              "id": "934de4b2-f8f1-4b5d-95e3-f51f0c9d36ee",
+              "name": "nome",
+              "value": "={{ $json.contacts[0].profile.name }}",
+              "type": "string"
+            },
+            {
+              "id": "67c06d87-1bb9-42d9-9f6c-c578626bc714",
+              "name": "mensagem",
+              "value": "={{ $json.messages[0].text.body }}",
+              "type": "string"
+            },
+            {
+              "id": "cb980780-f44f-42fc-b497-8bbed864e013",
+              "name": "body.message.messageType",
+              "value": "={{ $json.messages[0].type }}",
+              "type": "string"
+            },
+            {
+              "id": "9dfa5a97-38b3-43c8-9aaf-61e58bddda30",
+              "name": "body.message.content.URL",
+              "value": "={{ $json.messages[0].audio.url }}",
+              "type": "string"
+            },
+            {
+              "id": "7192b753-0a8e-4813-8d5e-0aa432364c43",
+              "name": "body.message.wasSentByApi",
+              "value": "={{ $json.body.message.wasSentByApi }}",
+              "type": "boolean"
+            },
+            {
+              "id": "a1eebe06-8caa-4269-9d4b-0a10c88280a5",
+              "name": "body.message.fromMe",
+              "value": "={{ $json.body.message.fromMe }}",
+              "type": "boolean"
+            },
+            {
+              "id": "2171bb61-0a93-4f3b-a700-1633790afb5a",
+              "name": "telefone-cliente-gp",
+              "value": "={{ $json.messages[0].from }}",
+              "type": "string"
+            },
+            {
+              "id": "ba45dc63-06b3-49df-84f7-96aba3fcbf74",
+              "name": "messages[0].audio.sha256",
+              "value": "={{ $json.messages[0].audio.sha256 }}",
+              "type": "string"
+            },
+            {
+              "id": "a74fabca-17a1-4930-ab0c-eb0b61cfb7ba",
+              "name": "messages[0].audio.mime_type",
+              "value": "={{ $json.messages[0].audio.mime_type }}",
+              "type": "string"
+            },
+            {
+              "id": "4844eb3c-6c31-4f15-9896-ae442be6ee20",
+              "name": "messages[0].audio.voice",
+              "value": "={{ $json.messages[0].audio.voice }}",
+              "type": "boolean"
+            },
+            {
+              "id": "c8679b5c-0506-4aca-a20d-735a9ec5aea1",
+              "name": "messages[0].audio.id",
+              "value": "={{ $json.messages[0].audio.id }}",
+              "type": "string"
+            },
+            {
+              "id": "c3142061-1179-440b-8d0f-a9b1b872ae95",
+              "name": "messages[0].document.id",
+              "value": "={{ $json.messages[0].document.id }}",
+              "type": "string"
+            },
+            {
+              "id": "70290831-0f56-4740-a8c5-a4a467b46a59",
+              "name": "messages[0].image.id",
+              "value": "={{ $json.messages[0].image.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3823ffdf-93df-4eaf-a8ee-c6d4e915d73d",
+      "name": "Dados Unicos",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-6368, 592]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ef46368f-4548-4c3d-ac59-fc9a3842f500",
+              "name": "mensagem",
+              "value": "={{ $('Dados Unicos').item.json.mensagem }}",
+              "type": "string"
+            },
+            {
+              "id": "9be80f9a-988b-4e41-8304-439733d2f6ed",
+              "name": "chat_id",
+              "value": "={{ $('Dados Unicos').item.json.chat_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-2784, 544],
+      "id": "9c6e20ee-272b-4de5-bc8a-6dff396821a5",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "84d10ea3-1700-44e3-9edc-42d24504bfc0",
+              "name": "data.base64",
+              "value": "={{ $('Dados Unicos').item.json.messages[0].audio.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fdd05d8f-5b9b-4b30-9b51-f32f0317787b",
+      "name": "Extrair Dados",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-3456, 912]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "propertyName": "Pega-Memoria-text",
+        "key": "={{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].phone }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [-2336, 832],
+      "id": "4bf50a1b-2c6a-418f-b5e0-c28af2c85107",
+      "name": "Pega-Memoria-text",
+      "credentials": {
+        "redis": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "Redis account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "options": {
+          "language": "pt"
+        }
+      },
+      "id": "ee46a495-e5c3-4407-b4f1-e8260b4e1cfb",
+      "name": "OpenAI Whisper1",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.3,
+      "position": [-2784, 912],
+      "credentials": {
+        "openAiApi": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Percorre todos os itens que chegam ao nó\nfor (const item of $input.all()) {\n  \n  // Math.random() gera um número entre 0 (inclusivo) e 1 (exclusivo)\n  const probabilidade = Math.random();\n  \n  // Se o número for menor que 0.30 (30% de chance), o resultado é 1.\n  // Caso contrário (70% de chance), o resultado é 2.\n  if (probabilidade < 0.30) {\n    item.json.resultado = 1;\n  } else {\n    item.json.resultado = 2;\n  }\n}\n\n// Retorna os itens atualizados para o próximo nó\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-6368, 224],
+      "id": "270a5201-3117-407d-9c66-f2042f43d6e5",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "425d1921-5437-416c-9dac-df6c19c0011e",
+              "leftValue": "={{ $json.items.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [-5472, 832],
+      "id": "68fa2fe7-70cc-4c22-a248-6e413c7cb5a1",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "849d8ce3-fc0d-49e8-9557-cca710706d38",
+              "name": "id_cliente",
+              "value": "99640561-bdb7-4bfb-9236-f27ecaedf538",
+              "type": "string"
+            },
+            {
+              "id": "53d7cde1-5109-487d-8a61-af4e56cd8d9d",
+              "name": "id_evento",
+              "value": "20bb5e36-1bbb-4f4e-956f-93e34969f2de",
+              "type": "string"
+            },
+            {
+              "id": "a84ebc79-a5a9-434c-a60b-41bd66d59bf1",
+              "name": "id_crm",
+              "value": "PL_99640561BDB74BFB",
+              "type": "string"
+            },
+            {
+              "id": "8d0c236c-4ee8-4faa-800d-45b64ef34b90",
+              "name": "urlapi",
+              "value": "https://api.gpdevendas.app/",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-5920, 832],
+      "id": "7eb55b75-1e2e-420c-b9bd-f257df2a78cc",
+      "name": "EverSync"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f336a1ff-e577-489d-a739-1eb8bd509245",
+              "name": "mensagecompleta",
+              "value": "={{ $json['Pega-Memoria-text-2'].join('\\n') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "28815978-8fed-40ba-9efe-d4e9aa7b0afa",
+      "name": "mensagemcompleta1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-1440, 832]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.urlapi }}api/integrations/v1/leads",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $json.id_cliente }}"
+            },
+            {
+              "name": "search",
+              "value": "={{ $('Dados Unicos').item.json['telefone-cliente-gp'] }}"
+            },
+            {
+              "name": "take",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "27a03243-efd6-4c8c-a44d-93d9740df769",
+      "name": "Consultar se o lead existe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-5696, 832],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - Integration Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2210ae48-63b8-4c46-bb4a-87156b5d1180",
+              "leftValue": "={{ $json.body.message.fromMe }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [-6144, 592],
+      "id": "7bb9aff1-19fc-4d0a-93df-6ea508ef24ee",
+      "name": "IA ou Humano?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2210ae48-63b8-4c46-bb4a-87156b5d1180",
+              "leftValue": "={{ $json.body.message.wasSentByApi }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [-5920, 448],
+      "id": "1f0639eb-b951-4eda-a3e8-701027d3560d",
+      "name": "IA ou Humano?1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.gpdevendas.app/api/agent/conversations/{{ $json.conversation_id }}/handoff",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"reason\": \"Atendimento humano assumido\"\n}",
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [-4800, 448],
+      "id": "c18821ad-2db0-45e6-92ac-744afa108140",
+      "name": "HTTP Request2",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - Integration Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.gpdevendas.app/api/integrations/v1/leads",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $json.id_cliente }}"
+            },
+            {
+              "name": "search",
+              "value": "={{ $('Code in JavaScript8').item.json.telefoneFormatado }}"
+            },
+            {
+              "name": "take",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "5ae2f8d2-b3db-409f-8ab2-6784817f0cae",
+      "name": "Consultar se o lead existe1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-5024, 448],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - Integration Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "849d8ce3-fc0d-49e8-9557-cca710706d38",
+              "name": "id_cliente",
+              "value": "84b55a6d-7bcf-47a8-b004-2a07fa06d09d",
+              "type": "string"
+            },
+            {
+              "id": "53d7cde1-5109-487d-8a61-af4e56cd8d9d",
+              "name": "id_evento",
+              "value": "387c1d92-e42a-43ce-93fa-dc934b2867fa",
+              "type": "string"
+            },
+            {
+              "id": "ba8f83f3-73c2-4309-ab6c-03be3a8d2c91",
+              "name": "id_crm",
+              "value": "PL_84B55A6D7BCF47A8",
+              "type": "string"
+            },
+            {
+              "id": "3b5ce772-0da2-4d1c-95c5-dcfc6915d16b",
+              "name": "nome",
+              "value": "={{ $json.nome }}",
+              "type": "string"
+            },
+            {
+              "id": "1611d4c5-a4fd-4cdb-acc9-6a6b2661ddca",
+              "name": "Telefone",
+              "value": "={{ $json.Telefone }}",
+              "type": "string"
+            },
+            {
+              "id": "fecfb8fd-867d-43be-9270-e331c1ab50d0",
+              "name": "email",
+              "value": "={{ $json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "61317112-9b3e-4200-bf09-bedc82e4f0dd",
+              "name": "Fonte",
+              "value": "={{ $json.Fonte }}",
+              "type": "string"
+            },
+            {
+              "id": "132e9788-9305-47e6-957d-cb74281e20cb",
+              "name": "result.DATE_CREATE",
+              "value": "={{ $json.result.DATE_CREATE }}",
+              "type": "string"
+            },
+            {
+              "id": "0bd3e2f1-185a-4c9e-abf3-ada15d4593e9",
+              "name": "result.DATE_MODIFY",
+              "value": "={{ $json.result.DATE_MODIFY }}",
+              "type": "string"
+            },
+            {
+              "id": "49431ad5-b69b-44b8-b937-133a25e220ea",
+              "name": "result.MOVED_TIME",
+              "value": "={{ $json.result.MOVED_TIME }}",
+              "type": "string"
+            },
+            {
+              "id": "4d99258a-c008-44eb-96bc-7c22f933a6d1",
+              "name": "result.LAST_COMMUNICATION_TIME",
+              "value": "={{ $json.result.LAST_COMMUNICATION_TIME }}",
+              "type": "string"
+            },
+            {
+              "id": "79613a55-f625-495b-8d45-50bc31c49f4c",
+              "name": "result.UTM_CAMPAIGN",
+              "value": "={{ $json.result.UTM_CAMPAIGN }}",
+              "type": "string"
+            },
+            {
+              "id": "711cf0b0-103b-4c05-9f11-0b501a1f6499",
+              "name": "result.UTM_CONTENT",
+              "value": "={{ $json.result.UTM_CONTENT }}",
+              "type": "string"
+            },
+            {
+              "id": "ac0a4ce1-6670-46d9-8ea0-463b9a2fef0a",
+              "name": "result.UTM_TERM",
+              "value": "={{ $json.result.UTM_TERM }}",
+              "type": "string"
+            },
+            {
+              "id": "6eebc110-2f3b-4fc8-9c74-34344db64623",
+              "name": "result.UF_CRM_META_OPT_IN",
+              "value": "={{ $json.result.UF_CRM_META_OPT_IN }}",
+              "type": "string"
+            },
+            {
+              "id": "86b6ea5a-6d6f-4f77-a0c8-d70315390f84",
+              "name": "result.UF_CRM_RUBINHO_ON",
+              "value": "={{ $json.result.UF_CRM_RUBINHO_ON }}",
+              "type": "string"
+            },
+            {
+              "id": "949193bc-b69e-4a4e-b81a-9d9bf7b5297c",
+              "name": "result.STAGE_ID",
+              "value": "={{ $json.result.STAGE_ID }}",
+              "type": "string"
+            },
+            {
+              "id": "78d444f7-9ba7-4ed0-8d17-92b360c904f0",
+              "name": "id_para_lead_crm",
+              "value": "84B55A6D7BCF47A8",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-5472, 640],
+      "id": "2be10a67-f37d-44b0-a2a1-c0a36dbac615",
+      "name": "Ford Sonnervig"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [-5248, 448],
+      "id": "27a26840-06d9-46a1-b1fe-fd2c0931a8c8",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json['telefone-cliente-gp'] }}",
+                    "rightValue": "<PHONE_REDACTED>",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "4c0f0fa0-d8b7-446b-ae6c-b695de024466"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "evento1"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "8bd569a2-0c09-4bad-a868-6842012432de",
+                    "leftValue": "={{ $json['telefone-cliente-gp'] }}",
+                    "rightValue": "<PHONE_REDACTED>",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "evento2"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [-5696, 448],
+      "id": "34a78b77-eeb5-4e9c-8209-c790333313e7",
+      "name": "Switch5"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "849d8ce3-fc0d-49e8-9557-cca710706d38",
+              "name": "id_cliente",
+              "value": "2ba9e258-d2f2-4fef-87a7-549f71035e65",
+              "type": "string"
+            },
+            {
+              "id": "53d7cde1-5109-487d-8a61-af4e56cd8d9d",
+              "name": "id_evento",
+              "value": "294fa389-e81a-4a6d-b9f3-37035af57aeb",
+              "type": "string"
+            },
+            {
+              "id": "a84ebc79-a5a9-434c-a60b-41bd66d59bf1",
+              "name": "id_crm",
+              "value": "PL_2BA9E258D2F24FEF",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-5472, 448],
+      "id": "451999da-9c78-453d-95d2-92ecead4aff5",
+      "name": "EverSync1"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('EverSync').item.json.urlapi }}api/integrations/v1/events/{{ $json.items[0].event_id }}?client_id={{ $json.items[0].client_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [-4128, 1008],
+      "id": "3084c69a-7e28-4d1d-95a4-fa018f4658c9",
+      "name": "Consultar - EVENTO",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - Integration Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0bd4fbf5-74f2-4726-9c15-e96a4719303a",
+              "name": "items[0].name",
+              "value": "={{ $('CONSULTAR ETAPA').item.json.items[0].name }}",
+              "type": "string"
+            },
+            {
+              "id": "702b0f1d-780d-4708-8db7-7965b97c0e15",
+              "name": "items[0].phone",
+              "value": "={{ $('CONSULTAR ETAPA').item.json.items[0].phone }}",
+              "type": "string"
+            },
+            {
+              "id": "0ff6639f-76f6-48a7-8423-55bfd49db947",
+              "name": "items[0].source",
+              "value": "={{ $('CONSULTAR ETAPA').item.json.items[0].source }}",
+              "type": "string"
+            },
+            {
+              "id": "cf906838-d5c4-46f0-ba8f-9368ada6051e",
+              "name": "items[0].client_id",
+              "value": "={{ $('CONSULTAR ETAPA').item.json.items[0].client_id }}",
+              "type": "string"
+            },
+            {
+              "id": "0851014a-c3b7-4fb4-8d88-a312aef45666",
+              "name": "items[0].event_id",
+              "value": "={{ $('CONSULTAR ETAPA').item.json.items[0].event_id }}",
+              "type": "string"
+            },
+            {
+              "id": "cf0db22e-cf9c-4889-832b-8d7a44cc16bf",
+              "name": "items[0].crm_stage_code",
+              "value": "={{ $('CONSULTAR ETAPA').item.json.items[0].crm_stage_code }}",
+              "type": "string"
+            },
+            {
+              "id": "6fcd1813-7318-4ea2-b41c-90292dcb399f",
+              "name": "items[0].confirmation_status",
+              "value": "={{ $('CONSULTAR ETAPA').item.json.items[0].confirmation_status }}",
+              "type": "string"
+            },
+            {
+              "id": "d3c4532d-2c28-48b7-85c8-7473408a2630",
+              "name": "participant_client_ids",
+              "value": "={{ $('Consultar - EVENTO').item.json.participant_client_ids }}",
+              "type": "array"
+            },
+            {
+              "id": "dc719cff-95bd-4015-ac5e-e3e200f4fff5",
+              "name": "name",
+              "value": "={{ $('Consultar - EVENTO').item.json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "4bfa499e-17fd-41a9-8906-9c385cc60012",
+              "name": "event_type",
+              "value": "={{ $('Consultar - EVENTO').item.json.event_type }}",
+              "type": "string"
+            },
+            {
+              "id": "f384c5be-dd14-481d-af4c-78e2b435de2d",
+              "name": "data de lançamento do evento",
+              "value": "={{ new Date($('Consultar - EVENTO').item.json.launch_date).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) }}",
+              "type": "string"
+            },
+            {
+              "id": "ced0a0a3-0731-4ca9-9428-83c6e679b616",
+              "name": "location",
+              "value": "={{ $('Consultar - EVENTO').item.json.location }}",
+              "type": "string"
+            },
+            {
+              "id": "e51c010b-a5d2-443e-bc92-d89244d349ee",
+              "name": "status",
+              "value": "={{ $('Consultar - EVENTO').item.json.status }}",
+              "type": "string"
+            },
+            {
+              "id": "f42567f3-9c64-4134-a2e6-eedc1ea84e5b",
+              "name": "name",
+              "value": "={{ $json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "915347cf-469a-41ef-9d26-b2747e54a305",
+              "name": "items[0].id",
+              "value": "={{ $('CONSULTAR ETAPA').item.json.items[0].id }}",
+              "type": "string"
+            },
+            {
+              "id": "9e79b1d2-f496-4e42-b854-5dab1069e45e",
+              "name": "items[0].handoff_required",
+              "value": "={{ $('CONSULTAR ETAPA').item.json.items[0].handoff_required }}",
+              "type": "boolean"
+            },
+            {
+              "id": "206f39ca-f36a-48f5-9b4e-e242927d12b6",
+              "name": "items[0].conversation_id",
+              "value": "={{ $('CONSULTAR ETAPA').item.json.items[0].conversation_id }}",
+              "type": "string"
+            },
+            {
+              "id": "405b630b-13d1-42da-9782-f6ff35a1927d",
+              "name": "items[0].checkin_voucher",
+              "value": "={{ $('CONSULTAR ETAPA').item.json.items[0].checkin_voucher }}",
+              "type": "string"
+            },
+            {
+              "id": "4a4e88fc-eb78-4ed2-bfab-43923350157f",
+              "name": "mensagem",
+              "value": "={{ $('Dados Unicos').item.json.mensagem }}",
+              "type": "string"
+            },
+            {
+              "id": "e7c5afed-00cb-46c8-84cc-74382c0e2115",
+              "name": "body.message.messageType",
+              "value": "={{ $('Dados Unicos').item.json.body.message.messageType }}",
+              "type": "string"
+            },
+            {
+              "id": "3926c305-be1b-4790-bf61-b86430dba41d",
+              "name": "body.message.content.URL",
+              "value": "={{ $('Dados Unicos').item.json.body.message.content.URL }}",
+              "type": "string"
+            },
+            {
+              "id": "1d0c3da0-b67e-4230-966b-9aec7f858918",
+              "name": "event_days",
+              "value": "={{ $('Consultar - EVENTO').item.json.event_days.map(d => {\n  const start = new Date(d.start);\n  const end = new Date(d.end);\n  const data = start.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });\n  const horaInicio = start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });\n  const horaFim = end.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });\n  return `${data} das ${horaInicio} às ${horaFim}`;\n}).join(' e ') }}",
+              "type": "string"
+            },
+            {
+              "id": "e456fd09-76b4-4263-a1ee-156287294d49",
+              "name": "description",
+              "value": "={{ $json.description }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-3904, 1008],
+      "id": "02ce5cf8-0357-4a9a-a469-1c16ae1e8970",
+      "name": "RESUMO DO LEAD/EVENTO/RUBINHO"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=1158769897321849",
+        "recipientPhoneNumber": "={{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].phone }}",
+        "textBody": "={{ $('AI Agent1').item.json.output }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [752, 640],
+      "id": "0faec567-f584-4ba6-a942-accb000f752c",
+      "name": "Send message and wait for response",
+      "webhookId": "37de6fb4-cee7-43a7-adcf-c58463861e19",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "52aaf749-fe4f-44e4-880e-15b2bfc027f1",
+                    "leftValue": "={{ $('Dados Unicos').item.json.body.message.messageType }}",
+                    "rightValue": "text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "text"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Dados Unicos').item.json.body.message.messageType }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "a2dec084-4744-4d63-8cc5-5a36be50ed7c"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "audio"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "c0e434dd-1268-421d-b81b-3a5e90ed9550",
+                    "leftValue": "={{ $('Dados Unicos').item.json.body.message.messageType }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "image"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "22a756b1-a0e1-4a03-9f2f-993919140a40",
+                    "leftValue": "={{ $('Dados Unicos').item.json.body.message.messageType }}",
+                    "rightValue": "ExtendedTextMessage",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Texto"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8ec52938-c83b-4304-a683-678055d76f19",
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [304, 800]
+    },
+    {
+      "parameters": {
+        "resource": "media",
+        "operation": "mediaUrlGet",
+        "mediaGetId": "={{ $json.data.base64 }}"
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [-3232, 912],
+      "id": "847a3a79-fe2e-41f4-83af-e5e3361b3718",
+      "name": "Download media",
+      "webhookId": "73919f83-90f5-440d-bd6c-23eebf190f1a",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-3008, 912],
+      "id": "f9959f14-347f-4064-b04b-0a9f2e193d83",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - Meta Account Discovery"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=1158769897321849",
+        "recipientPhoneNumber": "={{ $('Dados Unicos').item.json['telefone-cliente-gp'] }}",
+        "messageType": "audio",
+        "mediaPath": "useMediaId",
+        "mediaId": "={{ $json.id }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [1200, 832],
+      "id": "a104e291-0f5b-45a7-b9fa-da13927df8e6",
+      "name": "Send message and wait for response1",
+      "webhookId": "37de6fb4-cee7-43a7-adcf-c58463861e19",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "for (const item of $input.all()) {\n  if (item.binary && item.binary.data) {\n    // Altera a etiqueta de audio/mp3 para audio/mpeg exigido pela Meta\n    item.binary.data.mimeType = 'audio/mpeg';\n  }\n}\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [752, 832],
+      "id": "19279e00-7115-4fc8-b1ed-eb7dbd2c90d8",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "resource": "media",
+        "phoneNumberId": "=1158769897321849",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [976, 832],
+      "id": "e35d0ba8-3120-4495-8444-8416a578bc8a",
+      "name": "Upload media",
+      "webhookId": "d54d60cd-a435-4b5a-abed-8edf864a330c",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "input": "={{ $json.output }}",
+        "voice": "onyx",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [528, 832],
+      "id": "5dba637f-9c1f-4dcb-a78b-541546625b3e",
+      "name": "Generate audio",
+      "credentials": {
+        "openAiApi": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "media",
+        "operation": "mediaUrlGet",
+        "mediaGetId": "={{ $('Dados Unicos').item.json.messages[0].image.id }}"
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [-3456, 1104],
+      "id": "bea46f2f-e567-4da3-82f0-8d91601582b3",
+      "name": "Download media1",
+      "webhookId": "73919f83-90f5-440d-bd6c-23eebf190f1a",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-3232, 1104],
+      "id": "ceab746f-4fe1-4095-a5be-7a0316fe62cb",
+      "name": "HTTP Request1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - WhatsApp Cloud API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "75dde387-e743-4995-862d-dc09a1b26ad5",
+              "name": "content",
+              "value": "=O usuario envio uma imagem com a seguinte descricao: {{ $json.content }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-2784, 1104],
+      "id": "eea9179e-ee4e-44c4-a063-839a83cb9277",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "telefone"
+            },
+            {
+              "name": "id-cliente"
+            },
+            {
+              "name": "event_id"
+            },
+            {
+              "name": "key-cliente"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [-6592, 1552],
+      "id": "d8d08472-9948-4b32-8c0b-5901e11470fa",
+      "name": "QRCODE"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('EverSync').item.json.urlapi }}api/integrations/v1/leads/{{ $json.id }}/crm/move",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"pipeline_code\": \"PL_{{ $json.client_id.replace(/-/g, '').toUpperCase().slice(0, 16) }}\",\n  \"stage_code\": \"{{ $json.client_id.replace(/-/g, '').toUpperCase().slice(0, 16) }}_EM_CONTATO\"\n}",
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "72ba2736-dbc4-4a16-a65e-33196b9a4143",
+      "name": "ETAPA - EM CONTATO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-5024, 960],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - Integration Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.gpdevendas.app/api/integrations/v1/leads",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $json[\"id-cliente\"] }}"
+            },
+            {
+              "name": "search",
+              "value": "={{ $json.telefone }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Leadflow-Integration-Key",
+              "value": "={{ $json[\"key-cliente\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c8d3241a-40d8-4262-a917-2a7c2c32ece8",
+      "name": "Consultar - ETAPA3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-6368, 1552]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.qrserver.com/v1/create-qr-code/?size=600x600&data={{ encodeURIComponent($json.items[0].checkin_voucher) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-6144, 1552],
+      "id": "0c5b3382-3758-464c-adef-e695be19a5aa",
+      "name": "HTTP Request3"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=1158769897321849",
+        "recipientPhoneNumber": "={{ $('QRCODE').item.json.telefone }}",
+        "messageType": "image",
+        "mediaPath": "useMedian8n",
+        "additionalFields": {
+          "mediaCaption": "={{ `Este é o seu QR code de acesso gerado a partir da inscrição:\n\nDados da sua credencial: \nLocal: Em breve!\nNúmero de acesso: ${$json.items[0].checkin_token}\n\nPara entrar no evento, apresente este QR code na entrada, diretamente na tela do seu celular.\n\n👉 Salvar credencial: https://g-pde-vendas-desktop.vercel.app/convite/${$json.items[0].checkin_voucher}` }}"
+        }
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [-5920, 1552],
+      "id": "60da32aa-1f3a-4af9-92b7-973a04101882",
+      "name": "enviar qrcode",
+      "webhookId": "37de6fb4-cee7-43a7-adcf-c58463861e19",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": ["messages"],
+        "options": {}
+      },
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [-6592, 592],
+      "id": "9f2e15ef-5aaa-4a0f-995e-5f2d49e620fb",
+      "name": "WhatsApp Trigger",
+      "webhookId": "1cf82714-56d5-492f-9ca3-ffcb2950e213",
+      "credentials": {
+        "whatsAppTriggerApi": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "GridLABs"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "=+{{ $('WhatsApp Trigger').item.json.contacts[0].wa_id }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [-1216, 832],
+      "id": "a60c9aff-723e-4500-a856-ab6829a75202",
+      "name": "Redis",
+      "credentials": {
+        "redis": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "Redis account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=# Mensagem que deve ser respondida\n{{ $('mensagemcompleta1').item.json.mensagecompleta }}\n\n------\n## INFO do evento\nEvento:\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.name }}\n\nStatus do evento:\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.status }}\n\nEndereço do evento:\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.location }}\n\nDatas do evento:\nNome atual do lead:\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].name }}\n\nID do lead:\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}\n\nEtapa atual no CRM:\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].crm_stage_code }}\n\nStatus atual de confirmação:\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].confirmation_status }}\n\n### RESUMO DO EVENTO:\nDescricao do evento:\n# Champions Festival - NISSAN COMERI SANTOS ## OBRIGATÓRIO: Apresente o evento de vendas com entusiasmo e objetividade, destacando sempre os benefícios abaixo de maneira natural, sem muita informação na mesma frase: - *Bônus de até R$ 27.000 com seu usado na troca - *Taxa Zero em até 36x - *Nissan Versa a partir de R$ 109.900 - *Nissan Kicks a partir de R$ 117.900 - *Lote exclusivo com 17 unidades do Nissan Kicks à pronta entrega - *Seminovos revisados, periciados e 100% aprovados - *1 ano de Seguro Mecânico Grátis - *Parcelas a partir de R$ 999 - *Festival de Nissan Kicks seminovos a partir de R$ 59.990 - *Condições especiais para Táxi e PCD - *Condições exclusivas válidas somente durante o Champions Festival. ### IMPORTANTE: As condições acima não estão garantidas e estão sujeitas à aprovação de crédito, disponibilidade de estoque e regras da concessionária. --- ## Endereço: **Av. Washington Luís, 105 - Vila Matias, Santos - SP** --- ### IMPORTANTE: É IMPORTANTE frisar que o evento acontecerá apenas na unidade Nissan Comeri Santos e para garantir as condições especiais é necessário o agendamento. Feito o agendamento o cliente receberá o QR CODE que dará acesso ao evento e deve ser apresentado na recepção. --- ## Datas e Horários - **17/07/2026 - Das 09h às 18h** - **18/07/2026 - Das 09h às 18h** ### REGRA ABSOLUTA: - Faça uma pergunta por vez, envie as mensagens de maneira simples e objetiva para não ficar confuso para o lead. --- ### Texto Jurídico: - *Consulte condições na concessionária. - *Ofertas válidas durante o período do evento ou enquanto durarem os estoques. - *Todas as condições estão sujeitas à aprovação de crédito e disponibilidade de estoque. --- *VAGAS LIMITADAS – Garanta já sua participação!*",
+        "options": {
+          "systemMessage": "=# AGENTE RUBINHO\n## SDR DE CREDENCIAMENTO E CONFIRMAÇÃO\n\n# 1. IDENTIDADE E CONTEXTO\n\nVocê é o Rubinho, assistente do {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.description }}. Brasileiro, descontraído, alto astral e consultivo, como um amigo que trabalha na área automotiva.\n\nMissão única: qualificar leads para eventos {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.description }}, coletando apenas as informações necessárias para gerar o credenciamento com segurança e sem fricção.\n\n# 1.1 EVENTO QUE VOCE ESTA CREDENCIANDO E INFORMANDO OS CLIENTES\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.description }}\n---\n\n# 2. TOM E PERSONALIDADE\n\nUse linguagem:\n\n- Animada.\n- Receptiva.\n- Humana.\n- Acolhedora.\n- Natural.\n- Direta.\n- Consultiva.\n\nPode usar expressões naturais:\n\n- vc\n- pra\n- me passa\n- certinho\n- perfeito\n- show\n- sem problema\n\nNão use linguagem robótica.\nNão usar emogi\nNão fale sobre:\n\n- CRM.\n- API.\n- Ferramentas.\n- Automação.\n- Banco de dados.\n- Inteligência artificial.\n- Parâmetros internos.\n\n---\n\n# 3. REGRA ABSOLUTA DO ATENDIMENTO\n\nO fluxo deve seguir exatamente esta ordem:\n\n1. Boas-vindas e apresentação.\n2. Nome completo do lead.\n3. Quantidade de acompanhantes.\n4. Nome completo dos acompanhantes.\n5. Escolha do dia do evento.\n6. Endereço do evento.\n7. Interesse em dar carro na troca.\n8. Placa do veículo.\n9. Modelo e ano do veículo.\n10. Resumo completo.\n11. Validação dos dados.\n12. Atualização final do CRM e status.\n13. Envio do QR Code.\n14. Encerramento.\n\nNunca pule etapas.\n\nNunca altere a ordem das etapas.\n\nNunca pergunte sobre acompanhantes antes de receber o nome completo.\n\nNunca pergunte o dia antes de concluir a etapa de acompanhantes.\n\nNunca pergunte sobre troca antes de o lead escolher o dia.\n\nNunca peça placa antes de o lead confirmar que possui carro na troca.\n\nNunca peça modelo e ano antes de receber a placa.\n\nNunca envie QR Code antes de apresentar o resumo e receber uma confirmação clara.\n\nFaça no máximo uma pergunta por mensagem.\n\nSempre aguarde a resposta antes de avançar.\n\n---\n\n# 4. REGRA CRÍTICA SOBRE AS FERRAMENTAS\n\nSempre que o lead fornecer um dado, execute a ferramenta obrigatória antes de enviar a próxima pergunta.\n\nAs ferramentas são executadas silenciosamente.\n\nNunca diga:\n\n- Vou atualizar seus dados.\n- Estou salvando.\n- Atualizei o CRM.\n- Vou gerar o QR Code.\n- Vou enviar o QR Code.\n- Chamei uma ferramenta.\n\n## Regra mais importante\n\nQuando o lead escolher a data do evento, use somente:\n\n`atualizar_dados_lead`\n\npara salvar `store_visit_datetime`.\n\nNa etapa da escolha da data, é proibido usar:\n\n- `mover_lead_crm` com `PRESENCA_AGENDADA`\n- `atualizar_status_lead` com `scheduled`\n- `enviar_qrcode`\n\nEssas três ações só podem acontecer depois que:\n\n1. Todos os dados forem coletados.\n2. O resumo completo for apresentado.\n3. O lead confirmar claramente que os dados estão corretos.\n\n---\n\n# 5. FERRAMENTAS DISPONÍVEIS\n\n## 5.1 mover_lead_crm\n\nUse para mover o lead no funil.\n\nParâmetro obrigatório:\n\n`stage_suffix`\n\nValores permitidos:\n\n- `NOVO_LEAD`\n- `TENTATIVA_CONTATO`\n- `EM_CONTATO`\n- `PRESENCA_AGENDADA`\n- `PRESENCA_REAGENDADA`\n- `PRESENCA_CANCELADA`\n\n### Primeira resposta do lead\n\nSe a etapa atual for `NOVO_LEAD` ou `TENTATIVA_CONTATO`, execute:\n\n`mover_lead_crm`\n\nCom:\n\n`stage_suffix = EM_CONTATO`\n\nDepois envie a mensagem de boas-vindas.\n\n### Credenciamento finalizado\n\nSomente depois que o lead confirmar o resumo, execute:\n\n`mover_lead_crm`\n\nCom:\n\n`stage_suffix = PRESENCA_AGENDADA`\n\n### Reagendamento\n\nQuando o lead solicitar mudança de dia:\n\n`stage_suffix = PRESENCA_REAGENDADA`\n\n### Cancelamento\n\nQuando o lead cancelar:\n\n`stage_suffix = PRESENCA_CANCELADA`\n\n---\n\n## 5.2 atualizar_dados_lead\n\nUse para salvar os dados coletados.\n\nParâmetros disponíveis:\n\n- `lead_id`\n- `first_name`\n- `last_name`\n- `vehicle_plate`\n- `companions`\n- `store_visit_datetime`\n- `description`\n\nO valor obrigatório de `lead_id` é sempre:\n\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}\n\nNunca invente outro ID.\n\nEnvie somente os campos que foram informados ou corrigidos naquele momento.\n\nNunca envie campos vazios para apagar dados anteriores.\n\n### Nome completo\n\nQuando o lead informar o nome completo:\n\n- `first_name` = primeiro nome.\n- `last_name` = todos os demais nomes e sobrenomes.\n\nExemplo:\n\nNome informado:\n\n`Raphael dos Santos Rego`\n\nSalvar:\n\n`first_name = Raphael`\n\n`last_name = dos Santos Rego`\n\n### Acompanhantes\n\nQuando o lead informar somente a quantidade:\n\n`companions = quantidade informada`\n\nQuando informar os nomes:\n\n`companions = quantidade + nomes completos`\n\nExemplo:\n\n`1 acompanhante: Rafaela Lobo de Morais Santos`\n\n### Data escolhida\n\nQuando o lead escolher o dia:\n\n`store_visit_datetime = valor ISO exato de d.start`\n\nNunca invente horário.\n\nNunca use a hora atual.\n\nNunca monte manualmente uma data diferente do contexto.\n\n### Placa\n\nQuando o lead informar a placa:\n\n`vehicle_plate = placa normalizada`\n\nNormalize assim:\n\n- Letras maiúsculas.\n- Sem espaços.\n- Sem hífen.\n\nExemplo:\n\n`pyz 3452`\n\nSalvar:\n\n`PYZ3452`\n\n### Modelo e ano\n\nQuando o lead informar modelo e ano:\n\n`description = Carro na troca: sim | Modelo: [modelo] | Ano: [ano]`\n\n### Sem carro na troca\n\nQuando o lead disser que não pretende dar carro na troca:\n\n`description = Carro na troca: não`\n\n---\n\n## 5.3 atualizar_status_lead\n\nParâmetro obrigatório:\n\n`confirmation_status`\n\nValores permitidos:\n\n- `pending`\n- `scheduled`\n- `cancelled`\n\n### Credenciamento finalizado\n\nSomente depois da validação final do resumo:\n\n`confirmation_status = scheduled`\n\n### Cancelamento\n\n`confirmation_status = cancelled`\n\nNunca use `scheduled` no momento em que o lead apenas escolhe a data.\n\n---\n\n## 5.4 enviar_qrcode\n\nEssa ferramenta envia a credencial e o QR Code.\n\nNão possui parâmetros obrigatórios.\n\nSó pode ser utilizada quando todas estas condições forem verdadeiras:\n\n1. Nome completo coletado e salvo.\n2. Acompanhantes tratados e salvos.\n3. Nomes dos acompanhantes tratados, quando houver.\n4. Dia escolhido e salvo.\n5. Interesse em troca respondido.\n6. Placa salva, quando houver troca.\n7. Modelo e ano salvos, quando houver troca.\n8. Resumo completo apresentado.\n9. Lead confirmou claramente que os dados estão corretos.\n\nNunca use `enviar_qrcode` antes da confirmação do resumo.\n\n---\n\n# 6. NORMALIZAÇÃO E INTERPRETAÇÃO DOS DADOS\n\n## 6.1 Nome completo\n\nO nome deve possuir pelo menos nome e sobrenome.\n\nSe o lead informar apenas o primeiro nome:\n\n\"Pra concluir sua credencial, preciso também do seu sobrenome. Pode me informar?\"\n\nNão avance até receber nome e sobrenome.\n\n---\n\n## 6.2 Acompanhantes\n\nA quantidade de acompanhantes não inclui o próprio lead.\n\nExemplos:\n\n`Minha esposa`\n\nSignifica:\n\n`1 acompanhante`\n\n`Eu e mais uma pessoa`\n\nSignifica:\n\n`1 acompanhante`\n\n`Vamos em três pessoas`\n\nSignifica:\n\n`2 acompanhantes`\n\nNunca diga que “o lead e a esposa são dois acompanhantes”.\n\nO correto é:\n\n`1 acompanhante: esposa`\n\n---\n\n## 6.3 Nomes dos acompanhantes\n\nSolicite nome completo de cada acompanhante.\n\nSe o lead informou dois acompanhantes e enviou apenas um nome, pergunte somente pelo nome que falta.\n\nSe ainda não souber os nomes, salve:\n\n`2 acompanhantes, nomes ainda não informados`\n\nDepois continue o atendimento.\n\n---\n\n## 6.4 Data do evento\n\nApresente as datas no formato brasileiro.\n\nAo salvar, use o valor ISO exato presente em `event_days`.\n\nSe o lead responder somente:\n\n`30`\n\nIdentifique a opção em `event_days` cujo dia corresponde a 30.\n\nDepois salve o valor exato de `d.start`.\n\nNunca utilize:\n\n- A data atual.\n- O horário atual.\n- Uma data padrão.\n- Uma data de outro evento.\n\n---\n\n## 6.5 Modelo e ano\n\nO ano deve possuir quatro dígitos.\n\nSe o lead responder:\n\n`Onix 217`\n\nNão salve automaticamente.\n\nPergunte:\n\n\"O ano seria 2017?\"\n\nSó avance depois da confirmação.\n\n---\n\n# 7. FLUXO COMPLETO DO ATENDIMENTO\n\n## ETAPA 1 — BOAS-VINDAS E NOME COMPLETO\n\nQuando o lead pedir para realizar ou finalizar o credenciamento:\n\nSe a etapa atual for `NOVO_LEAD` ou `TENTATIVA_CONTATO`, execute primeiro:\n\n`mover_lead_crm`\n\nCom:\n\n`stage_suffix = EM_CONTATO`\n\nDepois responda:\n\n\"Oi, {{leadName}}! Tudo bem? 😊\n\nSeja muito bem-vindo ao {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.event_type }}.\n\nMeu nome é {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.name }} e vou finalizar seu credenciamento.\n\nPra começar, me informa seu nome completo?\"\n\nDepois pare e aguarde.\n\n---\n\n## ETAPA 2 — RECEBIMENTO DO NOME COMPLETO\n\nQuando o lead informar o nome completo:\n\n1. Separe o primeiro nome.\n2. Separe o restante do nome.\n3. Execute `atualizar_dados_lead`:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`first_name = primeiro nome`\n\n`last_name = restante do nome`\n\nDepois do sucesso, responda:\n\n\"Perfeito, {{leadName}} 😊\n\nNo dia do evento vc pretende levar algum acompanhante? Se sim, quantos?\"\n\nDepois pare e aguarde.\n\n---\n\n## ETAPA 3 — QUANTIDADE DE ACOMPANHANTES\n\n### Quando não houver acompanhante\n\nExecute `atualizar_dados_lead`:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`companions = Sem acompanhantes`\n\nDepois avance para a escolha do dia.\n\n### Quando houver acompanhante\n\nIdentifique a quantidade sem contar o próprio lead.\n\nExecute `atualizar_dados_lead`:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`companions = [quantidade] acompanhante(s)`\n\nDepois responda:\n\n\"Show! Pode me informar o nome completo de cada acompanhante? ✅\"\n\nDepois pare e aguarde.\n\n---\n\n## ETAPA 4 — NOMES DOS ACOMPANHANTES\n\nQuando o lead informar os nomes:\n\nExecute `atualizar_dados_lead`:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`companions = [quantidade] acompanhante(s): [nomes completos]`\n\nDepois do sucesso, avance para a escolha do dia.\n\n---\n\n## ETAPA 5 — ESCOLHA DO DIA\n\nEnvie:\n\n\"Obrigado pela informação, {{leadName}} 😊\n\nO {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.event_type }} vai acontecer nestas datas:\n\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.event_days.map(d => {\n  const inicio = new Date(d.start);\n\n  if (!isNaN(inicio.getTime())) {\n    const data = inicio.toLocaleDateString('pt-BR');\n    const horaInicio = inicio.toLocaleTimeString('pt-BR', {\n      hour: '2-digit',\n      minute: '2-digit'\n    });\n\n    const horaFim = d.end\n      ? new Date(d.end).toLocaleTimeString('pt-BR', {\n          hour: '2-digit',\n          minute: '2-digit'\n        })\n      : '';\n\n    return `${data}, das ${horaInicio}${horaFim ? ` às ${horaFim}` : ''}`;\n  }\n\n  return d.start;\n}).join('\\n') }}\n\nQual dia vc prefere comparecer?\"\n\nDepois pare e aguarde.\n\n---\n\n## ETAPA 6 — RECEBIMENTO DA DATA\n\nQuando o lead escolher o dia:\n\n1. Localize a opção correspondente em `event_days`.\n2. Obtenha o valor ISO exato de `d.start`.\n3. Execute somente `atualizar_dados_lead`.\n\nParâmetros:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`store_visit_datetime = valor ISO exato de d.start`\n\nNesta etapa, não execute:\n\n- `mover_lead_crm` com `PRESENCA_AGENDADA`\n- `atualizar_status_lead` com `scheduled`\n- `enviar_qrcode`\n\nDepois do sucesso, responda:\n\n\"Perfeito, {{leadName}} 😊\n\nO evento será no endereço:\n\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.location }}\n\nFalando em realização de sonho, vc pretende dar algum carro na troca?\"\n\nDepois pare e aguarde.\n\n---\n\n## ETAPA 7 — INTERESSE EM TROCA\n\n### Se o lead responder não\n\nExecute `atualizar_dados_lead`:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`description = Carro na troca: não`\n\nDepois avance para o resumo.\n\n### Se o lead responder sim\n\nExecute `atualizar_dados_lead`:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`description = Carro na troca: sim`\n\nDepois responda:\n\n\"Perfeito 🚗\n\nMe passa a placa do veículo, por gentileza? Assim já adiantamos essas informações.\"\n\nDepois pare e aguarde.\n\n---\n\n## ETAPA 8 — PLACA DO VEÍCULO\n\nQuando o lead informar a placa:\n\n1. Normalize para letras maiúsculas.\n2. Remova espaços e hífen.\n3. Execute `atualizar_dados_lead`:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`vehicle_plate = placa normalizada`\n\nDepois do sucesso, responda:\n\n\"Boa, {{leadName}}.\n\nQual é o modelo e o ano do veículo?\"\n\nDepois pare e aguarde.\n\n---\n\n## ETAPA 9 — MODELO E ANO\n\nQuando o lead informar modelo e ano:\n\n1. Confirme que o ano possui quatro dígitos.\n2. Se estiver válido, execute `atualizar_dados_lead`:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`description = Carro na troca: sim | Modelo: [modelo] | Ano: [ano]`\n\nDepois avance para o resumo.\n\nSe faltar o ano:\n\n\"E qual é o ano do veículo?\"\n\nSe faltar o modelo:\n\n\"E qual é o modelo do veículo?\"\n\nSe o ano estiver ambíguo:\n\n\"O ano seria [ano interpretado]?\"\n\nDepois pare e aguarde.\n\n---\n\n## ETAPA 10 — RESUMO COMPLETO\n\nAntes de enviar o QR Code, mostre obrigatoriamente:\n\n\"Maravilha, {{leadName}}! Antes de liberar sua credencial, confere se está tudo certinho 😊\n\nNome completo: [nome completo]\nAcompanhantes: [quantidade]\nNome dos acompanhantes: [nomes ou não se aplica]\nDia escolhido: [data e horário]\nCarro na troca: [sim ou não]\nPlaca: [placa ou não se aplica]\nModelo e ano: [modelo e ano ou não se aplica]\n\nEstá tudo correto?\"\n\nDepois pare e aguarde.\n\nNesta etapa, não execute:\n\n- `mover_lead_crm` com `PRESENCA_AGENDADA`\n- `atualizar_status_lead` com `scheduled`\n- `enviar_qrcode`\n\n---\n\n## ETAPA 11 — CORREÇÃO DOS DADOS\n\nSe o lead disser que alguma informação está errada:\n\nResponda:\n\n\"Obrigado por avisar 😊\n\nQual informação precisa ser corrigida?\"\n\nDepois pare e aguarde.\n\nQuando receber a correção:\n\n1. Execute `atualizar_dados_lead` com o campo correto.\n2. Envie novamente o resumo completo.\n3. Pergunte novamente:\n\n\"Agora está tudo correto?\"\n\nNão envie o QR Code enquanto houver correção pendente.\n\n---\n\n## ETAPA 12 — CONFIRMAÇÃO FINAL\n\nConsidere como confirmação clara:\n\n- Sim.\n- Isso mesmo.\n- Correto.\n- Está certo.\n- Tudo certo.\n- Pode confirmar.\n- Pode enviar.\n- Confirmo.\n\nNão considere confirmação:\n\n- Obrigado.\n- Beleza.\n- Ok.\n- Vou ver.\n- Talvez.\n- Acho que sim.\n- Depois confirmo.\n\nQuando o lead confirmar claramente o resumo, execute obrigatoriamente nesta ordem:\n\n### Ferramenta 1\n\n`mover_lead_crm`\n\nParâmetro:\n\n`stage_suffix = PRESENCA_AGENDADA`\n\n### Ferramenta 2\n\n`atualizar_status_lead`\n\nParâmetro:\n\n`confirmation_status = scheduled`\n\n### Ferramenta 3\n\n`enviar_qrcode`\n\nSomente depois das três ferramentas retornarem sucesso, envie a mensagem final.\n\n---\n\n## ETAPA 13 — ENCERRAMENTO\n\nDepois do envio do QR Code, responda:\n\n\"Parabéns pela sua decisão, {{leadName}}! 🎉\n\nSua credencial foi confirmada e o QR Code foi enviado.\n\nVamos ficar te esperando no {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.event_type }}.\n\nLocal:\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.location }}\"\n\nNão faça outra pergunta depois dessa mensagem.\n\n---\n\n# 8. REAGENDAMENTO\n\nQuando o lead pedir para mudar o dia:\n\n1. Execute `mover_lead_crm`:\n\n`stage_suffix = PRESENCA_REAGENDADA`\n\n2. Apresente novamente as datas disponíveis.\n3. Aguarde a escolha.\n4. Execute `atualizar_dados_lead` com o novo `store_visit_datetime`.\n5. Mostre novamente o resumo.\n6. Aguarde a confirmação.\n7. Depois execute:\n\n`mover_lead_crm = PRESENCA_AGENDADA`\n\n`atualizar_status_lead = scheduled`\n\n`enviar_qrcode`\n\n---\n\n# 9. CANCELAMENTO\n\nQuando o lead cancelar:\n\n1. Execute `mover_lead_crm`:\n\n`stage_suffix = PRESENCA_CANCELADA`\n\n2. Execute `atualizar_status_lead`:\n\n`confirmation_status = cancelled`\n\n3. Responda:\n\n\"Sem problema, {{leadName}}. Obrigado por avisar 😊\n\nEsperamos falar com vc em uma próxima oportunidade.\"\n\n---\n\n# 10. PERGUNTAS FORA DO FLUXO\n\nQuando o lead fizer uma pergunta:\n\n1. Responda primeiro à dúvida usando apenas informações confirmadas.\n2. Depois retome exatamente a pergunta pendente.\n3. Não pule de etapa.\n\nSe não houver uma ferramenta de base de conhecimento conectada, não diga que consultou uma base.\n\nNunca invente:\n\n- Endereço.\n- Datas.\n- Horários.\n- Marcas.\n- Modelos.\n- Descontos.\n- Taxas.\n- Condições.\n- Valores.\n\n---\n\n# 11. FORMATO DA SAÍDA\n\nRetorne somente a mensagem destinada ao WhatsApp.\n\nNão retorne:\n\n- Explicações.\n- Títulos.\n- Markdown.\n- JSON.\n- Nome das ferramentas.\n- Parâmetros.\n- Etapa interna.\n- Comentários técnicos.\n- Resultados brutos das ferramentas.\n\nQuando uma ferramenta for necessária:\n\n1. Execute a ferramenta.\n2. Verifique o resultado.\n3. Depois retorne somente a mensagem ao lead."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [-288, 832],
+      "id": "2c1036a5-08e1-4bba-b9a5-1c300a237cc1",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "responsesApiEnabled": false,
+        "options": {
+          "frequencyPenalty": 0.3,
+          "presencePenalty": 0.2,
+          "temperature": 0.3,
+          "topP": 0.9
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [-544, 1056],
+      "id": "f5edf8c5-daf5-4b89-82fe-d4156176ab9f",
+      "name": "OpenAI Chat Model",
+      "notesInFlow": false,
+      "credentials": {
+        "openAiApi": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2ff0e575-52fb-4e58-b535-d7fb35e44a94",
+              "leftValue": "={{ $json.items[0].crm_stage_name }}",
+              "rightValue": "Enviar confirmação",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [-4576, 832],
+      "id": "708a7c85-81cc-4b43-b8d4-187e71ba5b3f",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Dados Unicos').item.json[\"telefone-cliente-gp\"] }}",
+        "tableName": "agent_chat_history",
+        "contextWindowLength": 15
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.4,
+      "position": [-416, 1056],
+      "id": "6bb1a9d1-28c7-4849-bd49-696344a91c99",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Sufixo da etapa destino no funil. Valores: PRESENCA_AGENDADA, PRESENCA_CANCELADA, PRESENCA_REAGENDADA",
+        "method": "POST",
+        "url": "=https://api.gpdevendas.app/api/integrations/v1/leads/{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}/crm/move-by-suffix",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "stage_suffix",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', ``, 'string') }}"
+            }
+          ]
+        },
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.3,
+      "position": [-288, 1056],
+      "id": "48dce849-be3f-47fe-90f8-ca855f16c8c1",
+      "name": "mover_lead_crm",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - Integration Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Use para salvar Nome, Sobrenome, Placa do veículo, Acompanhantes e data da visita",
+        "method": "PATCH",
+        "url": "=https://api.gpdevendas.app/api/integrations/v1/leads/{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "vehicle_plate",
+              "value": "={{ $fromAI(\n  'vehicle_plate',\n  'Placa do veículo em letras maiúsculas e sem espaços.',\n  'string'\n) }}"
+            },
+            {
+              "name": "companions",
+              "value": "={{ $fromAI(\n  'companions',\n  'Quantidade e nomes completos dos acompanhantes.',\n  'string'\n) }}"
+            },
+            {
+              "name": "store_visit_datetime",
+              "value": "={{ $fromAI(\n  'store_visit_datetime',\n  'Data e horário selecionados em formato ISO.',\n  'string'\n) }}"
+            },
+            {
+              "name": "first_name",
+              "value": "={{ $fromAI(\n  'first_name',\n  'Primeiro nome do lead. Preencha apenas quando o primeiro nome for informado ou corrigido.',\n  'string'\n) }}"
+            },
+            {
+              "name": "last_name",
+              "value": "={{ $fromAI(\n  'last_name',\n  'Todos os sobrenomes e nomes após o primeiro nome.',\n  'string'\n) }}"
+            },
+            {
+              "name": "vehicle_model",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters5_Value', ``, 'string') }}"
+            },
+            {
+              "name": "vehicle_year",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters6_Value', ``, 'string') }}"
+            }
+          ]
+        },
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [-160, 1056],
+      "id": "011c172f-681a-46d0-bac4-8ac714e759aa",
+      "name": "atualizar_dados_lead",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - Integration Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Atualiza o status do lead. Quando mudar para confirmed envia o QR Code de acesso automaticamente por WhatsApp. Valores: pending, scheduled, confirmed, cancelled.",
+        "method": "PATCH",
+        "url": "=https://api.gpdevendas.app/api/integrations/v1/leads/{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "confirmation_status",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters0_Value', ``, 'string') }}"
+            }
+          ]
+        },
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.3,
+      "position": [-32, 1056],
+      "id": "fc344ccf-38c2-4ddc-97b1-85c8d1d0a21d",
+      "name": "atualizar_status_lead",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - Integration Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "185a58fd-820b-407c-ba8f-cc04f1494bea",
+              "name": "session_id",
+              "value": "={{ $('Dados Unicos').item.json['telefone-cliente-gp'] }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-992, 832],
+      "id": "129a0aed-1eca-4302-8c9f-cc64fc8d2589",
+      "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH total_antes AS (\n    SELECT COUNT(*)::int AS quantidade\n    FROM agent_chat_history\n    WHERE session_id = $1\n),\n\ncutoff AS (\n    SELECT id AS cutoff_id\n    FROM agent_chat_history\n    WHERE session_id = $1\n      AND (\n        message->>'type' = 'human'\n\n        OR\n\n        (\n          message->>'type' = 'ai'\n          AND (\n            CASE\n              WHEN jsonb_typeof(message->'tool_calls') = 'array'\n              THEN jsonb_array_length(message->'tool_calls')\n              ELSE 0\n            END\n          ) = 0\n        )\n      )\n    ORDER BY id DESC\n    OFFSET 9\n    LIMIT 1\n),\n\napagados AS (\n    DELETE FROM agent_chat_history\n    WHERE session_id = $1\n      AND (\n        /* Remove resultados antigos das ferramentas */\n        message->>'type' = 'tool'\n\n        OR\n\n        /* Remove mensagens AI que somente chamaram ferramentas */\n        (\n          message->>'type' = 'ai'\n          AND (\n            CASE\n              WHEN jsonb_typeof(message->'tool_calls') = 'array'\n              THEN jsonb_array_length(message->'tool_calls')\n              ELSE 0\n            END\n          ) > 0\n        )\n\n        OR\n\n        /* Remove mensagens normais anteriores às 10 últimas */\n        (\n          EXISTS (SELECT 1 FROM cutoff)\n          AND id < (SELECT cutoff_id FROM cutoff)\n        )\n      )\n    RETURNING id\n)\n\nSELECT\n    total_antes.quantidade AS quantidade_antes,\n    COUNT(apagados.id)::int AS registros_apagados,\n    (\n      total_antes.quantidade - COUNT(apagados.id)\n    )::int AS registros_mantidos\nFROM total_antes\nLEFT JOIN apagados ON TRUE\nGROUP BY total_antes.quantidade;",
+        "options": {
+          "queryReplacement": "={{ $json.session_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [-768, 832],
+      "id": "e8509581-7f2b-4812-81e2-1b1bd76b891c",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a5e07d64-a27c-4805-993d-4885a180f49c",
+              "leftValue": "={{ $('Dados Unicos').item.json.body.message.messageType }}",
+              "rightValue": "text",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "09d0daec-e2c0-4831-b782-f2dfe2ebe71e",
+              "leftValue": "={{ $('Dados Unicos').item.json.mensagem }}",
+              "rightValue": "SIM",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [-4352, 816],
+      "id": "81373b86-4a1f-47da-a2c2-36bedd1963da",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('EverSync').item.json.urlapi }}api/integrations/v1/leads/{{ $json.items[0].id }}/crm/move-by-suffix",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"stage_suffix\": \"AGENDADOS_CONFIRMADOS\"\n}",
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "ff93aab7-b666-4fe3-b1a5-8d03ed4d67ee",
+      "name": "ETAPA - EM CONTATO1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-4128, 768],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - Integration Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Use essa ferramenta para enviar o QRCODE",
+        "workflowId": {
+          "__rl": true,
+          "value": "=MWIRTrZl44bVjTZW",
+          "mode": "id",
+          "cachedResultUrl": "/workflow/=MWIRTrZl44bVjTZW"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "telefone": "={{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].phone }}",
+            "id-cliente": "={{ $('EverSync').item.json.id_cliente }}",
+            "event_id": "={{ $('EverSync').item.json.id_evento }}",
+            "key-cliente": "={{ $('EverSync').item.json.keychaveaut }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "telefone",
+              "displayName": "telefone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "id-cliente",
+              "displayName": "id-cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "key-cliente",
+              "displayName": "key-cliente",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [96, 1056],
+      "id": "dd8489e4-884c-4cae-aaca-56df4529d516",
+      "name": "enviar_qrcode"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "=1158769897321849",
+        "recipientPhoneNumber": "={{ $('Dados Unicos').item.json[\"telefone-cliente-gp\"] }}",
+        "textBody": "=Parabéns pela sua decisão! Seu agendamento foi confirmado. 🎉\n\nEstamos te esperando para a conquista do seu sonho! 🚗\n\nLembrando que o evento *{{ $json.event_type }}* vai acontecer no dia *{{ new Date($json.event_date).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) }}* às *{{ new Date($json.event_date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) }}* no endereço, *{{ $json.location }}*.\n\nNos vemos lá! 🚀",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [-3680, 768],
+      "id": "98f980e7-323a-48d0-98e2-64c411c8c2ec",
+      "name": "Send message and wait for response2",
+      "webhookId": "37de6fb4-cee7-43a7-adcf-c58463861e19",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $('EverSync').item.json.urlapi }}api/integrations/v1/events/{{ $('CONSULTAR ETAPA').item.json.items[0].event_id }}?client_id={{ $('CONSULTAR ETAPA').item.json.items[0].client_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [-3904, 768],
+      "id": "fa670675-ca4f-4288-b5a4-59bfa4e504ea",
+      "name": "Consultar - EVENTO1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - Integration Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('EverSync').item.json.urlapi }}api/integrations/v1/leads ",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"client_id\": \"{{ $('EverSync').item.json.id_cliente }}\",\n  \"name\": \"{{ $('Dados Unicos').item.json.nome }}\",\n  \"phone\": \"{{ $('Dados Unicos').item.json['telefone-cliente-gp'] }}\",\n  \"source\": \"facebook_ads\",\n  \"event_interest_id\": \"{{ $('EverSync').item.json.id_evento }}\"\n}",
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "a3178f57-adf8-433a-9f63-fb889a577536",
+      "name": "CRIAR LEAD",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-5248, 960],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - Integration Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $('EverSync').item.json.urlapi }}api/integrations/v1/leads",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $('EverSync').item.json.id_cliente }}"
+            },
+            {
+              "name": "search",
+              "value": "={{ $('Dados Unicos').item.json['telefone-cliente-gp'] }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "96f310c1-ad51-4237-9d5c-9941d6ffed94",
+      "name": "CONSULTAR ETAPA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-4800, 832],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - Integration Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('mensagemcompleta1').item.json.mensagecompleta }}",
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "=# AGENTE {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.name }}\n## SDR DE CREDENCIAMENTO E CONFIRMAÇÃO\n\n# 1. IDENTIDADE E CONTEXTO\n\nNome do agente:\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.name }}\n\nEvento:\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.event_type }}\n\nStatus do evento:\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.status }}\n\nEndereço do evento:\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.location }}\n\nDatas do evento:\n\n\nNome atual do lead:\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].name }}\n\nID do lead:\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}\n\nEtapa atual no CRM:\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].crm_stage_code }}\n\nStatus atual de confirmação:\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].confirmation_status }}\n\nDescricao do evento:\n# Champions Festival - NISSAN COMERI SANTOS ## OBRIGATÓRIO: Apresente o evento de vendas com entusiasmo e objetividade, destacando sempre os benefícios abaixo de maneira natural, sem muita informação na mesma frase: - *Bônus de até R$ 27.000 com seu usado na troca - *Taxa Zero em até 36x - *Nissan Versa a partir de R$ 109.900 - *Nissan Kicks a partir de R$ 117.900 - *Lote exclusivo com 17 unidades do Nissan Kicks à pronta entrega - *Seminovos revisados, periciados e 100% aprovados - *1 ano de Seguro Mecânico Grátis - *Parcelas a partir de R$ 999 - *Festival de Nissan Kicks seminovos a partir de R$ 59.990 - *Condições especiais para Táxi e PCD - *Condições exclusivas válidas somente durante o Champions Festival. ### IMPORTANTE: As condições acima não estão garantidas e estão sujeitas à aprovação de crédito, disponibilidade de estoque e regras da concessionária. --- ## Endereço: **Av. Washington Luís, 105 - Vila Matias, Santos - SP** --- ### IMPORTANTE: É IMPORTANTE frisar que o evento acontecerá apenas na unidade Nissan Comeri Santos e para garantir as condições especiais é necessário o agendamento. Feito o agendamento o cliente receberá o QR CODE que dará acesso ao evento e deve ser apresentado na recepção. --- ## Datas e Horários - **17/07/2026 - Das 09h às 18h** - **18/07/2026 - Das 09h às 18h** ### REGRA ABSOLUTA: - Faça uma pergunta por vez, envie as mensagens de maneira simples e objetiva para não ficar confuso para o lead. --- ### Texto Jurídico: - *Consulte condições na concessionária. - *Ofertas válidas durante o período do evento ou enquanto durarem os estoques. - *Todas as condições estão sujeitas à aprovação de crédito e disponibilidade de estoque. --- *VAGAS LIMITADAS – Garanta já sua participação!*\n\n\n\nCanal:\nWhatsApp.\n\nVocê é o SDR oficial do evento.\n\nSeu objetivo é receber o lead de forma animada, informar cada detalhe do evento como esta na descricao, realizar o credenciamento, salvar os dados no SaaS, validar as informações, confirmar a presença e enviar o QR Code somente no final.\n\n---\n\n# 2. TOM E PERSONALIDADE\n\nUse linguagem:\n\n- Animada.\n- Receptiva.\n- Humana.\n- Acolhedora.\n- Natural.\n- Direta.\n- Consultiva.\n\nPode usar emojis com moderação.\n\nEmojis permitidos:\n\n😊\n🎉\n🚗\n✅\n📲\n\nUse no máximo um emoji por mensagem ou bloco curto.\n\nPode usar expressões naturais:\n\n- vc\n- pra\n- me passa\n- certinho\n- perfeito\n- show\n- sem problema\n\nNão use linguagem robótica.\n\nNão fale sobre:\n\n- CRM.\n- API.\n- Ferramentas.\n- Automação.\n- Banco de dados.\n- Inteligência artificial.\n- Parâmetros internos.\n\n---\n\n# 3. REGRA ABSOLUTA DO ATENDIMENTO\n\nO fluxo deve seguir exatamente esta ordem:\n\n1. Boas-vindas e apresentação.\n2. Nome completo do lead.\n3. Quantidade de acompanhantes.\n4. Nome completo dos acompanhantes.\n5. Escolha do dia do evento.\n6. Endereço do evento.\n7. Interesse em dar carro na troca.\n8. Placa do veículo.\n9. Modelo e ano do veículo.\n10. Resumo completo.\n11. Validação dos dados.\n12. Atualização final do CRM e status.\n13. Envio do QR Code.\n14. Encerramento.\n\nNunca pule etapas.\n\nNunca altere a ordem das etapas.\n\nNunca pergunte sobre acompanhantes antes de receber o nome completo.\n\nNunca pergunte o dia antes de concluir a etapa de acompanhantes.\n\nNunca pergunte sobre troca antes de o lead escolher o dia.\n\nNunca peça placa antes de o lead confirmar que possui carro na troca.\n\nNunca peça modelo e ano antes de receber a placa.\n\nNunca envie QR Code antes de apresentar o resumo e receber uma confirmação clara.\n\nFaça no máximo uma pergunta por mensagem.\n\nSempre aguarde a resposta antes de avançar.\n\n---\n\n# 4. REGRA CRÍTICA SOBRE AS FERRAMENTAS\n\nSempre que o lead fornecer um dado, execute a ferramenta obrigatória antes de enviar a próxima pergunta.\n\nAs ferramentas são executadas silenciosamente.\n\nNunca diga:\n\n- Vou atualizar seus dados.\n- Estou salvando.\n- Atualizei o CRM.\n- Vou gerar o QR Code.\n- Vou enviar o QR Code.\n- Chamei uma ferramenta.\n\n## Regra mais importante\n\nQuando o lead escolher a data do evento, use somente:\n\n`atualizar_dados_lead`\n\npara salvar `store_visit_datetime`.\n\nNa etapa da escolha da data, é proibido usar:\n\n- `mover_lead_crm` com `PRESENCA_AGENDADA`\n- `atualizar_status_lead` com `scheduled`\n- `enviar_qrcode`\n\nEssas três ações só podem acontecer depois que:\n\n1. Todos os dados forem coletados.\n2. O resumo completo for apresentado.\n3. O lead confirmar claramente que os dados estão corretos.\n\n---\n\n# 5. FERRAMENTAS DISPONÍVEIS\n\n## 5.1 mover_lead_crm\n\nUse para mover o lead no funil.\n\nParâmetro obrigatório:\n\n`stage_suffix`\n\nValores permitidos:\n\n- `NOVO_LEAD`\n- `TENTATIVA_CONTATO`\n- `EM_CONTATO`\n- `PRESENCA_AGENDADA`\n- `PRESENCA_REAGENDADA`\n- `PRESENCA_CANCELADA`\n\n### Primeira resposta do lead\n\nSe a etapa atual for `NOVO_LEAD` ou `TENTATIVA_CONTATO`, execute:\n\n`mover_lead_crm`\n\nCom:\n\n`stage_suffix = EM_CONTATO`\n\nDepois envie a mensagem de boas-vindas.\n\n### Credenciamento finalizado\n\nSomente depois que o lead confirmar o resumo, execute:\n\n`mover_lead_crm`\n\nCom:\n\n`stage_suffix = PRESENCA_AGENDADA`\n\n### Reagendamento\n\nQuando o lead solicitar mudança de dia:\n\n`stage_suffix = PRESENCA_REAGENDADA`\n\n### Cancelamento\n\nQuando o lead cancelar:\n\n`stage_suffix = PRESENCA_CANCELADA`\n\n---\n\n## 5.2 atualizar_dados_lead\n\nUse para salvar os dados coletados.\n\nParâmetros disponíveis:\n\n- `lead_id`\n- `first_name`\n- `last_name`\n- `vehicle_plate`\n- `companions`\n- `store_visit_datetime`\n- `description`\n\nO valor obrigatório de `lead_id` é sempre:\n\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}\n\nNunca invente outro ID.\n\nEnvie somente os campos que foram informados ou corrigidos naquele momento.\n\nNunca envie campos vazios para apagar dados anteriores.\n\n### Nome completo\n\nQuando o lead informar o nome completo:\n\n- `first_name` = primeiro nome.\n- `last_name` = todos os demais nomes e sobrenomes.\n\nExemplo:\n\nNome informado:\n\n`Raphael dos Santos Rego`\n\nSalvar:\n\n`first_name = Raphael`\n\n`last_name = dos Santos Rego`\n\n### Acompanhantes\n\nQuando o lead informar somente a quantidade:\n\n`companions = quantidade informada`\n\nQuando informar os nomes:\n\n`companions = quantidade + nomes completos`\n\nExemplo:\n\n`1 acompanhante: Rafaela Lobo de Morais Santos`\n\n### Data escolhida\n\nQuando o lead escolher o dia:\n\n`store_visit_datetime = valor ISO exato de d.start`\n\nNunca invente horário.\n\nNunca use a hora atual.\n\nNunca monte manualmente uma data diferente do contexto.\n\n### Placa\n\nQuando o lead informar a placa:\n\n`vehicle_plate = placa normalizada`\n\nNormalize assim:\n\n- Letras maiúsculas.\n- Sem espaços.\n- Sem hífen.\n\nExemplo:\n\n`pyz 3452`\n\nSalvar:\n\n`PYZ3452`\n\n### Modelo e ano\n\nQuando o lead informar modelo e ano:\n\n`description = Carro na troca: sim | Modelo: [modelo] | Ano: [ano]`\n\n### Sem carro na troca\n\nQuando o lead disser que não pretende dar carro na troca:\n\n`description = Carro na troca: não`\n\n---\n\n## 5.3 atualizar_status_lead\n\nParâmetro obrigatório:\n\n`confirmation_status`\n\nValores permitidos:\n\n- `pending`\n- `scheduled`\n- `cancelled`\n\n### Credenciamento finalizado\n\nSomente depois da validação final do resumo:\n\n`confirmation_status = scheduled`\n\n### Cancelamento\n\n`confirmation_status = cancelled`\n\nNunca use `scheduled` no momento em que o lead apenas escolhe a data.\n\n---\n\n## 5.4 enviar_qrcode\n\nEssa ferramenta envia a credencial e o QR Code.\n\nNão possui parâmetros obrigatórios.\n\nSó pode ser utilizada quando todas estas condições forem verdadeiras:\n\n1. Nome completo coletado e salvo.\n2. Acompanhantes tratados e salvos.\n3. Nomes dos acompanhantes tratados, quando houver.\n4. Dia escolhido e salvo.\n5. Interesse em troca respondido.\n6. Placa salva, quando houver troca.\n7. Modelo e ano salvos, quando houver troca.\n8. Resumo completo apresentado.\n9. Lead confirmou claramente que os dados estão corretos.\n\nNunca use `enviar_qrcode` antes da confirmação do resumo.\n\n---\n\n# 6. NORMALIZAÇÃO E INTERPRETAÇÃO DOS DADOS\n\n## 6.1 Nome completo\n\nO nome deve possuir pelo menos nome e sobrenome.\n\nSe o lead informar apenas o primeiro nome:\n\n\"Pra concluir sua credencial, preciso também do seu sobrenome. Pode me informar?\"\n\nNão avance até receber nome e sobrenome.\n\n---\n\n## 6.2 Acompanhantes\n\nA quantidade de acompanhantes não inclui o próprio lead.\n\nExemplos:\n\n`Minha esposa`\n\nSignifica:\n\n`1 acompanhante`\n\n`Eu e mais uma pessoa`\n\nSignifica:\n\n`1 acompanhante`\n\n`Vamos em três pessoas`\n\nSignifica:\n\n`2 acompanhantes`\n\nNunca diga que “o lead e a esposa são dois acompanhantes”.\n\nO correto é:\n\n`1 acompanhante: esposa`\n\n---\n\n## 6.3 Nomes dos acompanhantes\n\nSolicite nome completo de cada acompanhante.\n\nSe o lead informou dois acompanhantes e enviou apenas um nome, pergunte somente pelo nome que falta.\n\nSe ainda não souber os nomes, salve:\n\n`2 acompanhantes, nomes ainda não informados`\n\nDepois continue o atendimento.\n\n---\n\n## 6.4 Data do evento\n\nApresente as datas no formato brasileiro.\n\nAo salvar, use o valor ISO exato presente em `event_days`.\n\nSe o lead responder somente:\n\n`30`\n\nIdentifique a opção em `event_days` cujo dia corresponde a 30.\n\nDepois salve o valor exato de `d.start`.\n\nNunca utilize:\n\n- A data atual.\n- O horário atual.\n- Uma data padrão.\n- Uma data de outro evento.\n\n---\n\n## 6.5 Modelo e ano\n\nO ano deve possuir quatro dígitos.\n\nSe o lead responder:\n\n`Onix 217`\n\nNão salve automaticamente.\n\nPergunte:\n\n\"O ano seria 2017?\"\n\nSó avance depois da confirmação.\n\n---\n\n# 7. FLUXO COMPLETO DO ATENDIMENTO\n\n## ETAPA 1 — BOAS-VINDAS E NOME COMPLETO\n\nQuando o lead pedir para realizar ou finalizar o credenciamento:\n\nSe a etapa atual for `NOVO_LEAD` ou `TENTATIVA_CONTATO`, execute primeiro:\n\n`mover_lead_crm`\n\nCom:\n\n`stage_suffix = EM_CONTATO`\n\nDepois responda:\n\n\"Oi, {{leadName}}! Tudo bem? 😊\n\nSeja muito bem-vindo ao {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.event_type }}.\n\nMeu nome é {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.name }} e vou finalizar seu credenciamento.\n\nPra começar, me informa seu nome completo?\"\n\nDepois pare e aguarde.\n\n---\n\n## ETAPA 2 — RECEBIMENTO DO NOME COMPLETO\n\nQuando o lead informar o nome completo:\n\n1. Separe o primeiro nome.\n2. Separe o restante do nome.\n3. Execute `atualizar_dados_lead`:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`first_name = primeiro nome`\n\n`last_name = restante do nome`\n\nDepois do sucesso, responda:\n\n\"Perfeito, {{leadName}} 😊\n\nNo dia do evento vc pretende levar algum acompanhante? Se sim, quantos?\"\n\nDepois pare e aguarde.\n\n---\n\n## ETAPA 3 — QUANTIDADE DE ACOMPANHANTES\n\n### Quando não houver acompanhante\n\nExecute `atualizar_dados_lead`:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`companions = Sem acompanhantes`\n\nDepois avance para a escolha do dia.\n\n### Quando houver acompanhante\n\nIdentifique a quantidade sem contar o próprio lead.\n\nExecute `atualizar_dados_lead`:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`companions = [quantidade] acompanhante(s)`\n\nDepois responda:\n\n\"Show! Pode me informar o nome completo de cada acompanhante? ✅\"\n\nDepois pare e aguarde.\n\n---\n\n## ETAPA 4 — NOMES DOS ACOMPANHANTES\n\nQuando o lead informar os nomes:\n\nExecute `atualizar_dados_lead`:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`companions = [quantidade] acompanhante(s): [nomes completos]`\n\nDepois do sucesso, avance para a escolha do dia.\n\n---\n\n## ETAPA 5 — ESCOLHA DO DIA\n\nEnvie:\n\n\"Obrigado pela informação, {{leadName}} 😊\n\nO {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.event_type }} vai acontecer nestas datas:\n\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.event_days.map(d => {\n  const inicio = new Date(d.start);\n\n  if (!isNaN(inicio.getTime())) {\n    const data = inicio.toLocaleDateString('pt-BR');\n    const horaInicio = inicio.toLocaleTimeString('pt-BR', {\n      hour: '2-digit',\n      minute: '2-digit'\n    });\n\n    const horaFim = d.end\n      ? new Date(d.end).toLocaleTimeString('pt-BR', {\n          hour: '2-digit',\n          minute: '2-digit'\n        })\n      : '';\n\n    return `${data}, das ${horaInicio}${horaFim ? ` às ${horaFim}` : ''}`;\n  }\n\n  return d.start;\n}).join('\\n') }}\n\nQual dia vc prefere comparecer?\"\n\nDepois pare e aguarde.\n\n---\n\n## ETAPA 6 — RECEBIMENTO DA DATA\n\nQuando o lead escolher o dia:\n\n1. Localize a opção correspondente em `event_days`.\n2. Obtenha o valor ISO exato de `d.start`.\n3. Execute somente `atualizar_dados_lead`.\n\nParâmetros:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`store_visit_datetime = valor ISO exato de d.start`\n\nNesta etapa, não execute:\n\n- `mover_lead_crm` com `PRESENCA_AGENDADA`\n- `atualizar_status_lead` com `scheduled`\n- `enviar_qrcode`\n\nDepois do sucesso, responda:\n\n\"Perfeito, {{leadName}} 😊\n\nO evento será no endereço:\n\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.location }}\n\nFalando em realização de sonho, vc pretende dar algum carro na troca?\"\n\nDepois pare e aguarde.\n\n---\n\n## ETAPA 7 — INTERESSE EM TROCA\n\n### Se o lead responder não\n\nExecute `atualizar_dados_lead`:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`description = Carro na troca: não`\n\nDepois avance para o resumo.\n\n### Se o lead responder sim\n\nExecute `atualizar_dados_lead`:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`description = Carro na troca: sim`\n\nDepois responda:\n\n\"Perfeito 🚗\n\nMe passa a placa do veículo, por gentileza? Assim já adiantamos essas informações.\"\n\nDepois pare e aguarde.\n\n---\n\n## ETAPA 8 — PLACA DO VEÍCULO\n\nQuando o lead informar a placa:\n\n1. Normalize para letras maiúsculas.\n2. Remova espaços e hífen.\n3. Execute `atualizar_dados_lead`:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`vehicle_plate = placa normalizada`\n\nDepois do sucesso, responda:\n\n\"Boa, {{leadName}}.\n\nQual é o modelo e o ano do veículo?\"\n\nDepois pare e aguarde.\n\n---\n\n## ETAPA 9 — MODELO E ANO\n\nQuando o lead informar modelo e ano:\n\n1. Confirme que o ano possui quatro dígitos.\n2. Se estiver válido, execute `atualizar_dados_lead`:\n\n`lead_id = {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}`\n\n`description = Carro na troca: sim | Modelo: [modelo] | Ano: [ano]`\n\nDepois avance para o resumo.\n\nSe faltar o ano:\n\n\"E qual é o ano do veículo?\"\n\nSe faltar o modelo:\n\n\"E qual é o modelo do veículo?\"\n\nSe o ano estiver ambíguo:\n\n\"O ano seria [ano interpretado]?\"\n\nDepois pare e aguarde.\n\n---\n\n## ETAPA 10 — RESUMO COMPLETO\n\nAntes de enviar o QR Code, mostre obrigatoriamente:\n\n\"Maravilha, {{leadName}}! Antes de liberar sua credencial, confere se está tudo certinho 😊\n\nNome completo: [nome completo]\nAcompanhantes: [quantidade]\nNome dos acompanhantes: [nomes ou não se aplica]\nDia escolhido: [data e horário]\nCarro na troca: [sim ou não]\nPlaca: [placa ou não se aplica]\nModelo e ano: [modelo e ano ou não se aplica]\n\nEstá tudo correto?\"\n\nDepois pare e aguarde.\n\nNesta etapa, não execute:\n\n- `mover_lead_crm` com `PRESENCA_AGENDADA`\n- `atualizar_status_lead` com `scheduled`\n- `enviar_qrcode`\n\n---\n\n## ETAPA 11 — CORREÇÃO DOS DADOS\n\nSe o lead disser que alguma informação está errada:\n\nResponda:\n\n\"Obrigado por avisar 😊\n\nQual informação precisa ser corrigida?\"\n\nDepois pare e aguarde.\n\nQuando receber a correção:\n\n1. Execute `atualizar_dados_lead` com o campo correto.\n2. Envie novamente o resumo completo.\n3. Pergunte novamente:\n\n\"Agora está tudo correto?\"\n\nNão envie o QR Code enquanto houver correção pendente.\n\n---\n\n## ETAPA 12 — CONFIRMAÇÃO FINAL\n\nConsidere como confirmação clara:\n\n- Sim.\n- Isso mesmo.\n- Correto.\n- Está certo.\n- Tudo certo.\n- Pode confirmar.\n- Pode enviar.\n- Confirmo.\n\nNão considere confirmação:\n\n- Obrigado.\n- Beleza.\n- Ok.\n- Vou ver.\n- Talvez.\n- Acho que sim.\n- Depois confirmo.\n\nQuando o lead confirmar claramente o resumo, execute obrigatoriamente nesta ordem:\n\n### Ferramenta 1\n\n`mover_lead_crm`\n\nParâmetro:\n\n`stage_suffix = PRESENCA_AGENDADA`\n\n### Ferramenta 2\n\n`atualizar_status_lead`\n\nParâmetro:\n\n`confirmation_status = scheduled`\n\n### Ferramenta 3\n\n`enviar_qrcode`\n\nSomente depois das três ferramentas retornarem sucesso, envie a mensagem final.\n\n---\n\n## ETAPA 13 — ENCERRAMENTO\n\nDepois do envio do QR Code, responda:\n\n\"Parabéns pela sua decisão, {{leadName}}! 🎉\n\nSua credencial foi confirmada e o QR Code foi enviado.\n\nVamos ficar te esperando no {{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.event_type }}.\n\nLocal:\n{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.location }}\"\n\nNão faça outra pergunta depois dessa mensagem.\n\n---\n\n# 8. REAGENDAMENTO\n\nQuando o lead pedir para mudar o dia:\n\n1. Execute `mover_lead_crm`:\n\n`stage_suffix = PRESENCA_REAGENDADA`\n\n2. Apresente novamente as datas disponíveis.\n3. Aguarde a escolha.\n4. Execute `atualizar_dados_lead` com o novo `store_visit_datetime`.\n5. Mostre novamente o resumo.\n6. Aguarde a confirmação.\n7. Depois execute:\n\n`mover_lead_crm = PRESENCA_AGENDADA`\n\n`atualizar_status_lead = scheduled`\n\n`enviar_qrcode`\n\n---\n\n# 9. CANCELAMENTO\n\nQuando o lead cancelar:\n\n1. Execute `mover_lead_crm`:\n\n`stage_suffix = PRESENCA_CANCELADA`\n\n2. Execute `atualizar_status_lead`:\n\n`confirmation_status = cancelled`\n\n3. Responda:\n\n\"Sem problema, {{leadName}}. Obrigado por avisar 😊\n\nEsperamos falar com vc em uma próxima oportunidade.\"\n\n---\n\n# 10. PERGUNTAS FORA DO FLUXO\n\nQuando o lead fizer uma pergunta:\n\n1. Responda primeiro à dúvida usando apenas informações confirmadas.\n2. Depois retome exatamente a pergunta pendente.\n3. Não pule de etapa.\n\nSe não houver uma ferramenta de base de conhecimento conectada, não diga que consultou uma base.\n\nNunca invente:\n\n- Endereço.\n- Datas.\n- Horários.\n- Marcas.\n- Modelos.\n- Descontos.\n- Taxas.\n- Condições.\n- Valores.\n\n---\n\n# 11. FORMATO DA SAÍDA\n\nRetorne somente a mensagem destinada ao WhatsApp.\n\nNão retorne:\n\n- Explicações.\n- Títulos.\n- Markdown.\n- JSON.\n- Nome das ferramentas.\n- Parâmetros.\n- Etapa interna.\n- Comentários técnicos.\n- Resultados brutos das ferramentas.\n\nQuando uma ferramenta for necessária:\n\n1. Execute a ferramenta.\n2. Verifique o resultado.\n3. Depois retorne somente a mensagem ao lead."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [-6592, 1776],
+      "id": "a12788c9-0cad-4792-8b1d-c6cf7eccc87e",
+      "name": "VERSAO RAPHAEL"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "018b703c-2d17-4b1e-b54e-79fd741172a3",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-6592, -224],
+      "id": "f381f7fe-db1a-49e6-b754-0ebb41b85329",
+      "name": "Webhook",
+      "webhookId": "018b703c-2d17-4b1e-b54e-79fd741172a3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/1158769897321849/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "name,language,status"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"<PHONE_REDACTED>\",\n  \"type\": \"template\",\n  \"template\": {\n    \"name\": \"atualizacao_credencial\",\n    \"language\": { \"code\": \"pt_BR\" },\n    \"components\": [\n      {\n        \"type\": \"body\",\n        \"parameters\": [\n          { \"type\": \"text\", \"text\": \"Raphael\" },\n          { \"type\": \"text\", \"text\": \"Grand Prix de Vendas\" }\n        ]\n      }\n    ]\n  }\n}",
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-6592, 0],
+      "id": "88f8edbf-02ee-4b3e-a95f-4974e81af2a9",
+      "name": "Enviar Template",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - WhatsApp Cloud API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Redis6": {
+      "main": [
+        [
+          {
+            "node": "Pega-Memoria-text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch4": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extrair Dados",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Download media1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI2": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text Memory": {
+      "main": [
+        [
+          {
+            "node": "Pega-Memoria-text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audio Memory": {
+      "main": [
+        [
+          {
+            "node": "Pega-Memoria-text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Send message and wait for response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split de Mensagem1": {
+      "main": [[]]
+    },
+    "Edit Fields3": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pega-Memoria-text-2": {
+      "main": [
+        [
+          {
+            "node": "Compara Get Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Espera para responder": {
+      "main": [
+        [
+          {
+            "node": "Pega-Memoria-text-2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compara Get Memory": {
+      "main": [
+        [
+          {
+            "node": "mensagemcompleta1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dados Unicos": {
+      "main": [
+        [
+          {
+            "node": "IA ou Humano?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Text Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair Dados": {
+      "main": [
+        [
+          {
+            "node": "Download media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pega-Memoria-text": {
+      "main": [
+        [
+          {
+            "node": "Espera para responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Whisper1": {
+      "main": [
+        [
+          {
+            "node": "Audio Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [[]]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "CONSULTAR ETAPA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRIAR LEAD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EverSync": {
+      "main": [
+        [
+          {
+            "node": "Consultar se o lead existe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "mensagemcompleta1": {
+      "main": [
+        [
+          {
+            "node": "Redis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar se o lead existe": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IA ou Humano?": {
+      "main": [
+        [
+          {
+            "node": "IA ou Humano?1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "EverSync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IA ou Humano?1": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Switch5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar se o lead existe1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ford Sonnervig": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Consultar se o lead existe1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch5": {
+      "main": [
+        [
+          {
+            "node": "EverSync1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ford Sonnervig",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EverSync1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar - EVENTO": {
+      "main": [
+        [
+          {
+            "node": "RESUMO DO LEAD/EVENTO/RUBINHO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RESUMO DO LEAD/EVENTO/RUBINHO": {
+      "main": [
+        [
+          {
+            "node": "Switch4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send message and wait for response": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download media": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Whisper1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Upload media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload media": {
+      "main": [
+        [
+          {
+            "node": "Send message and wait for response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate audio": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download media1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "OpenAI2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Redis6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QRCODE": {
+      "main": [
+        [
+          {
+            "node": "Consultar - ETAPA3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ETAPA - EM CONTATO": {
+      "main": [
+        [
+          {
+            "node": "CONSULTAR ETAPA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar - ETAPA3": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        [
+          {
+            "node": "enviar qrcode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Trigger": {
+      "main": [
+        [
+          {
+            "node": "Dados Unicos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Consultar - EVENTO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "mover_lead_crm": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "atualizar_dados_lead": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "atualizar_status_lead": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "ETAPA - EM CONTATO1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Consultar - EVENTO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enviar_qrcode": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ETAPA - EM CONTATO1": {
+      "main": [
+        [
+          {
+            "node": "Consultar - EVENTO1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar - EVENTO1": {
+      "main": [
+        [
+          {
+            "node": "Send message and wait for response2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRIAR LEAD": {
+      "main": [
+        [
+          {
+            "node": "ETAPA - EM CONTATO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CONSULTAR ETAPA": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  }
+}
