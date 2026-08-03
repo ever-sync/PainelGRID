@@ -15,6 +15,10 @@ if (!apiKey) {
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const workflows = [
   { id: "xrF95mmbiH38K1kS", file: "form-evento.json" },
+  {
+    id: "ajCMPJRM9s46maxh",
+    file: "meta-leads-verificacao-get.json",
+  },
   { id: "MWIRTrZl44bVjTZW", file: "rubinho-v1.json" },
 ];
 

@@ -1,54 +1,9 @@
 {
   "sourceWorkflowId": "xrF95mmbiH38K1kS",
-  "sourceUpdatedAt": "2026-08-03T21:48:45.350Z",
+  "sourceUpdatedAt": "2026-08-03T22:09:33.559Z",
   "name": "Form - EVENTO",
   "active": true,
   "nodes": [
-    {
-      "parameters": {
-        "path": "meta-leads",
-        "responseMode": "responseNode",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
-      "position": [-1936, 112],
-      "id": "4946eb7a-90f7-4fcc-9862-ee47e45c78a3",
-      "name": "Webhook",
-      "webhookId": "e1e16d9a-5cae-4d37-83c4-e3de651afe29"
-    },
-    {
-      "parameters": {
-        "jsCode": "const { createHash } = require(\"crypto\");\nconst query = $input.first().json.query ?? {};\n\nconst mode = query[\"hub.mode\"];\nconst token = String(query[\"hub.verify_token\"] ?? \"\");\nconst challenge = query[\"hub.challenge\"];\n\nif (mode !== \"subscribe\") {\n  return [{\n    json: {\n      statusCode: 400,\n      response: \"Modo de verificação inválido\",\n    },\n  }];\n}\n\nconst tokenHash = createHash(\"sha256\").update(token).digest(\"hex\");\nconst expectedHash = \"290c70bbbf3af1457819fae6d33df19d899a7e216990d289d485b8fba7c406f4\";\n\nif (tokenHash !== expectedHash) {\n  return [{\n    json: {\n      statusCode: 403,\n      response: \"Token de verificação inválido\",\n    },\n  }];\n}\n\nreturn [{\n  json: {\n    statusCode: 200,\n    response: String(challenge),\n  },\n}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [-1744, 112],
-      "id": "eacc77c4-3806-4e63-8c59-2cb3625ce1d9",
-      "name": "Code in JavaScript"
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "={{ $json.response }}",
-        "options": {
-          "responseCode": "={{ $json.statusCode }}",
-          "responseHeaders": {
-            "entries": [
-              {
-                "name": "Content-Type",
-                "value": "text/plain"
-              }
-            ]
-          }
-        }
-      },
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.5,
-      "position": [-1520, 112],
-      "id": "ea99c94e-2a6c-455c-b817-1a57756a16b6",
-      "name": "Respond to Webhook"
-    },
     {
       "parameters": {
         "jsCode": "const body = $json.body ?? $json;\n\nconst change = body.entry?.[0]?.changes?.[0];\n\nif (!change || change.field !== 'leadgen') {\n  return [];\n}\n\nconst value = change.value ?? {};\n\nreturn [\n  {\n    json: {\n      leadgen_id: value.leadgen_id,\n      page_id: value.page_id,\n      form_id: value.form_id,\n      ad_id: value.ad_id,\n      adgroup_id: value.adgroup_id,\n      created_time: value.created_time,\n      payload_original: body\n    }\n  }\n];"
@@ -432,28 +387,6 @@
     }
   ],
   "connections": {
-    "Webhook": {
-      "main": [
-        [
-          {
-            "node": "Code in JavaScript",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Code in JavaScript": {
-      "main": [
-        [
-          {
-            "node": "Respond to Webhook",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Code in JavaScript1": {
       "main": [
         [

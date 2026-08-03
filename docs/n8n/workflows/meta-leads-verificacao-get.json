@@ -1,0 +1,84 @@
+{
+  "sourceWorkflowId": "ajCMPJRM9s46maxh",
+  "sourceUpdatedAt": "2026-08-03T22:09:33.193Z",
+  "name": "Meta Leads - Verificação GET",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "path": "meta-leads",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "id": "35a6412e-a596-4cc1-a62a-febf07cda101",
+      "name": "Webhook",
+      "webhookId": "7e32c76f-12ed-4a1a-b328-4f643326b101"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { createHash } = require(\"crypto\");\nconst query = $input.first().json.query ?? {};\n\nconst mode = query[\"hub.mode\"];\nconst token = String(query[\"hub.verify_token\"] ?? \"\");\nconst challenge = query[\"hub.challenge\"];\n\nif (mode !== \"subscribe\") {\n  return [{\n    json: {\n      statusCode: 400,\n      response: \"Modo de verificação inválido\",\n    },\n  }];\n}\n\nconst tokenHash = createHash(\"sha256\").update(token).digest(\"hex\");\nconst expectedHash = \"290c70bbbf3af1457819fae6d33df19d899a7e216990d289d485b8fba7c406f4\";\n\nif (tokenHash !== expectedHash) {\n  return [{\n    json: {\n      statusCode: 403,\n      response: \"Token de verificação inválido\",\n    },\n  }];\n}\n\nreturn [{\n  json: {\n    statusCode: 200,\n    response: String(challenge),\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0],
+      "id": "35a6412e-a596-4cc1-a62a-febf07cda102",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.response }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/plain"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [480, 0],
+      "id": "35a6412e-a596-4cc1-a62a-febf07cda103",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false
+  }
+}
