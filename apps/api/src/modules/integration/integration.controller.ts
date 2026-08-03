@@ -1,13 +1,16 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
   Headers,
   Param,
+  ParseArrayPipe,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { ApiHeader, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -18,12 +21,14 @@ import { MoveLeadBySuffixDto } from '../crm/dto/move-lead-by-suffix.dto';
 import { MoveLeadDto } from '../crm/dto/move-lead.dto';
 import { EventsService } from '../events/events.service';
 import { CreateLeadDto } from '../leads/dto/create-lead.dto';
+import { FacebookLeadPayloadDto } from '../leads/dto/facebook-lead-payload.dto';
 import { FindLeadsQueryDto } from '../leads/dto/find-leads-query.dto';
 import { IntegrationPatchLeadDto } from '../leads/dto/integration-patch-lead.dto';
 import { ReconcileLeadsDto } from '../leads/dto/reconcile-leads.dto';
 import { LeadsService } from '../leads/leads.service';
 import { IntegrationFindEventQueryDto } from './dto/find-event-query.dto';
 import { IntegrationKeyGuard } from './integration-key.guard';
+import type { IntegrationRequest } from './integration-request';
 import { RubinhoService } from '../rubinho/rubinho.service';
 
 @ApiTags('integrations')
@@ -158,6 +163,45 @@ export class IntegrationController {
   })
   createLead(@Body() dto: CreateLeadDto) {
     return this.leadsService.createForIntegration(dto);
+  }
+
+  @Post('leads/facebook')
+  @ApiOperation({
+    summary: 'Recebe o array bruto de leads do Facebook Lead Ads',
+    description:
+      'Aceita os campos em portugues entregues pela automacao da campanha. ' +
+      'O cliente e inferido da credencial X-Leadflow-Integration-Key; nao envie client_id. ' +
+      'Cada formulario_id precisa estar entre os formularios Meta selecionados para esse cliente. ' +
+      'Deduplica primeiro pelo lead_id do Facebook e depois por telefone/e-mail.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Lote processado. Retorna quantos leads foram criados ou atualizados.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Formulario Meta nao esta vinculado ao cliente desta credencial.',
+  })
+  createFacebookLeads(
+    @Body(
+      new ParseArrayPipe({
+        items: FacebookLeadPayloadDto,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    payload: FacebookLeadPayloadDto[],
+    @Req() request: IntegrationRequest,
+  ) {
+    if (!request.integrationClientId) {
+      throw new BadRequestException(
+        'Use uma credencial de integracao vinculada ao cliente para importar leads do Facebook',
+      );
+    }
+    return this.leadsService.createFacebookLeadsForIntegration(
+      request.integrationClientId,
+      payload,
+    );
   }
 
   @Post('leads/reconcile')

@@ -65,3 +65,12 @@ export function isLeadEmailUniqueViolation(error: unknown): boolean {
       entry.includes('leads_client_id_email_active_unique'),
   );
 }
+
+export function isLeadExternalRefUniqueViolation(error: unknown): boolean {
+  const targets = uniqueTargetEntries(error);
+  return targets.some(
+    (entry) =>
+      (entry.includes('client_id') && entry.includes('external_ref')) ||
+      entry.includes('lead_client_external_ref'),
+  );
+}

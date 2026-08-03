@@ -104,6 +104,15 @@ export interface Lead {
   first_name?: string | null;
   last_name?: string | null;
   birth_date?: string | null;
+  facebook_lead_id?: string | null;
+  facebook_form_id?: string | null;
+  facebook_ad_id?: string | null;
+  facebook_ad_name?: string | null;
+  facebook_campaign_id?: string | null;
+  facebook_campaign_name?: string | null;
+  preferred_contact_channel?: string | null;
+  source_created_at?: string | null;
+  source_payload?: Record<string, unknown> | null;
   cpf_validated?: boolean;
   engagement_level?: "alto" | "medio" | "baixo";
   sentiment?: "positivo" | "neutro" | "negativo";

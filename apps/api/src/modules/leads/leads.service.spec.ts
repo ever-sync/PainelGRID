@@ -25,6 +25,7 @@ describe('LeadsService', () => {
     event: { findFirst: jest.Mock };
     user: { findFirst: jest.Mock };
     salesTeamMember: { findFirst: jest.Mock };
+    metaAssetSelection: { findMany: jest.Mock };
     $queryRaw: jest.Mock;
   };
   let clientsService: {
@@ -47,6 +48,7 @@ describe('LeadsService', () => {
       event: { findFirst: jest.fn() },
       user: { findFirst: jest.fn() },
       salesTeamMember: { findFirst: jest.fn() },
+      metaAssetSelection: { findMany: jest.fn() },
       $queryRaw: jest.fn(),
     };
     prisma.lead.findFirst.mockResolvedValue(null);
@@ -57,6 +59,12 @@ describe('LeadsService', () => {
     prisma.crmPipeline.findFirst.mockResolvedValue(null);
     prisma.crmHistory.create.mockResolvedValue({ id: 'hist-1' });
     prisma.event.findFirst.mockResolvedValue(null);
+    prisma.metaAssetSelection.findMany.mockResolvedValue([
+      {
+        form_id: '27515534804767924',
+        form_name: 'Form - OFICIAL-copy',
+      },
+    ]);
     prisma.$queryRaw.mockResolvedValue([]);
     clientsService = {
       assertGestorOwnsClient: jest.fn(),
@@ -517,6 +525,250 @@ describe('LeadsService', () => {
     );
     expect(result.already_existed).toBe(false);
     expect(result.id).toBe('lead-novo-1');
+  });
+
+  it('importa o payload bruto do Facebook com metadados de campanha no lead', async () => {
+    prisma.lead.findFirst.mockResolvedValue(null);
+    prisma.lead.create.mockResolvedValue({
+      ...baseExistingLead,
+      id: 'lead-facebook-1',
+      source: LeadSource.facebook_ads,
+      external_ref: '1946096999403754',
+      facebook_lead_id: '1946096999403754',
+      facebook_form_id: '27515534804767924',
+      facebook_ad_id: '120247888509270620',
+      facebook_ad_name: 'Novo anúncio de Leads',
+      facebook_campaign_id: '120247888509250620',
+      facebook_campaign_name: 'teste',
+      preferred_contact_channel: 'whatsapp',
+      source_created_at: new Date('2026-07-14T02:25:25.000Z'),
+      source_payload: { lead_id: '1946096999403754' },
+    });
+
+    const result = await service.createFacebookLeadsForIntegration(clientId, [
+      {
+        lead_id: '1946096999403754',
+        nome: 'Raphael',
+        email: 'raphaelbetel3@gmail.com',
+        telefone: '+5512981092776',
+        preferencia_atendimento: 'whatsapp',
+        formulario_id: '27515534804767924',
+        anuncio_id: '120247888509270620',
+        anuncio: 'Novo anúncio de Leads',
+        campanha_id: '120247888509250620',
+        campanha: 'teste',
+        criado_em: '2026-07-14T02:25:25+0000',
+        origem: 'facebook_lead_ads',
+        todos_os_campos: {
+          'prefere_ser_atendido_por:': 'whatsapp',
+          full_name: 'Raphael',
+          phone_number: '+5512981092776',
+          email: 'raphaelbetel3@gmail.com',
+        },
+      },
+    ]);
+
+    expect(prisma.lead.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          client_id: clientId,
+          name: 'Raphael',
+          email: 'raphaelbetel3@gmail.com',
+          phone: '+5512981092776',
+          source: LeadSource.facebook_ads,
+          external_ref: '1946096999403754',
+          facebook_lead_id: '1946096999403754',
+          facebook_form_id: '27515534804767924',
+          facebook_ad_id: '120247888509270620',
+          facebook_ad_name: 'Novo anúncio de Leads',
+          facebook_campaign_id: '120247888509250620',
+          facebook_campaign_name: 'teste',
+          preferred_contact_channel: 'whatsapp',
+          source_created_at: new Date('2026-07-14T02:25:25.000Z'),
+          source_payload: expect.objectContaining({
+            origem: 'facebook_lead_ads',
+            todos_os_campos: expect.objectContaining({ full_name: 'Raphael' }),
+          }),
+        }),
+      }),
+    );
+    expect(result).toMatchObject({ received: 1, created: 1, already_existed: 0 });
+    expect(result.validated_forms).toEqual([
+      { id: '27515534804767924', name: 'Form - OFICIAL-copy' },
+    ]);
+    expect(result.items[0]).toMatchObject({
+      id: 'lead-facebook-1',
+      facebook_campaign_name: 'teste',
+      already_existed: false,
+    });
+  });
+
+  it('reenvio do Facebook atualiza atribuicao no lead existente sem duplicar', async () => {
+    prisma.lead.findFirst.mockResolvedValue({
+      ...baseExistingLead,
+      external_ref: '1946096999403754',
+      source_created_at: new Date('2026-07-13T02:25:25.000Z'),
+    });
+    prisma.lead.update.mockResolvedValue({
+      ...baseExistingLead,
+      external_ref: '1946096999403754',
+      facebook_lead_id: '1946096999403754',
+      facebook_campaign_id: '120247888509250620',
+      facebook_campaign_name: 'teste',
+      source_created_at: new Date('2026-07-14T02:25:25.000Z'),
+      source_payload: { lead_id: '1946096999403754' },
+    });
+
+    const result = await service.createFacebookLeadsForIntegration(clientId, [
+      {
+        lead_id: '1946096999403754',
+        nome: 'Raphael',
+        campanha_id: '120247888509250620',
+        campanha: 'teste',
+        criado_em: '2026-07-14T02:25:25+0000',
+        formulario_id: '27515534804767924',
+      },
+    ]);
+
+    expect(prisma.lead.create).not.toHaveBeenCalled();
+    expect(prisma.lead.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: baseExistingLead.id },
+        data: expect.objectContaining({
+          facebook_lead_id: '1946096999403754',
+          facebook_campaign_id: '120247888509250620',
+          facebook_campaign_name: 'teste',
+          source_created_at: new Date('2026-07-14T02:25:25.000Z'),
+        }),
+      }),
+    );
+    expect(result).toMatchObject({ received: 1, created: 0, already_existed: 1 });
+  });
+
+  it('prioriza lead ativo pelo telefone quando o mesmo lead_id pertence a um arquivado', async () => {
+    const activeLead = {
+      ...baseExistingLead,
+      id: 'lead-ativo-pelo-telefone',
+      name: 'Raphael',
+      email: 'raphaelbetel3@gmail.com',
+      phone: '+5512981092776',
+      external_ref: 'lead-meta-anterior',
+      facebook_lead_id: 'lead-meta-anterior',
+      source_created_at: new Date('2026-07-13T23:00:45.000Z'),
+    };
+    const archivedLead = {
+      ...baseExistingLead,
+      id: 'lead-arquivado-pelo-id-meta',
+      name: 'Raphael',
+      email: null,
+      phone: '+5512981092776',
+      external_ref: '1946096999403754',
+      facebook_lead_id: '1946096999403754',
+      deleted_at: new Date('2026-08-03T13:11:34.233Z'),
+    };
+
+    prisma.lead.findFirst.mockImplementation(async ({ where }) => {
+      const conditions = Array.isArray(where?.OR) ? where.OR : [];
+      if (conditions.some((condition: Record<string, unknown>) => 'phone' in condition)) {
+        return activeLead;
+      }
+      if (
+        conditions.some((condition: Record<string, unknown>) => 'external_ref' in condition)
+      ) {
+        return archivedLead;
+      }
+      return null;
+    });
+    prisma.lead.update.mockImplementation(async ({ data }) => ({
+      ...activeLead,
+      ...data,
+    }));
+
+    const result = await service.createFacebookLeadsForIntegration(clientId, [
+      {
+        lead_id: '1946096999403754',
+        nome: 'Raphael',
+        email: 'raphaelbetel3@gmail.com',
+        telefone: '+5512981092776',
+        formulario_id: '27515534804767924',
+        criado_em: '2026-07-14T02:25:25+0000',
+      },
+    ]);
+
+    expect(prisma.lead.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: activeLead.id },
+        data: expect.not.objectContaining({ deleted_at: null }),
+      }),
+    );
+    expect(result.items[0]).toMatchObject({
+      id: activeLead.id,
+      already_existed: true,
+    });
+  });
+
+  it('reativa lead arquivado encontrado pelo id do Facebook e preenche e-mail vazio', async () => {
+    const archivedLead = {
+      ...baseExistingLead,
+      email: null,
+      external_ref: '1946096999403754',
+      facebook_lead_id: '1946096999403754',
+      deleted_at: new Date('2026-08-01T10:00:00.000Z'),
+    };
+    prisma.lead.findFirst.mockImplementation(async ({ where }) => {
+      if (where?.deleted_at?.not === null) {
+        return archivedLead;
+      }
+      return null;
+    });
+    prisma.lead.update.mockResolvedValue({
+      ...baseExistingLead,
+      email: 'raphaelbetel3@gmail.com',
+      external_ref: '1946096999403754',
+      facebook_lead_id: '1946096999403754',
+      deleted_at: null,
+    });
+
+    const result = await service.createFacebookLeadsForIntegration(clientId, [
+      {
+        lead_id: '1946096999403754',
+        nome: 'Raphael',
+        email: 'raphaelbetel3@gmail.com',
+        formulario_id: '27515534804767924',
+      },
+    ]);
+
+    expect(prisma.lead.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: baseExistingLead.id },
+        data: expect.objectContaining({
+          deleted_at: null,
+          email: 'raphaelbetel3@gmail.com',
+        }),
+      }),
+    );
+    expect(result).toMatchObject({ received: 1, created: 0, already_existed: 1 });
+  });
+
+  it('rejeita formulario do Facebook que nao foi selecionado para o cliente', async () => {
+    prisma.metaAssetSelection.findMany.mockResolvedValue([]);
+
+    await expect(
+      service.createFacebookLeadsForIntegration(clientId, [
+        {
+          lead_id: 'meta-lead-outro-cliente',
+          nome: 'Lead externo',
+          formulario_id: 'formulario-de-outro-cliente',
+        },
+      ]),
+    ).rejects.toThrow(
+      new ForbiddenException(
+        'Formulario Meta nao vinculado ao cliente desta integracao: formulario-de-outro-cliente',
+      ),
+    );
+
+    expect(prisma.lead.findFirst).not.toHaveBeenCalled();
+    expect(prisma.lead.create).not.toHaveBeenCalled();
   });
 
   it('bloqueia update de lead quando telefone pertence a outro lead do mesmo cliente', async () => {

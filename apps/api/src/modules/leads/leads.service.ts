@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AppointmentStatus, ConfirmationStatus, Lead, Prisma } from '@prisma/client';
+import { AppointmentStatus, ConfirmationStatus, Lead, LeadSource, Prisma } from '@prisma/client';
 import { readSheet } from 'read-excel-file/node';
 import {
   looksLikeJwtCompact,
@@ -32,6 +32,7 @@ import { clientIdToStageCode } from '../crm/default-crm-pipeline';
 import { RealtimeEventsService } from '../realtime/realtime-events.service';
 import { ScoreEventsService } from '../score-events/score-events.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
+import { FacebookLeadPayloadDto } from './dto/facebook-lead-payload.dto';
 import { CloseAttendanceDto } from './dto/close-attendance.dto';
 import { FindLeadsQueryDto } from './dto/find-leads-query.dto';
 import { ImportLeadsDto } from './dto/import-leads.dto';
@@ -42,6 +43,7 @@ import { RedisService } from '../../config/redis.service';
 import {
   buildLeadPhoneCandidates,
   isLeadEmailUniqueViolation,
+  isLeadExternalRefUniqueViolation,
   isLeadPhoneUniqueViolation,
 } from './lead-identity.util';
 
@@ -79,6 +81,16 @@ const leadSelect = {
   last_name: true,
   birth_date: true,
   facebook_lead_id: true,
+  facebook_form_id: true,
+  facebook_ad_id: true,
+  facebook_ad_name: true,
+  facebook_campaign_id: true,
+  facebook_campaign_name: true,
+  preferred_contact_channel: true,
+  source_created_at: true,
+  source_payload: true,
+  external_ref: true,
+  deleted_at: true,
   checkin_token: true,
   cpf: true,
   wristband_number: true,
@@ -117,6 +129,19 @@ const leadSelect = {
 } as const satisfies Prisma.LeadSelect;
 
 type LeadWithRelations = Prisma.LeadGetPayload<{ select: typeof leadSelect }>;
+
+type FacebookLeadMetadata = {
+  externalRef: string;
+  facebookLeadId: string;
+  facebookFormId: string | null;
+  facebookAdId: string | null;
+  facebookAdName: string | null;
+  facebookCampaignId: string | null;
+  facebookCampaignName: string | null;
+  preferredContactChannel: string | null;
+  sourceCreatedAt: Date | null;
+  sourcePayload: Prisma.InputJsonValue;
+};
 
 const CHECKIN_VOUCHER_TTL_SEC = 90 * 24 * 60 * 60;
 const MAX_IMPORT_ROWS = 10_000;
@@ -1422,13 +1447,110 @@ export class LeadsService {
     };
   }
 
+  async createFacebookLeadsForIntegration(
+    clientId: string,
+    payloads: FacebookLeadPayloadDto[],
+  ) {
+    if (payloads.length === 0) {
+      throw new BadRequestException('Envie ao menos um lead do Facebook');
+    }
+    if (payloads.length > 100) {
+      throw new BadRequestException('Cada lote pode conter no maximo 100 leads');
+    }
+
+    const validatedForms = await this.validateFacebookFormsForClient(clientId, payloads);
+    const items: Array<ReturnType<typeof this.toResponse> & { already_existed: boolean }> = [];
+
+    for (const payload of payloads) {
+      const metadata: FacebookLeadMetadata = {
+        externalRef: payload.lead_id,
+        facebookLeadId: payload.lead_id,
+        facebookFormId: payload.formulario_id || null,
+        facebookAdId: payload.anuncio_id || null,
+        facebookAdName: payload.anuncio || null,
+        facebookCampaignId: payload.campanha_id || null,
+        facebookCampaignName: payload.campanha || null,
+        preferredContactChannel: payload.preferencia_atendimento || null,
+        sourceCreatedAt: payload.criado_em ? new Date(payload.criado_em) : null,
+        sourcePayload: JSON.parse(JSON.stringify(payload)) as Prisma.InputJsonValue,
+      };
+
+      const result = await this.createForIntegration(
+        {
+          client_id: clientId,
+          name: payload.nome,
+          email: payload.email || undefined,
+          phone: payload.telefone || undefined,
+          source: LeadSource.facebook_ads,
+        },
+        metadata,
+      );
+      items.push(result);
+    }
+
+    const alreadyExisted = items.filter((item) => item.already_existed).length;
+    return {
+      received: payloads.length,
+      created: payloads.length - alreadyExisted,
+      already_existed: alreadyExisted,
+      validated_forms: validatedForms,
+      items,
+    };
+  }
+
+  /**
+   * Usa a selecao salva no painel do cliente como fonte de verdade. A credencial
+   * continua definindo o tenant e um formulario de outro cliente nunca e aceito,
+   * mesmo que todos os webhooks da Meta cheguem ao mesmo fluxo do n8n.
+   */
+  private async validateFacebookFormsForClient(
+    clientId: string,
+    payloads: FacebookLeadPayloadDto[],
+  ) {
+    const formIds = [...new Set(payloads.map((payload) => payload.formulario_id.trim()))];
+    const selectedForms = await this.prisma.metaAssetSelection.findMany({
+      where: {
+        form_id: { in: formIds },
+        meta_connection: {
+          client_id: clientId,
+          status: 'connected',
+        },
+      },
+      select: {
+        form_id: true,
+        form_name: true,
+      },
+    });
+
+    const selectedById = new Map(
+      selectedForms
+        .filter((form): form is typeof form & { form_id: string } => Boolean(form.form_id))
+        .map((form) => [form.form_id, form]),
+    );
+    const unlinkedFormIds = formIds.filter((formId) => !selectedById.has(formId));
+
+    if (unlinkedFormIds.length > 0) {
+      throw new ForbiddenException(
+        `Formulario Meta nao vinculado ao cliente desta integracao: ${unlinkedFormIds.join(', ')}`,
+      );
+    }
+
+    return formIds.map((formId) => ({
+      id: formId,
+      name: selectedById.get(formId)?.form_name ?? formId,
+    }));
+  }
+
   /** Cria lead sem exigir contexto JWT — autenticação já validada pelo IntegrationKeyGuard.
    *
    * Deduplicação automática: se já existir um lead ativo com o mesmo telefone
    * ou e-mail para o mesmo cliente, retorna o lead existente com
    * `already_existed: true` sem criar duplicata nem disparar webhook.
    */
-  async createForIntegration(dto: CreateLeadDto) {
+  async createForIntegration(
+    dto: CreateLeadDto,
+    facebookMetadata?: FacebookLeadMetadata,
+  ) {
     this.assertPipelineStageConsistency(dto.crm_pipeline_id, dto.crm_stage_id);
 
     if (dto.crm_stage_id) {
@@ -1447,7 +1569,7 @@ export class LeadsService {
     if (phone) {
       const existingByPhone = await this.findLeadByPhone(dto.client_id, phone);
       if (existingByPhone) {
-        return this.mergeExistingLeadOnIntegration(existingByPhone, dto);
+        return this.mergeExistingLeadOnIntegration(existingByPhone, dto, facebookMetadata);
       }
       const digits = phoneDigits(phone);
       dedupeOr.push({ phone });
@@ -1455,6 +1577,31 @@ export class LeadsService {
         dedupeOr.push({ phone: { contains: digits.slice(-10), mode: 'insensitive' } });
       }
     }
+
+    // O telefone ativo e a identidade principal deste fluxo. O mesmo lead pode
+    // preencher mais de um formulario da Meta e receber lead_ids diferentes;
+    // por isso o identificador externo so vem depois da busca por telefone.
+    if (facebookMetadata) {
+      const existingByExternalRef = await this.prisma.lead.findFirst({
+        where: {
+          client_id: dto.client_id,
+          deleted_at: null,
+          OR: [
+            { external_ref: facebookMetadata.externalRef },
+            { facebook_lead_id: facebookMetadata.facebookLeadId },
+          ],
+        },
+        select: leadSelect,
+      });
+      if (existingByExternalRef) {
+        return this.mergeExistingLeadOnIntegration(
+          existingByExternalRef as LeadWithRelations,
+          dto,
+          facebookMetadata,
+        );
+      }
+    }
+
     if (email) dedupeOr.push({ email });
 
     if (dedupeOr.length > 0) {
@@ -1464,7 +1611,35 @@ export class LeadsService {
       });
 
       if (existing) {
-        return this.mergeExistingLeadOnIntegration(existing as LeadWithRelations, dto);
+        return this.mergeExistingLeadOnIntegration(
+          existing as LeadWithRelations,
+          dto,
+          facebookMetadata,
+        );
+      }
+    }
+
+    // Somente reativa um cadastro arquivado depois de esgotar telefone e e-mail
+    // ativos. Isso evita tentar restaurar uma duplicata antiga quando a mesma
+    // pessoa ja possui um cadastro ativo no cliente.
+    if (facebookMetadata) {
+      const archivedByExternalRef = await this.prisma.lead.findFirst({
+        where: {
+          client_id: dto.client_id,
+          deleted_at: { not: null },
+          OR: [
+            { external_ref: facebookMetadata.externalRef },
+            { facebook_lead_id: facebookMetadata.facebookLeadId },
+          ],
+        },
+        select: leadSelect,
+      });
+      if (archivedByExternalRef) {
+        return this.mergeExistingLeadOnIntegration(
+          archivedByExternalRef as LeadWithRelations,
+          dto,
+          facebookMetadata,
+        );
       }
     }
 
@@ -1494,21 +1669,51 @@ export class LeadsService {
           vehicle_plate: dto.vehicle_plate?.trim() ?? null,
           vehicle_model: dto.vehicle_model?.trim() ?? null,
           vehicle_year: dto.vehicle_year?.trim() ?? null,
+          ...(facebookMetadata
+            ? {
+                external_ref: facebookMetadata.externalRef,
+                facebook_lead_id: facebookMetadata.facebookLeadId,
+                facebook_form_id: facebookMetadata.facebookFormId,
+                facebook_ad_id: facebookMetadata.facebookAdId,
+                facebook_ad_name: facebookMetadata.facebookAdName,
+                facebook_campaign_id: facebookMetadata.facebookCampaignId,
+                facebook_campaign_name: facebookMetadata.facebookCampaignName,
+                preferred_contact_channel: facebookMetadata.preferredContactChannel,
+                source_created_at: facebookMetadata.sourceCreatedAt,
+                source_payload: facebookMetadata.sourcePayload,
+              }
+            : {}),
         },
         select: leadSelect,
       })) as LeadWithRelations;
     } catch (error) {
+      if (facebookMetadata && isLeadExternalRefUniqueViolation(error)) {
+        const existingByExternalRef = await this.prisma.lead.findFirst({
+          where: {
+            client_id: dto.client_id,
+            external_ref: facebookMetadata.externalRef,
+          },
+          select: leadSelect,
+        });
+        if (existingByExternalRef) {
+          return this.mergeExistingLeadOnIntegration(
+            existingByExternalRef as LeadWithRelations,
+            dto,
+            facebookMetadata,
+          );
+        }
+      }
       if (isLeadPhoneUniqueViolation(error)) {
         const existingByPhone = phone ? await this.findLeadByPhone(dto.client_id, phone) : null;
         if (existingByPhone) {
-          return { ...this.toResponse(existingByPhone), already_existed: true };
+          return this.mergeExistingLeadOnIntegration(existingByPhone, dto, facebookMetadata);
         }
         throw new BadRequestException('Telefone ja cadastrado para este cliente');
       }
       if (isLeadEmailUniqueViolation(error)) {
         const existingByEmail = email ? await this.findLeadByEmail(dto.client_id, email) : null;
         if (existingByEmail) {
-          return { ...this.toResponse(existingByEmail), already_existed: true };
+          return this.mergeExistingLeadOnIntegration(existingByEmail, dto, facebookMetadata);
         }
         throw new BadRequestException('E-mail ja cadastrado para este cliente');
       }
@@ -1538,8 +1743,45 @@ export class LeadsService {
   private async mergeExistingLeadOnIntegration(
     existing: LeadWithRelations,
     dto: CreateLeadDto,
+    facebookMetadata?: FacebookLeadMetadata,
   ): Promise<ReturnType<typeof this.toResponse> & { already_existed: true }> {
     const patch: Prisma.LeadUncheckedUpdateInput = {};
+
+    // Uma nova entrega valida do Facebook deve reativar o cadastro encontrado
+    // pelo identificador externo. Sem isso, o endpoint devolvia um lead
+    // arquivado que as demais rotas (listagem/PATCH) corretamente ignoravam.
+    if (existing.deleted_at) {
+      const activeByPhone = await this.findLeadByPhone(
+        existing.client_id,
+        dto.phone ?? existing.phone,
+        existing.id,
+      );
+      if (activeByPhone) {
+        return this.mergeExistingLeadOnIntegration(activeByPhone, dto, facebookMetadata);
+      }
+
+      const activeByEmail = await this.findLeadByEmail(
+        existing.client_id,
+        dto.email ?? existing.email,
+        existing.id,
+      );
+      if (activeByEmail) {
+        return this.mergeExistingLeadOnIntegration(activeByEmail, dto, facebookMetadata);
+      }
+
+      patch.deleted_at = null;
+    }
+    if (dto.email && !existing.email) {
+      const normalizedEmail = dto.email.toLowerCase().trim();
+      const activeEmailOwner = await this.findLeadByEmail(
+        existing.client_id,
+        normalizedEmail,
+        existing.id,
+      );
+      if (!activeEmailOwner) {
+        patch.email = normalizedEmail;
+      }
+    }
 
     if (dto.event_interest_id && !existing.event_interest_id) {
       patch.event_interest_id = dto.event_interest_id;
@@ -1567,6 +1809,45 @@ export class LeadsService {
     }
     if (dto.vehicle_year && !existing.vehicle_year) {
       patch.vehicle_year = dto.vehicle_year;
+    }
+
+    if (facebookMetadata) {
+      if (!existing.external_ref) {
+        patch.external_ref = facebookMetadata.externalRef;
+      }
+
+      const incomingOccurredAt = facebookMetadata.sourceCreatedAt?.getTime() ?? null;
+      const currentOccurredAt = existing.source_created_at?.getTime() ?? null;
+      const isLatestAttribution =
+        incomingOccurredAt === null ||
+        currentOccurredAt === null ||
+        incomingOccurredAt >= currentOccurredAt;
+
+      if (isLatestAttribution) {
+        patch.facebook_lead_id = facebookMetadata.facebookLeadId;
+        if (facebookMetadata.facebookFormId) {
+          patch.facebook_form_id = facebookMetadata.facebookFormId;
+        }
+        if (facebookMetadata.facebookAdId) {
+          patch.facebook_ad_id = facebookMetadata.facebookAdId;
+        }
+        if (facebookMetadata.facebookAdName) {
+          patch.facebook_ad_name = facebookMetadata.facebookAdName;
+        }
+        if (facebookMetadata.facebookCampaignId) {
+          patch.facebook_campaign_id = facebookMetadata.facebookCampaignId;
+        }
+        if (facebookMetadata.facebookCampaignName) {
+          patch.facebook_campaign_name = facebookMetadata.facebookCampaignName;
+        }
+        if (facebookMetadata.preferredContactChannel) {
+          patch.preferred_contact_channel = facebookMetadata.preferredContactChannel;
+        }
+        if (facebookMetadata.sourceCreatedAt) {
+          patch.source_created_at = facebookMetadata.sourceCreatedAt;
+        }
+        patch.source_payload = facebookMetadata.sourcePayload;
+      }
     }
 
     if (Object.keys(patch).length === 0) {
@@ -1889,6 +2170,14 @@ export class LeadsService {
       last_name: lead.last_name,
       birth_date: lead.birth_date,
       facebook_lead_id: lead.facebook_lead_id,
+      facebook_form_id: lead.facebook_form_id,
+      facebook_ad_id: lead.facebook_ad_id,
+      facebook_ad_name: lead.facebook_ad_name,
+      facebook_campaign_id: lead.facebook_campaign_id,
+      facebook_campaign_name: lead.facebook_campaign_name,
+      preferred_contact_channel: lead.preferred_contact_channel,
+      source_created_at: lead.source_created_at,
+      source_payload: lead.source_payload,
       cpf: lead.cpf ?? null,
       wristband_number: lead.wristband_number ?? null,
       crm_pipeline_code: lead.crm_pipeline?.code ?? null,

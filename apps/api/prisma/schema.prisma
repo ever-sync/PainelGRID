@@ -212,6 +212,14 @@ model Lead {
   campaign_id                 String?                    @db.Uuid
   notes                       String?
   facebook_lead_id            String?                    @db.VarChar(100)
+  facebook_form_id            String?                    @db.VarChar(100)
+  facebook_ad_id              String?                    @db.VarChar(100)
+  facebook_ad_name            String?                    @db.VarChar(255)
+  facebook_campaign_id        String?                    @db.VarChar(100)
+  facebook_campaign_name      String?                    @db.VarChar(255)
+  preferred_contact_channel   String?                    @db.VarChar(50)
+  source_created_at           DateTime?
+  source_payload              Json?
   deleted_at                  DateTime?
   created_at                  DateTime                   @default(now())
   updated_at                  DateTime                   @updatedAt
@@ -269,6 +277,8 @@ model Lead {
   @@index([registered_by_id])
   @@index([campaign_id])
   @@index([event_interest_id])
+  @@index([client_id, facebook_lead_id])
+  @@index([client_id, facebook_campaign_id])
   @@index([client_id, deleted_at, created_at(sort: Desc)], map: "idx_leads_client_active_created")
   @@index([client_id, event_interest_id, confirmation_status], map: "idx_leads_client_event_confirmation")
   @@index([client_id, crm_pipeline_id, crm_stage_id], map: "idx_leads_client_pipeline_stage")

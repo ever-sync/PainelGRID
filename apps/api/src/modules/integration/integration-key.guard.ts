@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { createHash, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../../config/prisma.service';
+import type { IntegrationRequest } from './integration-request';
 
 const HEADER = 'x-leadflow-integration-key';
 
@@ -21,7 +22,7 @@ export class IntegrationKeyGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const req = context.switchToHttp().getRequest<Request>();
+    const req = context.switchToHttp().getRequest<IntegrationRequest>();
     const provided = String(req.headers[HEADER] ?? '').trim();
     if (!provided) {
       throw new UnauthorizedException('Chave de integracao invalida');
@@ -30,6 +31,7 @@ export class IntegrationKeyGuard implements CanActivate {
     const credentialClientId = await this.findCredentialClientId(provided);
     if (credentialClientId) {
       await this.assertClientScope(req, credentialClientId);
+      req.integrationClientId = credentialClientId;
       return true;
     }
 
@@ -57,6 +59,7 @@ export class IntegrationKeyGuard implements CanActivate {
     }
     if (legacyClientId) {
       await this.assertClientScope(req, legacyClientId);
+      req.integrationClientId = legacyClientId;
     }
 
     return true;

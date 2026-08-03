@@ -38,6 +38,14 @@ export type ApiLead = {
   last_name?: string | null;
   birth_date?: string | null;
   facebook_lead_id: string | null;
+  facebook_form_id?: string | null;
+  facebook_ad_id?: string | null;
+  facebook_ad_name?: string | null;
+  facebook_campaign_id?: string | null;
+  facebook_campaign_name?: string | null;
+  preferred_contact_channel?: string | null;
+  source_created_at?: string | null;
+  source_payload?: Record<string, unknown> | null;
   checkin_token: string | null;
   checkin_voucher: string | null;
   active_appointment: Lead["active_appointment"];
@@ -127,6 +135,15 @@ export function mapApiLeadToLead(row: ApiLead): Lead {
     first_name: row.first_name ?? "",
     last_name: row.last_name ?? "",
     birth_date: row.birth_date ?? null,
+    facebook_lead_id: row.facebook_lead_id ?? null,
+    facebook_form_id: row.facebook_form_id ?? null,
+    facebook_ad_id: row.facebook_ad_id ?? null,
+    facebook_ad_name: row.facebook_ad_name ?? null,
+    facebook_campaign_id: row.facebook_campaign_id ?? null,
+    facebook_campaign_name: row.facebook_campaign_name ?? null,
+    preferred_contact_channel: row.preferred_contact_channel ?? null,
+    source_created_at: row.source_created_at ?? null,
+    source_payload: row.source_payload ?? null,
     checkin_token: row.checkin_token ?? null,
     checkin_voucher: row.checkin_voucher ?? null,
     active_appointment: row.active_appointment ?? null,

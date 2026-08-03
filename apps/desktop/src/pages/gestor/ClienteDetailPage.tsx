@@ -24,7 +24,6 @@ import {
   FileText,
   Globe,
   KeyRound,
-  Layers3,
   Link2,
   Lock,
   DollarSign,
@@ -320,10 +319,19 @@ function mapMetaConnectionFromApi(
     }))
     .filter((item) => item.id);
 
-  const whatsapp = selectedAssets.find(
+  const whatsappAssets = selectedAssets.filter(
     (item) =>
       item.asset_type === "whatsapp" || item.waba_id || item.phone_number_id,
   );
+  const whatsappOptions = whatsappAssets.map((item) => ({
+    id: String(item.waba_id ?? item.external_id ?? ""),
+    name: String(item.asset_name ?? item.waba_id ?? "WhatsApp"),
+    phone_number_id: String(item.phone_number_id ?? ""),
+    display_phone_number: String(
+      item.display_phone_number ?? item.phone_number_id ?? "—",
+    ),
+  }));
+  const whatsapp = whatsappAssets[0];
   const latestSync = syncJobs[0];
   const syncSummary =
     latestSync &&
@@ -346,6 +354,7 @@ function mapMetaConnectionFromApi(
           display_phone_number: String(whatsapp.phone_number_id ?? "—"),
         }
       : null,
+    selected_whatsapps: whatsappOptions,
     phone_number_id: whatsapp ? String(whatsapp.phone_number_id ?? "") : null,
     last_sync_at: String(
       rawConnection.last_sync_at ??
@@ -394,12 +403,7 @@ function mapMetaBusinessFromApi(
   };
 }
 
-type AdsSubTab =
-  | "conexoes"
-  | "campanhas"
-  | "relatorios"
-  | "financeiro"
-  | "ia";
+type AdsSubTab = "conexoes" | "campanhas" | "relatorios" | "financeiro" | "ia";
 
 const ADS_SUB_TABS: Array<{ id: AdsSubTab; label: string }> = [
   { id: "conexoes", label: "Conexões" },
@@ -481,71 +485,341 @@ function AssetChip({
   );
 }
 
-function AssetSelectionBlock({
-  title,
-  subtitle,
+type CompactAssetTone = "blue" | "purple" | "amber" | "emerald" | "rose";
+
+const COMPACT_ASSET_TONES: Record<CompactAssetTone, string> = {
+  blue: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
+  purple:
+    "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300",
+  amber: "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+  emerald:
+    "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+  rose: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
+};
+
+const COMPACT_ASSET_ICON_TONES: Record<CompactAssetTone, string> = {
+  blue: "text-blue-600 dark:text-blue-300",
+  purple: "text-purple-600 dark:text-purple-300",
+  amber: "text-amber-700 dark:text-amber-300",
+  emerald: "text-emerald-600 dark:text-emerald-300",
+  rose: "text-rose-600 dark:text-rose-300",
+};
+
+function CompactAssetList({
+  items,
   icon,
+  tone,
+  emptyLabel,
+}: {
+  items: Array<{ id: string; label: string; description?: string }>;
+  icon: ReactNode;
+  tone: CompactAssetTone;
+  emptyLabel: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const uniqueItems = Array.from(
+    new Map(items.map((item) => [item.id, item])).values(),
+  );
+  const firstItem = uniqueItems[0];
+  const remainingCount = Math.max(uniqueItems.length - 1, 0);
+  const toneClass = COMPACT_ASSET_TONES[tone];
+  const iconToneClass = COMPACT_ASSET_ICON_TONES[tone];
+
+  if (!firstItem) {
+    return <span className="text-xs italic text-zinc-400">{emptyLabel}</span>;
+  }
+
+  return (
+    <div className="w-full min-w-0 max-w-[230px]">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <span
+          title={firstItem.description ?? firstItem.label}
+          className={clsx(
+            "inline-flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-medium",
+            toneClass,
+          )}
+        >
+          <span className="shrink-0">{icon}</span>
+          <span className="truncate">{firstItem.label}</span>
+        </span>
+
+        {remainingCount > 0 ? (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((current) => !current)}
+            className="shrink-0 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-[10px] font-medium text-zinc-600 transition hover:border-[#FF0636]/30 hover:bg-[#FF0636]/5 hover:text-[#d90030] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+          >
+            {expanded ? "Ocultar" : `+${remainingCount}`}
+          </button>
+        ) : null}
+      </div>
+
+      {expanded && remainingCount > 0 ? (
+        <div className="mt-2 max-h-44 space-y-1.5 overflow-y-auto rounded-xl border border-zinc-200 bg-zinc-50/80 p-2 dark:border-zinc-800 dark:bg-zinc-950/80">
+          {uniqueItems.slice(1).map((item) => (
+            <div
+              key={item.id}
+              title={item.description ?? item.label}
+              className="flex items-start gap-2 rounded-lg bg-white px-2 py-1.5 dark:bg-zinc-900"
+            >
+              <span className={clsx("mt-0.5 shrink-0", iconToneClass)}>
+                {icon}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-[11px] font-medium text-zinc-800 dark:text-zinc-200">
+                  {item.label}
+                </span>
+                {item.description ? (
+                  <span className="block truncate font-mono text-[9px] text-zinc-400">
+                    {item.description}
+                  </span>
+                ) : null}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function normalizeMetaSearch(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function MetaAssetPicker({
   items,
   selectedIds,
   onToggle,
   emptyLabel,
+  search,
+  onSearchChange,
+  searchPlaceholder,
+  mode = "multiple",
+  onSelectVisible,
+  onClear,
 }: {
-  title: string;
-  subtitle: string;
-  icon: ReactNode;
   items: Array<{ id: string; label: string; description?: string }>;
   selectedIds: string[];
   onToggle: (id: string) => void;
   emptyLabel: string;
+  search: string;
+  onSearchChange: (value: string) => void;
+  searchPlaceholder: string;
+  mode?: "multiple" | "single";
+  onSelectVisible?: (ids: string[]) => void;
+  onClear?: () => void;
 }) {
+  const normalizedSearch = normalizeMetaSearch(search);
+  const visibleItems = normalizedSearch
+    ? items.filter((item) =>
+        normalizeMetaSearch(
+          `${item.label} ${item.id} ${item.description ?? ""}`,
+        ).includes(normalizedSearch),
+      )
+    : items;
+  const visibleIds = visibleItems.map((item) => item.id);
+  const allVisibleSelected =
+    visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
+
   return (
-    <div className="rounded-[26px] border border-zinc-200 bg-[#fcfbf8] p-4">
-      <div className="mb-3 flex items-start gap-3">
-        <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-zinc-700 shadow-sm">
-          {icon}
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-zinc-900">{title}</p>
-          <p className="text-xs text-zinc-500">{subtitle}</p>
-        </div>
+    <div className="space-y-3">
+      <div className="relative">
+        <Search
+          size={17}
+          className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400"
+        />
+        <input
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+          placeholder={searchPlaceholder}
+          className="h-11 w-full rounded-2xl border border-zinc-200 bg-white pl-10 pr-10 text-sm text-zinc-900 outline-none transition focus:border-[#FF0636] focus:ring-4 focus:ring-[#FF0636]/10 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+        />
+        {search ? (
+          <button
+            type="button"
+            aria-label="Limpar busca"
+            onClick={() => onSearchChange("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+          >
+            <X size={15} />
+          </button>
+        ) : null}
       </div>
 
-      <div className="space-y-2">
-        {items.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-zinc-200 bg-white px-4 py-6 text-center text-sm text-zinc-400">
-            {emptyLabel}
+      <div className="flex min-h-7 flex-wrap items-center justify-between gap-2 px-1">
+        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+          {visibleItems.length}{" "}
+          {visibleItems.length === 1 ? "resultado" : "resultados"}
+          <span className="mx-1.5 text-zinc-300 dark:text-zinc-700">•</span>
+          <span className="font-medium text-zinc-700 dark:text-zinc-200">
+            {selectedIds.length} selecionado
+            {selectedIds.length === 1 ? "" : "s"}
+          </span>
+        </p>
+
+        {mode === "multiple" && (onSelectVisible || onClear) ? (
+          <div className="flex items-center gap-1">
+            {onSelectVisible && visibleIds.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => onSelectVisible(visibleIds)}
+                className="rounded-lg px-2 py-1 text-[11px] font-medium text-[#d90030] transition hover:bg-[#FF0636]/5"
+              >
+                {allVisibleSelected
+                  ? "Desmarcar resultados"
+                  : "Selecionar resultados"}
+              </button>
+            ) : null}
+            {onClear && selectedIds.length > 0 ? (
+              <button
+                type="button"
+                onClick={onClear}
+                className="rounded-lg px-2 py-1 text-[11px] font-semibold text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+              >
+                Limpar
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="max-h-[330px] space-y-2 overflow-y-auto pr-1">
+        {visibleItems.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-zinc-200 bg-white px-4 py-10 text-center dark:border-zinc-800 dark:bg-zinc-950/60">
+            <Search
+              size={20}
+              className="mx-auto mb-2 text-zinc-300 dark:text-zinc-700"
+            />
+            <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              {items.length === 0
+                ? emptyLabel
+                : "Nenhum ativo encontrado para esta busca."}
+            </p>
           </div>
         ) : (
-          items.map((item) => {
+          visibleItems.map((item) => {
             const checked = selectedIds.includes(item.id);
             return (
-              <label
+              <button
                 key={item.id}
-                className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-3 py-3 transition-colors ${
+                type="button"
+                role={mode === "single" ? "radio" : "checkbox"}
+                aria-checked={checked}
+                onClick={() => onToggle(item.id)}
+                className={clsx(
+                  "group flex w-full items-start gap-3 rounded-2xl border px-3.5 py-3 text-left transition-all",
                   checked
-                    ? "border-[#f0d2a8] bg-[#fff7ea]"
-                    : "border-zinc-200 bg-white hover:border-zinc-300"
-                }`}
+                    ? "border-[#FF0636]/35 bg-[#FF0636]/[0.045] shadow-[0_8px_22px_rgba(255,6,54,0.06)] dark:border-[#FF0636]/50 dark:bg-[#FF0636]/10"
+                    : "border-zinc-200 bg-white hover:-translate-y-px hover:border-zinc-300 hover:shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-zinc-700",
+                )}
               >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => onToggle(item.id)}
-                  className="mt-1 h-4 w-4 rounded border-zinc-300 text-[#FF0636] focus:ring-[#FF0636]"
-                />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-zinc-900">
+                <span
+                  className={clsx(
+                    "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center border transition",
+                    mode === "single" ? "rounded-full" : "rounded-md",
+                    checked
+                      ? "border-[#FF0636] bg-[#FF0636] text-white"
+                      : "border-zinc-300 bg-white text-transparent dark:border-zinc-700 dark:bg-zinc-900",
+                  )}
+                >
+                  <Check size={13} strokeWidth={3} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
                     {item.label}
-                  </p>
-                  <p className="truncate text-xs text-zinc-500">
-                    {item.description ?? item.id}
-                  </p>
-                </div>
-              </label>
+                  </span>
+                  <span className="mt-0.5 block truncate font-mono text-[11px] text-zinc-500 dark:text-zinc-400">
+                    {item.description ?? `ID ${item.id}`}
+                  </span>
+                </span>
+              </button>
             );
           })
         )}
       </div>
+    </div>
+  );
+}
+
+type MetaSetupStep = 0 | 1 | 2 | 3 | 4;
+
+const META_SETUP_STEPS: Array<{
+  title: string;
+  shortTitle: string;
+  description: string;
+  icon: ReactNode;
+}> = [
+  {
+    title: "Business Manager",
+    shortTitle: "BM",
+    description: "Escolha a estrutura Meta deste cliente.",
+    icon: <Building2 size={18} />,
+  },
+  {
+    title: "Contas de anúncio",
+    shortTitle: "Contas",
+    description: "Selecione as contas que o painel deve monitorar.",
+    icon: <Facebook size={18} />,
+  },
+  {
+    title: "Páginas",
+    shortTitle: "Páginas",
+    description: "Defina as páginas que pertencem a este cliente.",
+    icon: <Globe size={18} />,
+  },
+  {
+    title: "Formulários de lead",
+    shortTitle: "Formulários",
+    description: "Escolha os formulários autorizados a cadastrar leads.",
+    icon: <FileText size={18} />,
+  },
+  {
+    title: "WhatsApp e revisão",
+    shortTitle: "Revisão",
+    description: "Vincule o WhatsApp, revise tudo e salve.",
+    icon: <MessageCircle size={18} />,
+  },
+];
+
+function MetaSelectionSummary({
+  accountCount,
+  pageCount,
+  formCount,
+  hasWhatsapp,
+}: {
+  accountCount: number;
+  pageCount: number;
+  formCount: number;
+  hasWhatsapp: boolean;
+}) {
+  const items = [
+    { label: "Contas", value: accountCount },
+    { label: "Páginas", value: pageCount },
+    { label: "Formulários", value: formCount },
+    { label: "WhatsApp", value: hasWhatsapp ? 1 : 0 },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className="rounded-2xl border border-zinc-200 bg-white px-3 py-2.5 dark:border-zinc-800 dark:bg-zinc-950"
+        >
+          <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-400">
+            {item.label}
+          </p>
+          <p className="mt-1 text-lg font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+            {item.value}
+          </p>
+        </div>
+      ))}
     </div>
   );
 }
@@ -771,7 +1045,9 @@ export function ClienteDetailPage() {
   const [isCampaignLinkOpen, setIsCampaignLinkOpen] = useState(false);
   const [campaignLinkLoading, setCampaignLinkLoading] = useState(false);
   const [campaignLinkSaving, setCampaignLinkSaving] = useState(false);
-  const [campaignLinkError, setCampaignLinkError] = useState<string | null>(null);
+  const [campaignLinkError, setCampaignLinkError] = useState<string | null>(
+    null,
+  );
   const [assignableCampaigns, setAssignableCampaigns] = useState<
     AssignableCampaign[]
   >([]);
@@ -786,7 +1062,9 @@ export function ClienteDetailPage() {
     from: "",
     to: "",
   });
-  const [campaignObjective, setCampaignObjective] = useState<string | null>(null);
+  const [campaignObjective, setCampaignObjective] = useState<string | null>(
+    null,
+  );
   const [campaignStatus, setCampaignStatus] = useState<string | null>("ACTIVE");
   const [campaignColumns, setCampaignColumns] = useState<MetaColumnId[]>(
     () => readStoredColumns(resolvedId) ?? DEFAULT_COLUMNS,
@@ -843,13 +1121,17 @@ export function ClienteDetailPage() {
     setReportLoading(true);
     setReportError(null);
     try {
-      const data = await getMetaCampaignsReport(resolvedId, session.accessToken, {
-        ...periodToRange(campaignPeriod, campaignCustomRange),
-        objective: campaignObjective ?? undefined,
-        status: campaignStatus ?? undefined,
-        // Filtra no banco: a conta inteira nao precisa trafegar.
-        only_linked: adsSubTab === "campanhas",
-      });
+      const data = await getMetaCampaignsReport(
+        resolvedId,
+        session.accessToken,
+        {
+          ...periodToRange(campaignPeriod, campaignCustomRange),
+          objective: campaignObjective ?? undefined,
+          status: campaignStatus ?? undefined,
+          // Filtra no banco: a conta inteira nao precisa trafegar.
+          only_linked: adsSubTab === "campanhas",
+        },
+      );
       if (isStale()) return;
       setCampaignsReport(data.campaigns ?? []);
       setAvailableRange(data.available_range ?? { from: null, to: null });
@@ -857,7 +1139,9 @@ export function ClienteDetailPage() {
       if (isStale()) return;
       setCampaignsReport([]);
       setReportError(
-        error instanceof Error ? error.message : "Falha ao carregar o relatório.",
+        error instanceof Error
+          ? error.message
+          : "Falha ao carregar o relatório.",
       );
     } finally {
       if (!isStale()) setReportLoading(false);
@@ -955,6 +1239,8 @@ export function ClienteDetailPage() {
   const [draftFormIds, setDraftFormIds] = useState<string[]>([]);
   const [draftWhatsappId, setDraftWhatsappId] = useState("");
   const [draftPhoneNumberId, setDraftPhoneNumberId] = useState("");
+  const [metaSetupStep, setMetaSetupStep] = useState<MetaSetupStep>(0);
+  const [metaSetupSearch, setMetaSetupSearch] = useState("");
 
   const selectedBusiness = useMemo(
     () =>
@@ -962,6 +1248,17 @@ export function ClienteDetailPage() {
       null,
     [availableBusinesses, draftBusinessId],
   );
+
+  const orderedMetaForms = useMemo(() => {
+    if (!selectedBusiness) return [];
+    const selectedPages = new Set(draftPageIds);
+    return [...selectedBusiness.forms].sort((left, right) => {
+      const leftSelected = selectedPages.has(left.page_id) ? 1 : 0;
+      const rightSelected = selectedPages.has(right.page_id) ? 1 : 0;
+      if (leftSelected !== rightSelected) return rightSelected - leftSelected;
+      return left.name.localeCompare(right.name, "pt-BR");
+    });
+  }, [draftPageIds, selectedBusiness]);
 
   useEffect(() => {
     setIsDarkMode(readDashboardDarkEnabled(user.id));
@@ -1043,10 +1340,13 @@ export function ClienteDetailPage() {
       );
       setApiBusinesses(mappedBusinesses);
 
-      const initialBusiness = mappedBusinesses[0];
+      const initialBusiness =
+        mappedBusinesses.find(
+          (business) => business.id === metaConnection?.business_id,
+        ) ?? mappedBusinesses[0];
       if (initialBusiness) {
-        primeDraftState(initialBusiness);
-        setIsMetaModalOpen(true);
+        hydrateMetaDraft(initialBusiness);
+        showMetaWizard();
       } else {
         setMetaStatusMessage(
           "A autorização foi concluída, mas nenhuma BM foi encontrada para esta conta.",
@@ -1927,11 +2227,56 @@ export function ClienteDetailPage() {
 
   function primeDraftState(business: MetaBusinessOption) {
     setDraftBusinessId(business.id);
-    setDraftAdAccountIds(business.ad_accounts.map((item) => item.id));
-    setDraftPageIds(business.pages.map((item) => item.id));
-    setDraftFormIds(business.forms.map((item) => item.id));
-    setDraftWhatsappId(business.whatsapp_accounts[0]?.id ?? "");
-    setDraftPhoneNumberId(business.whatsapp_accounts[0]?.phone_number_id ?? "");
+    setDraftAdAccountIds(
+      business.ad_accounts.length === 1 ? [business.ad_accounts[0].id] : [],
+    );
+    setDraftPageIds(business.pages.length === 1 ? [business.pages[0].id] : []);
+    setDraftFormIds([]);
+    setDraftWhatsappId("");
+    setDraftPhoneNumberId("");
+  }
+
+  function hydrateMetaDraft(business: MetaBusinessOption) {
+    if (metaConnection?.business_id !== business.id) {
+      primeDraftState(business);
+      return;
+    }
+
+    setDraftBusinessId(business.id);
+    setDraftAdAccountIds(
+      metaConnection.selected_ad_accounts.map((item) => item.id),
+    );
+    setDraftPageIds(metaConnection.selected_pages.map((item) => item.id));
+    setDraftFormIds(metaConnection.selected_forms.map((item) => item.id));
+    setDraftWhatsappId(metaConnection.selected_whatsapp?.id ?? "");
+    setDraftPhoneNumberId(metaConnection.phone_number_id ?? "");
+  }
+
+  function showMetaWizard() {
+    setMetaSetupStep(0);
+    setMetaSetupSearch("");
+    setIsMetaModalOpen(true);
+  }
+
+  function goToMetaStep(step: MetaSetupStep) {
+    setMetaSetupStep(step);
+    setMetaSetupSearch("");
+  }
+
+  function toggleVisibleMetaSelection(
+    currentIds: string[],
+    visibleIds: string[],
+    setter: (ids: string[]) => void,
+  ) {
+    const visibleSet = new Set(visibleIds);
+    const allVisibleSelected =
+      visibleIds.length > 0 &&
+      visibleIds.every((id) => currentIds.includes(id));
+    setter(
+      allVisibleSelected
+        ? currentIds.filter((id) => !visibleSet.has(id))
+        : [...new Set([...currentIds, ...visibleIds])],
+    );
   }
 
   async function openMetaManager() {
@@ -1953,26 +2298,8 @@ export function ClienteDetailPage() {
           (business) => business.id === preferredBusinessId,
         );
         if (preferredBusiness) {
-          if (
-            metaConnection &&
-            metaConnection.business_id === preferredBusiness.id
-          ) {
-            setDraftBusinessId(preferredBusiness.id);
-            setDraftAdAccountIds(
-              metaConnection.selected_ad_accounts.map((item) => item.id),
-            );
-            setDraftPageIds(
-              metaConnection.selected_pages.map((item) => item.id),
-            );
-            setDraftFormIds(
-              metaConnection.selected_forms.map((item) => item.id),
-            );
-            setDraftWhatsappId(metaConnection.selected_whatsapp?.id ?? "");
-            setDraftPhoneNumberId(metaConnection.phone_number_id ?? "");
-          } else {
-            primeDraftState(preferredBusiness);
-          }
-          setIsMetaModalOpen(true);
+          hydrateMetaDraft(preferredBusiness);
+          showMetaWizard();
           return;
         }
       }
@@ -1994,20 +2321,8 @@ export function ClienteDetailPage() {
       return;
     }
 
-    if (metaConnection && metaConnection.business_id === preferredBusiness.id) {
-      setDraftBusinessId(preferredBusiness.id);
-      setDraftAdAccountIds(
-        metaConnection.selected_ad_accounts.map((item) => item.id),
-      );
-      setDraftPageIds(metaConnection.selected_pages.map((item) => item.id));
-      setDraftFormIds(metaConnection.selected_forms.map((item) => item.id));
-      setDraftWhatsappId(metaConnection.selected_whatsapp?.id ?? "");
-      setDraftPhoneNumberId(metaConnection.phone_number_id ?? "");
-    } else {
-      primeDraftState(preferredBusiness);
-    }
-
-    setIsMetaModalOpen(true);
+    hydrateMetaDraft(preferredBusiness);
+    showMetaWizard();
   }
 
   function handleBusinessChange(nextBusinessId: string) {
@@ -2016,6 +2331,7 @@ export function ClienteDetailPage() {
     );
     if (!business) return;
     primeDraftState(business);
+    setMetaSetupSearch("");
   }
 
   function toggleSelection(
@@ -2113,6 +2429,7 @@ export function ClienteDetailPage() {
       selected_pages: selectedPages,
       selected_forms: selectedForms,
       selected_whatsapp: selectedWhatsapp,
+      selected_whatsapps: selectedWhatsapp ? [selectedWhatsapp] : [],
       phone_number_id:
         selectedWhatsapp?.phone_number_id ?? draftPhoneNumberId ?? null,
       last_sync_at: new Date().toISOString(),
@@ -2141,7 +2458,10 @@ export function ClienteDetailPage() {
     const session = readStoredSession();
 
     if (!clientId || !isUuid(clientId) || !session?.accessToken) {
-      pushToast({ type: "error", message: "Sessão expirada. Faça login novamente." });
+      pushToast({
+        type: "error",
+        message: "Sessão expirada. Faça login novamente.",
+      });
       return;
     }
 
@@ -2208,7 +2528,10 @@ export function ClienteDetailPage() {
       const atual = assignableCampaigns.find(
         (row) => row.meta_campaign_id === campaignId,
       );
-      return (campaignEventChoice[campaignId] ?? "") !== (atual?.assigned_event_id ?? "");
+      return (
+        (campaignEventChoice[campaignId] ?? "") !==
+        (atual?.assigned_event_id ?? "")
+      );
     });
 
     if (toLink.length === 0 && toUnlink.length === 0 && toRelink.length === 0) {
@@ -2899,6 +3222,19 @@ export function ClienteDetailPage() {
       setDeleteAction(null);
     }
   }
+
+  const metaSetupRequirements = [
+    Boolean(selectedBusiness),
+    draftAdAccountIds.length > 0,
+    draftPageIds.length > 0,
+    draftFormIds.length > 0,
+    true,
+  ];
+  const canAdvanceMetaSetup = metaSetupRequirements[metaSetupStep];
+  const canSaveMetaSetup = metaSetupRequirements.slice(0, 4).every(Boolean);
+  const selectedWhatsappAccount = selectedBusiness?.whatsapp_accounts.find(
+    (item) => item.id === draftWhatsappId,
+  );
 
   return (
     <div
@@ -3729,7 +4065,9 @@ export function ClienteDetailPage() {
               <input
                 type="text"
                 value={staffFormPhone}
-                onChange={(e) => setStaffFormPhone(formatPhoneBr(e.target.value))}
+                onChange={(e) =>
+                  setStaffFormPhone(formatPhoneBr(e.target.value))
+                }
                 placeholder="(11) 99999-9999"
                 className="w-full h-11 pl-10 pr-3 rounded-2xl border border-zinc-200 bg-white text-zinc-900 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#FF0636] focus:border-[#FF0636] shadow-sm"
               />
@@ -4106,244 +4444,310 @@ export function ClienteDetailPage() {
               </div>
 
               {adsSubTab === "conexoes" && (
-              <div
-                className={clsx(
-                  "rounded-[28px] border p-6 space-y-6 shadow-sm animate-fadeIn",
-                  isDarkMode
-                    ? "border-zinc-800 bg-[#0c0d11] text-zinc-100"
-                    : "border-zinc-200 bg-white text-zinc-900",
-                )}
-              >
-                {/* APENAS OS 2 BOTÕES ALINHADOS À DIREITA E LINHA DIVISÓRIA */}
-                <div className="flex items-center justify-end gap-2 border-b pb-5 border-zinc-200 dark:border-zinc-800">
-                  <button
-                    type="button"
-                    onClick={() => void handleSyncMeta()}
-                    disabled={isSyncingMeta || !metaConnection}
-                    className={clsx(
-                      "h-11 px-5 rounded-2xl border text-xs font-bold transition-all active:scale-95 cursor-pointer inline-flex items-center gap-2 shadow-sm disabled:opacity-60",
-                      isDarkMode
-                        ? "border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
-                        : "border-zinc-200 bg-zinc-50 text-zinc-800 hover:bg-zinc-100",
-                    )}
-                    title="Sincronizar Ativos da Meta"
-                  >
-                    <RefreshCcw size={15} className={isSyncingMeta ? "animate-spin text-[#FF0636]" : ""} />
-                    <span>{isSyncingMeta ? "Sincronizando..." : "Sincronizar"}</span>
-                  </button>
+                <div
+                  className={clsx(
+                    "rounded-[28px] border p-6 space-y-6 shadow-sm animate-fadeIn",
+                    isDarkMode
+                      ? "border-zinc-800 bg-[#0c0d11] text-zinc-100"
+                      : "border-zinc-200 bg-white text-zinc-900",
+                  )}
+                >
+                  {/* APENAS OS 2 BOTÕES ALINHADOS À DIREITA E LINHA DIVISÓRIA */}
+                  <div className="flex items-center justify-end gap-2 border-b pb-5 border-zinc-200 dark:border-zinc-800">
+                    <button
+                      type="button"
+                      onClick={() => void handleSyncMeta()}
+                      disabled={isSyncingMeta || !metaConnection}
+                      className={clsx(
+                        "h-11 px-5 rounded-2xl border text-xs font-bold transition-all active:scale-95 cursor-pointer inline-flex items-center gap-2 shadow-sm disabled:opacity-60",
+                        isDarkMode
+                          ? "border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+                          : "border-zinc-200 bg-zinc-50 text-zinc-800 hover:bg-zinc-100",
+                      )}
+                      title="Sincronizar Ativos da Meta"
+                    >
+                      <RefreshCcw
+                        size={15}
+                        className={
+                          isSyncingMeta ? "animate-spin text-[#FF0636]" : ""
+                        }
+                      />
+                      <span>
+                        {isSyncingMeta ? "Sincronizando..." : "Sincronizar"}
+                      </span>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => void openMetaManager()}
-                    className="h-11 px-6 rounded-2xl bg-[#FF0636] hover:bg-[#e1002d] text-white text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer inline-flex items-center gap-2"
-                    title="Conectar / Selecionar Business Manager"
-                  >
-                    <Link2 size={15} />
-                    <span>{metaConnection ? "Conectar / Trocar BM" : "Conectar BM"}</span>
-                  </button>
-                </div>
-
-                {(metaStatusLoading || metaStatusMessage) && (
-                  <div
-                    className={clsx(
-                      "rounded-2xl border px-4 py-3 text-xs font-semibold flex items-center gap-2",
-                      isDarkMode
-                        ? "border-zinc-800 bg-[#121318] text-zinc-300"
-                        : "border-zinc-200 bg-zinc-50 text-zinc-700",
-                    )}
-                  >
-                    <RefreshCcw size={14} className="animate-spin text-[#FF0636]" />
-                    <span>{metaStatusLoading ? "Carregando status da integração Meta..." : metaStatusMessage}</span>
-                  </div>
-                )}
-
-                {/* TABELA COM AS 5 COLUNAS SOLICITADAS: BM, PAGINA, CA, FORM, WHATSAPP */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                      Matriz de Ativos Vinculados
-                    </h4>
-                    <span className="text-[11px] font-mono text-zinc-400">
-                      {metaConnection ? `Última sincronização: ${formatDateTime(metaConnection.last_sync_at)}` : "Sem conexão ativa"}
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void openMetaManager()}
+                      className="h-11 px-6 rounded-2xl bg-[#FF0636] hover:bg-[#e1002d] text-white text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer inline-flex items-center gap-2"
+                      title="Conectar / Selecionar Business Manager"
+                    >
+                      <Link2 size={15} />
+                      <span>
+                        {metaConnection
+                          ? "Conectar / Trocar BM"
+                          : "Conectar BM"}
+                      </span>
+                    </button>
                   </div>
 
-                  <div
-                    className={clsx(
-                      "rounded-2xl border overflow-x-auto shadow-sm",
-                      isDarkMode ? "border-zinc-800 bg-[#121212]" : "border-zinc-200 bg-white",
-                    )}
-                  >
-                    <table className="w-full text-left text-xs sm:text-sm">
-                      <thead>
-                        <tr
-                          className={clsx(
-                            "border-b font-extrabold uppercase tracking-wider text-[11px]",
-                            isDarkMode
-                              ? "border-zinc-800 bg-zinc-900/60 text-zinc-400"
-                              : "border-zinc-100 bg-zinc-50 text-zinc-600",
-                          )}
-                        >
-                          <th className="py-3.5 px-4">BM (Business Manager)</th>
-                          <th className="py-3.5 px-4">PÁGINA</th>
-                          <th className="py-3.5 px-4">CA (Conta Anúncio)</th>
-                          <th className="py-3.5 px-4">FORM (Formulários)</th>
-                          <th className="py-3.5 px-4">WHATSAPP</th>
-                          <th className="py-3.5 px-4">CAMPANHAS</th>
-                          <th className="py-3.5 px-4 text-right">STATUS</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                        {metaConnection ? (
-                          <tr className={clsx("transition-colors", isDarkMode ? "hover:bg-zinc-900/50" : "hover:bg-zinc-50")}>
-                            {/* BM */}
-                            <td className="py-4 px-4 font-bold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
-                              <div className="flex items-center gap-2">
-                                <Building2 size={16} className="text-[#FF0636] shrink-0" />
-                                <div>
-                                  <p className="font-bold text-xs">{metaConnection.business_name}</p>
-                                  <p className="text-[10px] font-mono text-zinc-400">ID: {metaConnection.business_id}</p>
-                                </div>
-                              </div>
-                            </td>
+                  {(metaStatusLoading || metaStatusMessage) && (
+                    <div
+                      className={clsx(
+                        "rounded-2xl border px-4 py-3 text-xs font-semibold flex items-center gap-2",
+                        isDarkMode
+                          ? "border-zinc-800 bg-[#121318] text-zinc-300"
+                          : "border-zinc-200 bg-zinc-50 text-zinc-700",
+                      )}
+                    >
+                      <RefreshCcw
+                        size={14}
+                        className="animate-spin text-[#FF0636]"
+                      />
+                      <span>
+                        {metaStatusLoading
+                          ? "Carregando status da integração Meta..."
+                          : metaStatusMessage}
+                      </span>
+                    </div>
+                  )}
 
-                            {/* PÁGINA */}
-                            <td className="py-4 px-4 text-zinc-700 dark:text-zinc-300">
-                              {metaConnection.selected_pages.length > 0 ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {metaConnection.selected_pages.map((p) => (
-                                    <span key={p.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-[11px] font-semibold">
-                                      <Globe size={11} />
-                                      {p.name}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-zinc-400 italic text-xs">Padrão da BM</span>
+                  {/* TABELA COM AS 5 COLUNAS SOLICITADAS: BM, PAGINA, CA, FORM, WHATSAPP */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                        Matriz de Ativos Vinculados
+                      </h4>
+                      <span className="text-[11px] font-mono text-zinc-400">
+                        {metaConnection
+                          ? `Última sincronização: ${formatDateTime(metaConnection.last_sync_at)}`
+                          : "Sem conexão ativa"}
+                      </span>
+                    </div>
+
+                    <div
+                      className={clsx(
+                        "rounded-2xl border overflow-x-auto shadow-sm",
+                        isDarkMode
+                          ? "border-zinc-800 bg-[#121212]"
+                          : "border-zinc-200 bg-white",
+                      )}
+                    >
+                      <table className="w-full min-w-[1340px] table-fixed text-left text-xs sm:text-sm">
+                        <colgroup>
+                          <col className="w-[220px]" />
+                          <col className="w-[165px]" />
+                          <col className="w-[175px]" />
+                          <col className="w-[205px]" />
+                          <col className="w-[175px]" />
+                          <col className="w-[220px]" />
+                          <col className="w-[180px]" />
+                        </colgroup>
+                        <thead>
+                          <tr
+                            className={clsx(
+                              "border-b font-extrabold uppercase tracking-wider text-[11px]",
+                              isDarkMode
+                                ? "border-zinc-800 bg-zinc-900/60 text-zinc-400"
+                                : "border-zinc-100 bg-zinc-50 text-zinc-600",
+                            )}
+                          >
+                            <th className="py-3.5 px-4">
+                              BM (Business Manager)
+                            </th>
+                            <th className="py-3.5 px-4">PÁGINA</th>
+                            <th className="py-3.5 px-4">CA (Conta Anúncio)</th>
+                            <th className="py-3.5 px-4">FORM (Formulários)</th>
+                            <th className="py-3.5 px-4">WHATSAPP</th>
+                            <th className="py-3.5 px-4">CAMPANHAS</th>
+                            <th className="py-3.5 px-4 text-right">STATUS</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                          {metaConnection ? (
+                            <tr
+                              className={clsx(
+                                "transition-colors",
+                                isDarkMode
+                                  ? "hover:bg-zinc-900/50"
+                                  : "hover:bg-zinc-50",
                               )}
-                            </td>
-
-                            {/* CA */}
-                            <td className="py-4 px-4 text-zinc-700 dark:text-zinc-300">
-                              {metaConnection.selected_ad_accounts.length > 0 ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {metaConnection.selected_ad_accounts.map((a) => (
-                                    <span key={a.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 text-[11px] font-semibold">
-                                      <Facebook size={11} />
-                                      {a.name}
-                                    </span>
-                                  ))}
+                            >
+                              {/* BM */}
+                              <td className="py-4 px-4 font-bold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                  <Building2
+                                    size={16}
+                                    className="text-[#FF0636] shrink-0"
+                                  />
+                                  <div>
+                                    <p className="font-bold text-xs">
+                                      {metaConnection.business_name}
+                                    </p>
+                                    <p className="text-[10px] font-mono text-zinc-400">
+                                      ID: {metaConnection.business_id}
+                                    </p>
+                                  </div>
                                 </div>
-                              ) : (
-                                <span className="text-zinc-400 italic text-xs">Sem CA vinculada</span>
-                              )}
-                            </td>
+                              </td>
 
-                            {/* FORM */}
-                            <td className="py-4 px-4 text-zinc-700 dark:text-zinc-300">
-                              {metaConnection.selected_forms.length > 0 ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {metaConnection.selected_forms.map((f) => (
-                                    <span key={f.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-[11px] font-semibold">
-                                      <FileText size={11} />
-                                      {f.name}
-                                    </span>
-                                  ))}
+                              {/* PÁGINA */}
+                              <td className="py-4 px-4 text-zinc-700 dark:text-zinc-300">
+                                <CompactAssetList
+                                  items={metaConnection.selected_pages.map(
+                                    (page) => ({
+                                      id: page.id,
+                                      label: page.name,
+                                      description: `ID ${page.id}`,
+                                    }),
+                                  )}
+                                  icon={<Globe size={11} />}
+                                  tone="blue"
+                                  emptyLabel="Padrão da BM"
+                                />
+                              </td>
+
+                              {/* CA */}
+                              <td className="py-4 px-4 text-zinc-700 dark:text-zinc-300">
+                                <CompactAssetList
+                                  items={metaConnection.selected_ad_accounts.map(
+                                    (account) => ({
+                                      id: account.id,
+                                      label: account.name,
+                                      description: `ID ${account.id}`,
+                                    }),
+                                  )}
+                                  icon={<Facebook size={11} />}
+                                  tone="purple"
+                                  emptyLabel="Sem CA vinculada"
+                                />
+                              </td>
+
+                              {/* FORM */}
+                              <td className="py-4 px-4 text-zinc-700 dark:text-zinc-300">
+                                <CompactAssetList
+                                  items={metaConnection.selected_forms.map(
+                                    (form) => ({
+                                      id: form.id,
+                                      label: form.name,
+                                      description: `Página ${form.page_id} · ID ${form.id}`,
+                                    }),
+                                  )}
+                                  icon={<FileText size={11} />}
+                                  tone="amber"
+                                  emptyLabel="Sem formulários"
+                                />
+                              </td>
+
+                              {/* WHATSAPP */}
+                              <td className="py-4 px-4 text-zinc-700 dark:text-zinc-300">
+                                <CompactAssetList
+                                  items={(metaConnection.selected_whatsapps
+                                    ?.length
+                                    ? metaConnection.selected_whatsapps
+                                    : metaConnection.selected_whatsapp
+                                      ? [metaConnection.selected_whatsapp]
+                                      : []
+                                  ).map((whatsapp) => ({
+                                    id: whatsapp.id,
+                                    label: whatsapp.display_phone_number,
+                                    description: `${whatsapp.name} · ID ${whatsapp.phone_number_id}`,
+                                  }))}
+                                  icon={<Phone size={11} />}
+                                  tone="emerald"
+                                  emptyLabel="Não configurado"
+                                />
+                              </td>
+
+                              {/* CAMPANHAS */}
+                              <td className="py-4 px-4 text-zinc-700 dark:text-zinc-300">
+                                <CompactAssetList
+                                  items={linkedCampaigns.map((campaign) => ({
+                                    id: campaign.meta_campaign_id,
+                                    label: campaign.name,
+                                    description: campaign.event_name
+                                      ? `Evento: ${campaign.event_name}`
+                                      : `ID ${campaign.meta_campaign_id}`,
+                                  }))}
+                                  icon={<Megaphone size={11} />}
+                                  tone="rose"
+                                  emptyLabel="Nenhuma vinculada"
+                                />
+                              </td>
+
+                              {/* STATUS */}
+                              <td className="py-4 px-4 text-right whitespace-nowrap">
+                                <div className="flex flex-col items-end gap-2">
+                                  <Badge variant="green">🟢 Conectado</Badge>
+                                  <button
+                                    type="button"
+                                    onClick={handleOpenCampaignLink}
+                                    className={clsx(
+                                      "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5",
+                                      "text-[11px] font-bold uppercase tracking-wide transition-colors",
+                                      isDarkMode
+                                        ? "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+                                        : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200",
+                                    )}
+                                    title="Vincular campanhas da Meta a este cliente"
+                                  >
+                                    <Link2 size={13} />
+                                    Vincular
+                                  </button>
                                 </div>
-                              ) : (
-                                <span className="text-zinc-400 italic text-xs">Sem formulários</span>
+                              </td>
+                            </tr>
+                          ) : (
+                            <tr
+                              className={clsx(
+                                "transition-colors",
+                                isDarkMode
+                                  ? "hover:bg-zinc-900/50"
+                                  : "hover:bg-zinc-50",
                               )}
-                            </td>
-
-                            {/* WHATSAPP */}
-                            <td className="py-4 px-4 font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">
-                              <div className="flex items-center gap-1.5">
-                                <Phone size={14} className="text-emerald-500" />
-                                <span>
-                                  {metaConnection.selected_whatsapp
-                                    ?.display_phone_number || "Não configurado"}
-                                </span>
-                              </div>
-                            </td>
-
-                            {/* CAMPANHAS */}
-                            <td className="py-4 px-4 text-zinc-700 dark:text-zinc-300">
-                              {linkedCampaigns.length > 0 ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {linkedCampaigns.map((campaign) => (
-                                    <span
-                                      key={campaign.meta_campaign_id}
-                                      title={
-                                        campaign.event_name
-                                          ? `Evento: ${campaign.event_name}`
-                                          : "Sem evento vinculado"
-                                      }
-                                      className="inline-flex max-w-[220px] items-center gap-1 rounded-lg bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
-                                    >
-                                      <Megaphone size={11} className="shrink-0" />
-                                      <span className="truncate">{campaign.name}</span>
-                                    </span>
-                                  ))}
+                            >
+                              <td className="py-4 px-4 font-medium text-zinc-400 whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                  <Building2
+                                    size={16}
+                                    className="text-zinc-400 shrink-0"
+                                  />
+                                  <span>Pendente de Seleção</span>
                                 </div>
-                              ) : (
-                                <span className="text-xs italic text-zinc-400">
-                                  Nenhuma vinculada
-                                </span>
-                              )}
-                            </td>
-
-                            {/* STATUS */}
-                            <td className="py-4 px-4 text-right whitespace-nowrap">
-                              <div className="flex items-center justify-end gap-2">
-                                <Badge variant="green">🟢 Conectado</Badge>
+                              </td>
+                              <td className="py-4 px-4 text-zinc-400 italic text-xs">
+                                —
+                              </td>
+                              <td className="py-4 px-4 text-zinc-400 font-mono text-xs">
+                                —
+                              </td>
+                              <td className="py-4 px-4 text-zinc-400 italic text-xs">
+                                —
+                              </td>
+                              <td className="py-4 px-4 font-mono text-xs text-zinc-400">
+                                —
+                              </td>
+                              <td className="py-4 px-4 text-xs italic text-zinc-400">
+                                —
+                              </td>
+                              <td className="py-4 px-4 text-right whitespace-nowrap">
                                 <button
                                   type="button"
-                                  onClick={handleOpenCampaignLink}
-                                  className={clsx(
-                                    "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5",
-                                    "text-[11px] font-bold uppercase tracking-wide transition-colors",
-                                    isDarkMode
-                                      ? "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
-                                      : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200",
-                                  )}
-                                  title="Vincular campanhas da Meta a este cliente"
+                                  onClick={() => void openMetaManager()}
+                                  className="px-3 py-1.5 rounded-xl bg-[#FF0636] hover:bg-[#e1002d] text-white font-bold text-xs shadow-sm transition-all active:scale-95 cursor-pointer inline-flex items-center gap-1"
                                 >
                                   <Link2 size={13} />
-                                  Vincular
+                                  <span>Conectar BM</span>
                                 </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ) : (
-                          <tr className={clsx("transition-colors", isDarkMode ? "hover:bg-zinc-900/50" : "hover:bg-zinc-50")}>
-                            <td className="py-4 px-4 font-medium text-zinc-400 whitespace-nowrap">
-                              <div className="flex items-center gap-2">
-                                <Building2 size={16} className="text-zinc-400 shrink-0" />
-                                <span>Pendente de Seleção</span>
-                              </div>
-                            </td>
-                            <td className="py-4 px-4 text-zinc-400 italic text-xs">—</td>
-                            <td className="py-4 px-4 text-zinc-400 font-mono text-xs">—</td>
-                            <td className="py-4 px-4 text-zinc-400 italic text-xs">—</td>
-                            <td className="py-4 px-4 font-mono text-xs text-zinc-400">—</td>
-                            <td className="py-4 px-4 text-xs italic text-zinc-400">—</td>
-                            <td className="py-4 px-4 text-right whitespace-nowrap">
-                              <button
-                                type="button"
-                                onClick={() => void openMetaManager()}
-                                className="px-3 py-1.5 rounded-xl bg-[#FF0636] hover:bg-[#e1002d] text-white font-bold text-xs shadow-sm transition-all active:scale-95 cursor-pointer inline-flex items-center gap-1"
-                              >
-                                <Link2 size={13} />
-                                <span>Conectar BM</span>
-                              </button>
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
-              </div>
               )}
 
               {adsSubTab === "campanhas" && (
@@ -4403,7 +4807,9 @@ export function ClienteDetailPage() {
                     isDarkMode={isDarkMode}
                   />
 
-                  {reportError ? <Notice tone="error">{reportError}</Notice> : null}
+                  {reportError ? (
+                    <Notice tone="error">{reportError}</Notice>
+                  ) : null}
 
                   {rangeOutOfSync ? (
                     <p
@@ -4415,9 +4821,9 @@ export function ClienteDetailPage() {
                       )}
                     >
                       O período escolhido está fora do que foi sincronizado
-                      (&nbsp;{availableRange.from} a {availableRange.to}&nbsp;), por
-                      isso os valores aparecem zerados. Rode Sincronizar na aba
-                      Conexões para trazer um histórico maior.
+                      (&nbsp;{availableRange.from} a {availableRange.to}&nbsp;),
+                      por isso os valores aparecem zerados. Rode Sincronizar na
+                      aba Conexões para trazer um histórico maior.
                     </p>
                   ) : null}
 
@@ -4487,13 +4893,17 @@ export function ClienteDetailPage() {
                     >
                       <RefreshCcw
                         size={14}
-                        className={reportLoading ? "animate-spin text-[#FF0636]" : ""}
+                        className={
+                          reportLoading ? "animate-spin text-[#FF0636]" : ""
+                        }
                       />
                       Atualizar
                     </button>
                   </div>
 
-                  {reportError ? <Notice tone="error">{reportError}</Notice> : null}
+                  {reportError ? (
+                    <Notice tone="error">{reportError}</Notice>
+                  ) : null}
 
                   {reportLoading ? (
                     <p className="py-12 text-center text-sm text-zinc-400">
@@ -4511,7 +4921,8 @@ export function ClienteDetailPage() {
                         Sem dados de campanha
                       </p>
                       <p className="mt-1 text-xs text-zinc-400">
-                        Rode uma sincronização na aba Conexões para trazer as métricas da Meta.
+                        Rode uma sincronização na aba Conexões para trazer as
+                        métricas da Meta.
                       </p>
                     </div>
                   ) : (
@@ -4658,9 +5069,9 @@ export function ClienteDetailPage() {
                     Análise por IA ainda não disponível
                   </p>
                   <p className="mx-auto mt-2 max-w-md text-xs text-zinc-400">
-                    Esta aba vai cruzar investimento, leads e vendas para apontar
-                    o que está performando e o que sugerir ajustar. Ainda não há
-                    nada implementado no backend.
+                    Esta aba vai cruzar investimento, leads e vendas para
+                    apontar o que está performando e o que sugerir ajustar.
+                    Ainda não há nada implementado no backend.
                   </p>
                 </div>
               )}
@@ -5432,239 +5843,312 @@ export function ClienteDetailPage() {
       <Modal
         open={isMetaModalOpen}
         onClose={() => setIsMetaModalOpen(false)}
-        title="Selecionar Business Manager"
-        size="xl"
+        title="Configurar conexão Meta"
+        size="2xl"
         dark={isDarkMode}
         footer={
-          <>
+          <div className="flex w-full flex-wrap items-center justify-between gap-3">
             <Button
               variant="secondary"
               onClick={() => setIsMetaModalOpen(false)}
             >
               Cancelar
             </Button>
-            <Button
-              onClick={() => void handleSaveMetaConnection()}
-              loading={isSavingMeta}
-              isDisabled={
-                !selectedBusiness ||
-                (isApiClient && !gestorMetaConnected) ||
-                (!isApiClient &&
-                  (draftAdAccountIds.length === 0 || draftPageIds.length === 0))
-              }
-            >
-              Salvar conexão
-            </Button>
-          </>
+            <div className="flex items-center gap-2">
+              {metaSetupStep > 0 ? (
+                <Button
+                  variant="ghost"
+                  onClick={() =>
+                    goToMetaStep((metaSetupStep - 1) as MetaSetupStep)
+                  }
+                >
+                  <ArrowLeft size={15} />
+                  Voltar
+                </Button>
+              ) : null}
+              {metaSetupStep < 4 ? (
+                <Button
+                  onClick={() =>
+                    goToMetaStep((metaSetupStep + 1) as MetaSetupStep)
+                  }
+                  isDisabled={!canAdvanceMetaSetup}
+                >
+                  Continuar
+                  <ArrowRight size={15} />
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => void handleSaveMetaConnection()}
+                  loading={isSavingMeta}
+                  isDisabled={
+                    !canSaveMetaSetup || (isApiClient && !gestorMetaConnected)
+                  }
+                >
+                  <CheckCircle2 size={16} />
+                  Salvar conexão
+                </Button>
+              )}
+            </div>
+          </div>
         }
       >
-        <div className="space-y-5">
-          <div className="rounded-[24px] border border-[#f1dfc6] bg-[#fff7ea] p-4">
-            <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#b7791f] shadow-sm">
-                <Building2 size={18} />
+        <div className="space-y-4">
+          <nav
+            aria-label="Etapas da conexão Meta"
+            className="grid grid-cols-5 gap-1 rounded-[22px] border border-zinc-200 bg-zinc-50 p-1.5 dark:border-zinc-800 dark:bg-zinc-950/70"
+          >
+            {META_SETUP_STEPS.map((step, index) => {
+              const canVisit =
+                index === 0 ||
+                metaSetupRequirements.slice(0, index).every(Boolean);
+              const active = metaSetupStep === index;
+              const completed =
+                index < metaSetupStep && metaSetupRequirements[index];
+
+              return (
+                <button
+                  key={step.shortTitle}
+                  type="button"
+                  disabled={!canVisit}
+                  onClick={() => goToMetaStep(index as MetaSetupStep)}
+                  className={clsx(
+                    "flex min-w-0 flex-col items-center gap-1 rounded-2xl px-1.5 py-2 text-center transition",
+                    active
+                      ? "bg-white text-zinc-950 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-50 dark:ring-zinc-700"
+                      : canVisit
+                        ? "text-zinc-500 hover:bg-white/70 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900"
+                        : "cursor-not-allowed text-zinc-300 dark:text-zinc-700",
+                  )}
+                >
+                  <span
+                    className={clsx(
+                      "flex h-7 w-7 items-center justify-center rounded-xl text-[11px] font-semibold transition",
+                      active
+                        ? "bg-[#FF0636] text-white"
+                        : completed
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                          : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+                    )}
+                  >
+                    {completed ? (
+                      <Check size={14} strokeWidth={3} />
+                    ) : (
+                      index + 1
+                    )}
+                  </span>
+                  <span className="w-full truncate text-[10px] font-medium sm:text-[11px]">
+                    {step.shortTitle}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+
+          <MetaSelectionSummary
+            accountCount={draftAdAccountIds.length}
+            pageCount={draftPageIds.length}
+            formCount={draftFormIds.length}
+            hasWhatsapp={Boolean(draftWhatsappId)}
+          />
+
+          <section className="rounded-[26px] border border-zinc-200 bg-[#fcfbf8] p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <div className="mb-4 flex items-start gap-3 border-b border-zinc-200 pb-4 dark:border-zinc-800">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-zinc-700 shadow-sm dark:bg-zinc-950 dark:text-zinc-200">
+                {META_SETUP_STEPS[metaSetupStep].icon}
               </div>
               <div>
-                <p className="text-sm font-semibold text-zinc-900">
-                  Fluxo da conexão no painel do gestor
+                <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-[#d90030]">
+                  Etapa {metaSetupStep + 1} de {META_SETUP_STEPS.length}
                 </p>
-                <p className="mt-1 text-sm leading-6 text-zinc-600">
-                  Escolha a BM deste cliente e confirme quais ativos o sistema
-                  deve puxar automaticamente: contas, páginas, formulários e
-                  WhatsApp.
+                <h3 className="mt-0.5 text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                  {META_SETUP_STEPS[metaSetupStep].title}
+                </h3>
+                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  {META_SETUP_STEPS[metaSetupStep].description}
                 </p>
               </div>
             </div>
-          </div>
 
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_240px]">
-            <div className="rounded-[24px] border border-zinc-200 bg-[#fcfbf8] p-4">
-              <p className="mb-2 text-sm font-semibold text-zinc-900">
-                Business Manager
-              </p>
-              {metaBusinessesLoading && (
-                <p className="mb-2 text-xs text-zinc-500">
-                  Carregando BMs da conta Meta...
-                </p>
-              )}
-              <select
-                value={draftBusinessId}
-                onChange={(event) => handleBusinessChange(event.target.value)}
-                disabled={availableBusinesses.length === 0}
-                className="w-full rounded-2xl border border-zinc-200 bg-white px-3 py-3 text-sm text-zinc-900 outline-none transition-colors focus:border-[#FF0636]"
-              >
-                {availableBusinesses.map((business) => (
-                  <option key={business.id} value={business.id}>
-                    {business.name}
-                  </option>
-                ))}
-              </select>
-              {availableBusinesses.length === 0 && (
-                <p className="mt-2 text-xs text-zinc-500">
-                  Nenhuma BM carregada. Conecte a BM em Configurações e volte
-                  para selecionar os ativos deste cliente.
-                </p>
-              )}
-            </div>
-
-            <div className="rounded-[24px] border border-zinc-200 bg-white p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                Resumo da seleção
-              </p>
-              <div className="mt-3 space-y-2 text-sm text-zinc-600">
-                <div className="flex items-center justify-between">
-                  <span>Contas</span>
-                  <strong className="text-zinc-950">
-                    {draftAdAccountIds.length}
-                  </strong>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Páginas</span>
-                  <strong className="text-zinc-950">
-                    {draftPageIds.length}
-                  </strong>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Formulários</span>
-                  <strong className="text-zinc-950">
-                    {draftFormIds.length}
-                  </strong>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>WhatsApp</span>
-                  <strong className="text-zinc-950">
-                    {draftWhatsappId ? "1" : "0"}
-                  </strong>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {selectedBusiness && (
-            <>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <AssetSelectionBlock
-                  title="Contas de anúncio"
-                  subtitle="Escolha quais contas a sincronização deve monitorar"
-                  icon={<Facebook size={18} />}
-                  items={selectedBusiness.ad_accounts.map((item) => ({
-                    id: item.id,
-                    label: item.name,
-                    description: item.id,
+            {metaSetupStep === 0 ? (
+              <>
+                {metaBusinessesLoading ? (
+                  <p className="mb-3 text-xs font-medium text-zinc-500">
+                    Carregando Business Managers da conta Meta...
+                  </p>
+                ) : null}
+                <MetaAssetPicker
+                  items={availableBusinesses.map((business) => ({
+                    id: business.id,
+                    label: business.name,
+                    description: `${business.ad_accounts.length} contas · ${business.pages.length} páginas · ${business.forms.length} formulários · ID ${business.id}`,
                   }))}
-                  selectedIds={draftAdAccountIds}
-                  onToggle={(value) =>
-                    toggleSelection(
-                      draftAdAccountIds,
-                      value,
-                      setDraftAdAccountIds,
-                    )
-                  }
-                  emptyLabel="Nenhuma conta disponível nesta BM."
+                  selectedIds={draftBusinessId ? [draftBusinessId] : []}
+                  onToggle={handleBusinessChange}
+                  emptyLabel="Nenhuma BM carregada. Conecte a Meta em Configurações."
+                  search={metaSetupSearch}
+                  onSearchChange={setMetaSetupSearch}
+                  searchPlaceholder="Buscar Business Manager por nome ou ID"
+                  mode="single"
                 />
+              </>
+            ) : null}
 
-                <AssetSelectionBlock
-                  title="Páginas"
-                  subtitle="Defina quais páginas ficam disponíveis para o cliente"
-                  icon={<Globe size={18} />}
-                  items={selectedBusiness.pages.map((item) => ({
+            {metaSetupStep === 1 && selectedBusiness ? (
+              <MetaAssetPicker
+                items={selectedBusiness.ad_accounts.map((item) => ({
+                  id: item.id,
+                  label: item.name,
+                  description: `ID ${item.id}`,
+                }))}
+                selectedIds={draftAdAccountIds}
+                onToggle={(value) =>
+                  toggleSelection(
+                    draftAdAccountIds,
+                    value,
+                    setDraftAdAccountIds,
+                  )
+                }
+                emptyLabel="Nenhuma conta de anúncio disponível nesta BM."
+                search={metaSetupSearch}
+                onSearchChange={setMetaSetupSearch}
+                searchPlaceholder="Buscar conta por nome ou ID"
+                onSelectVisible={(ids) =>
+                  toggleVisibleMetaSelection(
+                    draftAdAccountIds,
+                    ids,
+                    setDraftAdAccountIds,
+                  )
+                }
+                onClear={() => setDraftAdAccountIds([])}
+              />
+            ) : null}
+
+            {metaSetupStep === 2 && selectedBusiness ? (
+              <MetaAssetPicker
+                items={selectedBusiness.pages.map((item) => ({
+                  id: item.id,
+                  label: item.name,
+                  description: `ID ${item.id}`,
+                }))}
+                selectedIds={draftPageIds}
+                onToggle={(value) =>
+                  toggleSelection(draftPageIds, value, setDraftPageIds)
+                }
+                emptyLabel="Nenhuma página disponível nesta BM."
+                search={metaSetupSearch}
+                onSearchChange={setMetaSetupSearch}
+                searchPlaceholder="Buscar página por nome ou ID"
+                onSelectVisible={(ids) =>
+                  toggleVisibleMetaSelection(draftPageIds, ids, setDraftPageIds)
+                }
+                onClear={() => setDraftPageIds([])}
+              />
+            ) : null}
+
+            {metaSetupStep === 3 && selectedBusiness ? (
+              <>
+                <div className="mb-3 rounded-2xl border border-[#FF0636]/15 bg-[#FF0636]/[0.035] px-3 py-2.5 text-xs leading-5 text-zinc-600 dark:border-[#FF0636]/30 dark:bg-[#FF0636]/10 dark:text-zinc-300">
+                  Formulários das páginas selecionadas aparecem primeiro. A
+                  busca também encontra pelo ID da página ou do formulário.
+                </div>
+                <MetaAssetPicker
+                  items={orderedMetaForms.map((item) => ({
                     id: item.id,
                     label: item.name,
-                    description: item.id,
-                  }))}
-                  selectedIds={draftPageIds}
-                  onToggle={(value) =>
-                    toggleSelection(draftPageIds, value, setDraftPageIds)
-                  }
-                  emptyLabel="Nenhuma página disponível nesta BM."
-                />
-              </div>
-
-              <div className="grid gap-4 lg:grid-cols-2">
-                <AssetSelectionBlock
-                  title="Formulários de lead"
-                  subtitle="Esses formulários serão usados para importar leads e UTMs"
-                  icon={<FileText size={18} />}
-                  items={selectedBusiness.forms.map((item) => ({
-                    id: item.id,
-                    label: item.name,
-                    description: `Página ${item.page_id}`,
+                    description: `Página ${item.page_id} · ID ${item.id}`,
                   }))}
                   selectedIds={draftFormIds}
                   onToggle={(value) =>
                     toggleSelection(draftFormIds, value, setDraftFormIds)
                   }
                   emptyLabel="Nenhum formulário disponível nesta BM."
+                  search={metaSetupSearch}
+                  onSearchChange={setMetaSetupSearch}
+                  searchPlaceholder="Buscar formulário por nome, ID ou página"
+                  onSelectVisible={(ids) =>
+                    toggleVisibleMetaSelection(
+                      draftFormIds,
+                      ids,
+                      setDraftFormIds,
+                    )
+                  }
+                  onClear={() => setDraftFormIds([])}
+                />
+              </>
+            ) : null}
+
+            {metaSetupStep === 4 && selectedBusiness ? (
+              <div className="space-y-4">
+                <MetaAssetPicker
+                  items={selectedBusiness.whatsapp_accounts.map((item) => ({
+                    id: item.id,
+                    label: item.name,
+                    description: `${item.display_phone_number} · ID ${item.phone_number_id}`,
+                  }))}
+                  selectedIds={draftWhatsappId ? [draftWhatsappId] : []}
+                  onToggle={handleSelectWhatsapp}
+                  emptyLabel="Nenhum WhatsApp Business disponível nesta BM."
+                  search={metaSetupSearch}
+                  onSearchChange={setMetaSetupSearch}
+                  searchPlaceholder="Buscar WhatsApp por nome, número ou ID"
+                  mode="single"
                 />
 
-                <div className="rounded-[26px] border border-zinc-200 bg-[#fcfbf8] p-4">
-                  <div className="mb-3 flex items-start gap-3">
-                    <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-zinc-700 shadow-sm">
-                      <MessageCircle size={18} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-zinc-900">
-                        WhatsApp Business
-                      </p>
-                      <p className="text-xs text-zinc-500">
-                        Opcional, mas útil para rastrear agendamento e origem
-                        das conversas.
-                      </p>
-                    </div>
-                  </div>
+                <button
+                  type="button"
+                  onClick={() => handleSelectWhatsapp("")}
+                  className={clsx(
+                    "flex w-full items-center justify-between rounded-2xl border px-3.5 py-3 text-left transition",
+                    draftWhatsappId === ""
+                      ? "border-[#FF0636]/35 bg-[#FF0636]/[0.045] dark:border-[#FF0636]/50 dark:bg-[#FF0636]/10"
+                      : "border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950",
+                  )}
+                >
+                  <span>
+                    <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                      Continuar sem WhatsApp
+                    </span>
+                    <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
+                      A vinculação do WhatsApp é opcional e pode ser feita
+                      depois.
+                    </span>
+                  </span>
+                  {draftWhatsappId === "" ? (
+                    <Check size={16} className="shrink-0 text-[#FF0636]" />
+                  ) : null}
+                </button>
 
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => handleSelectWhatsapp("")}
-                      className={`flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left transition-colors ${
-                        draftWhatsappId === ""
-                          ? "border-[#f0d2a8] bg-[#fff7ea]"
-                          : "border-zinc-200 bg-white hover:border-zinc-300"
-                      }`}
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-zinc-900">
-                          Sem WhatsApp nesta etapa
-                        </p>
-                        <p className="text-xs text-zinc-500">
-                          Conecta só BM, contas, páginas e formulários
-                        </p>
-                      </div>
-                      {draftWhatsappId === "" && (
-                        <Check size={16} className="text-[#b7791f]" />
-                      )}
-                    </button>
-
-                    {selectedBusiness.whatsapp_accounts.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => handleSelectWhatsapp(item.id)}
-                        className={`flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left transition-colors ${
-                          draftWhatsappId === item.id
-                            ? "border-[#f0d2a8] bg-[#fff7ea]"
-                            : "border-zinc-200 bg-white hover:border-zinc-300"
-                        }`}
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-zinc-900">
-                            {item.name}
-                          </p>
-                          <p className="text-xs text-zinc-500">
-                            {item.display_phone_number} · {item.phone_number_id}
-                          </p>
-                        </div>
-                        {draftWhatsappId === item.id && (
-                          <Check size={16} className="text-[#b7791f]" />
-                        )}
-                      </button>
-                    ))}
+                <div className="rounded-[22px] border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-400">
+                    Revisão da conexão
+                  </p>
+                  <div className="mt-3 space-y-2 text-sm">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-zinc-500">Business Manager</span>
+                      <strong className="truncate text-right font-medium text-zinc-900 dark:text-zinc-100">
+                        {selectedBusiness.name}
+                      </strong>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-zinc-500">Ativos selecionados</span>
+                      <strong className="text-right font-medium text-zinc-900 dark:text-zinc-100">
+                        {draftAdAccountIds.length} contas ·{" "}
+                        {draftPageIds.length} páginas · {draftFormIds.length}{" "}
+                        formulários
+                      </strong>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-zinc-500">WhatsApp</span>
+                      <strong className="truncate text-right font-medium text-zinc-900 dark:text-zinc-100">
+                        {selectedWhatsappAccount?.display_phone_number ??
+                          "Não vinculado"}
+                      </strong>
+                    </div>
                   </div>
                 </div>
               </div>
-            </>
-          )}
+            ) : null}
+          </section>
         </div>
       </Modal>
 
@@ -5744,7 +6228,8 @@ export function ClienteDetailPage() {
                             event.target.checked
                               ? [...current, campaign.meta_campaign_id]
                               : current.filter(
-                                  (value) => value !== campaign.meta_campaign_id,
+                                  (value) =>
+                                    value !== campaign.meta_campaign_id,
                                 ),
                           );
                         }}
@@ -5764,7 +6249,9 @@ export function ClienteDetailPage() {
                       {/* O evento e o que permite somar investimento por evento. */}
                       {checked ? (
                         <select
-                          value={campaignEventChoice[campaign.meta_campaign_id] ?? ""}
+                          value={
+                            campaignEventChoice[campaign.meta_campaign_id] ?? ""
+                          }
                           onChange={(event) => {
                             event.stopPropagation();
                             setCampaignEventChoice((current) => ({

@@ -46,6 +46,7 @@ export interface MetaConnectionState {
   selected_pages: MetaPageOption[];
   selected_forms: MetaFormOption[];
   selected_whatsapp?: MetaWhatsappOption | null;
+  selected_whatsapps?: MetaWhatsappOption[];
   phone_number_id?: string | null;
   last_sync_at: string;
   sync_summary: MetaConnectionSummary;

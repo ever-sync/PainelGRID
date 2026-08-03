@@ -116,6 +116,9 @@ describe('IntegrationKeyGuard tenant scope', () => {
     } as Partial<Request>;
 
     await expect(guard.canActivate(contextFor(request))).resolves.toBe(true);
+    expect(
+      (request as Partial<Request> & { integrationClientId?: string }).integrationClientId,
+    ).toBe(clientId);
     expect(prisma.integrationCredential.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { key_hash: expect.stringMatching(/^[a-f0-9]{64}$/) },
