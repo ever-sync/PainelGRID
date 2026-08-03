@@ -1,4 +1,8 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { ConfirmationStatus, LeadSource } from '@prisma/client';
 import { Role } from '../../common/types';
 import { LeadsService } from './leads.service';
@@ -769,6 +773,137 @@ describe('LeadsService', () => {
 
     expect(prisma.lead.findFirst).not.toHaveBeenCalled();
     expect(prisma.lead.create).not.toHaveBeenCalled();
+  });
+
+  it('resolve automaticamente cada cliente pelo formulario antes de importar', async () => {
+    prisma.metaAssetSelection.findMany.mockResolvedValueOnce([
+      {
+        form_id: 'form-cliente-a',
+        form_name: 'Formulario Cliente A',
+        meta_connection: { client_id: clientId },
+      },
+      {
+        form_id: 'form-cliente-b',
+        form_name: 'Formulario Cliente B',
+        meta_connection: { client_id: partnerClientId },
+      },
+    ]);
+    const importSpy = jest
+      .spyOn(service, 'createFacebookLeadsForIntegration')
+      .mockResolvedValueOnce({
+        received: 1,
+        created: 1,
+        already_existed: 0,
+        validated_forms: [],
+        items: [{ id: 'lead-a', already_existed: false }],
+      } as never)
+      .mockResolvedValueOnce({
+        received: 1,
+        created: 0,
+        already_existed: 1,
+        validated_forms: [],
+        items: [{ id: 'lead-b', already_existed: true }],
+      } as never);
+
+    const result = await service.createFacebookLeadsAutomatically([
+      {
+        lead_id: 'meta-a',
+        nome: 'Lead A',
+        formulario_id: 'form-cliente-a',
+      },
+      {
+        lead_id: 'meta-b',
+        nome: 'Lead B',
+        formulario_id: 'form-cliente-b',
+      },
+    ]);
+
+    expect(importSpy).toHaveBeenNthCalledWith(
+      1,
+      clientId,
+      [expect.objectContaining({ lead_id: 'meta-a' })],
+    );
+    expect(importSpy).toHaveBeenNthCalledWith(
+      2,
+      partnerClientId,
+      [expect.objectContaining({ lead_id: 'meta-b' })],
+    );
+    expect(result).toMatchObject({
+      received: 2,
+      created: 1,
+      already_existed: 1,
+      resolved_forms: [
+        {
+          id: 'form-cliente-a',
+          name: 'Formulario Cliente A',
+          client_id: clientId,
+        },
+        {
+          id: 'form-cliente-b',
+          name: 'Formulario Cliente B',
+          client_id: partnerClientId,
+        },
+      ],
+    });
+  });
+
+  it('bloqueia o lote automatico inteiro quando o formulario e desconhecido', async () => {
+    prisma.metaAssetSelection.findMany.mockResolvedValueOnce([]);
+    const importSpy = jest.spyOn(
+      service,
+      'createFacebookLeadsForIntegration',
+    );
+
+    await expect(
+      service.createFacebookLeadsAutomatically([
+        {
+          lead_id: 'meta-desconhecido',
+          nome: 'Lead sem cliente',
+          formulario_id: 'form-desconhecido',
+        },
+      ]),
+    ).rejects.toThrow(
+      new ForbiddenException(
+        'Formulario Meta nao vinculado a nenhum cliente ativo: form-desconhecido',
+      ),
+    );
+
+    expect(importSpy).not.toHaveBeenCalled();
+  });
+
+  it('bloqueia formulario vinculado a clientes diferentes', async () => {
+    prisma.metaAssetSelection.findMany.mockResolvedValueOnce([
+      {
+        form_id: 'form-duplicado',
+        form_name: 'Formulario duplicado',
+        meta_connection: { client_id: clientId },
+      },
+      {
+        form_id: 'form-duplicado',
+        form_name: 'Formulario duplicado',
+        meta_connection: { client_id: partnerClientId },
+      },
+    ]);
+    const importSpy = jest.spyOn(
+      service,
+      'createFacebookLeadsForIntegration',
+    );
+
+    await expect(
+      service.createFacebookLeadsAutomatically([
+        {
+          lead_id: 'meta-ambiguo',
+          nome: 'Lead ambiguo',
+          formulario_id: 'form-duplicado',
+        },
+      ]),
+    ).rejects.toThrow(
+      new ConflictException(
+        'Formulario Meta vinculado a mais de um cliente: form-duplicado',
+      ),
+    );
+
+    expect(importSpy).not.toHaveBeenCalled();
   });
 
   it('bloqueia update de lead quando telefone pertence a outro lead do mesmo cliente', async () => {

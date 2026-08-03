@@ -7,10 +7,20 @@ import { IntegrationKeyGuard } from './integration-key.guard';
 import { RubinhoModule } from '../rubinho/rubinho.module';
 import { IntegrationCredentialsController } from './integration-credentials.controller';
 import { IntegrationCredentialsService } from './integration-credentials.service';
+import { MetaLeadIngestionController } from './meta-lead-ingestion.controller';
+import { MetaLeadIngestionKeyGuard } from './meta-lead-ingestion-key.guard';
 
 @Module({
   imports: [LeadsModule, CrmModule, EventsModule, RubinhoModule],
-  controllers: [IntegrationController, IntegrationCredentialsController],
-  providers: [IntegrationKeyGuard, IntegrationCredentialsService],
+  controllers: [
+    IntegrationController,
+    IntegrationCredentialsController,
+    MetaLeadIngestionController,
+  ],
+  providers: [
+    IntegrationKeyGuard,
+    IntegrationCredentialsService,
+    MetaLeadIngestionKeyGuard,
+  ],
 })
 export class IntegrationModule {}

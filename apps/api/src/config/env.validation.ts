@@ -164,6 +164,7 @@ export function validateEnvironment(raw: EnvironmentVariables) {
   }
 
   const integrationKey = env.LEADFLOW_INTEGRATION_API_KEY?.trim();
+  const metaIngestionKey = env.LEADFLOW_META_INGESTION_API_KEY?.trim();
   const integrationActor = env.LEADFLOW_INTEGRATION_ACTOR_USER_ID?.trim();
   const integrationClientId = env.LEADFLOW_INTEGRATION_CLIENT_ID?.trim();
   const allowLegacyIntegrationKey = env.ALLOW_LEGACY_INTEGRATION_KEY?.trim().toLowerCase();
@@ -175,6 +176,18 @@ export function validateEnvironment(raw: EnvironmentVariables) {
   }
   if (integrationKey) {
     validateMinLength(integrationKey, 'LEADFLOW_INTEGRATION_API_KEY', 32);
+  }
+  if (metaIngestionKey) {
+    validateMinLength(
+      metaIngestionKey,
+      'LEADFLOW_META_INGESTION_API_KEY',
+      32,
+    );
+  }
+  if (integrationKey && metaIngestionKey === integrationKey) {
+    throw new Error(
+      'LEADFLOW_META_INGESTION_API_KEY deve ser diferente da chave legada de integracao.',
+    );
   }
   if (
     integrationClientId &&

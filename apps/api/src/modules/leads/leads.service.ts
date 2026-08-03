@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -1494,6 +1495,119 @@ export class LeadsService {
       created: payloads.length - alreadyExisted,
       already_existed: alreadyExisted,
       validated_forms: validatedForms,
+      items,
+    };
+  }
+
+  /**
+   * Entrada global para webhooks Meta. O cliente nunca vem do request: ele e
+   * resolvido exclusivamente pelo formulario selecionado no painel do gestor.
+   *
+   * Toda a resolucao acontece antes da primeira escrita para evitar importar
+   * parte de um lote quando existe formulario desconhecido ou ambiguo.
+   */
+  async createFacebookLeadsAutomatically(payloads: FacebookLeadPayloadDto[]) {
+    if (payloads.length === 0) {
+      throw new BadRequestException('Envie ao menos um lead do Facebook');
+    }
+    if (payloads.length > 100) {
+      throw new BadRequestException('Cada lote pode conter no maximo 100 leads');
+    }
+
+    const formIds = [
+      ...new Set(payloads.map((payload) => payload.formulario_id.trim())),
+    ];
+    const selectedForms = await this.prisma.metaAssetSelection.findMany({
+      where: {
+        form_id: { in: formIds },
+        meta_connection: { status: 'connected' },
+      },
+      select: {
+        form_id: true,
+        form_name: true,
+        meta_connection: {
+          select: { client_id: true },
+        },
+      },
+    });
+
+    const selectionsByForm = new Map<
+      string,
+      Array<{ clientId: string; formName: string | null }>
+    >();
+    for (const selection of selectedForms) {
+      if (!selection.form_id) continue;
+      const entries = selectionsByForm.get(selection.form_id) ?? [];
+      if (
+        !entries.some(
+          (entry) => entry.clientId === selection.meta_connection.client_id,
+        )
+      ) {
+        entries.push({
+          clientId: selection.meta_connection.client_id,
+          formName: selection.form_name,
+        });
+      }
+      selectionsByForm.set(selection.form_id, entries);
+    }
+
+    const unknownFormIds = formIds.filter(
+      (formId) => !selectionsByForm.has(formId),
+    );
+    if (unknownFormIds.length > 0) {
+      throw new ForbiddenException(
+        `Formulario Meta nao vinculado a nenhum cliente ativo: ${unknownFormIds.join(', ')}`,
+      );
+    }
+
+    const ambiguousFormIds = formIds.filter(
+      (formId) => (selectionsByForm.get(formId)?.length ?? 0) > 1,
+    );
+    if (ambiguousFormIds.length > 0) {
+      throw new ConflictException(
+        `Formulario Meta vinculado a mais de um cliente: ${ambiguousFormIds.join(', ')}`,
+      );
+    }
+
+    const resolvedForms = formIds.map((formId) => {
+      const selection = selectionsByForm.get(formId)![0];
+      return {
+        id: formId,
+        name: selection.formName ?? formId,
+        client_id: selection.clientId,
+      };
+    });
+    const clientIdByForm = new Map(
+      resolvedForms.map((form) => [form.id, form.client_id]),
+    );
+    const payloadsByClient = new Map<string, FacebookLeadPayloadDto[]>();
+    for (const payload of payloads) {
+      const clientId = clientIdByForm.get(payload.formulario_id.trim())!;
+      const clientPayloads = payloadsByClient.get(clientId) ?? [];
+      clientPayloads.push(payload);
+      payloadsByClient.set(clientId, clientPayloads);
+    }
+
+    const items: Array<
+      ReturnType<typeof this.toResponse> & { already_existed: boolean }
+    > = [];
+    let created = 0;
+    let alreadyExisted = 0;
+    for (const [clientId, clientPayloads] of payloadsByClient) {
+      const result = await this.createFacebookLeadsForIntegration(
+        clientId,
+        clientPayloads,
+      );
+      created += result.created;
+      alreadyExisted += result.already_existed;
+      items.push(...result.items);
+    }
+
+    return {
+      received: payloads.length,
+      created,
+      already_existed: alreadyExisted,
+      resolved_forms: resolvedForms,
       items,
     };
   }

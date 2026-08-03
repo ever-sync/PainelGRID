@@ -30,6 +30,30 @@ describe('validateEnvironment', () => {
     ).not.toThrow();
   });
 
+  it('rejeita chave de ingestao Meta curta', () => {
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        LEADFLOW_META_INGESTION_API_KEY: 'short-key',
+      }),
+    ).toThrow(
+      'LEADFLOW_META_INGESTION_API_KEY deve ter no minimo 32 caracteres.',
+    );
+  });
+
+  it('exige chaves distintas para ingestao Meta e integracao legada', () => {
+    const duplicatedKey = 'integration-secret-with-32-characters';
+    expect(() =>
+      validateEnvironment({
+        ...validEnvironment,
+        LEADFLOW_INTEGRATION_API_KEY: duplicatedKey,
+        LEADFLOW_META_INGESTION_API_KEY: duplicatedKey,
+      }),
+    ).toThrow(
+      'LEADFLOW_META_INGESTION_API_KEY deve ser diferente da chave legada de integracao.',
+    );
+  });
+
   it('exige escopo de cliente para integração em produção', () => {
     expect(() =>
       validateEnvironment({
