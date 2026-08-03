@@ -1,6 +1,7 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   HttpException,
   HttpStatus,
@@ -31,6 +32,7 @@ import { ListMetaBusinessesQueryDto } from './dto/list-meta-businesses-query.dto
 import { MetaCallbackQueryDto } from './dto/meta-callback-query.dto';
 import { SelectMetaAssetsDto } from './dto/select-meta-assets.dto';
 import { StartMetaConnectDto } from './dto/start-meta-connect.dto';
+import { UpsertMetaLeadRoutingDto } from './dto/upsert-meta-lead-routing.dto';
 
 import { TriggerMetaSyncDto } from './dto/trigger-meta-sync.dto';
 import {
@@ -551,6 +553,17 @@ export class MetaService implements OnModuleInit {
         data: assetRow as unknown as Prisma.MetaAssetSelectionUncheckedCreateInput,
       });
     }
+
+    // Remove somente regras de formularios que deixaram de estar selecionados.
+    // Reconfigurar BM/paginas mantendo o formulario preserva o roteamento.
+    await this.db.metaLeadRoutingRule.deleteMany({
+      where: {
+        client_id: dto.client_id,
+        ...(selectedFormIds.length > 0
+          ? { form_id: { notIn: selectedFormIds } }
+          : {}),
+      },
+    });
 
     await this.db.client.update({
       where: { id: dto.client_id },
@@ -2029,6 +2042,208 @@ export class MetaService implements OnModuleInit {
     });
 
     return { removed: true };
+  }
+
+  /**
+   * Lista os formularios efetivamente selecionados para o cliente e anexa a
+   * regra operacional, quando configurada. A tela nao precisa combinar dados
+   * de conexoes diferentes nem consultar IDs fixos.
+   */
+  async listLeadRoutingRules(user: AuthenticatedUser, clientId: string) {
+    await this.assertMetaClientAccess(user, clientId);
+
+    const [selectedForms, rules] = await Promise.all([
+      this.db.metaAssetSelection.findMany({
+        where: {
+          form_id: { not: null },
+          meta_connection: { client_id: clientId, status: 'connected' },
+        },
+        select: {
+          form_id: true,
+          form_name: true,
+          page_id: true,
+        },
+      }),
+      this.db.metaLeadRoutingRule.findMany({
+        where: { client_id: clientId },
+        include: {
+          event: { select: { id: true, name: true } },
+          crm_pipeline: { select: { id: true, name: true, code: true } },
+          call_stage: { select: { id: true, name: true, code: true, color: true } },
+          whatsapp_stage: {
+            select: { id: true, name: true, code: true, color: true },
+          },
+        },
+      }),
+    ]);
+
+    const ruleByForm = new Map(
+      rules.map((rule: { form_id: string }) => [rule.form_id, rule]),
+    );
+    const uniqueForms = new Map<
+      string,
+      { id: string; name: string; page_id: string | null }
+    >();
+    for (const form of selectedForms) {
+      if (!form.form_id || uniqueForms.has(form.form_id)) continue;
+      uniqueForms.set(form.form_id, {
+        id: form.form_id,
+        name: form.form_name ?? form.form_id,
+        page_id: form.page_id,
+      });
+    }
+
+    return {
+      client_id: clientId,
+      forms: Array.from(uniqueForms.values())
+        .sort((left, right) => left.name.localeCompare(right.name, 'pt-BR'))
+        .map((form) => ({
+          ...form,
+          mapping: ruleByForm.get(form.id) ?? null,
+        })),
+    };
+  }
+
+  async upsertLeadRoutingRule(
+    user: AuthenticatedUser,
+    clientId: string,
+    dto: UpsertMetaLeadRoutingDto,
+  ) {
+    await this.assertMetaClientAccess(user, clientId);
+
+    const selectedForm = await this.db.metaAssetSelection.findFirst({
+      where: {
+        form_id: dto.form_id,
+        meta_connection: { client_id: clientId, status: 'connected' },
+      },
+      select: { form_id: true, form_name: true },
+    });
+    if (!selectedForm?.form_id) {
+      throw new BadRequestException(
+        'Formulario Meta nao esta selecionado para este cliente',
+      );
+    }
+
+    const [selectionFromOtherClient, existingRule, event, pipeline, stages] =
+      await Promise.all([
+        this.db.metaAssetSelection.findFirst({
+          where: {
+            form_id: dto.form_id,
+            meta_connection: {
+              client_id: { not: clientId },
+              status: 'connected',
+            },
+          },
+          select: { id: true },
+        }),
+        this.db.metaLeadRoutingRule.findUnique({
+          where: { form_id: dto.form_id },
+          select: { client_id: true },
+        }),
+        this.db.event.findFirst({
+          where: {
+            id: dto.event_id,
+            participants: { some: { client_id: clientId } },
+          },
+          select: { id: true },
+        }),
+        this.db.crmPipeline.findFirst({
+          where: {
+            id: dto.crm_pipeline_id,
+            client_id: clientId,
+            is_active: true,
+          },
+          select: { id: true },
+        }),
+        this.db.crmStage.findMany({
+          where: {
+            id: { in: [dto.call_stage_id, dto.whatsapp_stage_id] },
+            client_id: clientId,
+            pipeline_id: dto.crm_pipeline_id,
+          },
+          select: { id: true },
+        }),
+      ]);
+
+    if (
+      selectionFromOtherClient ||
+      (existingRule && existingRule.client_id !== clientId)
+    ) {
+      throw new ConflictException(
+        'Formulario Meta ja esta vinculado a outro cliente',
+      );
+    }
+    if (!event) {
+      throw new BadRequestException(
+        'Evento nao pertence aos eventos disponiveis deste cliente',
+      );
+    }
+    if (!pipeline) {
+      throw new BadRequestException(
+        'Pipeline CRM nao pertence a este cliente ou esta inativo',
+      );
+    }
+
+    const stageIds = new Set(stages.map((stage) => stage.id));
+    if (
+      !stageIds.has(dto.call_stage_id) ||
+      !stageIds.has(dto.whatsapp_stage_id)
+    ) {
+      throw new BadRequestException(
+        'As etapas de ligacao e WhatsApp devem pertencer ao pipeline selecionado',
+      );
+    }
+
+    return this.db.metaLeadRoutingRule.upsert({
+      where: { form_id: dto.form_id },
+      create: {
+        client_id: clientId,
+        form_id: dto.form_id,
+        form_name: selectedForm.form_name,
+        event_id: dto.event_id,
+        crm_pipeline_id: dto.crm_pipeline_id,
+        call_stage_id: dto.call_stage_id,
+        whatsapp_stage_id: dto.whatsapp_stage_id,
+      },
+      update: {
+        form_name: selectedForm.form_name,
+        event_id: dto.event_id,
+        crm_pipeline_id: dto.crm_pipeline_id,
+        call_stage_id: dto.call_stage_id,
+        whatsapp_stage_id: dto.whatsapp_stage_id,
+      },
+      include: {
+        event: { select: { id: true, name: true } },
+        crm_pipeline: { select: { id: true, name: true, code: true } },
+        call_stage: { select: { id: true, name: true, code: true, color: true } },
+        whatsapp_stage: {
+          select: { id: true, name: true, code: true, color: true },
+        },
+      },
+    });
+  }
+
+  async deleteLeadRoutingRule(
+    user: AuthenticatedUser,
+    clientId: string,
+    rawFormId: string,
+  ) {
+    await this.assertMetaClientAccess(user, clientId);
+    const formId = rawFormId.trim();
+    if (!formId || formId.length > 100) {
+      throw new BadRequestException('form_id invalido');
+    }
+
+    const existing = await this.db.metaLeadRoutingRule.findFirst({
+      where: { client_id: clientId, form_id: formId },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Mapeamento do formulario nao encontrado');
+    }
+
+    await this.db.metaLeadRoutingRule.delete({ where: { id: existing.id } });
+    return { removed: true, form_id: formId };
   }
 
   /**

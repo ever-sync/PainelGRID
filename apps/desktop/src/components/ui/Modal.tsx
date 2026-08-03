@@ -8,7 +8,7 @@ interface ModalProps {
   onClose: () => void;
   title?: string;
   children: ReactNode;
-  size?: "sm" | "md" | "lg" | "xl" | "2xl";
+  size?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl";
   footer?: ReactNode;
   /** @deprecated dark mode agora e global via classe `.dark`; sem efeito aqui. */
   dark?: boolean;
@@ -20,6 +20,7 @@ const sizeClasses = {
   lg: "sm:max-w-lg",
   xl: "sm:max-w-2xl",
   "2xl": "sm:max-w-[calc(100vw-2rem)] lg:max-w-4xl",
+  "3xl": "sm:max-w-[calc(100vw-2rem)] lg:max-w-6xl",
 };
 
 function useOverlay(open: boolean, onClose: () => void) {

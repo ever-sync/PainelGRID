@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   PayloadTooLargeException,
   Post,
+  Put,
   Query,
   RawBodyRequest,
   Req,
@@ -30,6 +31,7 @@ import { SelectMetaAssetsDto } from './dto/select-meta-assets.dto';
 import { ImportMetaLeadsDto } from './dto/import-meta-leads.dto';
 import { StartMetaConnectDto } from './dto/start-meta-connect.dto';
 import { TriggerMetaSyncDto } from './dto/trigger-meta-sync.dto';
+import { UpsertMetaLeadRoutingDto } from './dto/upsert-meta-lead-routing.dto';
 import { MetaService } from './meta.service';
 
 @ApiTags('meta')
@@ -220,6 +222,41 @@ export class MetaController {
     @Param('metaCampaignId') metaCampaignId: string,
   ): Promise<Record<string, unknown>> {
     return this.metaService.unassignCampaign(user, metaCampaignId);
+  }
+
+  @Roles(Role.GESTOR)
+  @Get('lead-routing/:clientId')
+  @ApiOperation({ summary: 'Lista o roteamento dos formularios Meta do cliente' })
+  @ApiResponse({ status: 200, description: 'Roteamentos retornados com sucesso' })
+  listLeadRouting(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('clientId', new ParseUUIDPipe()) clientId: string,
+  ): Promise<Record<string, unknown>> {
+    return this.metaService.listLeadRoutingRules(user, clientId);
+  }
+
+  @Roles(Role.GESTOR)
+  @Put('lead-routing/:clientId')
+  @ApiOperation({ summary: 'Configura evento, pipeline e etapas de um formulario Meta' })
+  @ApiResponse({ status: 200, description: 'Roteamento salvo com sucesso' })
+  upsertLeadRouting(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('clientId', new ParseUUIDPipe()) clientId: string,
+    @Body() dto: UpsertMetaLeadRoutingDto,
+  ): Promise<Record<string, unknown>> {
+    return this.metaService.upsertLeadRoutingRule(user, clientId, dto);
+  }
+
+  @Roles(Role.GESTOR)
+  @Delete('lead-routing/:clientId/:formId')
+  @ApiOperation({ summary: 'Remove o roteamento de um formulario Meta' })
+  @ApiResponse({ status: 200, description: 'Roteamento removido com sucesso' })
+  deleteLeadRouting(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('clientId', new ParseUUIDPipe()) clientId: string,
+    @Param('formId') formId: string,
+  ): Promise<Record<string, unknown>> {
+    return this.metaService.deleteLeadRoutingRule(user, clientId, formId);
   }
 
   @Roles(Role.GESTOR, Role.CLIENTE)

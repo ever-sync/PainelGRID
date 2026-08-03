@@ -20,6 +20,15 @@ describe('MetaService', () => {
     },
     metaAssetSelection: {
       findMany: jest.fn(),
+      findFirst: jest.fn(),
+    },
+    metaLeadRoutingRule: {
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      findUnique: jest.fn(),
+      upsert: jest.fn(),
+      delete: jest.fn(),
+      deleteMany: jest.fn(),
     },
     metaCampaignAssignment: {
       findMany: jest.fn(),
@@ -42,6 +51,13 @@ describe('MetaService', () => {
     },
     event: {
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
+    },
+    crmPipeline: {
+      findFirst: jest.fn(),
+    },
+    crmStage: {
+      findMany: jest.fn(),
     },
     metaSyncJob: {
       create: jest.fn(),
@@ -330,6 +346,133 @@ describe('MetaService', () => {
         status: 'ACTIVE',
         meta_campaign_id: { in: ['campaign-1'] },
       });
+    });
+  });
+
+  describe('roteamento de leads por formulario', () => {
+    const gestor = { sub: 'gestor-1', role: Role.GESTOR } as AuthenticatedUser;
+    const dto = {
+      form_id: 'form-1',
+      event_id: '11111111-1111-4111-8111-111111111111',
+      crm_pipeline_id: '22222222-2222-4222-8222-222222222222',
+      call_stage_id: '33333333-3333-4333-8333-333333333333',
+      whatsapp_stage_id: '44444444-4444-4444-8444-444444444444',
+    };
+
+    beforeEach(() => {
+      prisma.client.findUnique.mockResolvedValue({
+        id: 'client-1',
+        gestor_id: 'gestor-1',
+      });
+    });
+
+    it('lista formularios selecionados com o mapeamento persistido', async () => {
+      prisma.metaAssetSelection.findMany.mockResolvedValue([
+        { form_id: 'form-1', form_name: 'Formulario 1', page_id: 'page-1' },
+        { form_id: 'form-1', form_name: 'Formulario 1', page_id: 'page-1' },
+        { form_id: 'form-2', form_name: 'Formulario 2', page_id: 'page-1' },
+      ]);
+      prisma.metaLeadRoutingRule.findMany.mockResolvedValue([
+        {
+          id: 'routing-1',
+          form_id: 'form-1',
+          event: { id: 'event-1', name: 'Evento' },
+          crm_pipeline: { id: 'pipeline-1', name: 'Pipeline', code: 'PL' },
+          call_stage: { id: 'stage-1', name: 'Ligacao', code: 'LIG', color: '#111111' },
+          whatsapp_stage: {
+            id: 'stage-2',
+            name: 'WhatsApp',
+            code: 'WA',
+            color: '#222222',
+          },
+        },
+      ]);
+
+      const result = await service.listLeadRoutingRules(gestor, 'client-1');
+
+      expect(result.forms).toHaveLength(2);
+      expect(result.forms).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'form-1',
+            mapping: expect.objectContaining({ id: 'routing-1' }),
+          }),
+          expect.objectContaining({ id: 'form-2', mapping: null }),
+        ]),
+      );
+    });
+
+    it('salva evento, pipeline e etapas quando todos pertencem ao cliente', async () => {
+      prisma.metaAssetSelection.findFirst
+        .mockResolvedValueOnce({ form_id: 'form-1', form_name: 'Formulario 1' })
+        .mockResolvedValueOnce(null);
+      prisma.metaLeadRoutingRule.findUnique.mockResolvedValue(null);
+      prisma.event.findFirst.mockResolvedValue({ id: dto.event_id });
+      prisma.crmPipeline.findFirst.mockResolvedValue({ id: dto.crm_pipeline_id });
+      prisma.crmStage.findMany.mockResolvedValue([
+        { id: dto.call_stage_id },
+        { id: dto.whatsapp_stage_id },
+      ]);
+      prisma.metaLeadRoutingRule.upsert.mockResolvedValue({
+        id: 'routing-1',
+        client_id: 'client-1',
+        ...dto,
+      });
+
+      const result = await service.upsertLeadRoutingRule(
+        gestor,
+        'client-1',
+        dto,
+      );
+
+      expect(result).toMatchObject({ id: 'routing-1', ...dto });
+      expect(prisma.metaLeadRoutingRule.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { form_id: 'form-1' },
+          create: expect.objectContaining({
+            client_id: 'client-1',
+            form_name: 'Formulario 1',
+            ...dto,
+          }),
+        }),
+      );
+    });
+
+    it('bloqueia formulario selecionado simultaneamente por outro cliente', async () => {
+      prisma.metaAssetSelection.findFirst
+        .mockResolvedValueOnce({ form_id: 'form-1', form_name: 'Formulario 1' })
+        .mockResolvedValueOnce({ id: 'selection-other-client' });
+      prisma.metaLeadRoutingRule.findUnique.mockResolvedValue(null);
+      prisma.event.findFirst.mockResolvedValue({ id: dto.event_id });
+      prisma.crmPipeline.findFirst.mockResolvedValue({ id: dto.crm_pipeline_id });
+      prisma.crmStage.findMany.mockResolvedValue([
+        { id: dto.call_stage_id },
+        { id: dto.whatsapp_stage_id },
+      ]);
+
+      await expect(
+        service.upsertLeadRoutingRule(gestor, 'client-1', dto),
+      ).rejects.toThrow('Formulario Meta ja esta vinculado a outro cliente');
+
+      expect(prisma.metaLeadRoutingRule.upsert).not.toHaveBeenCalled();
+    });
+
+    it('bloqueia etapa que nao pertence ao pipeline escolhido', async () => {
+      prisma.metaAssetSelection.findFirst
+        .mockResolvedValueOnce({ form_id: 'form-1', form_name: 'Formulario 1' })
+        .mockResolvedValueOnce(null);
+      prisma.metaLeadRoutingRule.findUnique.mockResolvedValue(null);
+      prisma.event.findFirst.mockResolvedValue({ id: dto.event_id });
+      prisma.crmPipeline.findFirst.mockResolvedValue({ id: dto.crm_pipeline_id });
+      prisma.crmStage.findMany.mockResolvedValue([{ id: dto.call_stage_id }]);
+
+      await expect(
+        service.upsertLeadRoutingRule(gestor, 'client-1', dto),
+      ).rejects.toThrow(
+        'As etapas de ligacao e WhatsApp devem pertencer ao pipeline selecionado',
+      );
+
+      expect(prisma.metaLeadRoutingRule.upsert).not.toHaveBeenCalled();
     });
   });
 

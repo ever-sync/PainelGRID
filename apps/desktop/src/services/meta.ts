@@ -376,3 +376,75 @@ export function selectMetaAssets(
     body: payload,
   });
 }
+
+export type MetaLeadRoutingStage = {
+  id: string;
+  name: string;
+  code: string;
+  color: string;
+};
+
+export type MetaLeadRoutingMapping = {
+  id: string;
+  client_id: string;
+  form_id: string;
+  form_name: string | null;
+  event_id: string;
+  crm_pipeline_id: string;
+  call_stage_id: string;
+  whatsapp_stage_id: string;
+  updated_at: string;
+  event: { id: string; name: string };
+  crm_pipeline: { id: string; name: string; code: string };
+  call_stage: MetaLeadRoutingStage;
+  whatsapp_stage: MetaLeadRoutingStage;
+};
+
+export type MetaLeadRoutingForm = {
+  id: string;
+  name: string;
+  page_id: string | null;
+  mapping: MetaLeadRoutingMapping | null;
+};
+
+export type MetaLeadRoutingResponse = {
+  client_id: string;
+  forms: MetaLeadRoutingForm[];
+};
+
+export type UpsertMetaLeadRoutingPayload = {
+  form_id: string;
+  event_id: string;
+  crm_pipeline_id: string;
+  call_stage_id: string;
+  whatsapp_stage_id: string;
+};
+
+export function listMetaLeadRouting(clientId: string, token: string) {
+  return httpRequest<MetaLeadRoutingResponse>(
+    `/meta/lead-routing/${clientId}`,
+    { method: "GET", token },
+  );
+}
+
+export function upsertMetaLeadRouting(
+  clientId: string,
+  payload: UpsertMetaLeadRoutingPayload,
+  token: string,
+) {
+  return httpRequest<MetaLeadRoutingMapping>(
+    `/meta/lead-routing/${clientId}`,
+    { method: "PUT", token, body: payload },
+  );
+}
+
+export function deleteMetaLeadRouting(
+  clientId: string,
+  formId: string,
+  token: string,
+) {
+  return httpRequest<{ removed: boolean; form_id: string }>(
+    `/meta/lead-routing/${clientId}/${encodeURIComponent(formId)}`,
+    { method: "DELETE", token },
+  );
+}

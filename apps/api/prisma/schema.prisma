@@ -165,6 +165,7 @@ model Client {
   meta_daily_insights         MetaDailyInsight[]
   meta_lead_forms             MetaLeadForm[]
   meta_lead_imports           MetaLeadImport[]
+  meta_lead_routing_rules     MetaLeadRoutingRule[]
   meta_sync_jobs              MetaSyncJob[]
   rubinho_agents              RubinhoAgent[]
   sales                       Sale[]
@@ -315,6 +316,7 @@ model Event {
   client                        Client                   @relation(fields: [client_id], references: [id])
   interested_leads              Lead[]
   meta_campaign_assignments     MetaCampaignAssignment[]
+  meta_lead_routing_rules       MetaLeadRoutingRule[]
   rubinho_events                RubinhoAgentEvent[]
   sales_teams                   SalesTeam[]
   service_ratings               ServiceRating[]
@@ -341,17 +343,18 @@ model EventParticipant {
 }
 
 model CrmPipeline {
-  id          String     @id @default(uuid()) @db.Uuid
-  client_id   String     @db.Uuid
-  code        String     @unique @db.VarChar(40)
-  name        String     @db.VarChar(120)
-  description String?
-  is_active   Boolean    @default(true)
-  created_at  DateTime   @default(now())
-  updated_at  DateTime   @updatedAt
-  client      Client     @relation(fields: [client_id], references: [id])
-  stages      CrmStage[]
-  leads       Lead[]
+  id                      String                @id @default(uuid()) @db.Uuid
+  client_id               String                @db.Uuid
+  code                    String                @unique @db.VarChar(40)
+  name                    String                @db.VarChar(120)
+  description             String?
+  is_active               Boolean               @default(true)
+  created_at              DateTime              @default(now())
+  updated_at              DateTime              @updatedAt
+  client                  Client                @relation(fields: [client_id], references: [id])
+  stages                  CrmStage[]
+  leads                   Lead[]
+  meta_lead_routing_rules MetaLeadRoutingRule[]
 
   @@index([client_id])
   @@index([is_active])
@@ -359,21 +362,23 @@ model CrmPipeline {
 }
 
 model CrmStage {
-  id             String       @id @default(uuid()) @db.Uuid
-  client_id      String       @db.Uuid
-  name           String       @db.VarChar(100)
-  display_order  Int
-  color          String       @default("#6B7280") @db.VarChar(7)
-  is_final_stage Boolean      @default(false)
-  created_at     DateTime     @default(now())
-  pipeline_id    String       @db.Uuid
-  code           String       @unique @db.VarChar(40)
-  updated_at     DateTime     @updatedAt
-  history_from   CrmHistory[] @relation("FromStage")
-  history_to     CrmHistory[] @relation("ToStage")
-  client         Client       @relation(fields: [client_id], references: [id])
-  pipeline       CrmPipeline  @relation(fields: [pipeline_id], references: [id])
-  leads          Lead[]
+  id                               String                @id @default(uuid()) @db.Uuid
+  client_id                        String                @db.Uuid
+  name                             String                @db.VarChar(100)
+  display_order                    Int
+  color                            String                @default("#6B7280") @db.VarChar(7)
+  is_final_stage                   Boolean               @default(false)
+  created_at                       DateTime              @default(now())
+  pipeline_id                      String                @db.Uuid
+  code                             String                @unique @db.VarChar(40)
+  updated_at                       DateTime              @updatedAt
+  history_from                     CrmHistory[]          @relation("FromStage")
+  history_to                       CrmHistory[]          @relation("ToStage")
+  client                           Client                @relation(fields: [client_id], references: [id])
+  pipeline                         CrmPipeline           @relation(fields: [pipeline_id], references: [id])
+  leads                            Lead[]
+  meta_lead_call_routing_rules     MetaLeadRoutingRule[] @relation("MetaLeadCallStage")
+  meta_lead_whatsapp_routing_rules MetaLeadRoutingRule[] @relation("MetaLeadWhatsappStage")
 
   @@unique([pipeline_id, display_order])
   @@index([client_id])
@@ -634,6 +639,35 @@ model MetaAssetSelection {
 
   @@index([meta_connection_id])
   @@map("meta_asset_selections")
+}
+
+/// Regra operacional aplicada aos leads de um formulario Meta. Fica separada
+/// da selecao de ativos porque essa selecao e recriada quando a BM e salva.
+/// `form_id` e globalmente unico: o mesmo formulario nunca pode rotear leads
+/// para dois clientes diferentes.
+model MetaLeadRoutingRule {
+  id                String      @id @default(uuid()) @db.Uuid
+  client_id         String      @db.Uuid
+  form_id           String      @unique @db.VarChar(100)
+  form_name         String?     @db.VarChar(255)
+  event_id          String      @db.Uuid
+  crm_pipeline_id   String      @db.Uuid
+  call_stage_id     String      @db.Uuid
+  whatsapp_stage_id String      @db.Uuid
+  created_at        DateTime    @default(now())
+  updated_at        DateTime    @updatedAt
+  client            Client      @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  event             Event       @relation(fields: [event_id], references: [id])
+  crm_pipeline      CrmPipeline @relation(fields: [crm_pipeline_id], references: [id])
+  call_stage        CrmStage    @relation("MetaLeadCallStage", fields: [call_stage_id], references: [id])
+  whatsapp_stage    CrmStage    @relation("MetaLeadWhatsappStage", fields: [whatsapp_stage_id], references: [id])
+
+  @@index([client_id])
+  @@index([event_id])
+  @@index([crm_pipeline_id])
+  @@index([call_stage_id])
+  @@index([whatsapp_stage_id])
+  @@map("meta_lead_routing_rules")
 }
 
 model MetaCampaign {

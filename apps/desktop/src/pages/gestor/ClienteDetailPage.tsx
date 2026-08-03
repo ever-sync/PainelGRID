@@ -35,6 +35,7 @@ import {
   Phone,
   Plus,
   RefreshCcw,
+  Route,
   Search,
   Settings,
   UserRound,
@@ -67,6 +68,10 @@ import { CopyableId } from "../../components/ui/CopyableId";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { VendorSignupLinkCard } from "../../components/shared/VendorSignupLinkCard";
 import { listEvents } from "../../services/events";
+import {
+  listCrmPipelines,
+  type ApiCrmPipeline,
+} from "../../services/crm";
 import { MetaCampaignTree } from "../../components/shared/MetaCampaignTree";
 import {
   MetaCampaignFilters,
@@ -136,8 +141,12 @@ import {
   listLinkedCampaigns,
   assignMetaCampaign,
   unassignMetaCampaign,
+  deleteMetaLeadRouting,
+  listMetaLeadRouting,
+  upsertMetaLeadRouting,
   type AssignableCampaign,
   type LinkedCampaign,
+  type MetaLeadRoutingForm,
   type MetaCampaignsReportItem,
   type MetaBusinessApiOption,
 } from "../../services/meta";
@@ -181,6 +190,39 @@ type IntegrationAction = {
   kind: "rotate" | "revoke";
   credential: IntegrationCredential;
 };
+type MetaLeadRoutingDraft = {
+  event_id: string;
+  crm_pipeline_id: string;
+  call_stage_id: string;
+  whatsapp_stage_id: string;
+};
+
+function emptyMetaLeadRoutingDraft(): MetaLeadRoutingDraft {
+  return {
+    event_id: "",
+    crm_pipeline_id: "",
+    call_stage_id: "",
+    whatsapp_stage_id: "",
+  };
+}
+
+function draftsFromMetaLeadRoutingForms(
+  forms: MetaLeadRoutingForm[],
+): Record<string, MetaLeadRoutingDraft> {
+  return Object.fromEntries(
+    forms.map((form) => [
+      form.id,
+      form.mapping
+        ? {
+            event_id: form.mapping.event_id,
+            crm_pipeline_id: form.mapping.crm_pipeline_id,
+            call_stage_id: form.mapping.call_stage_id,
+            whatsapp_stage_id: form.mapping.whatsapp_stage_id,
+          }
+        : emptyMetaLeadRoutingDraft(),
+    ]),
+  );
+}
 
 const VENDOR_CATEGORY_OPTIONS: Array<{
   value: EditableVendorCategory;
@@ -1055,6 +1097,24 @@ export function ClienteDetailPage() {
   const [checkedCampaignIds, setCheckedCampaignIds] = useState<string[]>([]);
   const [initialCampaignIds, setInitialCampaignIds] = useState<string[]>([]);
   const [linkedCampaigns, setLinkedCampaigns] = useState<LinkedCampaign[]>([]);
+
+  // Roteamento formulario -> evento/pipeline/etapas de atendimento.
+  const [isLeadRoutingOpen, setIsLeadRoutingOpen] = useState(false);
+  const [leadRoutingLoading, setLeadRoutingLoading] = useState(false);
+  const [leadRoutingSaving, setLeadRoutingSaving] = useState(false);
+  const [leadRoutingError, setLeadRoutingError] = useState<string | null>(null);
+  const [leadRoutingForms, setLeadRoutingForms] = useState<
+    MetaLeadRoutingForm[]
+  >([]);
+  const [leadRoutingEvents, setLeadRoutingEvents] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  const [leadRoutingPipelines, setLeadRoutingPipelines] = useState<
+    ApiCrmPipeline[]
+  >([]);
+  const [leadRoutingDrafts, setLeadRoutingDrafts] = useState<
+    Record<string, MetaLeadRoutingDraft>
+  >({});
 
   // Filtros da aba Campanhas: periodo, tipo e colunas visiveis.
   const [campaignPeriod, setCampaignPeriod] = useState<PeriodPreset>(30);
@@ -2451,6 +2511,147 @@ export function ClienteDetailPage() {
 
     setIsSavingMeta(false);
     setIsMetaModalOpen(false);
+  }
+
+  async function handleOpenLeadRouting() {
+    const clientId = id ?? "";
+    const session = readStoredSession();
+    if (!clientId || !isUuid(clientId) || !session?.accessToken) {
+      pushToast({
+        type: "error",
+        message: "Sessão expirada. Faça login novamente.",
+      });
+      return;
+    }
+
+    setIsLeadRoutingOpen(true);
+    setLeadRoutingLoading(true);
+    setLeadRoutingError(null);
+    try {
+      const [routing, events, pipelines] = await Promise.all([
+        listMetaLeadRouting(clientId, session.accessToken),
+        listEvents({ client_id: clientId }, session.accessToken),
+        listCrmPipelines(clientId, session.accessToken),
+      ]);
+      setLeadRoutingForms(routing.forms);
+      setLeadRoutingEvents(
+        events.map((event) => ({ id: event.id, name: event.name })),
+      );
+      setLeadRoutingPipelines(pipelines);
+      setLeadRoutingDrafts(draftsFromMetaLeadRoutingForms(routing.forms));
+    } catch (error) {
+      setLeadRoutingForms([]);
+      setLeadRoutingError(
+        getErrorMessage(
+          error,
+          "Não foi possível carregar o mapeamento dos formulários.",
+        ),
+      );
+    } finally {
+      setLeadRoutingLoading(false);
+    }
+  }
+
+  function patchLeadRoutingDraft(
+    formId: string,
+    patch: Partial<MetaLeadRoutingDraft>,
+  ) {
+    setLeadRoutingDrafts((current) => ({
+      ...current,
+      [formId]: {
+        ...(current[formId] ?? emptyMetaLeadRoutingDraft()),
+        ...patch,
+      },
+    }));
+  }
+
+  async function handleSaveLeadRouting() {
+    const clientId = id ?? "";
+    const session = readStoredSession();
+    if (!clientId || !session?.accessToken) return;
+
+    const started = leadRoutingForms.filter((form) => {
+      const draft = leadRoutingDrafts[form.id];
+      return draft && Object.values(draft).some(Boolean);
+    });
+    const incomplete = started.filter((form) => {
+      const draft = leadRoutingDrafts[form.id];
+      return !draft || Object.values(draft).some((value) => !value);
+    });
+    if (incomplete.length > 0) {
+      setLeadRoutingError(
+        `Complete evento, pipeline e as duas etapas em: ${incomplete
+          .map((form) => form.name)
+          .join(", ")}.`,
+      );
+      return;
+    }
+    if (started.length === 0) {
+      setLeadRoutingError("Configure ao menos um formulário antes de salvar.");
+      return;
+    }
+
+    setLeadRoutingSaving(true);
+    setLeadRoutingError(null);
+    try {
+      for (const form of started) {
+        const draft = leadRoutingDrafts[form.id]!;
+        await upsertMetaLeadRouting(
+          clientId,
+          { form_id: form.id, ...draft },
+          session.accessToken,
+        );
+      }
+
+      const refreshed = await listMetaLeadRouting(
+        clientId,
+        session.accessToken,
+      );
+      setLeadRoutingForms(refreshed.forms);
+      setLeadRoutingDrafts(draftsFromMetaLeadRoutingForms(refreshed.forms));
+      pushToast({
+        type: "success",
+        message: `${started.length} formulário(s) configurado(s) para entrada automática.`,
+      });
+      setIsLeadRoutingOpen(false);
+    } catch (error) {
+      setLeadRoutingError(
+        getErrorMessage(error, "Não foi possível salvar os mapeamentos."),
+      );
+    } finally {
+      setLeadRoutingSaving(false);
+    }
+  }
+
+  async function handleDeleteLeadRouting(form: MetaLeadRoutingForm) {
+    const clientId = id ?? "";
+    const session = readStoredSession();
+    if (!clientId || !session?.accessToken || !form.mapping) return;
+
+    setLeadRoutingSaving(true);
+    setLeadRoutingError(null);
+    try {
+      await deleteMetaLeadRouting(clientId, form.id, session.accessToken);
+      setLeadRoutingForms((current) =>
+        current.map((item) =>
+          item.id === form.id ? { ...item, mapping: null } : item,
+        ),
+      );
+      setLeadRoutingDrafts((current) => ({
+        ...current,
+        [form.id]: emptyMetaLeadRoutingDraft(),
+      }));
+      pushToast({
+        type: "success",
+        message: `Mapeamento removido de ${form.name}.`,
+      });
+    } catch (error) {
+      setLeadRoutingError(
+        getErrorMessage(error, "Não foi possível remover o mapeamento."),
+      );
+    } finally {
+      setLeadRoutingSaving(false);
+    }
   }
 
   async function handleOpenCampaignLink() {
@@ -4452,8 +4653,27 @@ export function ClienteDetailPage() {
                       : "border-zinc-200 bg-white text-zinc-900",
                   )}
                 >
-                  {/* APENAS OS 2 BOTÕES ALINHADOS À DIREITA E LINHA DIVISÓRIA */}
+                  {/* Acoes da conexao e do roteamento de leads. */}
                   <div className="flex items-center justify-end gap-2 border-b pb-5 border-zinc-200 dark:border-zinc-800">
+                    <button
+                      type="button"
+                      onClick={() => void handleOpenLeadRouting()}
+                      disabled={
+                        !metaConnection ||
+                        metaConnection.selected_forms.length === 0
+                      }
+                      className={clsx(
+                        "h-11 px-5 rounded-2xl border text-xs font-bold transition-all active:scale-95 cursor-pointer inline-flex items-center gap-2 shadow-sm disabled:cursor-not-allowed disabled:opacity-50",
+                        isDarkMode
+                          ? "border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+                          : "border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50",
+                      )}
+                      title="Definir evento e etapas de entrada para cada formulário"
+                    >
+                      <Route size={15} className="text-[#FF0636]" />
+                      <span>Mapear leads</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => void handleSyncMeta()}
@@ -5844,7 +6064,7 @@ export function ClienteDetailPage() {
         open={isMetaModalOpen}
         onClose={() => setIsMetaModalOpen(false)}
         title="Configurar conexão Meta"
-        size="2xl"
+        size="3xl"
         dark={isDarkMode}
         footer={
           <div className="flex w-full flex-wrap items-center justify-between gap-3">
@@ -6149,6 +6369,279 @@ export function ClienteDetailPage() {
               </div>
             ) : null}
           </section>
+        </div>
+      </Modal>
+
+      <Modal
+        open={isLeadRoutingOpen}
+        onClose={() => (leadRoutingSaving ? null : setIsLeadRoutingOpen(false))}
+        title="Mapear entrada dos leads"
+        size="3xl"
+        dark={isDarkMode}
+        footer={
+          <div className="flex w-full items-center justify-between gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => setIsLeadRoutingOpen(false)}
+              isDisabled={leadRoutingSaving}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => void handleSaveLeadRouting()}
+              loading={leadRoutingSaving}
+              isDisabled={leadRoutingLoading || leadRoutingForms.length === 0}
+            >
+              <CheckCircle2 size={16} />
+              Salvar mapeamentos
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div
+            className={clsx(
+              "rounded-2xl border px-4 py-3",
+              isDarkMode
+                ? "border-zinc-800 bg-zinc-900/60"
+                : "border-zinc-200 bg-zinc-50",
+            )}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  Defina o destino de cada formulário selecionado
+                </p>
+                <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+                  O cliente é identificado pelo formulário. O canal informado
+                  pelo lead decide entre a etapa de ligação e a etapa de
+                  WhatsApp.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="rounded-full bg-emerald-50 px-3 py-1.5 font-medium text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                  {
+                    leadRoutingForms.filter((form) => form.mapping !== null)
+                      .length
+                  }{" "}
+                  configurados
+                </span>
+                <span className="rounded-full bg-amber-50 px-3 py-1.5 font-medium text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                  {
+                    leadRoutingForms.filter((form) => form.mapping === null)
+                      .length
+                  }{" "}
+                  pendentes
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {leadRoutingError ? (
+            <Notice tone="error">{leadRoutingError}</Notice>
+          ) : null}
+
+          {leadRoutingLoading ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-zinc-500">
+              <RefreshCcw size={16} className="animate-spin text-[#FF0636]" />
+              Carregando formulários, eventos e etapas...
+            </div>
+          ) : leadRoutingForms.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-zinc-300 px-5 py-12 text-center dark:border-zinc-700">
+              <FileText
+                size={24}
+                className="mx-auto mb-3 text-zinc-400"
+              />
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                Nenhum formulário selecionado
+              </p>
+              <p className="mt-1 text-xs text-zinc-500">
+                Selecione os formulários na conexão Meta antes de criar o
+                mapeamento.
+              </p>
+            </div>
+          ) : (
+            <div className="max-h-[62vh] space-y-3 overflow-y-auto pr-1">
+              {leadRoutingForms.map((form) => {
+                const draft =
+                  leadRoutingDrafts[form.id] ?? emptyMetaLeadRoutingDraft();
+                const pipeline = leadRoutingPipelines.find(
+                  (item) => item.id === draft.crm_pipeline_id,
+                );
+                const stages = pipeline?.stages ?? [];
+                const selectClass = clsx(
+                  "h-10 w-full rounded-xl border px-3 text-sm font-normal outline-none transition focus:border-[#FF0636]/60 focus:ring-2 focus:ring-[#FF0636]/10 disabled:cursor-not-allowed disabled:opacity-50",
+                  isDarkMode
+                    ? "border-zinc-700 bg-zinc-950 text-zinc-100"
+                    : "border-zinc-200 bg-white text-zinc-800",
+                );
+
+                return (
+                  <article
+                    key={form.id}
+                    className={clsx(
+                      "rounded-[22px] border p-4",
+                      form.mapping
+                        ? isDarkMode
+                          ? "border-emerald-900/70 bg-emerald-950/10"
+                          : "border-emerald-200 bg-emerald-50/20"
+                        : isDarkMode
+                          ? "border-zinc-800 bg-zinc-900/35"
+                          : "border-zinc-200 bg-white",
+                    )}
+                  >
+                    <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                          <FileText size={16} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                            {form.name}
+                          </p>
+                          <p className="mt-0.5 truncate font-mono text-[10px] text-zinc-400">
+                            ID {form.id}
+                            {form.page_id ? ` · Página ${form.page_id}` : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={clsx(
+                            "rounded-full px-2.5 py-1 text-[10px] font-medium",
+                            form.mapping
+                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                              : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+                          )}
+                        >
+                          {form.mapping ? "Configurado" : "Pendente"}
+                        </span>
+                        {form.mapping ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void handleDeleteLeadRouting(form)
+                            }
+                            disabled={leadRoutingSaving}
+                            className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/40"
+                            title="Remover mapeamento"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                      <label className="space-y-1.5">
+                        <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                          Evento
+                        </span>
+                        <select
+                          value={draft.event_id}
+                          onChange={(event) =>
+                            patchLeadRoutingDraft(form.id, {
+                              event_id: event.target.value,
+                            })
+                          }
+                          className={selectClass}
+                        >
+                          <option value="">Selecione o evento</option>
+                          {leadRoutingEvents.map((event) => (
+                            <option key={event.id} value={event.id}>
+                              {event.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="space-y-1.5">
+                        <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                          Pipeline
+                        </span>
+                        <select
+                          value={draft.crm_pipeline_id}
+                          onChange={(event) =>
+                            patchLeadRoutingDraft(form.id, {
+                              crm_pipeline_id: event.target.value,
+                              call_stage_id: "",
+                              whatsapp_stage_id: "",
+                            })
+                          }
+                          className={selectClass}
+                        >
+                          <option value="">Selecione o pipeline</option>
+                          {leadRoutingPipelines.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="space-y-1.5">
+                        <span className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                          <Phone size={12} />
+                          Se escolheu ligação
+                        </span>
+                        <select
+                          value={draft.call_stage_id}
+                          onChange={(event) =>
+                            patchLeadRoutingDraft(form.id, {
+                              call_stage_id: event.target.value,
+                            })
+                          }
+                          disabled={!pipeline}
+                          className={selectClass}
+                        >
+                          <option value="">Etapa de ligação</option>
+                          {stages.map((stage) => (
+                            <option key={stage.id} value={stage.id}>
+                              {stage.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="space-y-1.5">
+                        <span className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                          <MessageCircle size={12} />
+                          Se escolheu WhatsApp
+                        </span>
+                        <select
+                          value={draft.whatsapp_stage_id}
+                          onChange={(event) =>
+                            patchLeadRoutingDraft(form.id, {
+                              whatsapp_stage_id: event.target.value,
+                            })
+                          }
+                          disabled={!pipeline}
+                          className={selectClass}
+                        >
+                          <option value="">Etapa de WhatsApp</option>
+                          {stages.map((stage) => (
+                            <option key={stage.id} value={stage.id}>
+                              {stage.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+
+          {!leadRoutingLoading &&
+          leadRoutingForms.length > 0 &&
+          (leadRoutingEvents.length === 0 ||
+            leadRoutingPipelines.length === 0) ? (
+            <Notice tone="warning">
+              Cadastre ao menos um evento e um pipeline ativo para concluir o
+              mapeamento.
+            </Notice>
+          ) : null}
         </div>
       </Modal>
 
