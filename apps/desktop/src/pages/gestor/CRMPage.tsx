@@ -33,6 +33,7 @@ import {
   Clock,
   Filter,
   Layers,
+  Loader2,
   Mail,
   MessageCircle,
   Phone,
@@ -1631,6 +1632,37 @@ const LeadCard = memo(function LeadCard({
   );
 });
 
+/** Placeholder de card enquanto a primeira pagina de leads nao chega. Evita a
+ *  etapa parecer vazia durante o carregamento. */
+function LeadCardSkeleton({
+  dark,
+  dense,
+}: {
+  dark?: boolean;
+  dense?: boolean;
+}) {
+  const bar = dark ? "bg-[#1c1c1c]" : "bg-zinc-100";
+  return (
+    <div
+      aria-hidden="true"
+      className={clsx(
+        "shrink-0 animate-pulse rounded-[18px] border p-3.5",
+        dense ? "space-y-2" : "space-y-2.5",
+        dark ? "border-[#1a1a1a] bg-[#0d0d0d]" : "border-zinc-100 bg-white",
+      )}
+    >
+      <div className={clsx("h-3 w-2/3 rounded-full", bar)} />
+      <div className={clsx("h-2.5 w-1/2 rounded-full", bar)} />
+      {!dense && (
+        <div className="flex gap-1.5">
+          <div className={clsx("h-4 w-16 rounded-full", bar)} />
+          <div className={clsx("h-4 w-12 rounded-full", bar)} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StageColumn({
   stage,
   leads,
@@ -1645,6 +1677,7 @@ function StageColumn({
   onLeadOpen,
   onLeadKeyboardMove,
   totalCount,
+  loading,
   fillHeight,
 }: {
   stage: KanbanColumn;
@@ -1660,6 +1693,8 @@ function StageColumn({
   onLeadOpen: (lead: Lead) => void;
   onLeadKeyboardMove?: (lead: Lead, direction: -1 | 1) => void;
   totalCount?: number;
+  /** Board ainda carregando: etapa vazia mostra esqueleto, nao "Nenhum lead". */
+  loading?: boolean;
   /** Kanban: preenche a altura do board (o pai controla). Compact: altura fixa. */
   fillHeight?: boolean;
 }) {
@@ -1773,7 +1808,12 @@ function StageColumn({
               enterIndex={index}
             />
           ))}
-          {leads.length === 0 && (
+          {leads.length === 0 &&
+            loading &&
+            [0, 1, 2].map((index) => (
+              <LeadCardSkeleton key={index} dark={dark} dense={dense} />
+            ))}
+          {leads.length === 0 && !loading && (
             <div
               className={clsx(
                 "flex min-h-[200px] flex-1 flex-col items-center justify-center gap-2 rounded-[16px] border border-dashed",
@@ -3346,6 +3386,19 @@ export function CRMPage() {
                       : "animate-pulse bg-amber-500",
                 )}
               />
+              {boardLoading && (
+                <span
+                  className={clsx(
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide",
+                    isDarkMode
+                      ? "bg-[#1a1a1a] text-zinc-400"
+                      : "bg-zinc-100 text-zinc-500",
+                  )}
+                >
+                  <Loader2 size={11} className="animate-spin" />
+                  Carregando
+                </span>
+              )}
               {(
                 [
                   ["kanban", "Kanban", KanbanSquare],
@@ -3642,6 +3695,7 @@ export function CRMPage() {
                   onToggleSelect={toggleSelection}
                   onLeadOpen={setOpenLead}
                   onLeadKeyboardMove={moveLeadToNeighborStage}
+                  loading={boardLoading}
                   totalCount={
                     cardFiltersActive ? undefined : stageCounts[stage.id]
                   }
@@ -3715,6 +3769,7 @@ export function CRMPage() {
                   onToggleSelect={toggleSelection}
                   onLeadOpen={setOpenLead}
                   onLeadKeyboardMove={moveLeadToNeighborStage}
+                  loading={boardLoading}
                   totalCount={
                     cardFiltersActive
                       ? undefined
@@ -3743,6 +3798,7 @@ export function CRMPage() {
                     onToggleSelect={toggleSelection}
                     onLeadOpen={setOpenLead}
                     onLeadKeyboardMove={moveLeadToNeighborStage}
+                    loading={boardLoading}
                     totalCount={
                       cardFiltersActive ? undefined : stageCounts[stage.id]
                     }
