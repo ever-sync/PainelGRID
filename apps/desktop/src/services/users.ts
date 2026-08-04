@@ -18,11 +18,22 @@ export type CreateStaffUserPayload = {
   vendor_categories?: VendorCategory[];
 };
 
+export type CreateAccessUserPayload = {
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+  client_id?: string;
+  phone?: string;
+  vendor_categories?: VendorCategory[];
+};
+
 export type UpdateStaffUserPayload = {
   name?: string;
   email?: string;
   password?: string;
   role?: "cliente" | "vendedor" | "recepcao";
+  client_id?: string;
   phone?: string | null;
   vendor_categories?: VendorCategory[];
 };
@@ -85,6 +96,17 @@ export function createPrincipalClientAccess(
 export function createStaffUser(
   token: string,
   payload: CreateStaffUserPayload,
+) {
+  return httpRequest<ApiUser>("/users", {
+    method: "POST",
+    token,
+    body: payload,
+  }).then(toStaffUser);
+}
+
+export function createAccessUser(
+  token: string,
+  payload: CreateAccessUserPayload,
 ) {
   return httpRequest<ApiUser>("/users", {
     method: "POST",

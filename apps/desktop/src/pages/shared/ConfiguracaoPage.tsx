@@ -13,11 +13,16 @@ import {
   Lock,
   MoonStar,
   PanelLeft,
+  Pencil,
+  Plus,
+  Power,
+  PowerOff,
   Save,
   ShieldCheck,
   ShoppingCart,
   Sliders,
   Trophy,
+  Trash2,
   Unplug,
   UserCheck,
   UserCog,
@@ -31,6 +36,8 @@ import { ApprovalStatusBadge } from "../../components/ui/Badge";
 import { Notice } from "../../components/ui/Notice";
 import { Button } from "../../components/ui/Button";
 import { CopyableId } from "../../components/ui/CopyableId";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { Input } from "../../components/ui/Input";
 import { Modal } from "../../components/ui/Modal";
 import { Select } from "../../components/ui/Select";
 import { Tabs } from "../../components/ui/Tabs";
@@ -49,7 +56,14 @@ import {
   mapApiClientToClient,
   updateClient,
 } from "../../services/clients";
-import { listUsers, type StaffUser } from "../../services/users";
+import {
+  createAccessUser,
+  deleteStaffUser,
+  listUsers,
+  toggleUserActive,
+  updateStaffUser,
+  type StaffUser,
+} from "../../services/users";
 import { listCrmPipelines } from "../../services/crm";
 import { listEvents, updateEvent, type ApiEvent } from "../../services/events";
 import {
@@ -72,6 +86,7 @@ import type {
   Client,
   ConfirmationStatus,
   CrmStageStatusRule,
+  VendorCategory,
 } from "../../types";
 
 const SETTINGS_STORAGE_KEY = "painelgrid:settings";
@@ -97,6 +112,45 @@ const ACCESS_ROLE_LABELS: Record<(typeof ACCESS_ROLE_ORDER)[number], string> = {
   vendedor: "Vendedores",
   recepcao: "Recepção",
 };
+
+type AccessRole = (typeof ACCESS_ROLE_ORDER)[number];
+type AccessFormState = {
+  name: string;
+  email: string;
+  password: string;
+  role: AccessRole;
+  client_id: string;
+  phone: string;
+  vendor_categories: VendorCategory[];
+};
+
+const EMPTY_ACCESS_FORM: AccessFormState = {
+  name: "",
+  email: "",
+  password: "",
+  role: "gestor",
+  client_id: "",
+  phone: "",
+  vendor_categories: [],
+};
+
+const ACCESS_ROLE_OPTIONS = [
+  { value: "gestor", label: "Gestor" },
+  { value: "cliente", label: "Cliente" },
+  { value: "vendedor", label: "Vendedor" },
+  { value: "recepcao", label: "Recepção" },
+];
+
+const VENDOR_CATEGORY_OPTIONS: Array<{
+  value: VendorCategory;
+  label: string;
+}> = [
+  { value: "novo", label: "Novo" },
+  { value: "semininovo", label: "Seminovo" },
+  { value: "pdc", label: "PCD" },
+  { value: "consorcio", label: "Consórcio" },
+  { value: "assinatura", label: "Assinatura" },
+];
 
 type SettingsTab =
   | "perfil"
@@ -251,6 +305,17 @@ export function ConfiguracaoPage() {
   >({});
   const [accessLoading, setAccessLoading] = useState(false);
   const [accessError, setAccessError] = useState("");
+  const [accessMessage, setAccessMessage] = useState("");
+  const [accessModalOpen, setAccessModalOpen] = useState(false);
+  const [accessEditing, setAccessEditing] = useState<StaffUser | null>(null);
+  const [accessForm, setAccessForm] =
+    useState<AccessFormState>(EMPTY_ACCESS_FORM);
+  const [accessFormError, setAccessFormError] = useState("");
+  const [accessSaving, setAccessSaving] = useState(false);
+  const [accessActionUserId, setAccessActionUserId] = useState("");
+  const [accessDeleteTarget, setAccessDeleteTarget] =
+    useState<StaffUser | null>(null);
+  const [accessDeleteSaving, setAccessDeleteSaving] = useState(false);
 
   const [preferences, setPreferences] = useState<Preferences>(() => {
     const stored = parseStoredPreferences();
@@ -980,6 +1045,195 @@ export function ConfiguracaoPage() {
       )
       .finally(() => setAccessLoading(false));
   }, [activeTab, user.role, accessUsers.length, accessLoading]);
+
+  function openCreateAccessModal() {
+    setAccessEditing(null);
+    setAccessForm(EMPTY_ACCESS_FORM);
+    setAccessFormError("");
+    setAccessMessage("");
+    setAccessModalOpen(true);
+  }
+
+  function openEditAccessModal(accessUser: StaffUser) {
+    setAccessEditing(accessUser);
+    setAccessForm({
+      name: accessUser.name,
+      email: accessUser.email,
+      password: "",
+      role: accessUser.role as AccessRole,
+      client_id: accessUser.client_id ?? "",
+      phone: accessUser.phone ?? "",
+      vendor_categories: accessUser.vendor_categories,
+    });
+    setAccessFormError("");
+    setAccessMessage("");
+    setAccessModalOpen(true);
+  }
+
+  function closeAccessModal() {
+    if (accessSaving) return;
+    setAccessModalOpen(false);
+    setAccessEditing(null);
+    setAccessForm(EMPTY_ACCESS_FORM);
+    setAccessFormError("");
+  }
+
+  async function handleSaveAccess() {
+    const token = readStoredSession()?.accessToken;
+    if (!token) {
+      setAccessFormError("Faça login novamente para salvar este acesso.");
+      return;
+    }
+
+    const name = accessForm.name.trim();
+    const email = accessForm.email.trim().toLowerCase();
+    const password = accessForm.password;
+    if (!name) {
+      setAccessFormError("Informe o nome.");
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      setAccessFormError("Informe um e-mail válido.");
+      return;
+    }
+    if (!accessEditing && !password) {
+      setAccessFormError("Informe a senha inicial.");
+      return;
+    }
+    if (password && !isLocallyReasonablePassword(password)) {
+      setAccessFormError(PASSWORD_REQUIREMENTS_HINT);
+      return;
+    }
+    if (accessForm.role !== "gestor" && !accessForm.client_id) {
+      setAccessFormError("Selecione a empresa vinculada a este acesso.");
+      return;
+    }
+    if (
+      accessForm.role === "vendedor" &&
+      accessForm.vendor_categories.length === 0
+    ) {
+      setAccessFormError("Selecione ao menos uma categoria para o vendedor.");
+      return;
+    }
+
+    setAccessSaving(true);
+    setAccessFormError("");
+    try {
+      let saved: StaffUser;
+      if (accessEditing) {
+        saved = await updateStaffUser(token, accessEditing.id, {
+          name,
+          email,
+          ...(password ? { password } : {}),
+          ...(accessForm.role !== "gestor"
+            ? {
+                role: accessForm.role,
+                client_id: accessForm.client_id,
+              }
+            : {}),
+          phone: accessForm.phone.trim() || null,
+          ...(accessForm.role === "vendedor"
+            ? { vendor_categories: accessForm.vendor_categories }
+            : {}),
+        });
+        setAccessUsers((current) =>
+          current.map((item) => (item.id === saved.id ? saved : item)),
+        );
+        setAccessMessage(`Acesso de ${saved.name} atualizado.`);
+      } else {
+        saved = await createAccessUser(token, {
+          name,
+          email,
+          password,
+          role: accessForm.role,
+          ...(accessForm.role !== "gestor"
+            ? { client_id: accessForm.client_id }
+            : {}),
+          ...(accessForm.phone.trim()
+            ? { phone: accessForm.phone.trim() }
+            : {}),
+          ...(accessForm.role === "vendedor"
+            ? { vendor_categories: accessForm.vendor_categories }
+            : {}),
+        });
+        setAccessUsers((current) => [saved, ...current]);
+        setAccessMessage(`Acesso de ${saved.name} criado com sucesso.`);
+      }
+      setAccessModalOpen(false);
+      setAccessEditing(null);
+      setAccessForm(EMPTY_ACCESS_FORM);
+    } catch (error) {
+      setAccessFormError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar o acesso.",
+      );
+    } finally {
+      setAccessSaving(false);
+    }
+  }
+
+  async function handleToggleAccess(accessUser: StaffUser) {
+    const token = readStoredSession()?.accessToken;
+    if (!token) {
+      setAccessError("Faça login novamente para alterar este acesso.");
+      return;
+    }
+
+    setAccessActionUserId(accessUser.id);
+    setAccessError("");
+    setAccessMessage("");
+    try {
+      const saved = await toggleUserActive(
+        token,
+        accessUser.id,
+        !accessUser.is_active,
+      );
+      setAccessUsers((current) =>
+        current.map((item) => (item.id === saved.id ? saved : item)),
+      );
+      setAccessMessage(
+        `${saved.name} foi ${saved.is_active ? "ativado" : "desativado"}.`,
+      );
+    } catch (error) {
+      setAccessError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível alterar este acesso.",
+      );
+    } finally {
+      setAccessActionUserId("");
+    }
+  }
+
+  async function handleDeleteAccess() {
+    if (!accessDeleteTarget) return;
+    const token = readStoredSession()?.accessToken;
+    if (!token) {
+      setAccessError("Faça login novamente para excluir este acesso.");
+      return;
+    }
+
+    setAccessDeleteSaving(true);
+    setAccessError("");
+    setAccessMessage("");
+    try {
+      await deleteStaffUser(token, accessDeleteTarget.id);
+      setAccessUsers((current) =>
+        current.filter((item) => item.id !== accessDeleteTarget.id),
+      );
+      setAccessMessage(`Acesso de ${accessDeleteTarget.name} excluído.`);
+      setAccessDeleteTarget(null);
+    } catch (error) {
+      setAccessError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível excluir este acesso.",
+      );
+    } finally {
+      setAccessDeleteSaving(false);
+    }
+  }
 
   const settingsTabs = useMemo(() => {
     const tabs: Array<{
@@ -1839,24 +2093,39 @@ export function ConfiguracaoPage() {
                     Todos os e-mails com conta no PainelGRID, por perfil.
                   </p>
                 </div>
-                {!accessLoading && accessUsers.length > 0 ? (
-                  <span
-                    className={clsx(
-                      "rounded-full px-3 py-1 text-xs font-semibold",
-                      isDarkMode
-                        ? "bg-zinc-800 text-zinc-300"
-                        : "bg-gray-100 text-gray-600",
-                    )}
+                <div className="flex items-center gap-2">
+                  {!accessLoading && accessUsers.length > 0 ? (
+                    <span
+                      className={clsx(
+                        "rounded-full px-3 py-1 text-xs font-semibold",
+                        isDarkMode
+                          ? "bg-zinc-800 text-zinc-300"
+                          : "bg-gray-100 text-gray-600",
+                      )}
+                    >
+                      {accessUsers.length}{" "}
+                      {accessUsers.length === 1 ? "conta" : "contas"}
+                    </span>
+                  ) : null}
+                  <Button
+                    size="sm"
+                    icon={<Plus size={14} />}
+                    onClick={openCreateAccessModal}
                   >
-                    {accessUsers.length}{" "}
-                    {accessUsers.length === 1 ? "conta" : "contas"}
-                  </span>
-                ) : null}
+                    Novo acesso
+                  </Button>
+                </div>
               </div>
 
               {accessError ? (
                 <Notice tone="error" className="mb-4 text-xs">
                   {accessError}
+                </Notice>
+              ) : null}
+
+              {accessMessage ? (
+                <Notice tone="success" className="mb-4 text-xs">
+                  {accessMessage}
                 </Notice>
               ) : null}
 
@@ -1931,10 +2200,84 @@ export function ConfiguracaoPage() {
                                     : " · acesso global"}
                                 </p>
                               </div>
-                              <ApprovalStatusBadge
-                                status={item.approval_status}
-                                isActive={item.is_active}
-                              />
+                              <div className="flex shrink-0 items-center gap-2">
+                                {item.id === user.id ? (
+                                  <span
+                                    className={clsx(
+                                      "rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                                      isDarkMode
+                                        ? "bg-zinc-800 text-zinc-300"
+                                        : "bg-zinc-100 text-zinc-600",
+                                    )}
+                                  >
+                                    Você
+                                  </span>
+                                ) : null}
+                                <ApprovalStatusBadge
+                                  status={item.approval_status}
+                                  isActive={item.is_active}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => openEditAccessModal(item)}
+                                  aria-label={`Editar acesso de ${item.name}`}
+                                  title="Editar"
+                                  className={clsx(
+                                    "inline-flex h-8 w-8 items-center justify-center rounded-xl border transition-colors",
+                                    isDarkMode
+                                      ? "border-zinc-700 bg-[#171717] text-zinc-300 hover:bg-[#212121]"
+                                      : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50",
+                                  )}
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                                {item.id !== user.id &&
+                                item.approval_status === "approved" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void handleToggleAccess(item)
+                                    }
+                                    disabled={accessActionUserId === item.id}
+                                    aria-label={`${item.is_active ? "Desativar" : "Ativar"} acesso de ${item.name}`}
+                                    title={
+                                      item.is_active ? "Desativar" : "Ativar"
+                                    }
+                                    className={clsx(
+                                      "inline-flex h-8 w-8 items-center justify-center rounded-xl border transition-colors disabled:opacity-50",
+                                      item.is_active
+                                        ? isDarkMode
+                                          ? "border-amber-900/70 bg-amber-950/30 text-amber-400 hover:bg-amber-950/50"
+                                          : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                                        : isDarkMode
+                                          ? "border-emerald-900/70 bg-emerald-950/30 text-emerald-400 hover:bg-emerald-950/50"
+                                          : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
+                                    )}
+                                  >
+                                    {accessActionUserId === item.id ? (
+                                      <Loader2
+                                        size={14}
+                                        className="animate-spin"
+                                      />
+                                    ) : item.is_active ? (
+                                      <PowerOff size={14} />
+                                    ) : (
+                                      <Power size={14} />
+                                    )}
+                                  </button>
+                                ) : null}
+                                {item.id !== user.id ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setAccessDeleteTarget(item)}
+                                    aria-label={`Excluir acesso de ${item.name}`}
+                                    title="Excluir"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-950/50"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                ) : null}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -2191,6 +2534,207 @@ export function ConfiguracaoPage() {
             </Card>
           </div>
         ) : null}
+
+        <Modal
+          open={accessModalOpen}
+          onClose={closeAccessModal}
+          title={accessEditing ? "Editar acesso" : "Novo acesso"}
+          size="lg"
+          dark={isDarkMode}
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                onClick={closeAccessModal}
+                isDisabled={accessSaving}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => void handleSaveAccess()}
+                loading={accessSaving}
+                icon={<Save size={15} />}
+              >
+                {accessEditing ? "Salvar alterações" : "Criar acesso"}
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {accessEditing
+                ? "Atualize os dados da conta. Deixe a senha vazia para mantê-la."
+                : "Cadastre a conta e defina a senha inicial de acesso ao painel."}
+            </p>
+
+            {accessFormError ? (
+              <Notice tone="error" className="text-xs">
+                {accessFormError}
+              </Notice>
+            ) : null}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input
+                label="Nome"
+                value={accessForm.name}
+                onChange={(event) =>
+                  setAccessForm((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                autoComplete="name"
+                maxLength={255}
+              />
+              <Input
+                label="E-mail"
+                type="email"
+                value={accessForm.email}
+                onChange={(event) =>
+                  setAccessForm((current) => ({
+                    ...current,
+                    email: event.target.value,
+                  }))
+                }
+                autoComplete="email"
+                maxLength={255}
+              />
+              <Input
+                label={
+                  accessEditing ? "Nova senha (opcional)" : "Senha inicial"
+                }
+                type="password"
+                value={accessForm.password}
+                onChange={(event) =>
+                  setAccessForm((current) => ({
+                    ...current,
+                    password: event.target.value,
+                  }))
+                }
+                autoComplete="new-password"
+                maxLength={255}
+              />
+              <Input
+                label="Telefone (opcional)"
+                value={accessForm.phone}
+                onChange={(event) =>
+                  setAccessForm((current) => ({
+                    ...current,
+                    phone: event.target.value,
+                  }))
+                }
+                autoComplete="tel"
+                maxLength={20}
+              />
+              <Select
+                label="Perfil"
+                value={accessForm.role}
+                options={
+                  accessEditing && accessEditing.role !== "gestor"
+                    ? ACCESS_ROLE_OPTIONS.filter(
+                        (option) => option.value !== "gestor",
+                      )
+                    : ACCESS_ROLE_OPTIONS
+                }
+                disabled={accessEditing?.role === "gestor"}
+                onValueChange={(value) =>
+                  setAccessForm((current) => ({
+                    ...current,
+                    role: value as AccessRole,
+                    client_id: value === "gestor" ? "" : current.client_id,
+                    vendor_categories:
+                      value === "vendedor" ? current.vendor_categories : [],
+                  }))
+                }
+              />
+              {accessForm.role !== "gestor" ? (
+                <Select
+                  label="Empresa"
+                  value={accessForm.client_id}
+                  placeholder="Selecione a empresa"
+                  options={Object.entries(accessCompanies)
+                    .sort(([, a], [, b]) => a.localeCompare(b, "pt-BR"))
+                    .map(([value, label]) => ({ value, label }))}
+                  onValueChange={(client_id) =>
+                    setAccessForm((current) => ({
+                      ...current,
+                      client_id,
+                    }))
+                  }
+                />
+              ) : null}
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              {PASSWORD_REQUIREMENTS_HINT}
+            </p>
+
+            {accessForm.role === "vendedor" ? (
+              <fieldset className="rounded-2xl border border-border p-4">
+                <legend className="px-1 text-sm font-semibold">
+                  Categorias do vendedor
+                </legend>
+                <div className="mt-1 grid gap-2 sm:grid-cols-2">
+                  {VENDOR_CATEGORY_OPTIONS.map((option) => {
+                    const checked = accessForm.vendor_categories.includes(
+                      option.value,
+                    );
+                    return (
+                      <label
+                        key={option.value}
+                        className="flex cursor-pointer items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm transition-colors hover:bg-muted"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() =>
+                            setAccessForm((current) => ({
+                              ...current,
+                              vendor_categories: checked
+                                ? current.vendor_categories.filter(
+                                    (category) => category !== option.value,
+                                  )
+                                : [...current.vendor_categories, option.value],
+                            }))
+                          }
+                          className="accent-[#FF0636]"
+                        />
+                        {option.label}
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            ) : null}
+
+            {accessEditing?.role === "gestor" ? (
+              <p className="text-xs text-muted-foreground">
+                O perfil de gestor é global e não pode ser trocado.
+              </p>
+            ) : null}
+          </div>
+        </Modal>
+
+        <ConfirmationModal
+          open={Boolean(accessDeleteTarget)}
+          onClose={() => {
+            if (!accessDeleteSaving) setAccessDeleteTarget(null);
+          }}
+          onConfirm={() => void handleDeleteAccess()}
+          loading={accessDeleteSaving}
+          title="Excluir acesso"
+          description={
+            <p className="text-sm text-muted-foreground">
+              Tem certeza que deseja excluir permanentemente o acesso de{" "}
+              <span className="font-semibold text-foreground">
+                {accessDeleteTarget?.name}
+              </span>
+              ? Esta ação não pode ser desfeita.
+            </p>
+          }
+          confirmLabel="Excluir acesso"
+          dark={isDarkMode}
+        />
 
         <Modal
           open={passwordModalOpen}
