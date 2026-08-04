@@ -125,6 +125,8 @@ type Toast = {
   id: number;
   message: string;
   type: "success" | "error" | "info";
+  /** Acao opcional no proprio toast (ex.: desfazer uma movimentacao). */
+  action?: { label: string; onAction: () => void };
 };
 
 const CARD_SORT_OPTIONS = [
@@ -202,6 +204,18 @@ function ToastStack({
           )}
         >
           <span>{t.message}</span>
+          {t.action && (
+            <button
+              type="button"
+              onClick={() => {
+                t.action?.onAction();
+                onDismiss(t.id);
+              }}
+              className="shrink-0 rounded-full bg-white/20 px-3 py-1 text-xs font-bold uppercase tracking-wide transition-colors hover:bg-white/30"
+            >
+              {t.action.label}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onDismiss(t.id)}
@@ -1833,12 +1847,17 @@ export function CRMPage() {
     [apiStages],
   );
 
-  const showToast = (message: string, type: Toast["type"] = "info") => {
+  const showToast = (
+    message: string,
+    type: Toast["type"] = "info",
+    action?: Toast["action"],
+  ) => {
     const id = ++toastCounterRef.current;
-    setToasts((prev) => [...prev, { id, message, type }]);
+    setToasts((prev) => [...prev, { id, message, type, action }]);
+    // Toast com acao fica mais tempo: e a janela para desfazer.
     setTimeout(
       () => setToasts((prev) => prev.filter((t) => t.id !== id)),
-      5000,
+      action ? 8000 : 5000,
     );
   };
 
@@ -2797,11 +2816,35 @@ export function CRMPage() {
       });
   };
 
-  /** Move um lead para outra etapa sem drag (trilha de etapas do modal).
-   *  Usa a mesma rota da API do arraste, entao o historico e registrado igual. */
+  /** Botao "Desfazer" do toast: devolve o lead para a etapa de origem. O
+   *  desfazer nao oferece outro desfazer, para nao virar ping-pong de toasts. */
+  const buildUndoAction = (
+    lead: Lead,
+    previousStageId: string | null | undefined,
+    undoable?: boolean,
+  ): Toast["action"] => {
+    if (undoable === false || !previousStageId) return undefined;
+    if (!kanbanColumns.some((stage) => stage.id === previousStageId)) {
+      return undefined;
+    }
+    return {
+      label: "Desfazer",
+      onAction: () => {
+        void moveLeadToStage(lead, previousStageId, {
+          source: "desktop_undo",
+          undoable: false,
+        });
+      },
+    };
+  };
+
+  /** Move um lead para outra etapa sem drag (trilha de etapas do modal e o
+   *  desfazer do toast). Usa a mesma rota da API do arraste, entao o historico
+   *  e registrado igual. */
   const moveLeadToStage = async (
     lead: Lead,
     targetStageId: string,
+    options?: { source?: string; undoable?: boolean },
   ): Promise<Lead | null> => {
     const targetColumn = kanbanColumns.find(
       (stage) => stage.id === targetStageId,
@@ -2836,7 +2879,7 @@ export function CRMPage() {
         {
           pipeline_code: apiPipelineCode,
           stage_code: stageCode,
-          source: "desktop_modal",
+          source: options?.source ?? "desktop_modal",
         },
         accessToken,
       );
@@ -2868,13 +2911,16 @@ export function CRMPage() {
         next[targetStageId] = [...(next[targetStageId] ?? []), updated];
         return next;
       });
-      adjustStageCounts([
-        { from: result.from_stage_id ?? lead.crm_stage_id, to: targetStageId },
-      ]);
+      const previousStageId = result.from_stage_id ?? lead.crm_stage_id;
+      adjustStageCounts([{ from: previousStageId, to: targetStageId }]);
       setOpenLead((current) => (current?.id === lead.id ? updated : current));
       // Recarrega a timeline do modal para mostrar a movimentacao recem-criada.
       setOpenLeadHistoryVersion((version) => version + 1);
-      showToast(`${lead.name} movido para ${targetColumn.label}.`, "success");
+      showToast(
+        `${lead.name} movido para ${targetColumn.label}.`,
+        "success",
+        buildUndoAction(updated, previousStageId, options?.undoable),
+      );
       return updated;
     } catch (error) {
       const detail = error instanceof Error ? error.message : "";
@@ -3019,6 +3065,7 @@ export function CRMPage() {
         showToast(
           `${movedLead?.name} movido para ${targetColumn?.label ?? "nova etapa"}.`,
           "success",
+          movedLead ? buildUndoAction(movedLead, originalStageId) : undefined,
         );
       })
       .catch((error) => {
