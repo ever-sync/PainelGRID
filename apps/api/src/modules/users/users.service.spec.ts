@@ -39,10 +39,18 @@ describe('UsersService', () => {
       },
       client: {
         findFirst: jest.fn(),
+        updateMany: jest.fn(),
       },
       salesTeamMember: {
         deleteMany: jest.fn(),
       },
+      scoreEvent: { deleteMany: jest.fn() },
+      sale: { deleteMany: jest.fn() },
+      campaignVendor: { deleteMany: jest.fn() },
+      courseProgress: { deleteMany: jest.fn() },
+      serviceRating: { deleteMany: jest.fn() },
+      crmHistory: { deleteMany: jest.fn() },
+      lead: { updateMany: jest.fn() },
       $transaction: jest.fn(async (callback: (tx: any) => Promise<any>) => callback(prisma)),
     };
     service = new UsersService(
@@ -131,6 +139,87 @@ describe('UsersService', () => {
         }),
       }),
     );
+  });
+
+  describe('gestao de acessos de gestores', () => {
+    const manager = {
+      ...baseUser,
+      id: 'gestor-2',
+      role: Role.GESTOR,
+      client_id: null,
+      vendor_category: null,
+      vendor_categories: [],
+    };
+    const actor = {
+      sub: gestorId,
+      role: Role.GESTOR,
+      email: 'gestor@demo.com',
+      name: 'Gestor',
+    } as never;
+
+    it('permite atualizar os dados de outro gestor', async () => {
+      (service as any).ensureGestorCanManageUser.mockRestore();
+      prisma.user.findUnique.mockResolvedValue(manager);
+      prisma.user.update.mockResolvedValue({
+        ...manager,
+        name: 'Gestor Atualizado',
+      });
+
+      await service.update(
+        manager.id,
+        { name: 'Gestor Atualizado' } as never,
+        actor,
+      );
+
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ name: 'Gestor Atualizado' }),
+        }),
+      );
+    });
+
+    it('nao permite transformar outro perfil em gestor', async () => {
+      prisma.user.findUnique.mockResolvedValue(baseUser);
+
+      await expect(
+        service.update(baseUser.id, { role: Role.GESTOR } as never, actor),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('nao permite mudar o perfil de um gestor', async () => {
+      prisma.user.findUnique.mockResolvedValue(manager);
+
+      await expect(
+        service.update(manager.id, { role: Role.RECEPCAO } as never, actor),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('nao permite desativar nem excluir o proprio acesso', async () => {
+      await expect(
+        service.setActive(gestorId, false, actor),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service.remove(gestorId, actor)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('transfere os clientes ao excluir outro gestor', async () => {
+      (service as any).ensureGestorCanManageUser.mockRestore();
+      prisma.user.findUnique.mockResolvedValue(manager);
+      prisma.user.delete = jest.fn();
+
+      await service.remove(manager.id, actor);
+
+      expect(prisma.client.updateMany).toHaveBeenCalledWith({
+        where: { gestor_id: manager.id },
+        data: { gestor_id: gestorId },
+      });
+      expect(prisma.user.delete).toHaveBeenCalledWith({
+        where: { id: manager.id },
+      });
+    });
   });
 
   describe('createSelfSignupVendor', () => {

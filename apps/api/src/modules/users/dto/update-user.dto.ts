@@ -5,6 +5,7 @@ import {
   IsEnum,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   MinLength,
   Validate,
@@ -33,6 +34,10 @@ export class UpdateUserDto {
   @IsOptional()
   @IsEnum(Role)
   role?: Role;
+
+  @IsOptional()
+  @IsUUID()
+  client_id?: string;
 
   @IsOptional()
   @IsEnum(VendorCategory)

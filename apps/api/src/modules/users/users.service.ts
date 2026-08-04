@@ -379,9 +379,7 @@ export class UsersService {
 
   private async ensureGestorCanManageUser(targetUser: User, gestorId: string) {
     if (targetUser.role === Role.GESTOR) {
-      throw new ForbiddenException(
-        "Nao e permitido gerenciar outro gestor por aqui",
-      );
+      return;
     }
 
     if (!targetUser.client_id) {
@@ -399,10 +397,25 @@ export class UsersService {
     const currentUser = await this.getEntityById(id);
     await this.ensureGestorCanManageUser(currentUser, gestor.sub);
 
-    if (dto.role === Role.GESTOR) {
+    if (dto.role === Role.GESTOR && currentUser.role !== Role.GESTOR) {
       throw new BadRequestException(
         "Nao e permitido transformar usuario em gestor por aqui",
       );
+    }
+    if (
+      currentUser.role === Role.GESTOR &&
+      dto.role &&
+      dto.role !== Role.GESTOR
+    ) {
+      throw new BadRequestException(
+        "Nao e permitido alterar o perfil de um gestor por aqui",
+      );
+    }
+    if (currentUser.role === Role.GESTOR && dto.client_id) {
+      throw new BadRequestException("Gestor nao deve ter client_id");
+    }
+    if (dto.client_id && dto.client_id !== currentUser.client_id) {
+      await this.ensureClientOwnedByGestor(dto.client_id, gestor.sub);
     }
 
     const normalizedEmail = dto.email?.toLowerCase().trim();
@@ -441,6 +454,7 @@ export class UsersService {
           name: dto.name?.trim(),
           email: normalizedEmail,
           role: dto.role,
+          client_id: dto.client_id,
           vendor_category: nextVendorCategory,
           ...(nextVendorCategories !== undefined
             ? { vendor_categories: nextVendorCategories }
@@ -461,6 +475,12 @@ export class UsersService {
     isActive: boolean,
     gestor: AuthenticatedUser,
   ): Promise<SafeUser> {
+    if (id === gestor.sub) {
+      throw new ForbiddenException(
+        "Nao e permitido desativar o proprio acesso",
+      );
+    }
+
     const currentUser = await this.getEntityById(id);
     await this.ensureGestorCanManageUser(currentUser, gestor.sub);
 
@@ -473,19 +493,42 @@ export class UsersService {
   }
 
   async remove(id: string, gestor: AuthenticatedUser) {
+    if (id === gestor.sub) {
+      throw new ForbiddenException("Nao e permitido excluir o proprio acesso");
+    }
+
     const currentUser = await this.getEntityById(id);
     await this.ensureGestorCanManageUser(currentUser, gestor.sub);
 
     await this.prisma.$transaction(async (tx) => {
+      if (currentUser.role === Role.GESTOR) {
+        await tx.client.updateMany({
+          where: { gestor_id: id },
+          data: { gestor_id: gestor.sub },
+        });
+      }
       await tx.salesTeamMember.deleteMany({ where: { user_id: id } });
       await tx.scoreEvent.deleteMany({ where: { vendor_id: id } });
       await tx.sale.deleteMany({ where: { vendor_id: id } });
       await tx.campaignVendor.deleteMany({ where: { vendor_id: id } });
       await tx.courseProgress.deleteMany({ where: { vendor_id: id } });
+      await tx.serviceRating.deleteMany({ where: { vendor_id: id } });
       await tx.crmHistory.deleteMany({ where: { changed_by_user_id: id } });
       await tx.lead.updateMany({
         where: { assigned_vendor_id: id },
         data: { assigned_vendor_id: null },
+      });
+      await tx.lead.updateMany({
+        where: { attendant_user_id: id },
+        data: { attendant_user_id: null },
+      });
+      await tx.lead.updateMany({
+        where: { registered_by_id: id },
+        data: { registered_by_id: null },
+      });
+      await tx.lead.updateMany({
+        where: { sold_by_vendor_id: id },
+        data: { sold_by_vendor_id: null },
       });
       await tx.user.delete({ where: { id } });
     });
