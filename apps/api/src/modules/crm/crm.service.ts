@@ -978,7 +978,10 @@ export class CrmService {
         action: 'stage_changed',
         updated_at: new Date().toISOString(),
       });
-      void this.leadTimeline.record({
+      // `await`: o painel recarrega a timeline logo apos a resposta do move.
+      // Se o registro fosse fire-and-forget, a movimentacao poderia nao
+      // aparecer no historico recem-carregado. `record` nunca lanca.
+      await this.leadTimeline.record({
         clientId: lead.client_id,
         leadId: lead.id,
         eventType: 'stage_moved',
@@ -992,7 +995,7 @@ export class CrmService {
         metadata: { crm_history_id: result.history.id },
       });
       if (mappedStatus && mappedStatus !== lead.confirmation_status) {
-        void this.leadTimeline.record({
+        await this.leadTimeline.record({
           clientId: lead.client_id,
           leadId: lead.id,
           eventType: 'status_changed',

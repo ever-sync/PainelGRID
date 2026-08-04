@@ -270,6 +270,7 @@ function LeadDetailModal({
   onClose,
   onOpenChat,
   onLeadUpdated,
+  onMoveStage,
 }: {
   lead: Lead;
   vendorsById: Record<string, string>;
@@ -279,6 +280,8 @@ function LeadDetailModal({
   onClose: () => void;
   onOpenChat: (lead: Lead) => void;
   onLeadUpdated: (lead: Lead) => void;
+  /** Move o lead pela trilha de etapas do topo (mesma rota da API do drag). */
+  onMoveStage: (lead: Lead, stageId: string) => Promise<Lead | null>;
 }) {
   const [activeTab, setActiveTab] = useState<"historico" | "dados">(
     "historico",
@@ -309,6 +312,7 @@ function LeadDetailModal({
   );
   const [history, setHistory] = useState<ApiLeadTimelineItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [movingStageId, setMovingStageId] = useState<string | null>(null);
 
   const vendorName = lead.assigned_vendor_id
     ? vendorsById[lead.assigned_vendor_id]
@@ -326,6 +330,18 @@ function LeadDetailModal({
   const currentStageIndex = progressStages.findIndex(
     (stage) => stage.id === lead.crm_stage_id || stage.id === lead.crm_stage,
   );
+
+  const handleStageClick = async (stageId: string) => {
+    if (movingStageId) return;
+    if (stageId === lead.crm_stage_id || stageId === lead.crm_stage) return;
+    setMovingStageId(stageId);
+    try {
+      const moved = await onMoveStage(lead, stageId);
+      if (moved) setLead(moved);
+    } finally {
+      setMovingStageId(null);
+    }
+  };
 
   useEffect(() => {
     setLead(initialLead);
@@ -619,7 +635,32 @@ function LeadDetailModal({
                       )}
                     />
                   )}
-                  <div className="flex shrink-0 flex-col items-center gap-1.5 px-1.5">
+                  <button
+                    type="button"
+                    onClick={() => void handleStageClick(stage.id)}
+                    disabled={isCurrent || movingStageId !== null}
+                    title={
+                      isCurrent
+                        ? `Etapa atual: ${stage.label}`
+                        : `Mover para ${stage.label}`
+                    }
+                    aria-label={
+                      isCurrent
+                        ? `Etapa atual: ${stage.label}`
+                        : `Mover lead para ${stage.label}`
+                    }
+                    className={clsx(
+                      "flex shrink-0 flex-col items-center gap-1.5 rounded-xl px-1.5 py-1 transition-colors",
+                      isCurrent
+                        ? "cursor-default"
+                        : movingStageId
+                          ? "cursor-wait opacity-60"
+                          : clsx(
+                              "cursor-pointer",
+                              dark ? "hover:bg-white/5" : "hover:bg-zinc-100",
+                            ),
+                    )}
+                  >
                     <div
                       className={clsx(
                         "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all",
@@ -630,6 +671,8 @@ function LeadDetailModal({
                             : dark
                               ? "border-[#2a2a2a] bg-transparent"
                               : "border-zinc-300 bg-white",
+                        movingStageId === stage.id &&
+                          "animate-pulse border-[#FF0636]",
                       )}
                     >
                       {isPast && <Check size={12} strokeWidth={3} />}
@@ -653,7 +696,7 @@ function LeadDetailModal({
                     >
                       {stage.label}
                     </span>
-                  </div>
+                  </button>
                 </div>
               );
             })}
@@ -1500,10 +1543,7 @@ function StageColumn({
   const handleColumnWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
     const cardList = cardListRef.current;
     if (!cardList || event.deltaY === 0) return;
-    if (
-      event.target instanceof Node &&
-      cardList.contains(event.target)
-    ) {
+    if (event.target instanceof Node && cardList.contains(event.target)) {
       return;
     }
 
@@ -2630,6 +2670,92 @@ export function CRMPage() {
       });
   };
 
+  /** Move um lead para outra etapa sem drag (trilha de etapas do modal).
+   *  Usa a mesma rota da API do arraste, entao o historico e registrado igual. */
+  const moveLeadToStage = async (
+    lead: Lead,
+    targetStageId: string,
+  ): Promise<Lead | null> => {
+    const targetColumn = kanbanColumns.find(
+      (stage) => stage.id === targetStageId,
+    );
+    if (!targetColumn) return null;
+
+    const session = readStoredSession();
+    const accessToken = session?.accessToken;
+    const stageCode = stageCodeById(apiStages, targetStageId);
+
+    if (!accessToken || !isUuid(lead.id) || !isUuid(selectedClient)) {
+      showToast(
+        "Sem sessao ou cliente invalido — etapa nao foi alterada.",
+        "error",
+      );
+      return null;
+    }
+    if (!apiPipelineCode || !stageCode) {
+      showToast(
+        "Pipeline ou etapa nao configurada para este cliente — etapa nao foi alterada.",
+        "error",
+      );
+      return null;
+    }
+
+    try {
+      const result = await moveCrmLead(
+        lead.id,
+        {
+          pipeline_code: apiPipelineCode,
+          stage_code: stageCode,
+          source: "desktop_modal",
+        },
+        accessToken,
+      );
+
+      const updated: Lead = {
+        ...lead,
+        crm_stage_id: targetStageId,
+        crm_stage_name: targetColumn.label,
+        confirmation_status:
+          result.confirmation_status &&
+          [
+            "pending",
+            "scheduled",
+            "confirmed",
+            "cancelled",
+            "checked_in",
+          ].includes(result.confirmation_status)
+            ? (result.confirmation_status as Lead["confirmation_status"])
+            : lead.confirmation_status,
+      };
+
+      setBoardState((prev) => {
+        const next = { ...prev };
+        for (const stage of kanbanColumns) {
+          next[stage.id] = (next[stage.id] ?? []).filter(
+            (item) => item.id !== lead.id,
+          );
+        }
+        next[targetStageId] = [...(next[targetStageId] ?? []), updated];
+        return next;
+      });
+      setOpenLead((current) => (current?.id === lead.id ? updated : current));
+      // Recarrega a timeline do modal para mostrar a movimentacao recem-criada.
+      setOpenLeadHistoryVersion((version) => version + 1);
+      showToast(`${lead.name} movido para ${targetColumn.label}.`, "success");
+      refreshBoard();
+      return updated;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "";
+      showToast(
+        detail
+          ? `Falha ao mover etapa: ${detail}`
+          : "Falha ao mover etapa na API.",
+        "error",
+      );
+      return null;
+    }
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
@@ -2985,11 +3111,16 @@ export function CRMPage() {
             </div>
           </div>
         </div>
-        {kanbanColumns.length === 0 && (
-          <p className="text-center text-xs text-zinc-500">
-            Carregando etapas do funil…
-          </p>
-        )}
+      </div>
+      {kanbanColumns.length === 0 && (
+        <p className="shrink-0 text-center text-xs text-zinc-500">
+          Carregando etapas do funil…
+        </p>
+      )}
+      {/* Area do board: precisa ser irma do cabecalho (e nao filha dele) para
+          herdar a altura util da raiz — e so assim o `flex-1`/`h-full` das
+          colunas resolve e os cards ganham scroll proprio. */}
+      <div className="flex min-h-0 flex-1 flex-col">
         <DndContext
           sensors={sensors}
           onDragStart={handleDragStart}
@@ -3222,6 +3353,7 @@ export function CRMPage() {
           pipelineStages={kanbanColumns}
           dark={isDarkMode}
           historyVersion={openLeadHistoryVersion}
+          onMoveStage={moveLeadToStage}
           onClose={() => {
             setOpenLead(null);
             if (!searchParams.get("lead_id")) return;
