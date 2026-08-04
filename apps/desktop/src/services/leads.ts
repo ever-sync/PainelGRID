@@ -15,6 +15,8 @@ export type ApiLead = {
   crm_stage_id: string | null;
   crm_stage_code: string | null;
   crm_stage_name: string | null;
+  /** Entrada na etapa atual (ultimo registro no historico do CRM). */
+  crm_stage_since?: string | null;
   event_interest_id: string | null;
   event_interest_name?: string | null;
   event_id: string | null;
@@ -114,6 +116,7 @@ export function mapApiLeadToLead(row: ApiLead): Lead {
     crm_stage_id: row.crm_stage_id ?? null,
     crm_stage_code: row.crm_stage_code ?? null,
     crm_stage_name: row.crm_stage_name ?? null,
+    crm_stage_since: row.crm_stage_since ?? null,
     crm_pipeline_id: row.crm_pipeline_id ?? null,
     tags: row.tags ?? [],
     confirmation_status: row.confirmation_status,

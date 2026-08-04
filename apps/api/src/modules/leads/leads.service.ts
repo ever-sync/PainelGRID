@@ -409,14 +409,52 @@ export class LeadsService {
     const page = hasNextPage ? rows.slice(0, take) : rows;
     const nextCursor = hasNextPage ? (page[page.length - 1]?.id ?? null) : null;
 
+    const stageSince = await this.stageSinceByLead(page);
+
     return {
-      items: page.map((row) => this.toResponse(row)),
+      items: page.map((row) => ({
+        ...this.toResponse(row),
+        crm_stage_since: (
+          stageSince.get(row.id) ?? row.created_at
+        ).toISOString(),
+      })),
       page_info: {
         take,
         next_cursor: nextCursor,
         has_next_page: hasNextPage,
       },
     };
+  }
+
+  /**
+   * Quando cada lead entrou na etapa em que esta hoje, para o painel mostrar
+   * "parado ha X dias". Uma unica query por pagina: agrupa o historico por
+   * (lead, etapa de destino) e pega a entrada mais recente na etapa atual.
+   * Lead sem historic da etapa atual cai no `created_at` de quem chama.
+   */
+  private async stageSinceByLead(
+    leads: Array<{ id: string; crm_stage_id: string | null }>,
+  ) {
+    const stageByLeadId = new Map<string, string>();
+    for (const lead of leads) {
+      if (lead.crm_stage_id) stageByLeadId.set(lead.id, lead.crm_stage_id);
+    }
+    const result = new Map<string, Date>();
+    if (stageByLeadId.size === 0) return result;
+
+    const groups = await this.prisma.crmHistory.groupBy({
+      by: ['lead_id', 'to_stage_id'],
+      where: { lead_id: { in: Array.from(stageByLeadId.keys()) } },
+      _max: { created_at: true },
+    });
+
+    for (const group of groups) {
+      if (stageByLeadId.get(group.lead_id) !== group.to_stage_id) continue;
+      const enteredAt = group._max.created_at;
+      if (enteredAt) result.set(group.lead_id, enteredAt);
+    }
+
+    return result;
   }
 
   async exportCsv(user: AuthenticatedUser, query: FindLeadsQueryDto) {

@@ -117,7 +117,7 @@ import {
 } from "./crm-page.model";
 
 type ViewMode = "kanban" | "compact" | "list";
-type CardSort = "recent" | "oldest" | "visit" | "updated" | "name";
+type CardSort = "recent" | "oldest" | "stalled" | "visit" | "updated" | "name";
 type StageFilter = "all" | string;
 type ConfirmationFilter = "all" | Lead["confirmation_status"];
 type LeadMotionKind = "new" | "stage-change" | "update";
@@ -134,10 +134,24 @@ type Toast = {
 const CARD_SORT_OPTIONS = [
   ["recent", "Mais recentes"],
   ["oldest", "Mais antigos"],
+  ["stalled", "Parados ha mais tempo"],
   ["visit", "Visita mais proxima"],
   ["updated", "Atualizados por ultimo"],
   ["name", "Nome (A-Z)"],
 ] as const satisfies ReadonlyArray<readonly [CardSort, string]>;
+
+/** Dias na etapa a partir dos quais o card sinaliza que o lead esfriou. */
+const STAGE_AGE_WARNING_DAYS = 7;
+const STAGE_AGE_CRITICAL_DAYS = 14;
+
+/** Dias inteiros desde a entrada na etapa atual. */
+function stageAgeInDays(lead: Lead) {
+  if (!lead.crm_stage_since) return null;
+  const since = Date.parse(lead.crm_stage_since);
+  if (Number.isNaN(since)) return null;
+  const days = Math.floor((Date.now() - since) / 86_400_000);
+  return days >= 0 ? days : null;
+}
 
 const CARD_SORT_STORAGE_KEY = "crm_card_sort";
 
@@ -188,6 +202,10 @@ function compareLeads(sort: CardSort) {
         return compareByDate(a.created_at, b.created_at, "desc") || byName;
       case "oldest":
         return compareByDate(a.created_at, b.created_at, "asc") || byName;
+      case "stalled":
+        return (
+          compareByDate(a.crm_stage_since, b.crm_stage_since, "asc") || byName
+        );
       case "visit":
         return (
           compareByDate(
@@ -1398,6 +1416,8 @@ const LeadCard = memo(function LeadCard({
     navigate(`/gestor/chat?${params.toString()}`);
   };
 
+  const stageAgeDays = stageAgeInDays(lead);
+
   // Entrada escalonada (sensação de cards sendo "colocados" no board). Usa a
   // propriedade CSS `translate`, independente do `transform` usado pelo dnd-kit.
   const enterDelayMs = Math.min(enterIndex ?? 0, 10) * 35;
@@ -1572,6 +1592,28 @@ const LeadCard = memo(function LeadCard({
               className={dark ? "text-zinc-600" : "text-zinc-300"}
             />
             <span className="truncate">{lead.event_interest}</span>
+          </div>
+        )}
+        {stageAgeDays !== null && stageAgeDays >= 1 && (
+          <div
+            className={clsx(
+              "flex items-center gap-1.5 font-semibold",
+              stageAgeDays >= STAGE_AGE_CRITICAL_DAYS
+                ? "text-[#FF0636]"
+                : stageAgeDays >= STAGE_AGE_WARNING_DAYS
+                  ? "text-amber-500"
+                  : dark
+                    ? "text-zinc-500"
+                    : "text-zinc-400",
+            )}
+            title={`Nesta etapa desde ${formatDateFull(lead.crm_stage_since)}`}
+          >
+            <Clock size={10} className="shrink-0" />
+            <span>
+              {stageAgeDays === 1
+                ? "1 dia nesta etapa"
+                : `${stageAgeDays} dias nesta etapa`}
+            </span>
           </div>
         )}
       </div>

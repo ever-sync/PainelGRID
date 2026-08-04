@@ -83,6 +83,8 @@ export interface Lead {
   crm_stage_id: string | null;
   crm_stage_code?: string | null;
   crm_stage_name?: string | null;
+  /** Quando o lead entrou na etapa atual; base do "parado ha X dias". */
+  crm_stage_since?: string | null;
   crm_pipeline_id: string | null;
   tags: string[];
   confirmation_status: ConfirmationStatus;
