@@ -66,6 +66,7 @@ export function ClientesPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
   const [clientIdsWithActiveEvent, setClientIdsWithActiveEvent] = useState<
     Set<string>
   >(new Set());
@@ -265,6 +266,7 @@ export function ClientesPage() {
   }
 
   async function handleDeleteClientFromList(client: Client) {
+    setDeleteError("");
     setClientToDelete(client);
   }
 
@@ -279,6 +281,7 @@ export function ClientesPage() {
 
     setDeletingClientId(clientToDelete.id);
     setListError("");
+    setDeleteError("");
     try {
       await deleteClient(clientToDelete.id, session.accessToken);
       setClients((current) =>
@@ -286,7 +289,9 @@ export function ClientesPage() {
       );
       setClientToDelete(null);
     } catch (error) {
-      setListError(
+      // Dentro do modal: o aviso da lista fica atras do overlay, e o clique
+      // em "Excluir cliente" parecia nao fazer nada.
+      setDeleteError(
         error instanceof Error
           ? error.message
           : "Não foi possível excluir o cliente.",
@@ -684,20 +689,30 @@ export function ClientesPage() {
 
       <ConfirmationModal
         open={Boolean(clientToDelete)}
-        onClose={() => setClientToDelete(null)}
+        onClose={() => {
+          setClientToDelete(null);
+          setDeleteError("");
+        }}
         onConfirm={() => void confirmDeleteClientFromList()}
         loading={Boolean(
           clientToDelete && deletingClientId === clientToDelete.id,
         )}
         title="Excluir cliente"
         description={
-          <p className="text-sm text-zinc-600">
-            Tem certeza que deseja excluir o cliente{" "}
-            <span className="font-semibold text-zinc-900">
-              {clientToDelete?.company_name}
-            </span>
-            ? Esta ação não pode ser desfeita.
-          </p>
+          <>
+            <p className="text-sm text-zinc-600">
+              Tem certeza que deseja excluir o cliente{" "}
+              <span className="font-semibold text-zinc-900">
+                {clientToDelete?.company_name}
+              </span>
+              ? Esta ação não pode ser desfeita.
+            </p>
+            {deleteError && (
+              <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-800">
+                {deleteError}
+              </p>
+            )}
+          </>
         }
         confirmLabel="Excluir cliente"
       />

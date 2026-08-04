@@ -500,6 +500,17 @@ export class ClientsService {
           where: { client_id: clientId },
         });
 
+        // As regras de roteamento apontam para etapa, pipeline e evento com
+        // ON DELETE RESTRICT: precisam sair antes de crm_stages, crm_pipelines
+        // e events, senao aqueles deletes falham e a transacao inteira volta.
+        await tx.metaLeadRoutingRule.deleteMany({
+          where: { client_id: clientId },
+        });
+        // client_id tambem e RESTRICT: sem isso o delete final do cliente falha.
+        await tx.metaCampaignAssignment.deleteMany({
+          where: { client_id: clientId },
+        });
+
         await tx.metaDailyInsight.deleteMany({
           where: { client_id: clientId },
         });

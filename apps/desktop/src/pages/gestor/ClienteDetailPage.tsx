@@ -3501,6 +3501,16 @@ export function ClienteDetailPage() {
     try {
       await deleteClient(resolvedId, session.accessToken);
       navigate("/gestor/clientes");
+    } catch (error) {
+      // Sem isto a falha sumia: a promessa rejeitava, o loading voltava ao
+      // normal e a tela nao dizia nada.
+      pushToast({
+        message:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível excluir o cliente.",
+        type: "error",
+      });
     } finally {
       setDeleteLoading(false);
     }
