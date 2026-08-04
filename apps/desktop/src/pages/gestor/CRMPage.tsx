@@ -2109,6 +2109,70 @@ export function CRMPage() {
     setSelectedLeadIds(new Set());
   };
 
+  /** Desfazer de uma movimentacao em massa: os leads podem ter vindo de etapas
+   *  diferentes, entao a volta e um bulk move por etapa de origem. */
+  const undoBulkMove = async (stageByLeadId: Record<string, string>) => {
+    const accessToken = readStoredSession()?.accessToken;
+    if (!accessToken || !apiPipelineCode) {
+      showToast("Sem sessao valida — nao foi possivel desfazer.", "error");
+      return;
+    }
+
+    const byOriginStage = new Map<string, string[]>();
+    for (const [leadId, stageId] of Object.entries(stageByLeadId)) {
+      const group = byOriginStage.get(stageId) ?? [];
+      group.push(leadId);
+      byOriginStage.set(stageId, group);
+    }
+
+    let restored = 0;
+    for (const [stageId, leadIds] of byOriginStage) {
+      const stageCode = stageCodeById(apiStages, stageId);
+      if (!stageCode) continue;
+      markSelfMoved(leadIds);
+      try {
+        const result = await bulkMoveCrmLeads(
+          {
+            lead_ids: leadIds,
+            pipeline_code: apiPipelineCode,
+            stage_code: stageCode,
+            source: "desktop_undo",
+          },
+          accessToken,
+        );
+        restored += result.moved;
+      } catch {
+        // Segue para as outras etapas; o total no fim conta o que voltou.
+      }
+    }
+
+    showToast(
+      restored > 0
+        ? `${restored} de ${Object.keys(stageByLeadId).length} leads devolvidos para a etapa de origem.`
+        : "Falha ao desfazer a movimentacao em massa.",
+      restored > 0 ? "success" : "error",
+    );
+    // Volta em varias etapas de uma vez: um resync e mais simples (e mais
+    // seguro) do que remontar o board otimista etapa por etapa.
+    refreshBoard();
+  };
+
+  /** Acao "Desfazer" do toast para movimentacoes em massa. */
+  const buildBulkUndoAction = (
+    stageByLeadId: Record<string, string>,
+  ): Toast["action"] => {
+    const restorable = Object.fromEntries(
+      Object.entries(stageByLeadId).filter(([, stageId]) =>
+        kanbanColumns.some((stage) => stage.id === stageId),
+      ),
+    );
+    if (Object.keys(restorable).length === 0) return undefined;
+    return {
+      label: "Desfazer",
+      onAction: () => void undoBulkMove(restorable),
+    };
+  };
+
   const handleBulkMove = async () => {
     if (selectedLeadIds.size === 0 || !apiPipelineCode) return;
     const session = readStoredSession();
@@ -2119,6 +2183,18 @@ export function CRMPage() {
     if (!stageCode) {
       showToast("Etapa de destino nao encontrada no pipeline.", "error");
       return;
+    }
+
+    // Etapa de origem de cada selecionado, capturada antes do move: e o que
+    // permite oferecer o desfazer depois.
+    const originStageByLeadId: Record<string, string> = {};
+    for (const stage of kanbanColumns) {
+      if (stage.id === bulkTargetStageId) continue;
+      for (const lead of boardState[stage.id] ?? []) {
+        if (selectedLeadIds.has(lead.id)) {
+          originStageByLeadId[lead.id] = stage.id;
+        }
+      }
     }
 
     setBulkMoving(true);
@@ -2135,6 +2211,7 @@ export function CRMPage() {
       showToast(
         `${result.moved} de ${result.total} leads movidos para ${kanbanColumns.find((stage) => stage.id === bulkTargetStageId)?.label ?? "etapa selecionada"}.`,
         result.moved > 0 ? "success" : "info",
+        result.moved > 0 ? buildBulkUndoAction(originStageByLeadId) : undefined,
       );
       exitSelectionMode();
       refreshBoard();
@@ -2875,9 +2952,17 @@ export function CRMPage() {
       accessToken,
     )
       .then((result) => {
+        const originStageByLeadId: Record<string, string> = {};
+        for (const leadId of movedIds) {
+          const from = originalStageById[leadId];
+          if (from) originStageByLeadId[leadId] = from;
+        }
         showToast(
           `${result.moved} de ${result.total} leads movidos para ${targetColumn?.label ?? "nova etapa"}.`,
           result.moved > 0 ? "success" : "info",
+          result.moved > 0
+            ? buildBulkUndoAction(originStageByLeadId)
+            : undefined,
         );
         exitSelectionMode();
         // O board otimista ja reflete o sucesso total; so vale refazer tudo
