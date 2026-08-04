@@ -438,6 +438,96 @@ describe('MetaService', () => {
       );
     });
 
+    it('salva template aprovado e a ordem dos parametros dinamicos', async () => {
+      const templateDto = {
+        ...dto,
+        whatsapp_template_name: 'boas_vindas_evento',
+        whatsapp_template_language: 'pt_BR',
+        whatsapp_template_parameter_keys: [
+          'lead_name',
+          'event_name',
+        ] as Array<'lead_name' | 'event_name'>,
+      };
+      jest.spyOn(service, 'listClientWhatsappTemplates').mockResolvedValue({
+        client_id: 'client-1',
+        waba_id: 'waba-1',
+        templates: [
+          {
+            id: 'template-1',
+            name: 'boas_vindas_evento',
+            language: 'pt_BR',
+            category: 'MARKETING',
+            body_text: 'Ola {{1}}, esperamos voce no {{2}}.',
+            body_parameter_count: 2,
+            supported: true,
+          },
+        ],
+      });
+      prisma.metaAssetSelection.findFirst
+        .mockResolvedValueOnce({ form_id: 'form-1', form_name: 'Formulario 1' })
+        .mockResolvedValueOnce(null);
+      prisma.metaLeadRoutingRule.findUnique.mockResolvedValue(null);
+      prisma.event.findFirst.mockResolvedValue({ id: dto.event_id });
+      prisma.crmPipeline.findFirst.mockResolvedValue({ id: dto.crm_pipeline_id });
+      prisma.crmStage.findMany.mockResolvedValue([
+        { id: dto.call_stage_id },
+        { id: dto.whatsapp_stage_id },
+      ]);
+      prisma.metaLeadRoutingRule.upsert.mockResolvedValue({
+        id: 'routing-1',
+        client_id: 'client-1',
+        ...templateDto,
+      });
+
+      await service.upsertLeadRoutingRule(gestor, 'client-1', templateDto);
+
+      expect(prisma.metaLeadRoutingRule.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            whatsapp_template_name: 'boas_vindas_evento',
+            whatsapp_template_language: 'pt_BR',
+            whatsapp_template_parameter_keys: ['lead_name', 'event_name'],
+          }),
+        }),
+      );
+    });
+
+    it('lista somente templates aprovados e informa parametros do corpo', async () => {
+      jest.spyOn(service as any, 'getClientPrimaryWhatsappChannel').mockResolvedValue({
+        waba_id: 'waba-1',
+        phone_number_id: 'phone-number-1',
+        meta_connection: { access_token: 'token-1' },
+      });
+      jest.spyOn(service as any, 'graphGetAll').mockResolvedValue([
+        {
+          id: 'template-approved',
+          name: 'boas_vindas_evento',
+          status: 'APPROVED',
+          category: 'MARKETING',
+          language: 'pt_BR',
+          components: [{ type: 'BODY', text: 'Ola {{1}}, evento {{2}}.' }],
+        },
+        {
+          id: 'template-pending',
+          name: 'aguardando_aprovacao',
+          status: 'PENDING',
+          language: 'pt_BR',
+        },
+      ]);
+
+      const result = await service.listClientWhatsappTemplates(gestor, 'client-1');
+
+      expect(result.templates).toEqual([
+        expect.objectContaining({
+          id: 'template-approved',
+          name: 'boas_vindas_evento',
+          language: 'pt_BR',
+          body_parameter_count: 2,
+          supported: true,
+        }),
+      ]);
+    });
+
     it('bloqueia formulario selecionado simultaneamente por outro cliente', async () => {
       prisma.metaAssetSelection.findFirst
         .mockResolvedValueOnce({ form_id: 'form-1', form_name: 'Formulario 1' })

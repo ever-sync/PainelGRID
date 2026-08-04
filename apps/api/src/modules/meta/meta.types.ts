@@ -49,6 +49,21 @@ export interface MetaLeadFormSummary {
   questions?: unknown[];
 }
 
+export interface MetaWhatsappTemplateComponent {
+  type?: string;
+  format?: string;
+  text?: string;
+}
+
+export interface MetaWhatsappMessageTemplateSummary {
+  id: string;
+  name?: string;
+  status?: string;
+  category?: string;
+  language?: string;
+  components?: MetaWhatsappTemplateComponent[];
+}
+
 export interface WhatsappSendMessageResponse {
   messages?: Array<{ id?: string }>;
 }

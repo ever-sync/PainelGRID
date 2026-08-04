@@ -236,6 +236,17 @@ export class MetaController {
   }
 
   @Roles(Role.GESTOR)
+  @Get('lead-routing/:clientId/whatsapp-templates')
+  @ApiOperation({ summary: 'Lista templates WhatsApp aprovados para o cliente' })
+  @ApiResponse({ status: 200, description: 'Templates aprovados retornados com sucesso' })
+  listLeadRoutingWhatsappTemplates(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('clientId', new ParseUUIDPipe()) clientId: string,
+  ): Promise<Record<string, unknown>> {
+    return this.metaService.listClientWhatsappTemplates(user, clientId);
+  }
+
+  @Roles(Role.GESTOR)
   @Put('lead-routing/:clientId')
   @ApiOperation({ summary: 'Configura evento, pipeline e etapas de um formulario Meta' })
   @ApiResponse({ status: 200, description: 'Roteamento salvo com sucesso' })

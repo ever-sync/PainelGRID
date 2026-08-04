@@ -29,6 +29,7 @@ import { AuthenticatedUser } from '../auth/auth.types';
 import { ClientsService } from '../clients/clients.service';
 import { ClientWebhookService } from '../crm/client-webhook.service';
 import { LeadTimelineService } from '../lead-timeline/lead-timeline.service';
+import type { MetaLeadWhatsappTemplateParameterKey } from '../meta/dto/upsert-meta-lead-routing.dto';
 import { MetaService } from '../meta/meta.service';
 import { resolveConfirmationStatusForStage } from '../clients/client-settings';
 import { clientIdToStageCode } from '../crm/default-crm-pipeline';
@@ -152,10 +153,16 @@ type AutomaticFacebookRouting = {
   clientId: string;
   eventId: string;
   eventName: string;
+  eventDate: Date;
+  eventLocation: string | null;
+  clientName: string;
   pipelineId: string;
   pipelineCode: string;
   callStage: { id: string; code: string; name: string };
   whatsappStage: { id: string; code: string; name: string };
+  whatsappTemplateName: string | null;
+  whatsappTemplateLanguage: string | null;
+  whatsappTemplateParameterKeys: MetaLeadWhatsappTemplateParameterKey[];
   clientSettings: unknown;
 };
 
@@ -174,8 +181,30 @@ type AutomaticFacebookTransactionItem = {
   stageMoved: boolean;
   fromStageId: string | null;
   fromStageCode: string | null;
+  shouldDispatchWhatsapp: boolean;
   prepared: AutomaticFacebookPreparedLead;
 };
+
+type AutomaticWhatsappDispatchResult = {
+  status: 'not_requested' | 'skipped' | 'sent' | 'failed';
+  reason?:
+    | 'channel_ligacao'
+    | 'duplicate_delivery'
+    | 'phone_missing'
+    | 'template_not_configured'
+    | 'provider_error';
+  template_name?: string;
+  template_language?: string;
+  message_id?: string | null;
+};
+
+const AUTOMATIC_WHATSAPP_TEMPLATE_PARAMETER_KEYS = new Set<string>([
+  'lead_name',
+  'event_name',
+  'company_name',
+  'event_date',
+  'event_location',
+]);
 
 const CHECKIN_VOUCHER_TTL_SEC = 90 * 24 * 60 * 60;
 const MAX_IMPORT_ROWS = 10_000;
@@ -1616,10 +1645,15 @@ export class LeadsService {
         crm_pipeline_id: true,
         call_stage_id: true,
         whatsapp_stage_id: true,
-        client: { select: { settings: true } },
+        whatsapp_template_name: true,
+        whatsapp_template_language: true,
+        whatsapp_template_parameter_keys: true,
+        client: { select: { settings: true, company_name: true } },
         event: {
           select: {
             name: true,
+            event_date: true,
+            location: true,
             participants: { select: { client_id: true } },
           },
         },
@@ -1687,8 +1721,11 @@ export class LeadsService {
         formId,
         formName: rule.form_name ?? selection.name,
         clientId: rule.client_id,
+        clientName: rule.client.company_name,
         eventId: rule.event_id,
         eventName: rule.event.name,
+        eventDate: rule.event.event_date,
+        eventLocation: rule.event.location,
         pipelineId: rule.crm_pipeline_id,
         pipelineCode: rule.crm_pipeline.code,
         callStage: {
@@ -1701,6 +1738,12 @@ export class LeadsService {
           code: rule.whatsapp_stage.code,
           name: rule.whatsapp_stage.name,
         },
+        whatsappTemplateName: rule.whatsapp_template_name,
+        whatsappTemplateLanguage: rule.whatsapp_template_language,
+        whatsappTemplateParameterKeys: rule.whatsapp_template_parameter_keys.filter(
+          (key): key is MetaLeadWhatsappTemplateParameterKey =>
+            AUTOMATIC_WHATSAPP_TEMPLATE_PARAMETER_KEYS.has(key),
+        ),
         clientSettings: rule.client.settings,
       });
     }
@@ -1823,9 +1866,13 @@ export class LeadsService {
       }
     }
 
+    const whatsappDispatches = await Promise.all(
+      transactionItems.map((item) => this.dispatchAutomaticWhatsappTemplate(item)),
+    );
+
     const created = transactionItems.filter((item) => !item.alreadyExisted).length;
     const alreadyExisted = transactionItems.length - created;
-    const items = transactionItems.map((item) => ({
+    const items = transactionItems.map((item, index) => ({
       ...this.toResponse(item.lead),
       already_existed: item.alreadyExisted,
       routing_applied: {
@@ -1839,6 +1886,7 @@ export class LeadsService {
         channel: item.prepared.channel,
         stage_moved: item.stageMoved,
       },
+      whatsapp_dispatch: whatsappDispatches[index],
     }));
 
     return {
@@ -1856,6 +1904,8 @@ export class LeadsService {
           crm_pipeline_code: routing.pipelineCode,
           call_stage_id: routing.callStage.id,
           whatsapp_stage_id: routing.whatsappStage.id,
+          whatsapp_template_name: routing.whatsappTemplateName,
+          whatsapp_template_language: routing.whatsappTemplateLanguage,
         };
       }),
       items,
@@ -1876,6 +1926,100 @@ export class LeadsService {
       return 'ligacao';
     }
     throw new BadRequestException(`Canal de atendimento invalido: ${normalized || 'vazio'}`);
+  }
+
+  private async dispatchAutomaticWhatsappTemplate(
+    item: AutomaticFacebookTransactionItem,
+  ): Promise<AutomaticWhatsappDispatchResult> {
+    const { lead, prepared, shouldDispatchWhatsapp } = item;
+    const { routing } = prepared;
+
+    if (prepared.channel !== 'whatsapp') {
+      return { status: 'not_requested', reason: 'channel_ligacao' };
+    }
+    if (!shouldDispatchWhatsapp) {
+      return { status: 'skipped', reason: 'duplicate_delivery' };
+    }
+    if (!lead.phone) {
+      return { status: 'skipped', reason: 'phone_missing' };
+    }
+    if (!routing.whatsappTemplateName || !routing.whatsappTemplateLanguage) {
+      return { status: 'skipped', reason: 'template_not_configured' };
+    }
+
+    const templateName = routing.whatsappTemplateName;
+    const templateLanguage = routing.whatsappTemplateLanguage;
+    try {
+      const messageId = await this.metaService.sendClientWhatsappTemplate({
+        clientId: routing.clientId,
+        to: lead.phone,
+        templateName,
+        language: templateLanguage,
+        parameters: routing.whatsappTemplateParameterKeys.map((key) =>
+          this.resolveAutomaticWhatsappTemplateParameter(key, item),
+        ),
+      });
+
+      await this.leadTimeline.record({
+        clientId: lead.client_id,
+        leadId: lead.id,
+        eventType: 'message',
+        origin: 'whatsapp',
+        actorLabel: 'Integração Meta',
+        notes: `Template WhatsApp enviado: ${templateName}`,
+        metadata: {
+          direction: 'outbound',
+          provider: 'meta',
+          template_name: templateName,
+          template_language: templateLanguage,
+          message_id: messageId,
+          form_id: routing.formId,
+        },
+      });
+
+      return {
+        status: 'sent',
+        template_name: templateName,
+        template_language: templateLanguage,
+        message_id: messageId,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Falha ao enviar template WhatsApp do formulario ${routing.formId} para o lead ${lead.id}: ${this.errorMessage(error)}`,
+      );
+      return {
+        status: 'failed',
+        reason: 'provider_error',
+        template_name: templateName,
+        template_language: templateLanguage,
+      };
+    }
+  }
+
+  private resolveAutomaticWhatsappTemplateParameter(
+    key: MetaLeadWhatsappTemplateParameterKey,
+    item: AutomaticFacebookTransactionItem,
+  ): string {
+    const { lead, prepared } = item;
+    switch (key) {
+      case 'lead_name':
+        return lead.name;
+      case 'event_name':
+        return prepared.routing.eventName;
+      case 'company_name':
+        return prepared.routing.clientName;
+      case 'event_date':
+        return new Intl.DateTimeFormat('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }).format(prepared.routing.eventDate);
+      case 'event_location':
+        return prepared.routing.eventLocation?.trim() || '-';
+    }
   }
 
   private async findActiveLeadByPhoneForAutomaticImport(
@@ -2038,6 +2182,7 @@ export class LeadsService {
         stageMoved: true,
         fromStageId: null,
         fromStageCode: null,
+        shouldDispatchWhatsapp: true,
         prepared,
       };
     }
@@ -2119,6 +2264,7 @@ export class LeadsService {
       stageMoved,
       fromStageId,
       fromStageCode,
+      shouldDispatchWhatsapp: shouldApplyRouting,
       prepared,
     };
   }

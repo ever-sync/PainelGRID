@@ -393,6 +393,9 @@ export type MetaLeadRoutingMapping = {
   crm_pipeline_id: string;
   call_stage_id: string;
   whatsapp_stage_id: string;
+  whatsapp_template_name: string | null;
+  whatsapp_template_language: string | null;
+  whatsapp_template_parameter_keys: MetaLeadWhatsappTemplateParameterKey[];
   updated_at: string;
   event: { id: string; name: string };
   crm_pipeline: { id: string; name: string; code: string };
@@ -418,6 +421,28 @@ export type UpsertMetaLeadRoutingPayload = {
   crm_pipeline_id: string;
   call_stage_id: string;
   whatsapp_stage_id: string;
+  whatsapp_template_name?: string;
+  whatsapp_template_language?: string;
+  whatsapp_template_parameter_keys?: MetaLeadWhatsappTemplateParameterKey[];
+};
+
+export type MetaLeadWhatsappTemplateParameterKey =
+  "lead_name" | "event_name" | "company_name" | "event_date" | "event_location";
+
+export type MetaLeadWhatsappTemplate = {
+  id: string;
+  name: string;
+  language: string;
+  category: string | null;
+  body_text: string | null;
+  body_parameter_count: number;
+  supported: boolean;
+};
+
+export type MetaLeadWhatsappTemplatesResponse = {
+  client_id: string;
+  waba_id: string;
+  templates: MetaLeadWhatsappTemplate[];
 };
 
 export function listMetaLeadRouting(clientId: string, token: string) {
@@ -427,15 +452,26 @@ export function listMetaLeadRouting(clientId: string, token: string) {
   );
 }
 
+export function listMetaLeadRoutingWhatsappTemplates(
+  clientId: string,
+  token: string,
+) {
+  return httpRequest<MetaLeadWhatsappTemplatesResponse>(
+    `/meta/lead-routing/${clientId}/whatsapp-templates`,
+    { method: "GET", token },
+  );
+}
+
 export function upsertMetaLeadRouting(
   clientId: string,
   payload: UpsertMetaLeadRoutingPayload,
   token: string,
 ) {
-  return httpRequest<MetaLeadRoutingMapping>(
-    `/meta/lead-routing/${clientId}`,
-    { method: "PUT", token, body: payload },
-  );
+  return httpRequest<MetaLeadRoutingMapping>(`/meta/lead-routing/${clientId}`, {
+    method: "PUT",
+    token,
+    body: payload,
+  });
 }
 
 export function deleteMetaLeadRouting(

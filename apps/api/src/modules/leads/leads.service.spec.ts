@@ -44,6 +44,11 @@ describe('LeadsService', () => {
     emitVendorCalled: jest.Mock;
   };
   let leadTimeline: { record: jest.Mock; originFromSource: jest.Mock };
+  let metaService: {
+    sendClientWhatsappMessage: jest.Mock;
+    sendClientWhatsappMediaMessage: jest.Mock;
+    sendClientWhatsappTemplate: jest.Mock;
+  };
   let service: LeadsService;
 
   beforeEach(() => {
@@ -96,6 +101,11 @@ describe('LeadsService', () => {
       record: jest.fn().mockResolvedValue(undefined),
       originFromSource: jest.fn(() => 'crm'),
     };
+    metaService = {
+      sendClientWhatsappMessage: jest.fn(),
+      sendClientWhatsappMediaMessage: jest.fn(),
+      sendClientWhatsappTemplate: jest.fn().mockResolvedValue('wamid-template-1'),
+    };
 
     service = new LeadsService(
       prisma as never,
@@ -113,10 +123,7 @@ describe('LeadsService', () => {
       } as never,
       realtimeEvents as never,
       { dispatch: jest.fn() } as never,
-      {
-        sendClientWhatsappMessage: jest.fn(),
-        sendClientWhatsappMediaMessage: jest.fn(),
-      } as never,
+      metaService as never,
       leadTimeline as never,
       {
         client: {
@@ -810,7 +817,11 @@ describe('LeadsService', () => {
     crm_pipeline_id: `pipeline-${suffix}`,
     call_stage_id: `stage-call-${suffix}`,
     whatsapp_stage_id: `stage-whatsapp-${suffix}`,
+    whatsapp_template_name: `boas_vindas_${suffix.toLowerCase()}`,
+    whatsapp_template_language: 'pt_BR',
+    whatsapp_template_parameter_keys: ['lead_name', 'event_name'],
     client: {
+      company_name: `Cliente ${suffix}`,
       settings: {
         crm_stage_status_rules: [
           {
@@ -822,6 +833,8 @@ describe('LeadsService', () => {
     },
     event: {
       name: `Evento ${suffix}`,
+      event_date: new Date('2026-08-14T15:00:00.000Z'),
+      location: `Loja ${suffix}`,
       participants: [{ client_id: ownerClientId }],
     },
     crm_pipeline: {
@@ -944,6 +957,7 @@ describe('LeadsService', () => {
       {
         lead_id: 'meta-a',
         nome: 'Lead A',
+        telefone: '11999999999',
         formulario_id: 'form-cliente-a',
         preferencia_atendimento: 'WhatsApp',
       },
@@ -1013,6 +1027,12 @@ describe('LeadsService', () => {
             crm_stage_id: 'stage-whatsapp-A',
             stage_moved: true,
           }),
+          whatsapp_dispatch: {
+            status: 'sent',
+            template_name: 'boas_vindas_a',
+            template_language: 'pt_BR',
+            message_id: 'wamid-template-1',
+          },
         }),
         expect.objectContaining({
           id: 'lead-b',
@@ -1022,9 +1042,21 @@ describe('LeadsService', () => {
             crm_stage_id: 'stage-call-B',
             stage_moved: true,
           }),
+          whatsapp_dispatch: {
+            status: 'not_requested',
+            reason: 'channel_ligacao',
+          },
         }),
       ]),
     );
+    expect(metaService.sendClientWhatsappTemplate).toHaveBeenCalledTimes(1);
+    expect(metaService.sendClientWhatsappTemplate).toHaveBeenCalledWith({
+      clientId,
+      to: '+5511999999999',
+      templateName: 'boas_vindas_a',
+      language: 'pt_BR',
+      parameters: ['Lead A', 'Evento A'],
+    });
     expect(realtimeEvents.emitLeadUpdated).toHaveBeenCalledTimes(2);
     expect(leadTimeline.record).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: 'created', leadId: 'lead-a' }),
@@ -1166,7 +1198,12 @@ describe('LeadsService', () => {
       already_existed: true,
       crm_stage_id: 'stage-venda-A',
       routing_applied: { stage_moved: false },
+      whatsapp_dispatch: {
+        status: 'skipped',
+        reason: 'duplicate_delivery',
+      },
     });
+    expect(metaService.sendClientWhatsappTemplate).not.toHaveBeenCalled();
   });
 
   it('nao publica efeitos externos quando a transacao falha', async () => {
@@ -1195,6 +1232,7 @@ describe('LeadsService', () => {
 
     expect(realtimeEvents.emitLeadUpdated).not.toHaveBeenCalled();
     expect(leadTimeline.record).not.toHaveBeenCalled();
+    expect(metaService.sendClientWhatsappTemplate).not.toHaveBeenCalled();
   });
 
   it('bloqueia update de lead quando telefone pertence a outro lead do mesmo cliente', async () => {

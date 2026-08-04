@@ -49,6 +49,7 @@ import {
   type MetaInsightPayload,
   type MetaLeadFormSummary,
   type MetaLeadPayload,
+  type MetaWhatsappMessageTemplateSummary,
   type MetaOauthSessionCache,
   type MetaOauthStateCache,
   type MetaPageSummary,
@@ -1666,6 +1667,115 @@ export class MetaService implements OnModuleInit {
     return response.messages?.[0]?.id ?? null;
   }
 
+  async listClientWhatsappTemplates(user: AuthenticatedUser, clientId: string) {
+    await this.assertMetaClientAccess(user, clientId);
+    const selectedAsset = await this.getClientPrimaryWhatsappChannel(clientId);
+    if (!selectedAsset.waba_id) {
+      throw new BadRequestException(
+        'Cliente sem WABA configurada para consultar templates do WhatsApp.',
+      );
+    }
+
+    const templates = await this.graphGetAll<MetaWhatsappMessageTemplateSummary>(
+      `${selectedAsset.waba_id}/message_templates`,
+      selectedAsset.meta_connection.access_token,
+      {
+        fields: 'id,name,status,category,language,components',
+        limit: 100,
+      },
+    );
+
+    return {
+      client_id: clientId,
+      waba_id: selectedAsset.waba_id,
+      templates: templates
+        .filter(
+          (template) =>
+            template.status?.toUpperCase() === 'APPROVED' &&
+            Boolean(template.name) &&
+            Boolean(template.language),
+        )
+        .map((template) => {
+          const body = template.components?.find(
+            (component) => component.type?.toUpperCase() === 'BODY',
+          );
+          const header = template.components?.find(
+            (component) => component.type?.toUpperCase() === 'HEADER',
+          );
+          const bodyParameterCount = this.countWhatsappTemplateParameters(body?.text);
+          const hasDynamicNonBodyComponent = (template.components ?? [])
+            .filter((component) => component.type?.toUpperCase() !== 'BODY')
+            .some(
+              (component) =>
+                this.countWhatsappTemplateParameters(JSON.stringify(component)) > 0,
+            );
+          const headerRequiresMedia = ['IMAGE', 'VIDEO', 'DOCUMENT', 'LOCATION'].includes(
+            header?.format?.toUpperCase() ?? '',
+          );
+          return {
+            id: template.id,
+            name: template.name!,
+            language: template.language!,
+            category: template.category ?? null,
+            body_text: body?.text ?? null,
+            body_parameter_count: bodyParameterCount,
+            supported: !hasDynamicNonBodyComponent && !headerRequiresMedia,
+          };
+        })
+        .sort((left, right) =>
+          `${left.name}:${left.language}`.localeCompare(
+            `${right.name}:${right.language}`,
+            'pt-BR',
+          ),
+        ),
+    };
+  }
+
+  async sendClientWhatsappTemplate(args: {
+    clientId: string;
+    to: string;
+    templateName: string;
+    language: string;
+    parameters: string[];
+  }): Promise<string | null> {
+    const targetPhone = this.normalizePhone(args.to);
+    if (!targetPhone) {
+      throw new BadRequestException('Lead sem telefone valido para envio via WhatsApp.');
+    }
+    if (!/^[a-z0-9_]+$/.test(args.templateName)) {
+      throw new BadRequestException('Nome de template WhatsApp invalido.');
+    }
+    if (!/^[a-z]{2}(?:_[A-Z]{2})?$/.test(args.language)) {
+      throw new BadRequestException('Idioma de template WhatsApp invalido.');
+    }
+
+    const selectedAsset = await this.getClientPrimaryWhatsappChannel(args.clientId);
+    const parameters = args.parameters.map((value) => ({
+      type: 'text',
+      text: String(value).trim().slice(0, 1024) || '-',
+    }));
+    const template: Record<string, unknown> = {
+      name: args.templateName,
+      language: { code: args.language },
+      ...(parameters.length > 0
+        ? { components: [{ type: 'body', parameters }] }
+        : {}),
+    };
+
+    const response = await this.graphPost<WhatsappSendMessageResponse>(
+      `${selectedAsset.phone_number_id}/messages`,
+      selectedAsset.meta_connection.access_token,
+      {
+        messaging_product: 'whatsapp',
+        to: targetPhone,
+        type: 'template',
+        template,
+      },
+    );
+
+    return response.messages?.[0]?.id ?? null;
+  }
+
   async sendClientWhatsappMediaMessage(args: {
     clientId: string;
     to: string;
@@ -2111,6 +2221,44 @@ export class MetaService implements OnModuleInit {
   ) {
     await this.assertMetaClientAccess(user, clientId);
 
+    const templateName = dto.whatsapp_template_name?.trim() || null;
+    const templateLanguage = dto.whatsapp_template_language?.trim() || null;
+    const templateParameterKeys = dto.whatsapp_template_parameter_keys ?? [];
+    if (templateName && !templateLanguage) {
+      throw new BadRequestException(
+        'Informe o idioma do template WhatsApp selecionado',
+      );
+    }
+    if (!templateName && (templateLanguage || templateParameterKeys.length > 0)) {
+      throw new BadRequestException(
+        'Selecione um template WhatsApp antes de configurar seus parametros',
+      );
+    }
+
+    if (templateName && templateLanguage) {
+      const catalog = await this.listClientWhatsappTemplates(user, clientId);
+      const selectedTemplate = catalog.templates.find(
+        (template) =>
+          template.name === templateName &&
+          template.language === templateLanguage,
+      );
+      if (!selectedTemplate) {
+        throw new BadRequestException(
+          'Template WhatsApp nao encontrado ou ainda nao aprovado na Meta',
+        );
+      }
+      if (!selectedTemplate.supported) {
+        throw new BadRequestException(
+          'Template com parametro dinamico no cabecalho ainda nao e suportado',
+        );
+      }
+      if (selectedTemplate.body_parameter_count !== templateParameterKeys.length) {
+        throw new BadRequestException(
+          `O template WhatsApp exige ${selectedTemplate.body_parameter_count} parametro(s) no corpo`,
+        );
+      }
+    }
+
     const selectedForm = await this.db.metaAssetSelection.findFirst({
       where: {
         form_id: dto.form_id,
@@ -2204,6 +2352,9 @@ export class MetaService implements OnModuleInit {
         crm_pipeline_id: dto.crm_pipeline_id,
         call_stage_id: dto.call_stage_id,
         whatsapp_stage_id: dto.whatsapp_stage_id,
+        whatsapp_template_name: templateName,
+        whatsapp_template_language: templateLanguage,
+        whatsapp_template_parameter_keys: templateParameterKeys,
       },
       update: {
         form_name: selectedForm.form_name,
@@ -2211,6 +2362,9 @@ export class MetaService implements OnModuleInit {
         crm_pipeline_id: dto.crm_pipeline_id,
         call_stage_id: dto.call_stage_id,
         whatsapp_stage_id: dto.whatsapp_stage_id,
+        whatsapp_template_name: templateName,
+        whatsapp_template_language: templateLanguage,
+        whatsapp_template_parameter_keys: templateParameterKeys,
       },
       include: {
         event: { select: { id: true, name: true } },
@@ -3249,6 +3403,15 @@ export class MetaService implements OnModuleInit {
       return '';
     }
     return value.replace(/\D/g, '');
+  }
+
+  private countWhatsappTemplateParameters(text?: string | null): number {
+    if (!text) return 0;
+    const indexes = new Set<number>();
+    for (const match of text.matchAll(/\{\{(\d+)\}\}/g)) {
+      indexes.add(Number(match[1]));
+    }
+    return indexes.size;
   }
 
   private buildPhoneCandidates(raw?: string | null) {

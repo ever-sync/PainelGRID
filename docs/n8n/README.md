@@ -12,7 +12,8 @@ A mesma URL pública usa workflows separados por método HTTP:
   `hub.challenge`. Execuções de sucesso e erro não são armazenadas.
 - `Form - EVENTO`: recebe somente eventos `POST`, busca os dados completos na
   Graph API, normaliza o payload e envia para o endpoint global de ingestão.
-  Cliente, evento, pipeline e etapas nunca ficam gravados no workflow.
+  Cliente, evento, pipeline, etapas e template de WhatsApp nunca ficam gravados
+  no workflow; a API resolve tudo pelo formulário configurado no painel.
 
 Separar os métodos evita que alterações na validação do callback afetem o
 processamento dos leads.

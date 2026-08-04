@@ -10,6 +10,9 @@ O workflow termina nessa chamada. Vínculo ao evento e movimentação de CRM sã
 responsabilidades da API, usando o mapeamento salvo no painel do gestor; não
 adicione IDs fixos ou chamadas complementares no n8n.
 
+O envio inicial do WhatsApp também pertence à API. Não adicione ao workflow um
+node com token da Meta, `phone_number_id`, nome de template ou telefone fixo.
+
 ## Autenticacao
 
 Use um Header Auth do n8n, sem gravar o segredo diretamente no workflow:
@@ -50,12 +53,39 @@ O endpoint recebe um array, mesmo quando existe somente um lead:
 Nao envie `client_id`. A API resolve o cliente por `formulario_id`, usando
 somente formularios selecionados em uma conexao Meta ativa no painel do gestor.
 
+## Roteamento e template
+
+No painel do gestor, abra o cliente e configure cada formulário selecionado com:
+
+- evento;
+- pipeline;
+- etapa para ligação;
+- etapa para WhatsApp;
+- template aprovado do WhatsApp, opcional, e o conteúdo de cada parâmetro.
+
+Quando `preferencia_atendimento` for `ligacao`, a API move o lead para a etapa
+de ligação e nunca envia WhatsApp. Quando for `whatsapp`, move para a etapa de
+WhatsApp e envia o template configurado usando o número e a credencial Meta do
+próprio cliente. Um reenvio exato do mesmo `lead_id` é deduplicado e não dispara
+o template novamente.
+
+O resultado de cada item inclui `whatsapp_dispatch`:
+
+- `sent`: template aceito pela Meta;
+- `not_requested`: o canal escolhido foi ligação;
+- `skipped`: entrega duplicada, telefone ausente ou template não configurado;
+- `failed`: o lead foi salvo, mas a Meta recusou ou não concluiu o envio.
+
+Falha de envio não desfaz o cadastro e o roteamento já confirmados no banco. A
+fila de retries e alertas será tratada na fase operacional seguinte.
+
 ## Respostas de seguranca
 
 - `401`: chave ausente ou invalida.
 - `403`: formulario nao vinculado a nenhum cliente ativo.
 - `409`: formulario vinculado a mais de um cliente; a importacao e bloqueada
   para evitar vazamento entre clientes.
+- `422`: formulario selecionado, mas sem evento/pipeline/etapas configurados.
 - `503`: o segredo exclusivo de ingestao ainda nao foi configurado na API.
 
 Todos os formularios do lote sao resolvidos antes da primeira gravacao. Depois

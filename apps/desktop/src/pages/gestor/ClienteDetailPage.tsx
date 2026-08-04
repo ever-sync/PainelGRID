@@ -68,10 +68,7 @@ import { CopyableId } from "../../components/ui/CopyableId";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { VendorSignupLinkCard } from "../../components/shared/VendorSignupLinkCard";
 import { listEvents } from "../../services/events";
-import {
-  listCrmPipelines,
-  type ApiCrmPipeline,
-} from "../../services/crm";
+import { listCrmPipelines, type ApiCrmPipeline } from "../../services/crm";
 import { MetaCampaignTree } from "../../components/shared/MetaCampaignTree";
 import {
   MetaCampaignFilters,
@@ -143,10 +140,13 @@ import {
   unassignMetaCampaign,
   deleteMetaLeadRouting,
   listMetaLeadRouting,
+  listMetaLeadRoutingWhatsappTemplates,
   upsertMetaLeadRouting,
   type AssignableCampaign,
   type LinkedCampaign,
   type MetaLeadRoutingForm,
+  type MetaLeadWhatsappTemplate,
+  type MetaLeadWhatsappTemplateParameterKey,
   type MetaCampaignsReportItem,
   type MetaBusinessApiOption,
 } from "../../services/meta";
@@ -195,6 +195,11 @@ type MetaLeadRoutingDraft = {
   crm_pipeline_id: string;
   call_stage_id: string;
   whatsapp_stage_id: string;
+  whatsapp_template_name: string;
+  whatsapp_template_language: string;
+  whatsapp_template_parameter_keys: Array<
+    MetaLeadWhatsappTemplateParameterKey | ""
+  >;
 };
 
 function emptyMetaLeadRoutingDraft(): MetaLeadRoutingDraft {
@@ -203,6 +208,9 @@ function emptyMetaLeadRoutingDraft(): MetaLeadRoutingDraft {
     crm_pipeline_id: "",
     call_stage_id: "",
     whatsapp_stage_id: "",
+    whatsapp_template_name: "",
+    whatsapp_template_language: "",
+    whatsapp_template_parameter_keys: [],
   };
 }
 
@@ -218,9 +226,41 @@ function draftsFromMetaLeadRoutingForms(
             crm_pipeline_id: form.mapping.crm_pipeline_id,
             call_stage_id: form.mapping.call_stage_id,
             whatsapp_stage_id: form.mapping.whatsapp_stage_id,
+            whatsapp_template_name: form.mapping.whatsapp_template_name ?? "",
+            whatsapp_template_language:
+              form.mapping.whatsapp_template_language ?? "",
+            whatsapp_template_parameter_keys:
+              form.mapping.whatsapp_template_parameter_keys ?? [],
           }
         : emptyMetaLeadRoutingDraft(),
     ]),
+  );
+}
+
+const META_LEAD_TEMPLATE_PARAMETER_OPTIONS: Array<{
+  value: MetaLeadWhatsappTemplateParameterKey;
+  label: string;
+}> = [
+  { value: "lead_name", label: "Nome do lead" },
+  { value: "event_name", label: "Nome do evento" },
+  { value: "company_name", label: "Nome do cliente" },
+  { value: "event_date", label: "Data e hora do evento" },
+  { value: "event_location", label: "Local do evento" },
+];
+
+function defaultMetaTemplateParameters(
+  count: number,
+): MetaLeadWhatsappTemplateParameterKey[] {
+  const defaults: MetaLeadWhatsappTemplateParameterKey[] = [
+    "lead_name",
+    "event_name",
+    "company_name",
+    "event_date",
+    "event_location",
+  ];
+  return Array.from(
+    { length: count },
+    (_, index) => defaults[index] ?? "lead_name",
   );
 }
 
@@ -1112,6 +1152,12 @@ export function ClienteDetailPage() {
   const [leadRoutingPipelines, setLeadRoutingPipelines] = useState<
     ApiCrmPipeline[]
   >([]);
+  const [leadRoutingWhatsappTemplates, setLeadRoutingWhatsappTemplates] =
+    useState<MetaLeadWhatsappTemplate[]>([]);
+  const [
+    leadRoutingWhatsappTemplatesWarning,
+    setLeadRoutingWhatsappTemplatesWarning,
+  ] = useState<string | null>(null);
   const [leadRoutingDrafts, setLeadRoutingDrafts] = useState<
     Record<string, MetaLeadRoutingDraft>
   >({});
@@ -2527,20 +2573,37 @@ export function ClienteDetailPage() {
     setIsLeadRoutingOpen(true);
     setLeadRoutingLoading(true);
     setLeadRoutingError(null);
+    setLeadRoutingWhatsappTemplatesWarning(null);
     try {
-      const [routing, events, pipelines] = await Promise.all([
-        listMetaLeadRouting(clientId, session.accessToken),
-        listEvents({ client_id: clientId }, session.accessToken),
-        listCrmPipelines(clientId, session.accessToken),
-      ]);
+      const [routing, events, pipelines, whatsappTemplatesResult] =
+        await Promise.all([
+          listMetaLeadRouting(clientId, session.accessToken),
+          listEvents({ client_id: clientId }, session.accessToken),
+          listCrmPipelines(clientId, session.accessToken),
+          listMetaLeadRoutingWhatsappTemplates(clientId, session.accessToken)
+            .then((data) => ({ data, error: null }))
+            .catch((error: unknown) => ({ data: null, error })),
+        ]);
       setLeadRoutingForms(routing.forms);
       setLeadRoutingEvents(
         events.map((event) => ({ id: event.id, name: event.name })),
       );
       setLeadRoutingPipelines(pipelines);
+      setLeadRoutingWhatsappTemplates(
+        whatsappTemplatesResult.data?.templates ?? [],
+      );
+      if (whatsappTemplatesResult.error) {
+        setLeadRoutingWhatsappTemplatesWarning(
+          getErrorMessage(
+            whatsappTemplatesResult.error,
+            "Não foi possível consultar os templates aprovados do WhatsApp.",
+          ),
+        );
+      }
       setLeadRoutingDrafts(draftsFromMetaLeadRoutingForms(routing.forms));
     } catch (error) {
       setLeadRoutingForms([]);
+      setLeadRoutingWhatsappTemplates([]);
       setLeadRoutingError(
         getErrorMessage(
           error,
@@ -2572,15 +2635,41 @@ export function ClienteDetailPage() {
 
     const started = leadRoutingForms.filter((form) => {
       const draft = leadRoutingDrafts[form.id];
-      return draft && Object.values(draft).some(Boolean);
+      return (
+        draft &&
+        (Boolean(draft.event_id) ||
+          Boolean(draft.crm_pipeline_id) ||
+          Boolean(draft.call_stage_id) ||
+          Boolean(draft.whatsapp_stage_id) ||
+          Boolean(draft.whatsapp_template_name))
+      );
     });
     const incomplete = started.filter((form) => {
       const draft = leadRoutingDrafts[form.id];
-      return !draft || Object.values(draft).some((value) => !value);
+      if (
+        !draft?.event_id ||
+        !draft.crm_pipeline_id ||
+        !draft.call_stage_id ||
+        !draft.whatsapp_stage_id
+      ) {
+        return true;
+      }
+      if (!draft.whatsapp_template_name) return false;
+      const selectedTemplate = leadRoutingWhatsappTemplates.find(
+        (template) =>
+          template.name === draft.whatsapp_template_name &&
+          template.language === draft.whatsapp_template_language,
+      );
+      return (
+        !selectedTemplate ||
+        selectedTemplate.body_parameter_count !==
+          draft.whatsapp_template_parameter_keys.length ||
+        draft.whatsapp_template_parameter_keys.some((key) => !key)
+      );
     });
     if (incomplete.length > 0) {
       setLeadRoutingError(
-        `Complete evento, pipeline e as duas etapas em: ${incomplete
+        `Complete evento, pipeline, etapas e os parâmetros do template em: ${incomplete
           .map((form) => form.name)
           .join(", ")}.`,
       );
@@ -2596,9 +2685,25 @@ export function ClienteDetailPage() {
     try {
       for (const form of started) {
         const draft = leadRoutingDrafts[form.id]!;
+        const parameterKeys = draft.whatsapp_template_parameter_keys.filter(
+          (key): key is MetaLeadWhatsappTemplateParameterKey => Boolean(key),
+        );
         await upsertMetaLeadRouting(
           clientId,
-          { form_id: form.id, ...draft },
+          {
+            form_id: form.id,
+            event_id: draft.event_id,
+            crm_pipeline_id: draft.crm_pipeline_id,
+            call_stage_id: draft.call_stage_id,
+            whatsapp_stage_id: draft.whatsapp_stage_id,
+            ...(draft.whatsapp_template_name
+              ? {
+                  whatsapp_template_name: draft.whatsapp_template_name,
+                  whatsapp_template_language: draft.whatsapp_template_language,
+                  whatsapp_template_parameter_keys: parameterKeys,
+                }
+              : {}),
+          },
           session.accessToken,
         );
       }
@@ -6415,7 +6520,7 @@ export function ClienteDetailPage() {
                 <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
                   O cliente é identificado pelo formulário. O canal informado
                   pelo lead decide entre a etapa de ligação e a etapa de
-                  WhatsApp.
+                  WhatsApp; o template automático só é enviado no segundo caso.
                 </p>
               </div>
               <div className="flex items-center gap-2 text-xs">
@@ -6441,17 +6546,21 @@ export function ClienteDetailPage() {
             <Notice tone="error">{leadRoutingError}</Notice>
           ) : null}
 
+          {leadRoutingWhatsappTemplatesWarning ? (
+            <Notice tone="warning">
+              {leadRoutingWhatsappTemplatesWarning} O roteamento ainda pode ser
+              salvo sem mensagem automática.
+            </Notice>
+          ) : null}
+
           {leadRoutingLoading ? (
             <div className="flex items-center justify-center gap-2 py-12 text-sm text-zinc-500">
               <RefreshCcw size={16} className="animate-spin text-[#FF0636]" />
-              Carregando formulários, eventos e etapas...
+              Carregando formulários, eventos, etapas e templates...
             </div>
           ) : leadRoutingForms.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-zinc-300 px-5 py-12 text-center dark:border-zinc-700">
-              <FileText
-                size={24}
-                className="mx-auto mb-3 text-zinc-400"
-              />
+              <FileText size={24} className="mx-auto mb-3 text-zinc-400" />
               <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
                 Nenhum formulário selecionado
               </p>
@@ -6469,6 +6578,17 @@ export function ClienteDetailPage() {
                   (item) => item.id === draft.crm_pipeline_id,
                 );
                 const stages = pipeline?.stages ?? [];
+                const selectedWhatsappTemplate =
+                  leadRoutingWhatsappTemplates.find(
+                    (template) =>
+                      template.name === draft.whatsapp_template_name &&
+                      template.language === draft.whatsapp_template_language,
+                  ) ?? null;
+                const selectedWhatsappTemplateValue = selectedWhatsappTemplate
+                  ? selectedWhatsappTemplate.id
+                  : draft.whatsapp_template_name
+                    ? "current-unavailable"
+                    : "";
                 const selectClass = clsx(
                   "h-10 w-full rounded-xl border px-3 text-sm font-normal outline-none transition focus:border-[#FF0636]/60 focus:ring-2 focus:ring-[#FF0636]/10 disabled:cursor-not-allowed disabled:opacity-50",
                   isDarkMode
@@ -6519,9 +6639,7 @@ export function ClienteDetailPage() {
                         {form.mapping ? (
                           <button
                             type="button"
-                            onClick={() =>
-                              void handleDeleteLeadRouting(form)
-                            }
+                            onClick={() => void handleDeleteLeadRouting(form)}
                             disabled={leadRoutingSaving}
                             className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/40"
                             title="Remover mapeamento"
@@ -6626,6 +6744,155 @@ export function ClienteDetailPage() {
                           ))}
                         </select>
                       </label>
+                    </div>
+
+                    <div
+                      className={clsx(
+                        "mt-4 rounded-2xl border p-3.5",
+                        isDarkMode
+                          ? "border-zinc-800 bg-zinc-950/70"
+                          : "border-zinc-200 bg-zinc-50/80",
+                      )}
+                    >
+                      <div className="grid gap-3 lg:grid-cols-[minmax(240px,0.9fr)_minmax(0,1.6fr)]">
+                        <label className="space-y-1.5">
+                          <span className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+                            <MessageCircle size={12} />
+                            Template automático do WhatsApp
+                          </span>
+                          <select
+                            value={selectedWhatsappTemplateValue}
+                            onChange={(event) => {
+                              const template =
+                                leadRoutingWhatsappTemplates.find(
+                                  (item) => item.id === event.target.value,
+                                ) ?? null;
+                              patchLeadRoutingDraft(form.id, {
+                                whatsapp_template_name: template?.name ?? "",
+                                whatsapp_template_language:
+                                  template?.language ?? "",
+                                whatsapp_template_parameter_keys: template
+                                  ? defaultMetaTemplateParameters(
+                                      template.body_parameter_count,
+                                    )
+                                  : [],
+                              });
+                            }}
+                            className={selectClass}
+                          >
+                            <option value="">
+                              Não enviar mensagem automática
+                            </option>
+                            {draft.whatsapp_template_name &&
+                            !selectedWhatsappTemplate ? (
+                              <option value="current-unavailable" disabled>
+                                {draft.whatsapp_template_name} · indisponível
+                              </option>
+                            ) : null}
+                            {leadRoutingWhatsappTemplates.map((template) => (
+                              <option
+                                key={template.id}
+                                value={template.id}
+                                disabled={!template.supported}
+                              >
+                                {template.name} · {template.language}
+                                {!template.supported
+                                  ? " · cabeçalho não suportado"
+                                  : ""}
+                              </option>
+                            ))}
+                          </select>
+                          <span className="block text-[10px] leading-4 text-zinc-400">
+                            Só é enviado quando o lead escolher WhatsApp. Em
+                            ligação, nenhum template é disparado.
+                          </span>
+                        </label>
+
+                        <div className="min-w-0">
+                          {selectedWhatsappTemplate ? (
+                            <>
+                              <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2.5 dark:border-zinc-800 dark:bg-zinc-900">
+                                <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-400">
+                                  Prévia do corpo ·{" "}
+                                  {selectedWhatsappTemplate.category ?? "Meta"}
+                                </p>
+                                <p className="mt-1.5 whitespace-pre-wrap text-xs leading-5 text-zinc-600 dark:text-zinc-300">
+                                  {selectedWhatsappTemplate.body_text ??
+                                    "Template sem texto de corpo."}
+                                </p>
+                              </div>
+
+                              {selectedWhatsappTemplate.body_parameter_count >
+                              0 ? (
+                                <div className="mt-2.5 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                                  {Array.from(
+                                    {
+                                      length:
+                                        selectedWhatsappTemplate.body_parameter_count,
+                                    },
+                                    (_, parameterIndex) => (
+                                      <label
+                                        key={parameterIndex}
+                                        className="space-y-1"
+                                      >
+                                        <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400">
+                                          Parâmetro{" "}
+                                          {`{{${parameterIndex + 1}}}`}
+                                        </span>
+                                        <select
+                                          value={
+                                            draft
+                                              .whatsapp_template_parameter_keys[
+                                              parameterIndex
+                                            ] ?? ""
+                                          }
+                                          onChange={(event) => {
+                                            const parameterKeys = [
+                                              ...draft.whatsapp_template_parameter_keys,
+                                            ];
+                                            parameterKeys[parameterIndex] =
+                                              event.target.value as
+                                                | MetaLeadWhatsappTemplateParameterKey
+                                                | "";
+                                            patchLeadRoutingDraft(form.id, {
+                                              whatsapp_template_parameter_keys:
+                                                parameterKeys,
+                                            });
+                                          }}
+                                          className={selectClass}
+                                        >
+                                          <option value="">
+                                            Escolha o conteúdo
+                                          </option>
+                                          {META_LEAD_TEMPLATE_PARAMETER_OPTIONS.map(
+                                            (option) => (
+                                              <option
+                                                key={option.value}
+                                                value={option.value}
+                                              >
+                                                {option.label}
+                                              </option>
+                                            ),
+                                          )}
+                                        </select>
+                                      </label>
+                                    ),
+                                  )}
+                                </div>
+                              ) : (
+                                <p className="mt-2 text-[10px] text-zinc-400">
+                                  Este template não possui parâmetros dinâmicos.
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <div className="flex min-h-20 items-center rounded-xl border border-dashed border-zinc-300 px-4 text-xs leading-5 text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+                              Selecione um template aprovado para visualizar o
+                              texto e definir cada campo dinâmico.
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </article>
                 );
