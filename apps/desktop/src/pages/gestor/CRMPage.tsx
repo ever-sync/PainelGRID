@@ -6,13 +6,15 @@ import {
   useRef,
   useState,
   type MouseEvent,
+  type WheelEvent as ReactWheelEvent,
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useDraggable,
   useDroppable,
   useSensor,
@@ -1493,9 +1495,40 @@ function StageColumn({
   fillHeight?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
+  const cardListRef = useRef<HTMLDivElement>(null);
+
+  const handleColumnWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
+    const cardList = cardListRef.current;
+    if (!cardList || event.deltaY === 0) return;
+    if (
+      event.target instanceof Node &&
+      cardList.contains(event.target)
+    ) {
+      return;
+    }
+
+    const maxScrollTop = cardList.scrollHeight - cardList.clientHeight;
+    if (maxScrollTop <= 0) return;
+
+    const deltaY =
+      event.deltaMode === 1
+        ? event.deltaY * 16
+        : event.deltaMode === 2
+          ? event.deltaY * cardList.clientHeight
+          : event.deltaY;
+    const nextScrollTop = Math.min(
+      maxScrollTop,
+      Math.max(0, cardList.scrollTop + deltaY),
+    );
+
+    if (nextScrollTop === cardList.scrollTop) return;
+
+    cardList.scrollTop = nextScrollTop;
+  };
 
   return (
     <div
+      onWheel={handleColumnWheel}
       className={clsx(
         "flex flex-col gap-2",
         // No modo compacto a coluna conserva a altura propria. No Kanban, ela
@@ -1554,7 +1587,10 @@ function StageColumn({
               : "bg-zinc-50/70",
         )}
       >
-        <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-2.5 overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable] [-ms-overflow-style:none] [scrollbar-width:thin]">
+        <div
+          ref={cardListRef}
+          className="flex min-h-0 flex-1 touch-pan-y flex-col gap-2.5 overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable] [-ms-overflow-style:none] [scrollbar-width:thin]"
+        >
           {leads.map((lead, index) => (
             <LeadCard
               key={lead.id}
@@ -1743,7 +1779,12 @@ export function CRMPage() {
   const [staffUsers, setStaffUsers] = useState<User[]>([]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    // Um gesto curto deve rolar a etapa. No toque, o drag so comeca apos
+    // pressionar por alguns instantes sem ultrapassar a tolerancia de movimento.
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 8 },
+    }),
   );
 
   const vendors = useMemo(
