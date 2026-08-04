@@ -23,21 +23,26 @@ export class MetaLeadIngestionController {
 
   @Post('auto')
   @ApiOperation({
-    summary: 'Resolve o cliente pelo formulario Meta e importa os leads',
+    summary: 'Resolve e roteia leads pelo formulario Meta',
     description:
       'Endpoint global para o receptor de webhooks Meta. Nao aceita client_id: ' +
       'cada formulario_id e resolvido pelas selecoes salvas no painel do gestor. ' +
-      'Formularios desconhecidos ou vinculados a mais de um cliente sao rejeitados.',
+      'O mapeamento salvo define cliente, evento, pipeline e as etapas de ligacao/WhatsApp. ' +
+      'Todo o lote, incluindo deduplicacao e historico CRM, e persistido em uma unica transacao.',
   })
   @ApiResponse({
     status: 201,
-    description: 'Cliente resolvido e lote importado com deduplicacao.',
+    description: 'Lote deduplicado, vinculado e roteado de forma transacional.',
   })
   @ApiResponse({ status: 401, description: 'Chave de ingestao invalida.' })
   @ApiResponse({ status: 403, description: 'Formulario nao vinculado.' })
   @ApiResponse({
     status: 409,
-    description: 'Formulario vinculado a mais de um cliente.',
+    description: 'Formulario ambiguo ou mapeamento inconsistente.',
+  })
+  @ApiResponse({
+    status: 422,
+    description: 'Formulario selecionado ainda nao possui regra de roteamento.',
   })
   create(
     @Body(

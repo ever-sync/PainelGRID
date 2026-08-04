@@ -3,8 +3,10 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppointmentStatus, ConfirmationStatus, Lead, LeadSource, Prisma } from '@prisma/client';
@@ -142,6 +144,37 @@ type FacebookLeadMetadata = {
   preferredContactChannel: string | null;
   sourceCreatedAt: Date | null;
   sourcePayload: Prisma.InputJsonValue;
+};
+
+type AutomaticFacebookRouting = {
+  formId: string;
+  formName: string;
+  clientId: string;
+  eventId: string;
+  eventName: string;
+  pipelineId: string;
+  pipelineCode: string;
+  callStage: { id: string; code: string; name: string };
+  whatsappStage: { id: string; code: string; name: string };
+  clientSettings: unknown;
+};
+
+type AutomaticFacebookPreparedLead = {
+  payload: FacebookLeadPayloadDto;
+  routing: AutomaticFacebookRouting;
+  channel: 'ligacao' | 'whatsapp';
+  targetStage: { id: string; code: string; name: string };
+  mappedStatus: ConfirmationStatus | null;
+  metadata: FacebookLeadMetadata;
+};
+
+type AutomaticFacebookTransactionItem = {
+  lead: LeadWithRelations;
+  alreadyExisted: boolean;
+  stageMoved: boolean;
+  fromStageId: string | null;
+  fromStageCode: string | null;
+  prepared: AutomaticFacebookPreparedLead;
 };
 
 const CHECKIN_VOUCHER_TTL_SEC = 90 * 24 * 60 * 60;
@@ -1503,8 +1536,9 @@ export class LeadsService {
    * Entrada global para webhooks Meta. O cliente nunca vem do request: ele e
    * resolvido exclusivamente pelo formulario selecionado no painel do gestor.
    *
-   * Toda a resolucao acontece antes da primeira escrita para evitar importar
-   * parte de um lote quando existe formulario desconhecido ou ambiguo.
+   * Toda a resolucao acontece antes da primeira escrita. Depois disso, o lote
+   * inteiro e criado/atualizado dentro de uma unica transacao, incluindo o
+   * vinculo ao evento, pipeline, etapa e o historico CRM.
    */
   async createFacebookLeadsAutomatically(payloads: FacebookLeadPayloadDto[]) {
     if (payloads.length === 0) {
@@ -1514,9 +1548,7 @@ export class LeadsService {
       throw new BadRequestException('Cada lote pode conter no maximo 100 leads');
     }
 
-    const formIds = [
-      ...new Set(payloads.map((payload) => payload.formulario_id.trim())),
-    ];
+    const formIds = [...new Set(payloads.map((payload) => payload.formulario_id.trim()))];
     const selectedForms = await this.prisma.metaAssetSelection.findMany({
       where: {
         form_id: { in: formIds },
@@ -1538,11 +1570,7 @@ export class LeadsService {
     for (const selection of selectedForms) {
       if (!selection.form_id) continue;
       const entries = selectionsByForm.get(selection.form_id) ?? [];
-      if (
-        !entries.some(
-          (entry) => entry.clientId === selection.meta_connection.client_id,
-        )
-      ) {
+      if (!entries.some((entry) => entry.clientId === selection.meta_connection.client_id)) {
         entries.push({
           clientId: selection.meta_connection.client_id,
           formName: selection.form_name,
@@ -1569,7 +1597,7 @@ export class LeadsService {
       );
     }
 
-    const resolvedForms = formIds.map((formId) => {
+    const resolvedSelections = formIds.map((formId) => {
       const selection = selectionsByForm.get(formId)![0];
       return {
         id: formId,
@@ -1577,38 +1605,521 @@ export class LeadsService {
         client_id: selection.clientId,
       };
     });
-    const clientIdByForm = new Map(
-      resolvedForms.map((form) => [form.id, form.client_id]),
-    );
-    const payloadsByClient = new Map<string, FacebookLeadPayloadDto[]>();
-    for (const payload of payloads) {
-      const clientId = clientIdByForm.get(payload.formulario_id.trim())!;
-      const clientPayloads = payloadsByClient.get(clientId) ?? [];
-      clientPayloads.push(payload);
-      payloadsByClient.set(clientId, clientPayloads);
+
+    const routingRows = await this.prisma.metaLeadRoutingRule.findMany({
+      where: { form_id: { in: formIds } },
+      select: {
+        form_id: true,
+        form_name: true,
+        client_id: true,
+        event_id: true,
+        crm_pipeline_id: true,
+        call_stage_id: true,
+        whatsapp_stage_id: true,
+        client: { select: { settings: true } },
+        event: {
+          select: {
+            name: true,
+            participants: { select: { client_id: true } },
+          },
+        },
+        crm_pipeline: {
+          select: { client_id: true, code: true, is_active: true },
+        },
+        call_stage: {
+          select: {
+            id: true,
+            client_id: true,
+            pipeline_id: true,
+            code: true,
+            name: true,
+          },
+        },
+        whatsapp_stage: {
+          select: {
+            id: true,
+            client_id: true,
+            pipeline_id: true,
+            code: true,
+            name: true,
+          },
+        },
+      },
+    });
+    const routingRowByForm = new Map(routingRows.map((rule) => [rule.form_id, rule]));
+    const missingRoutingFormIds = formIds.filter((formId) => !routingRowByForm.has(formId));
+    if (missingRoutingFormIds.length > 0) {
+      throw new UnprocessableEntityException(
+        `Formulario Meta sem mapeamento de evento e etapas: ${missingRoutingFormIds.join(', ')}`,
+      );
     }
 
-    const items: Array<
-      ReturnType<typeof this.toResponse> & { already_existed: boolean }
-    > = [];
-    let created = 0;
-    let alreadyExisted = 0;
-    for (const [clientId, clientPayloads] of payloadsByClient) {
-      const result = await this.createFacebookLeadsForIntegration(
-        clientId,
-        clientPayloads,
+    const selectionByForm = new Map(resolvedSelections.map((form) => [form.id, form]));
+    const routingByForm = new Map<string, AutomaticFacebookRouting>();
+    for (const formId of formIds) {
+      const selection = selectionByForm.get(formId)!;
+      const rule = routingRowByForm.get(formId)!;
+      const eventBelongsToClient = rule.event.participants.some(
+        (participant) => participant.client_id === rule.client_id,
       );
-      created += result.created;
-      alreadyExisted += result.already_existed;
-      items.push(...result.items);
+      const pipelineIsValid =
+        rule.crm_pipeline.is_active && rule.crm_pipeline.client_id === rule.client_id;
+      const callStageIsValid =
+        rule.call_stage_id === rule.call_stage.id &&
+        rule.call_stage.client_id === rule.client_id &&
+        rule.call_stage.pipeline_id === rule.crm_pipeline_id;
+      const whatsappStageIsValid =
+        rule.whatsapp_stage_id === rule.whatsapp_stage.id &&
+        rule.whatsapp_stage.client_id === rule.client_id &&
+        rule.whatsapp_stage.pipeline_id === rule.crm_pipeline_id;
+
+      if (
+        rule.client_id !== selection.client_id ||
+        !eventBelongsToClient ||
+        !pipelineIsValid ||
+        !callStageIsValid ||
+        !whatsappStageIsValid
+      ) {
+        throw new ConflictException(`Mapeamento Meta inconsistente para o formulario: ${formId}`);
+      }
+
+      routingByForm.set(formId, {
+        formId,
+        formName: rule.form_name ?? selection.name,
+        clientId: rule.client_id,
+        eventId: rule.event_id,
+        eventName: rule.event.name,
+        pipelineId: rule.crm_pipeline_id,
+        pipelineCode: rule.crm_pipeline.code,
+        callStage: {
+          id: rule.call_stage.id,
+          code: rule.call_stage.code,
+          name: rule.call_stage.name,
+        },
+        whatsappStage: {
+          id: rule.whatsapp_stage.id,
+          code: rule.whatsapp_stage.code,
+          name: rule.whatsapp_stage.name,
+        },
+        clientSettings: rule.client.settings,
+      });
     }
+
+    // Canal, datas e metadados sao validados antes de abrir a transacao. Um
+    // item invalido nunca deixa os itens anteriores gravados parcialmente.
+    const prepared = payloads.map((payload): AutomaticFacebookPreparedLead => {
+      const routing = routingByForm.get(payload.formulario_id.trim())!;
+      const channel = this.normalizeFacebookContactChannel(payload.preferencia_atendimento);
+      const targetStage = channel === 'ligacao' ? routing.callStage : routing.whatsappStage;
+      const sourceCreatedAt = payload.criado_em ? new Date(payload.criado_em) : null;
+      if (sourceCreatedAt && Number.isNaN(sourceCreatedAt.getTime())) {
+        throw new BadRequestException(`criado_em invalido para o lead Meta: ${payload.lead_id}`);
+      }
+
+      return {
+        payload,
+        routing,
+        channel,
+        targetStage,
+        mappedStatus: resolveConfirmationStatusForStage(routing.clientSettings, targetStage.id),
+        metadata: {
+          externalRef: payload.lead_id,
+          facebookLeadId: payload.lead_id,
+          facebookFormId: payload.formulario_id,
+          facebookAdId: payload.anuncio_id || null,
+          facebookAdName: payload.anuncio || null,
+          facebookCampaignId: payload.campanha_id || null,
+          facebookCampaignName: payload.campanha || null,
+          preferredContactChannel: channel,
+          sourceCreatedAt,
+          sourcePayload: JSON.parse(JSON.stringify(payload)) as Prisma.InputJsonValue,
+        },
+      };
+    });
+
+    const integrationActorId = this.config
+      .get<string>('LEADFLOW_INTEGRATION_ACTOR_USER_ID')
+      ?.trim();
+    if (!integrationActorId) {
+      throw new InternalServerErrorException(
+        'Integracao externa nao configurada (LEADFLOW_INTEGRATION_ACTOR_USER_ID)',
+      );
+    }
+    const integrationActor = await this.prisma.user.findUnique({
+      where: { id: integrationActorId },
+      select: { id: true },
+    });
+    if (!integrationActor) {
+      throw new InternalServerErrorException('Usuario tecnico da integracao nao encontrado');
+    }
+
+    const runTransaction = () =>
+      this.prisma.$transaction(async (tx) => {
+        const transactionItems: AutomaticFacebookTransactionItem[] = [];
+        for (const item of prepared) {
+          transactionItems.push(
+            await this.upsertAutomaticFacebookLeadWithRouting(tx, item, integrationActor.id),
+          );
+        }
+        return transactionItems;
+      });
+
+    let transactionItems: AutomaticFacebookTransactionItem[];
+    try {
+      transactionItems = await runTransaction();
+    } catch (error) {
+      // Uma entrega concorrente pode ganhar a restricao unica entre o lookup e
+      // o create. A primeira transacao e revertida por inteiro; uma repeticao
+      // passa pela deduplicacao e continua atomica.
+      if (
+        isLeadPhoneUniqueViolation(error) ||
+        isLeadEmailUniqueViolation(error) ||
+        isLeadExternalRefUniqueViolation(error)
+      ) {
+        transactionItems = await runTransaction();
+      } else {
+        throw error;
+      }
+    }
+
+    for (const item of transactionItems) {
+      const { lead, prepared: preparedItem } = item;
+      this.realtimeEvents.emitLeadUpdated(lead.client_id, {
+        client_id: lead.client_id,
+        lead_id: lead.id,
+        action: item.alreadyExisted ? 'updated' : 'created',
+        source: 'facebook_lead_ads',
+        updated_at: lead.updated_at.toISOString(),
+      });
+      if (!item.alreadyExisted) {
+        void this.leadTimeline.record({
+          clientId: lead.client_id,
+          leadId: lead.id,
+          eventType: 'created',
+          origin: 'integration',
+          actorId: integrationActor.id,
+          actorLabel: 'Integração Meta',
+          metadata: {
+            form_id: preparedItem.routing.formId,
+            event_id: preparedItem.routing.eventId,
+            channel: preparedItem.channel,
+          },
+        });
+      }
+      if (item.stageMoved) {
+        void this.leadTimeline.record({
+          clientId: lead.client_id,
+          leadId: lead.id,
+          eventType: 'stage_moved',
+          origin: 'integration',
+          fromStageId: item.fromStageId,
+          toStageId: preparedItem.targetStage.id,
+          fromValue: item.fromStageCode,
+          toValue: preparedItem.targetStage.code,
+          actorId: integrationActor.id,
+          actorLabel: 'Integração Meta',
+          notes: 'Roteamento automático pelo formulário Meta',
+        });
+      }
+    }
+
+    const created = transactionItems.filter((item) => !item.alreadyExisted).length;
+    const alreadyExisted = transactionItems.length - created;
+    const items = transactionItems.map((item) => ({
+      ...this.toResponse(item.lead),
+      already_existed: item.alreadyExisted,
+      routing_applied: {
+        form_id: item.prepared.routing.formId,
+        event_id: item.prepared.routing.eventId,
+        event_name: item.prepared.routing.eventName,
+        crm_pipeline_id: item.prepared.routing.pipelineId,
+        crm_pipeline_code: item.prepared.routing.pipelineCode,
+        crm_stage_id: item.prepared.targetStage.id,
+        crm_stage_code: item.prepared.targetStage.code,
+        channel: item.prepared.channel,
+        stage_moved: item.stageMoved,
+      },
+    }));
 
     return {
       received: payloads.length,
       created,
       already_existed: alreadyExisted,
-      resolved_forms: resolvedForms,
+      transaction: 'committed',
+      resolved_forms: resolvedSelections.map((form) => {
+        const routing = routingByForm.get(form.id)!;
+        return {
+          ...form,
+          event_id: routing.eventId,
+          event_name: routing.eventName,
+          crm_pipeline_id: routing.pipelineId,
+          crm_pipeline_code: routing.pipelineCode,
+          call_stage_id: routing.callStage.id,
+          whatsapp_stage_id: routing.whatsappStage.id,
+        };
+      }),
       items,
+    };
+  }
+
+  private normalizeFacebookContactChannel(
+    value: string | null | undefined,
+  ): 'ligacao' | 'whatsapp' {
+    const normalized = String(value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase();
+
+    if (normalized.includes('whatsapp')) return 'whatsapp';
+    if (normalized.includes('ligacao') || normalized.includes('telefone')) {
+      return 'ligacao';
+    }
+    throw new BadRequestException(`Canal de atendimento invalido: ${normalized || 'vazio'}`);
+  }
+
+  private async findActiveLeadByPhoneForAutomaticImport(
+    tx: Prisma.TransactionClient,
+    clientId: string,
+    phone?: string | null,
+    excludeLeadId?: string,
+  ): Promise<LeadWithRelations | null> {
+    const candidates = buildLeadPhoneCandidates(phone);
+    if (!candidates) return null;
+
+    const exact = await tx.lead.findFirst({
+      where: {
+        client_id: clientId,
+        deleted_at: null,
+        ...(excludeLeadId ? { id: { not: excludeLeadId } } : {}),
+        OR: candidates.candidates.map((candidate) => ({ phone: candidate })),
+      },
+      select: leadSelect,
+    });
+    if (exact) return exact as LeadWithRelations;
+
+    const suffixes = new Set<string>();
+    if (candidates.digits.length >= 10) suffixes.add(candidates.digits.slice(-10));
+    if (candidates.digits.length >= 11) suffixes.add(candidates.digits.slice(-11));
+    if (candidates.digits.length >= 12) suffixes.add(candidates.digits.slice(-12));
+    if (suffixes.size === 0) return null;
+
+    const bySuffix = await tx.lead.findFirst({
+      where: {
+        client_id: clientId,
+        deleted_at: null,
+        ...(excludeLeadId ? { id: { not: excludeLeadId } } : {}),
+        OR: Array.from(suffixes).map((suffix) => ({
+          phone: { endsWith: suffix },
+        })),
+      },
+      select: leadSelect,
+    });
+    return bySuffix as LeadWithRelations | null;
+  }
+
+  private async findActiveLeadByEmailForAutomaticImport(
+    tx: Prisma.TransactionClient,
+    clientId: string,
+    email?: string | null,
+    excludeLeadId?: string,
+  ): Promise<LeadWithRelations | null> {
+    const normalized = email?.toLowerCase().trim();
+    if (!normalized) return null;
+    const lead = await tx.lead.findFirst({
+      where: {
+        client_id: clientId,
+        email: normalized,
+        deleted_at: null,
+        ...(excludeLeadId ? { id: { not: excludeLeadId } } : {}),
+      },
+      select: leadSelect,
+    });
+    return lead as LeadWithRelations | null;
+  }
+
+  private async upsertAutomaticFacebookLeadWithRouting(
+    tx: Prisma.TransactionClient,
+    prepared: AutomaticFacebookPreparedLead,
+    integrationActorId: string,
+  ): Promise<AutomaticFacebookTransactionItem> {
+    const { payload, routing, targetStage, metadata } = prepared;
+    const phone = payload.telefone?.trim()
+      ? normalizeBrazilianPhone(payload.telefone.trim())
+      : null;
+    const email = payload.email?.toLowerCase().trim() || null;
+
+    let existing = await this.findActiveLeadByPhoneForAutomaticImport(tx, routing.clientId, phone);
+    if (!existing) {
+      existing = (await tx.lead.findFirst({
+        where: {
+          client_id: routing.clientId,
+          deleted_at: null,
+          OR: [
+            { external_ref: metadata.externalRef },
+            { facebook_lead_id: metadata.facebookLeadId },
+          ],
+        },
+        select: leadSelect,
+      })) as LeadWithRelations | null;
+    }
+    if (!existing) {
+      existing = await this.findActiveLeadByEmailForAutomaticImport(tx, routing.clientId, email);
+    }
+    if (!existing) {
+      const archived = (await tx.lead.findFirst({
+        where: {
+          client_id: routing.clientId,
+          deleted_at: { not: null },
+          OR: [
+            { external_ref: metadata.externalRef },
+            { facebook_lead_id: metadata.facebookLeadId },
+          ],
+        },
+        select: leadSelect,
+      })) as LeadWithRelations | null;
+      if (archived) {
+        existing =
+          (await this.findActiveLeadByPhoneForAutomaticImport(
+            tx,
+            routing.clientId,
+            phone ?? archived.phone,
+            archived.id,
+          )) ??
+          (await this.findActiveLeadByEmailForAutomaticImport(
+            tx,
+            routing.clientId,
+            email ?? archived.email,
+            archived.id,
+          )) ??
+          archived;
+      }
+    }
+
+    if (!existing) {
+      const lead = (await tx.lead.create({
+        data: {
+          client_id: routing.clientId,
+          name: payload.nome.trim(),
+          email,
+          phone,
+          source: LeadSource.facebook_ads,
+          event_interest_id: routing.eventId,
+          crm_pipeline_id: routing.pipelineId,
+          crm_stage_id: targetStage.id,
+          ...(prepared.mappedStatus ? { confirmation_status: prepared.mappedStatus } : {}),
+          external_ref: metadata.externalRef,
+          facebook_lead_id: metadata.facebookLeadId,
+          facebook_form_id: metadata.facebookFormId,
+          facebook_ad_id: metadata.facebookAdId,
+          facebook_ad_name: metadata.facebookAdName,
+          facebook_campaign_id: metadata.facebookCampaignId,
+          facebook_campaign_name: metadata.facebookCampaignName,
+          preferred_contact_channel: metadata.preferredContactChannel,
+          source_created_at: metadata.sourceCreatedAt,
+          source_payload: metadata.sourcePayload,
+        },
+        select: leadSelect,
+      })) as LeadWithRelations;
+
+      await tx.crmHistory.create({
+        data: {
+          lead_id: lead.id,
+          from_stage_id: null,
+          to_stage_id: targetStage.id,
+          changed_by_user_id: integrationActorId,
+          notes: `Lead Meta criado e roteado para ${targetStage.name}`,
+        },
+      });
+
+      return {
+        lead,
+        alreadyExisted: false,
+        stageMoved: true,
+        fromStageId: null,
+        fromStageCode: null,
+        prepared,
+      };
+    }
+
+    const patch: Prisma.LeadUncheckedUpdateInput = {};
+    const sameDelivery =
+      existing.external_ref === metadata.externalRef ||
+      existing.facebook_lead_id === metadata.facebookLeadId;
+    const shouldReplaceRouting = Boolean(existing.deleted_at) || !sameDelivery;
+    const routingIsIncomplete =
+      !existing.event_interest_id || !existing.crm_pipeline_id || !existing.crm_stage_id;
+    const shouldApplyRouting = shouldReplaceRouting || routingIsIncomplete;
+
+    if (existing.deleted_at) patch.deleted_at = null;
+    if (email && !existing.email) {
+      const emailOwner = await this.findActiveLeadByEmailForAutomaticImport(
+        tx,
+        routing.clientId,
+        email,
+        existing.id,
+      );
+      if (!emailOwner) patch.email = email;
+    }
+    if (shouldApplyRouting) {
+      patch.event_interest_id = routing.eventId;
+      patch.crm_pipeline_id = routing.pipelineId;
+      patch.crm_stage_id = targetStage.id;
+      if (prepared.mappedStatus) {
+        patch.confirmation_status = prepared.mappedStatus;
+      }
+    }
+    if (!existing.external_ref) patch.external_ref = metadata.externalRef;
+
+    const incomingOccurredAt = metadata.sourceCreatedAt?.getTime() ?? null;
+    const currentOccurredAt = existing.source_created_at?.getTime() ?? null;
+    const isLatestAttribution =
+      incomingOccurredAt === null ||
+      currentOccurredAt === null ||
+      incomingOccurredAt >= currentOccurredAt;
+    if (isLatestAttribution) {
+      patch.facebook_lead_id = metadata.facebookLeadId;
+      patch.facebook_form_id = metadata.facebookFormId;
+      patch.facebook_ad_id = metadata.facebookAdId;
+      patch.facebook_ad_name = metadata.facebookAdName;
+      patch.facebook_campaign_id = metadata.facebookCampaignId;
+      patch.facebook_campaign_name = metadata.facebookCampaignName;
+      patch.preferred_contact_channel = metadata.preferredContactChannel;
+      patch.source_created_at = metadata.sourceCreatedAt;
+      patch.source_payload = metadata.sourcePayload;
+    }
+
+    const fromStageId = existing.crm_stage_id;
+    const fromStageCode = existing.crm_stage?.code ?? null;
+    const stageMoved = shouldApplyRouting && fromStageId !== targetStage.id;
+    const lead =
+      Object.keys(patch).length > 0
+        ? ((await tx.lead.update({
+            where: { id: existing.id },
+            data: patch,
+            select: leadSelect,
+          })) as LeadWithRelations)
+        : existing;
+
+    if (stageMoved) {
+      await tx.crmHistory.create({
+        data: {
+          lead_id: existing.id,
+          from_stage_id: fromStageId,
+          to_stage_id: targetStage.id,
+          changed_by_user_id: integrationActorId,
+          notes: `Lead Meta roteado para ${targetStage.name}`,
+        },
+      });
+    }
+
+    return {
+      lead,
+      alreadyExisted: true,
+      stageMoved,
+      fromStageId,
+      fromStageCode,
+      prepared,
     };
   }
 

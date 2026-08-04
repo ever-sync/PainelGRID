@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfirmationStatus, LeadSource } from '@prisma/client';
 import { Role } from '../../common/types';
@@ -27,14 +28,22 @@ describe('LeadsService', () => {
     crmPipeline: { findFirst: jest.Mock };
     crmHistory: { create: jest.Mock };
     event: { findFirst: jest.Mock };
-    user: { findFirst: jest.Mock };
+    user: { findFirst: jest.Mock; findUnique: jest.Mock };
     salesTeamMember: { findFirst: jest.Mock };
     metaAssetSelection: { findMany: jest.Mock };
+    metaLeadRoutingRule: { findMany: jest.Mock };
+    $transaction: jest.Mock;
     $queryRaw: jest.Mock;
   };
   let clientsService: {
     assertGestorOwnsClient: jest.Mock;
   };
+  let realtimeEvents: {
+    emitLeadCheckin: jest.Mock;
+    emitLeadUpdated: jest.Mock;
+    emitVendorCalled: jest.Mock;
+  };
+  let leadTimeline: { record: jest.Mock; originFromSource: jest.Mock };
   let service: LeadsService;
 
   beforeEach(() => {
@@ -50,9 +59,11 @@ describe('LeadsService', () => {
       crmPipeline: { findFirst: jest.fn() },
       crmHistory: { create: jest.fn() },
       event: { findFirst: jest.fn() },
-      user: { findFirst: jest.fn() },
+      user: { findFirst: jest.fn(), findUnique: jest.fn() },
       salesTeamMember: { findFirst: jest.fn() },
       metaAssetSelection: { findMany: jest.fn() },
+      metaLeadRoutingRule: { findMany: jest.fn() },
+      $transaction: jest.fn(),
       $queryRaw: jest.fn(),
     };
     prisma.lead.findFirst.mockResolvedValue(null);
@@ -63,34 +74,50 @@ describe('LeadsService', () => {
     prisma.crmPipeline.findFirst.mockResolvedValue(null);
     prisma.crmHistory.create.mockResolvedValue({ id: 'hist-1' });
     prisma.event.findFirst.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue({ id: gestorId });
     prisma.metaAssetSelection.findMany.mockResolvedValue([
       {
         form_id: '27515534804767924',
         form_name: 'Form - OFICIAL-copy',
       },
     ]);
+    prisma.metaLeadRoutingRule.findMany.mockResolvedValue([]);
+    prisma.$transaction.mockImplementation(async (callback) => callback(prisma));
     prisma.$queryRaw.mockResolvedValue([]);
     clientsService = {
       assertGestorOwnsClient: jest.fn(),
+    };
+    realtimeEvents = {
+      emitLeadCheckin: jest.fn(),
+      emitLeadUpdated: jest.fn(),
+      emitVendorCalled: jest.fn(),
+    };
+    leadTimeline = {
+      record: jest.fn().mockResolvedValue(undefined),
+      originFromSource: jest.fn(() => 'crm'),
     };
 
     service = new LeadsService(
       prisma as never,
       clientsService as never,
-      { get: jest.fn() } as never,
+      {
+        get: jest.fn((key: string, fallback?: unknown) =>
+          key === 'LEADFLOW_INTEGRATION_ACTOR_USER_ID' ? gestorId : fallback,
+        ),
+      } as never,
       // `closeAttendance` pontua a venda por fora da transacao, via `award`, e
       // encadeia `.catch` no retorno — o mock precisa devolver promise.
       {
         awardWithTx: jest.fn(),
         award: jest.fn().mockResolvedValue(undefined),
       } as never,
-      { emitLeadCheckin: jest.fn(), emitLeadUpdated: jest.fn(), emitVendorCalled: jest.fn() } as never,
+      realtimeEvents as never,
       { dispatch: jest.fn() } as never,
       {
         sendClientWhatsappMessage: jest.fn(),
         sendClientWhatsappMediaMessage: jest.fn(),
       } as never,
-      { record: jest.fn(), originFromSource: jest.fn(() => 'crm') } as never,
+      leadTimeline as never,
       {
         client: {
           set: jest.fn().mockResolvedValue('OK'),
@@ -775,7 +802,96 @@ describe('LeadsService', () => {
     expect(prisma.lead.create).not.toHaveBeenCalled();
   });
 
-  it('resolve automaticamente cada cliente pelo formulario antes de importar', async () => {
+  const buildAutomaticRoutingRule = (formId: string, ownerClientId: string, suffix: string) => ({
+    form_id: formId,
+    form_name: `Formulario ${suffix}`,
+    client_id: ownerClientId,
+    event_id: `event-${suffix}`,
+    crm_pipeline_id: `pipeline-${suffix}`,
+    call_stage_id: `stage-call-${suffix}`,
+    whatsapp_stage_id: `stage-whatsapp-${suffix}`,
+    client: {
+      settings: {
+        crm_stage_status_rules: [
+          {
+            status: ConfirmationStatus.pending,
+            stage_id: `stage-call-${suffix}`,
+          },
+        ],
+      },
+    },
+    event: {
+      name: `Evento ${suffix}`,
+      participants: [{ client_id: ownerClientId }],
+    },
+    crm_pipeline: {
+      client_id: ownerClientId,
+      code: `PIPELINE_${suffix}`,
+      is_active: true,
+    },
+    call_stage: {
+      id: `stage-call-${suffix}`,
+      client_id: ownerClientId,
+      pipeline_id: `pipeline-${suffix}`,
+      code: `CALL_${suffix}`,
+      name: `Ligacao ${suffix}`,
+    },
+    whatsapp_stage: {
+      id: `stage-whatsapp-${suffix}`,
+      client_id: ownerClientId,
+      pipeline_id: `pipeline-${suffix}`,
+      code: `WHATSAPP_${suffix}`,
+      name: `WhatsApp ${suffix}`,
+    },
+  });
+
+  const buildAutomaticLead = (
+    id: string,
+    data: Record<string, unknown>,
+    suffix: string,
+  ) => {
+    const stageId = typeof data.crm_stage_id === 'string' ? data.crm_stage_id : null;
+    const pipelineId =
+      typeof data.crm_pipeline_id === 'string' ? data.crm_pipeline_id : null;
+    const interestEventId =
+      typeof data.event_interest_id === 'string' ? data.event_interest_id : null;
+
+    return {
+      ...baseExistingLead,
+      id,
+      source: LeadSource.facebook_ads,
+      external_ref: null,
+      facebook_form_id: null,
+      facebook_ad_id: null,
+      facebook_ad_name: null,
+      facebook_campaign_id: null,
+      facebook_campaign_name: null,
+      preferred_contact_channel: null,
+      source_created_at: null,
+      source_payload: null,
+      ...data,
+      crm_stage: stageId
+        ? {
+            id: stageId,
+            code: stageId.includes('whatsapp')
+              ? `WHATSAPP_${suffix}`
+              : `CALL_${suffix}`,
+            name: stageId.includes('whatsapp')
+              ? `WhatsApp ${suffix}`
+              : `Ligacao ${suffix}`,
+          }
+        : null,
+      crm_pipeline: pipelineId
+        ? { id: pipelineId, code: `PIPELINE_${suffix}` }
+        : null,
+      event_interest: interestEventId
+        ? { id: interestEventId, name: `Evento ${suffix}` }
+        : null,
+      updated_at: new Date('2026-08-03T19:00:00.000Z'),
+    };
+  };
+
+  it('resolve clientes e roteia WhatsApp/ligacao em uma unica transacao', async () => {
     prisma.metaAssetSelection.findMany.mockResolvedValueOnce([
       {
         form_id: 'form-cliente-a',
@@ -788,72 +904,138 @@ describe('LeadsService', () => {
         meta_connection: { client_id: partnerClientId },
       },
     ]);
-    const importSpy = jest
-      .spyOn(service, 'createFacebookLeadsForIntegration')
-      .mockResolvedValueOnce({
-        received: 1,
-        created: 1,
-        already_existed: 0,
-        validated_forms: [],
-        items: [{ id: 'lead-a', already_existed: false }],
-      } as never)
-      .mockResolvedValueOnce({
-        received: 1,
-        created: 0,
-        already_existed: 1,
-        validated_forms: [],
-        items: [{ id: 'lead-b', already_existed: true }],
-      } as never);
+    prisma.metaLeadRoutingRule.findMany.mockResolvedValueOnce([
+      buildAutomaticRoutingRule('form-cliente-a', clientId, 'A'),
+      buildAutomaticRoutingRule('form-cliente-b', partnerClientId, 'B'),
+    ]);
+
+    const existingPartnerLead = buildAutomaticLead(
+      'lead-b',
+      {
+        client_id: partnerClientId,
+        name: 'Lead B',
+        phone: '+5511988888888',
+        external_ref: 'meta-b-anterior',
+        facebook_lead_id: 'meta-b-anterior',
+        event_interest_id: 'event-anterior-b',
+        crm_pipeline_id: 'pipeline-anterior-b',
+        crm_stage_id: 'stage-whatsapp-anterior-b',
+      },
+      'B',
+    );
+    prisma.lead.findFirst.mockImplementation(async ({ where }) => {
+      const conditions = Array.isArray(where?.OR) ? where.OR : [];
+      const isPhoneLookup = conditions.some(
+        (condition: Record<string, unknown>) => 'phone' in condition,
+      );
+      if (where?.client_id === partnerClientId && isPhoneLookup) {
+        return existingPartnerLead;
+      }
+      return null;
+    });
+    prisma.lead.create.mockImplementation(async ({ data }) =>
+      buildAutomaticLead('lead-a', data, 'A'),
+    );
+    prisma.lead.update.mockImplementation(async ({ data }) =>
+      buildAutomaticLead('lead-b', { ...existingPartnerLead, ...data }, 'B'),
+    );
 
     const result = await service.createFacebookLeadsAutomatically([
       {
         lead_id: 'meta-a',
         nome: 'Lead A',
         formulario_id: 'form-cliente-a',
+        preferencia_atendimento: 'WhatsApp',
       },
       {
         lead_id: 'meta-b',
         nome: 'Lead B',
+        telefone: '11988888888',
         formulario_id: 'form-cliente-b',
+        preferencia_atendimento: 'ligacao',
       },
     ]);
 
-    expect(importSpy).toHaveBeenNthCalledWith(
-      1,
-      clientId,
-      [expect.objectContaining({ lead_id: 'meta-a' })],
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.lead.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          client_id: clientId,
+          event_interest_id: 'event-A',
+          crm_pipeline_id: 'pipeline-A',
+          crm_stage_id: 'stage-whatsapp-A',
+          preferred_contact_channel: 'whatsapp',
+        }),
+      }),
     );
-    expect(importSpy).toHaveBeenNthCalledWith(
-      2,
-      partnerClientId,
-      [expect.objectContaining({ lead_id: 'meta-b' })],
+    expect(prisma.lead.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'lead-b' },
+        data: expect.objectContaining({
+          event_interest_id: 'event-B',
+          crm_pipeline_id: 'pipeline-B',
+          crm_stage_id: 'stage-call-B',
+          preferred_contact_channel: 'ligacao',
+          confirmation_status: ConfirmationStatus.pending,
+        }),
+      }),
     );
+    expect(prisma.crmHistory.create).toHaveBeenCalledTimes(2);
     expect(result).toMatchObject({
       received: 2,
       created: 1,
       already_existed: 1,
+      transaction: 'committed',
       resolved_forms: [
         {
           id: 'form-cliente-a',
           name: 'Formulario Cliente A',
           client_id: clientId,
+          event_id: 'event-A',
+          whatsapp_stage_id: 'stage-whatsapp-A',
         },
         {
           id: 'form-cliente-b',
           name: 'Formulario Cliente B',
           client_id: partnerClientId,
+          event_id: 'event-B',
+          call_stage_id: 'stage-call-B',
         },
       ],
     });
+    expect(result.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'lead-a',
+          already_existed: false,
+          routing_applied: expect.objectContaining({
+            channel: 'whatsapp',
+            crm_stage_id: 'stage-whatsapp-A',
+            stage_moved: true,
+          }),
+        }),
+        expect.objectContaining({
+          id: 'lead-b',
+          already_existed: true,
+          routing_applied: expect.objectContaining({
+            channel: 'ligacao',
+            crm_stage_id: 'stage-call-B',
+            stage_moved: true,
+          }),
+        }),
+      ]),
+    );
+    expect(realtimeEvents.emitLeadUpdated).toHaveBeenCalledTimes(2);
+    expect(leadTimeline.record).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'created', leadId: 'lead-a' }),
+    );
+    expect(leadTimeline.record).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'stage_moved', leadId: 'lead-b' }),
+    );
   });
 
   it('bloqueia o lote automatico inteiro quando o formulario e desconhecido', async () => {
     prisma.metaAssetSelection.findMany.mockResolvedValueOnce([]);
-    const importSpy = jest.spyOn(
-      service,
-      'createFacebookLeadsForIntegration',
-    );
-
     await expect(
       service.createFacebookLeadsAutomatically([
         {
@@ -868,7 +1050,8 @@ describe('LeadsService', () => {
       ),
     );
 
-    expect(importSpy).not.toHaveBeenCalled();
+    expect(prisma.metaLeadRoutingRule.findMany).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('bloqueia formulario vinculado a clientes diferentes', async () => {
@@ -884,11 +1067,6 @@ describe('LeadsService', () => {
         meta_connection: { client_id: partnerClientId },
       },
     ]);
-    const importSpy = jest.spyOn(
-      service,
-      'createFacebookLeadsForIntegration',
-    );
-
     await expect(
       service.createFacebookLeadsAutomatically([
         {
@@ -898,12 +1076,125 @@ describe('LeadsService', () => {
         },
       ]),
     ).rejects.toThrow(
-      new ConflictException(
-        'Formulario Meta vinculado a mais de um cliente: form-duplicado',
-      ),
+      new ConflictException('Formulario Meta vinculado a mais de um cliente: form-duplicado'),
     );
 
-    expect(importSpy).not.toHaveBeenCalled();
+    expect(prisma.metaLeadRoutingRule.findMany).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejeita formulario selecionado sem regra de roteamento antes da transacao', async () => {
+    prisma.metaAssetSelection.findMany.mockResolvedValueOnce([
+      {
+        form_id: 'form-sem-regra',
+        form_name: 'Formulario sem regra',
+        meta_connection: { client_id: clientId },
+      },
+    ]);
+    prisma.metaLeadRoutingRule.findMany.mockResolvedValueOnce([]);
+
+    await expect(
+      service.createFacebookLeadsAutomatically([
+        {
+          lead_id: 'meta-sem-regra',
+          nome: 'Lead sem regra',
+          formulario_id: 'form-sem-regra',
+          preferencia_atendimento: 'whatsapp',
+        },
+      ]),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.lead.create).not.toHaveBeenCalled();
+  });
+
+  it('preserva etapa avancada no reenvio exato do mesmo lead Meta', async () => {
+    prisma.metaAssetSelection.findMany.mockResolvedValueOnce([
+      {
+        form_id: 'form-cliente-a',
+        form_name: 'Formulario Cliente A',
+        meta_connection: { client_id: clientId },
+      },
+    ]);
+    prisma.metaLeadRoutingRule.findMany.mockResolvedValueOnce([
+      buildAutomaticRoutingRule('form-cliente-a', clientId, 'A'),
+    ]);
+    const progressedLead = buildAutomaticLead(
+      'lead-progressed',
+      {
+        client_id: clientId,
+        name: 'Lead em atendimento',
+        external_ref: 'meta-replay',
+        facebook_lead_id: 'meta-replay',
+        event_interest_id: 'event-A',
+        crm_pipeline_id: 'pipeline-A',
+        crm_stage_id: 'stage-venda-A',
+        source_created_at: new Date('2026-08-03T17:00:00.000Z'),
+      },
+      'A',
+    );
+    prisma.lead.findFirst.mockImplementation(async ({ where }) =>
+      where?.deleted_at === null ? progressedLead : null,
+    );
+    prisma.lead.update.mockImplementation(async ({ data }) => ({
+      ...progressedLead,
+      ...data,
+    }));
+
+    const result = await service.createFacebookLeadsAutomatically([
+      {
+        lead_id: 'meta-replay',
+        nome: 'Lead em atendimento',
+        formulario_id: 'form-cliente-a',
+        preferencia_atendimento: 'whatsapp',
+        criado_em: '2026-08-03T18:00:00.000Z',
+      },
+    ]);
+
+    expect(prisma.lead.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.not.objectContaining({
+          event_interest_id: expect.anything(),
+          crm_pipeline_id: expect.anything(),
+          crm_stage_id: expect.anything(),
+        }),
+      }),
+    );
+    expect(prisma.crmHistory.create).not.toHaveBeenCalled();
+    expect(result.items[0]).toMatchObject({
+      id: 'lead-progressed',
+      already_existed: true,
+      crm_stage_id: 'stage-venda-A',
+      routing_applied: { stage_moved: false },
+    });
+  });
+
+  it('nao publica efeitos externos quando a transacao falha', async () => {
+    prisma.metaAssetSelection.findMany.mockResolvedValueOnce([
+      {
+        form_id: 'form-cliente-a',
+        form_name: 'Formulario Cliente A',
+        meta_connection: { client_id: clientId },
+      },
+    ]);
+    prisma.metaLeadRoutingRule.findMany.mockResolvedValueOnce([
+      buildAutomaticRoutingRule('form-cliente-a', clientId, 'A'),
+    ]);
+    prisma.$transaction.mockRejectedValueOnce(new Error('falha transacional'));
+
+    await expect(
+      service.createFacebookLeadsAutomatically([
+        {
+          lead_id: 'meta-falha',
+          nome: 'Lead falha',
+          formulario_id: 'form-cliente-a',
+          preferencia_atendimento: 'whatsapp',
+        },
+      ]),
+    ).rejects.toThrow('falha transacional');
+
+    expect(realtimeEvents.emitLeadUpdated).not.toHaveBeenCalled();
+    expect(leadTimeline.record).not.toHaveBeenCalled();
   });
 
   it('bloqueia update de lead quando telefone pertence a outro lead do mesmo cliente', async () => {
