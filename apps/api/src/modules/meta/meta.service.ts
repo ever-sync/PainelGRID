@@ -290,7 +290,9 @@ export class MetaService implements OnModuleInit {
         throw new BadRequestException('Estado OAuth do gestor invalido');
       }
 
-      const gestorUser = await this.db.user.findUnique({ where: { id: gestorId } });
+      const gestorUser = await this.db.user.findUnique({
+        where: { id: gestorId },
+      });
       if (!gestorUser || gestorUser.role !== Role.GESTOR) {
         throw new ForbiddenException('Usuario gestor invalido para este fluxo');
       }
@@ -560,9 +562,7 @@ export class MetaService implements OnModuleInit {
     await this.db.metaLeadRoutingRule.deleteMany({
       where: {
         client_id: dto.client_id,
-        ...(selectedFormIds.length > 0
-          ? { form_id: { notIn: selectedFormIds } }
-          : {}),
+        ...(selectedFormIds.length > 0 ? { form_id: { notIn: selectedFormIds } } : {}),
       },
     });
 
@@ -697,21 +697,40 @@ export class MetaService implements OnModuleInit {
     let adSets = 0;
     let ads = 0;
     let leadsImported = 0;
-    let campaignBudget: { _sum: { daily_budget: Prisma.Decimal | number | null } } = {
+    let campaignBudget: {
+      _sum: { daily_budget: Prisma.Decimal | number | null };
+    } = {
       _sum: { daily_budget: null },
     };
-    let topFormCounts: Array<{ meta_form_id?: string | null; _count: { _all: number } }> = [];
-    let topUtmCampaignCounts: Array<{ utm_campaign?: string | null; _count: { _all: number } }> =
-      [];
-    let topUtmContentCounts: Array<{ utm_content?: string | null; _count: { _all: number } }> = [];
-    let topUtmTermCounts: Array<{ utm_term?: string | null; _count: { _all: number } }> = [];
+    let topFormCounts: Array<{
+      meta_form_id?: string | null;
+      _count: { _all: number };
+    }> = [];
+    let topUtmCampaignCounts: Array<{
+      utm_campaign?: string | null;
+      _count: { _all: number };
+    }> = [];
+    let topUtmContentCounts: Array<{
+      utm_content?: string | null;
+      _count: { _all: number };
+    }> = [];
+    let topUtmTermCounts: Array<{
+      utm_term?: string | null;
+      _count: { _all: number };
+    }> = [];
 
     try {
       const results = await Promise.all([
-        this.db.metaCampaign.count({ where: { meta_connection_id: connection.id } }),
-        this.db.metaAdSet.count({ where: { meta_connection_id: connection.id } }),
+        this.db.metaCampaign.count({
+          where: { meta_connection_id: connection.id },
+        }),
+        this.db.metaAdSet.count({
+          where: { meta_connection_id: connection.id },
+        }),
         this.db.metaAd.count({ where: { meta_connection_id: connection.id } }),
-        this.db.metaLeadImport.count({ where: { meta_connection_id: connection.id } }),
+        this.db.metaLeadImport.count({
+          where: { meta_connection_id: connection.id },
+        }),
         this.db.metaCampaign.aggregate({
           where: { meta_connection_id: connection.id },
           _sum: { daily_budget: true },
@@ -761,7 +780,9 @@ export class MetaService implements OnModuleInit {
       adSets = results[1];
       ads = results[2];
       leadsImported = results[3];
-      campaignBudget = results[4] as { _sum: { daily_budget: Prisma.Decimal | number | null } };
+      campaignBudget = results[4] as {
+        _sum: { daily_budget: Prisma.Decimal | number | null };
+      };
       topFormCounts = results[5] as Array<{
         meta_form_id?: string | null;
         _count: { _all: number };
@@ -951,7 +972,10 @@ export class MetaService implements OnModuleInit {
       lead_id: { not: null },
     };
     if (hasDateFilter) {
-      importWhere.imported_at = dateFilter;
+      importWhere.OR = [
+        { source_created_at: dateFilter },
+        { source_created_at: null, imported_at: dateFilter },
+      ];
     }
 
     // Filtro por vinculo no banco, e nao no front: sem isso a conta de anuncio
@@ -965,8 +989,7 @@ export class MetaService implements OnModuleInit {
         ).map((row: { meta_campaign_id: string }) => row.meta_campaign_id)
       : null;
 
-    const [campaigns, adSets, ads, insights, range, importedLeads] =
-      await Promise.all([
+    const [campaigns, adSets, ads, insights, range, importedLeads] = await Promise.all([
       this.db.metaCampaign.findMany({
         where: {
           meta_connection_id: connection.id,
@@ -975,8 +998,12 @@ export class MetaService implements OnModuleInit {
           ...(linkedIds ? { meta_campaign_id: { in: linkedIds } } : {}),
         },
       }),
-      this.db.metaAdSet.findMany({ where: { meta_connection_id: connection.id } }),
-      this.db.metaAd.findMany({ where: { meta_connection_id: connection.id } }),
+      this.db.metaAdSet.findMany({
+        where: { meta_connection_id: connection.id },
+      }),
+      this.db.metaAd.findMany({
+        where: { meta_connection_id: connection.id },
+      }),
       this.db.metaDailyInsight.findMany({
         where: {
           meta_connection_id: connection.id,
@@ -1005,22 +1032,37 @@ export class MetaService implements OnModuleInit {
       // formulario; aqui conta o que chegou. A diferenca entre os dois e
       // exatamente o que se perdeu no caminho.
       this.db.metaLeadImport.groupBy({
-        by: ['meta_campaign_id'],
+        by: ['meta_campaign_id', 'meta_ad_set_id', 'meta_ad_id'],
         where: importWhere,
         _count: { _all: true },
       }),
     ]);
 
-    const importedByCampaign = new Map<string, number>(
-      (
-        importedLeads as Array<{
-          meta_campaign_id: string | null;
-          _count: { _all: number };
-        }>
-      )
-        .filter((row) => row.meta_campaign_id)
-        .map((row) => [row.meta_campaign_id as string, row._count._all]),
-    );
+    const importedByCampaign = new Map<string, number>();
+    const importedByAdSet = new Map<string, number>();
+    const importedByAd = new Map<string, number>();
+    for (const row of importedLeads as Array<{
+      meta_campaign_id: string | null;
+      meta_ad_set_id: string | null;
+      meta_ad_id: string | null;
+      _count: { _all: number };
+    }>) {
+      if (row.meta_campaign_id) {
+        importedByCampaign.set(
+          row.meta_campaign_id,
+          (importedByCampaign.get(row.meta_campaign_id) ?? 0) + row._count._all,
+        );
+      }
+      if (row.meta_ad_set_id) {
+        importedByAdSet.set(
+          row.meta_ad_set_id,
+          (importedByAdSet.get(row.meta_ad_set_id) ?? 0) + row._count._all,
+        );
+      }
+      if (row.meta_ad_id) {
+        importedByAd.set(row.meta_ad_id, (importedByAd.get(row.meta_ad_id) ?? 0) + row._count._all);
+      }
+    }
 
     type EntityMetrics = {
       spend: number;
@@ -1074,7 +1116,9 @@ export class MetaService implements OnModuleInit {
       }
 
       const rawActions = (
-        row.raw_payload as { actions?: Array<{ action_type?: string; value?: string }> } | null
+        row.raw_payload as {
+          actions?: Array<{ action_type?: string; value?: string }>;
+        } | null
       )?.actions;
       current.conversations += this.extractConversationCount(rawActions) ?? 0;
       current.linkClicks += this.sumAction(rawActions, 'link_click');
@@ -1092,8 +1136,7 @@ export class MetaService implements OnModuleInit {
     const round2 = (value: number) => Math.round(value * 100) / 100;
 
     /** Custo unitario so existe quando ha denominador; 0 mentiria de eficiencia. */
-    const costPer = (spend: number, count: number) =>
-      count > 0 ? round2(spend / count) : 0;
+    const costPer = (spend: number, count: number) => (count > 0 ? round2(spend / count) : 0);
 
     const buildRow = (id: string, name: string, level: MetaInsightLevel) => {
       const m = metricsByEntity.get(`${level}:${id}`) ?? emptyMetrics();
@@ -1112,8 +1155,7 @@ export class MetaService implements OnModuleInit {
         cost_per_click: costPer(m.spend, m.clicks),
         ctr: m.impressions > 0 ? round2((m.clicks / m.impressions) * 100) : 0,
         cpm: m.impressions > 0 ? round2((m.spend / m.impressions) * 1000) : 0,
-        frequency:
-          m.frequencySamples > 0 ? round2(m.frequency / m.frequencySamples) : 0,
+        frequency: m.frequencySamples > 0 ? round2(m.frequency / m.frequencySamples) : 0,
         link_clicks: m.linkClicks,
         cost_per_link_click: costPer(m.spend, m.linkClicks),
         video_views: m.videoViews,
@@ -1150,9 +1192,11 @@ export class MetaService implements OnModuleInit {
       ad_sets: (adSetsByCampaignId.get(campaign.meta_campaign_id) ?? []).map((adSet) => ({
         ...buildRow(adSet.meta_ad_set_id, adSet.name, 'adset'),
         status: adSet.status,
+        leads_in_system: importedByAdSet.get(adSet.meta_ad_set_id) ?? 0,
         ads: (adsByAdSetId.get(adSet.meta_ad_set_id) ?? []).map((ad) => ({
           ...buildRow(ad.meta_ad_id, ad.name, 'ad'),
           status: ad.status,
+          leads_in_system: importedByAd.get(ad.meta_ad_id) ?? 0,
         })),
       })),
     }));
@@ -1285,7 +1329,11 @@ export class MetaService implements OnModuleInit {
       },
     });
 
-    const normalizedForms: Array<{ id: string; name: string; page_id?: string }> = [];
+    const normalizedForms: Array<{
+      id: string;
+      name: string;
+      page_id?: string;
+    }> = [];
     for (const form of selectedForms) {
       const formId = form.form_id?.trim();
       if (!formId) {
@@ -1432,7 +1480,11 @@ export class MetaService implements OnModuleInit {
       await this.db.metaSyncJob
         .update({
           where: { id: jobId },
-          data: { status: 'failed', finished_at: new Date(), error_message: message },
+          data: {
+            status: 'failed',
+            finished_at: new Date(),
+            error_message: message,
+          },
         })
         .catch(() => undefined);
       return { status: 'failed', message };
@@ -1706,8 +1758,7 @@ export class MetaService implements OnModuleInit {
           const hasDynamicNonBodyComponent = (template.components ?? [])
             .filter((component) => component.type?.toUpperCase() !== 'BODY')
             .some(
-              (component) =>
-                this.countWhatsappTemplateParameters(JSON.stringify(component)) > 0,
+              (component) => this.countWhatsappTemplateParameters(JSON.stringify(component)) > 0,
             );
           const headerRequiresMedia = ['IMAGE', 'VIDEO', 'DOCUMENT', 'LOCATION'].includes(
             header?.format?.toUpperCase() ?? '',
@@ -1723,10 +1774,7 @@ export class MetaService implements OnModuleInit {
           };
         })
         .sort((left, right) =>
-          `${left.name}:${left.language}`.localeCompare(
-            `${right.name}:${right.language}`,
-            'pt-BR',
-          ),
+          `${left.name}:${left.language}`.localeCompare(`${right.name}:${right.language}`, 'pt-BR'),
         ),
     };
   }
@@ -1757,9 +1805,7 @@ export class MetaService implements OnModuleInit {
     const template: Record<string, unknown> = {
       name: args.templateName,
       language: { code: args.language },
-      ...(parameters.length > 0
-        ? { components: [{ type: 'body', parameters }] }
-        : {}),
+      ...(parameters.length > 0 ? { components: [{ type: 'body', parameters }] } : {}),
     };
 
     const response = await this.graphPost<WhatsappSendMessageResponse>(
@@ -1890,10 +1936,7 @@ export class MetaService implements OnModuleInit {
     };
   }
 
-  private assertWebhookSignature(
-    signatureHeader: string | undefined,
-    rawBody: Buffer | undefined,
-  ) {
+  private assertWebhookSignature(signatureHeader: string | undefined, rawBody: Buffer | undefined) {
     const secrets = [
       this.configService.get<string>('META_APP_SECRET'),
       this.configService.get<string>('FACEBOOK_APP_SECRET'),
@@ -2002,7 +2045,10 @@ export class MetaService implements OnModuleInit {
     // Mapa pagina -> cliente, para sugerir o dono do que ainda nao foi vinculado.
     const allSelections = await this.db.metaAssetSelection.findMany({
       where: { page_id: { in: Array.from(new Set(pageByCampaign.values())) } },
-      select: { page_id: true, meta_connection: { select: { client_id: true } } },
+      select: {
+        page_id: true,
+        meta_connection: { select: { client_id: true } },
+      },
     });
 
     const clientByPage = new Map<string, string>();
@@ -2016,7 +2062,9 @@ export class MetaService implements OnModuleInit {
     }
 
     const assignments = await this.db.metaCampaignAssignment.findMany({
-      where: { meta_campaign_id: { in: campaigns.map((campaign) => campaign.id) } },
+      where: {
+        meta_campaign_id: { in: campaigns.map((campaign) => campaign.id) },
+      },
       include: { event: { select: { id: true, name: true } } },
     });
 
@@ -2119,7 +2167,10 @@ export class MetaService implements OnModuleInit {
         where: { client_id: clientId, meta_campaign_id: { in: semNome } },
         select: { meta_campaign_id: true, name: true },
       });
-      for (const row of synced as Array<{ meta_campaign_id: string; name: string }>) {
+      for (const row of synced as Array<{
+        meta_campaign_id: string;
+        name: string;
+      }>) {
         nomeSincronizado.set(row.meta_campaign_id, row.name);
       }
     }
@@ -2179,7 +2230,9 @@ export class MetaService implements OnModuleInit {
         include: {
           event: { select: { id: true, name: true } },
           crm_pipeline: { select: { id: true, name: true, code: true } },
-          call_stage: { select: { id: true, name: true, code: true, color: true } },
+          call_stage: {
+            select: { id: true, name: true, code: true, color: true },
+          },
           whatsapp_stage: {
             select: { id: true, name: true, code: true, color: true },
           },
@@ -2187,13 +2240,8 @@ export class MetaService implements OnModuleInit {
       }),
     ]);
 
-    const ruleByForm = new Map(
-      rules.map((rule: { form_id: string }) => [rule.form_id, rule]),
-    );
-    const uniqueForms = new Map<
-      string,
-      { id: string; name: string; page_id: string | null }
-    >();
+    const ruleByForm = new Map(rules.map((rule: { form_id: string }) => [rule.form_id, rule]));
+    const uniqueForms = new Map<string, { id: string; name: string; page_id: string | null }>();
     for (const form of selectedForms) {
       if (!form.form_id || uniqueForms.has(form.form_id)) continue;
       uniqueForms.set(form.form_id, {
@@ -2225,9 +2273,7 @@ export class MetaService implements OnModuleInit {
     const templateLanguage = dto.whatsapp_template_language?.trim() || null;
     const templateParameterKeys = dto.whatsapp_template_parameter_keys ?? [];
     if (templateName && !templateLanguage) {
-      throw new BadRequestException(
-        'Informe o idioma do template WhatsApp selecionado',
-      );
+      throw new BadRequestException('Informe o idioma do template WhatsApp selecionado');
     }
     if (!templateName && (templateLanguage || templateParameterKeys.length > 0)) {
       throw new BadRequestException(
@@ -2238,9 +2284,7 @@ export class MetaService implements OnModuleInit {
     if (templateName && templateLanguage) {
       const catalog = await this.listClientWhatsappTemplates(user, clientId);
       const selectedTemplate = catalog.templates.find(
-        (template) =>
-          template.name === templateName &&
-          template.language === templateLanguage,
+        (template) => template.name === templateName && template.language === templateLanguage,
       );
       if (!selectedTemplate) {
         throw new BadRequestException(
@@ -2267,76 +2311,61 @@ export class MetaService implements OnModuleInit {
       select: { form_id: true, form_name: true },
     });
     if (!selectedForm?.form_id) {
-      throw new BadRequestException(
-        'Formulario Meta nao esta selecionado para este cliente',
-      );
+      throw new BadRequestException('Formulario Meta nao esta selecionado para este cliente');
     }
 
-    const [selectionFromOtherClient, existingRule, event, pipeline, stages] =
-      await Promise.all([
-        this.db.metaAssetSelection.findFirst({
-          where: {
-            form_id: dto.form_id,
-            meta_connection: {
-              client_id: { not: clientId },
-              status: 'connected',
-            },
+    const [selectionFromOtherClient, existingRule, event, pipeline, stages] = await Promise.all([
+      this.db.metaAssetSelection.findFirst({
+        where: {
+          form_id: dto.form_id,
+          meta_connection: {
+            client_id: { not: clientId },
+            status: 'connected',
           },
-          select: { id: true },
-        }),
-        this.db.metaLeadRoutingRule.findUnique({
-          where: { form_id: dto.form_id },
-          select: { client_id: true },
-        }),
-        this.db.event.findFirst({
-          where: {
-            id: dto.event_id,
-            participants: { some: { client_id: clientId } },
-          },
-          select: { id: true },
-        }),
-        this.db.crmPipeline.findFirst({
-          where: {
-            id: dto.crm_pipeline_id,
-            client_id: clientId,
-            is_active: true,
-          },
-          select: { id: true },
-        }),
-        this.db.crmStage.findMany({
-          where: {
-            id: { in: [dto.call_stage_id, dto.whatsapp_stage_id] },
-            client_id: clientId,
-            pipeline_id: dto.crm_pipeline_id,
-          },
-          select: { id: true },
-        }),
-      ]);
+        },
+        select: { id: true },
+      }),
+      this.db.metaLeadRoutingRule.findUnique({
+        where: { form_id: dto.form_id },
+        select: { client_id: true },
+      }),
+      this.db.event.findFirst({
+        where: {
+          id: dto.event_id,
+          participants: { some: { client_id: clientId } },
+        },
+        select: { id: true },
+      }),
+      this.db.crmPipeline.findFirst({
+        where: {
+          id: dto.crm_pipeline_id,
+          client_id: clientId,
+          is_active: true,
+        },
+        select: { id: true },
+      }),
+      this.db.crmStage.findMany({
+        where: {
+          id: { in: [dto.call_stage_id, dto.whatsapp_stage_id] },
+          client_id: clientId,
+          pipeline_id: dto.crm_pipeline_id,
+        },
+        select: { id: true },
+      }),
+    ]);
 
-    if (
-      selectionFromOtherClient ||
-      (existingRule && existingRule.client_id !== clientId)
-    ) {
-      throw new ConflictException(
-        'Formulario Meta ja esta vinculado a outro cliente',
-      );
+    if (selectionFromOtherClient || (existingRule && existingRule.client_id !== clientId)) {
+      throw new ConflictException('Formulario Meta ja esta vinculado a outro cliente');
     }
     if (!event) {
-      throw new BadRequestException(
-        'Evento nao pertence aos eventos disponiveis deste cliente',
-      );
+      throw new BadRequestException('Evento nao pertence aos eventos disponiveis deste cliente');
     }
     if (!pipeline) {
-      throw new BadRequestException(
-        'Pipeline CRM nao pertence a este cliente ou esta inativo',
-      );
+      throw new BadRequestException('Pipeline CRM nao pertence a este cliente ou esta inativo');
     }
 
     const stageIds = new Set(stages.map((stage) => stage.id));
-    if (
-      !stageIds.has(dto.call_stage_id) ||
-      !stageIds.has(dto.whatsapp_stage_id)
-    ) {
+    if (!stageIds.has(dto.call_stage_id) || !stageIds.has(dto.whatsapp_stage_id)) {
       throw new BadRequestException(
         'As etapas de ligacao e WhatsApp devem pertencer ao pipeline selecionado',
       );
@@ -2369,7 +2398,9 @@ export class MetaService implements OnModuleInit {
       include: {
         event: { select: { id: true, name: true } },
         crm_pipeline: { select: { id: true, name: true, code: true } },
-        call_stage: { select: { id: true, name: true, code: true, color: true } },
+        call_stage: {
+          select: { id: true, name: true, code: true, color: true },
+        },
         whatsapp_stage: {
           select: { id: true, name: true, code: true, color: true },
         },
@@ -2377,11 +2408,7 @@ export class MetaService implements OnModuleInit {
     });
   }
 
-  async deleteLeadRoutingRule(
-    user: AuthenticatedUser,
-    clientId: string,
-    rawFormId: string,
-  ) {
+  async deleteLeadRoutingRule(user: AuthenticatedUser, clientId: string, rawFormId: string) {
     await this.assertMetaClientAccess(user, clientId);
     const formId = rawFormId.trim();
     if (!formId || formId.length > 100) {
@@ -2471,7 +2498,10 @@ export class MetaService implements OnModuleInit {
     const mine = new Set<string>();
     const others = new Set<string>();
 
-    for (const row of rows as Array<{ meta_campaign_id: string; client_id: string }>) {
+    for (const row of rows as Array<{
+      meta_campaign_id: string;
+      client_id: string;
+    }>) {
       (row.client_id === clientId ? mine : others).add(row.meta_campaign_id);
     }
 
@@ -2483,11 +2513,7 @@ export class MetaService implements OnModuleInit {
    * formulario que ele promove. Conjunto sem `promoted_object` (trafego,
    * reconhecimento) nao tem como ser atribuido e fica de fora.
    */
-  private adSetBelongsToClient(
-    adSet: MetaAdSetPayload,
-    pageIds: string[],
-    formIds: string[],
-  ) {
+  private adSetBelongsToClient(adSet: MetaAdSetPayload, pageIds: string[], formIds: string[]) {
     const promoted = adSet.promoted_object;
     if (!promoted) {
       return false;
@@ -2827,50 +2853,48 @@ export class MetaService implements OnModuleInit {
         // seguintes (insights) valem mais, e era exatamente ai que o sync
         // morria, deixando todas as metricas zeradas.
         try {
-        const creative = await this.fetchCreative(creativeId, connection.access_token);
-        if (creative) {
-          const creativeExisting = await this.db.metaCreative.findFirst({
-            where: {
+          const creative = await this.fetchCreative(creativeId, connection.access_token);
+          if (creative) {
+            const creativeExisting = await this.db.metaCreative.findFirst({
+              where: {
+                meta_connection_id: connection.id,
+                meta_creative_id: creative.id,
+              },
+            });
+
+            const creativeData = {
+              client_id: connection.client_id,
               meta_connection_id: connection.id,
-              meta_creative_id: creative.id,
-            },
-          });
+              meta_creative_id: this.cut(creative.id, 100)!,
+              // Corte defensivo: os tamanhos vem da Meta e nao estao sob nosso
+              // controle. `body`, `url_tags` e `image_url` sao TEXT e ficam
+              // inteiros; o resto tem limite na coluna.
+              name: this.cut(creative.name, 255),
+              title: this.cut(creative.title, 255),
+              body: creative.body ?? null,
+              image_url: creative.image_url ?? null,
+              video_id: this.cut(creative.video_id, 100),
+              url_tags: creative.url_tags ?? null,
+              object_story_id: this.cut(creative.object_story_id, 100),
+              raw_payload: this.toJsonValue(creative),
+            };
 
-          const creativeData = {
-            client_id: connection.client_id,
-            meta_connection_id: connection.id,
-            meta_creative_id: this.cut(creative.id, 100)!,
-            // Corte defensivo: os tamanhos vem da Meta e nao estao sob nosso
-            // controle. `body`, `url_tags` e `image_url` sao TEXT e ficam
-            // inteiros; o resto tem limite na coluna.
-            name: this.cut(creative.name, 255),
-            title: this.cut(creative.title, 255),
-            body: creative.body ?? null,
-            image_url: creative.image_url ?? null,
-            video_id: this.cut(creative.video_id, 100),
-            url_tags: creative.url_tags ?? null,
-            object_story_id: this.cut(creative.object_story_id, 100),
-            raw_payload: this.toJsonValue(creative),
-          };
+            if (creativeExisting) {
+              await this.db.metaCreative.update({
+                where: { id: creativeExisting.id },
+                data: creativeData,
+              });
+            } else {
+              await this.db.metaCreative.create({
+                data: creativeData,
+              });
+            }
 
-          if (creativeExisting) {
-            await this.db.metaCreative.update({
-              where: { id: creativeExisting.id },
-              data: creativeData,
-            });
-          } else {
-            await this.db.metaCreative.create({
-              data: creativeData,
-            });
+            syncedCreativeIds.add(creative.id);
+            syncedCreatives += 1;
           }
-
-          syncedCreativeIds.add(creative.id);
-          syncedCreatives += 1;
-        }
         } catch (error) {
-          this.logger.warn(
-            `Criativo ${creativeId} ignorado: ${this.getErrorMessage(error)}`,
-          );
+          this.logger.warn(`Criativo ${creativeId} ignorado: ${this.getErrorMessage(error)}`);
           syncedCreativeIds.add(creativeId);
         }
       }
@@ -2932,11 +2956,7 @@ export class MetaService implements OnModuleInit {
     for (const insight of insights) {
       const date = this.toDate(insight.date_start);
       const entityId =
-        level === 'ad'
-          ? insight.ad_id
-          : level === 'adset'
-            ? insight.adset_id
-            : insight.campaign_id;
+        level === 'ad' ? insight.ad_id : level === 'adset' ? insight.adset_id : insight.campaign_id;
       const entityName =
         level === 'ad'
           ? insight.ad_name
@@ -2997,7 +3017,10 @@ export class MetaService implements OnModuleInit {
       return false;
     }
 
-    const connection = await this.resolveConnectionForLeadWebhook({ formId, pageId });
+    const connection = await this.resolveConnectionForLeadWebhook({
+      formId,
+      pageId,
+    });
     if (!connection) {
       this.logger.warn('Webhook leadgen ignorado: conexao nao encontrada');
       return false;
@@ -3076,9 +3099,7 @@ export class MetaService implements OnModuleInit {
     });
 
     if (!assetSelection?.meta_connection) {
-      this.logger.warn(
-        'Webhook WhatsApp ignorado: numero nao mapeado para cliente.',
-      );
+      this.logger.warn('Webhook WhatsApp ignorado: numero nao mapeado para cliente.');
       return false;
     }
 
@@ -3286,7 +3307,11 @@ export class MetaService implements OnModuleInit {
     }
 
     if (type === 'contacts') {
-      return { content: '[contato compartilhado]', mediaId: null, mediaUrl: null };
+      return {
+        content: '[contato compartilhado]',
+        mediaId: null,
+        mediaUrl: null,
+      };
     }
 
     const mediaPayload = this.readRecord(message[type]);
@@ -3307,19 +3332,35 @@ export class MetaService implements OnModuleInit {
     }
 
     if (type === 'image') {
-      return { content: mediaCaption ?? '[imagem]', mediaId: mediaId ?? null, mediaUrl };
+      return {
+        content: mediaCaption ?? '[imagem]',
+        mediaId: mediaId ?? null,
+        mediaUrl,
+      };
     }
 
     if (type === 'video') {
-      return { content: mediaCaption ?? '[video]', mediaId: mediaId ?? null, mediaUrl };
+      return {
+        content: mediaCaption ?? '[video]',
+        mediaId: mediaId ?? null,
+        mediaUrl,
+      };
     }
 
     if (type === 'audio') {
-      return { content: mediaCaption ?? '[audio]', mediaId: mediaId ?? null, mediaUrl };
+      return {
+        content: mediaCaption ?? '[audio]',
+        mediaId: mediaId ?? null,
+        mediaUrl,
+      };
     }
 
     if (type === 'sticker') {
-      return { content: mediaCaption ?? '[sticker]', mediaId: mediaId ?? null, mediaUrl };
+      return {
+        content: mediaCaption ?? '[sticker]',
+        mediaId: mediaId ?? null,
+        mediaUrl,
+      };
     }
 
     if (mediaCaption) {
@@ -3339,9 +3380,7 @@ export class MetaService implements OnModuleInit {
       });
       return media.url ?? null;
     } catch (error) {
-      this.logger.warn(
-        `Nao foi possivel resolver media_url: ${this.getErrorMessage(error)}`,
-      );
+      this.logger.warn(`Nao foi possivel resolver media_url: ${this.getErrorMessage(error)}`);
       return null;
     }
   }
@@ -3435,7 +3474,11 @@ export class MetaService implements OnModuleInit {
       }
     }
 
-    return { normalized, digits, candidates: Array.from(candidates).filter(Boolean) };
+    return {
+      normalized,
+      digits,
+      candidates: Array.from(candidates).filter(Boolean),
+    };
   }
 
   private async findLeadByPhone(clientId: string, phone?: string | null, excludeLeadId?: string) {
@@ -3615,6 +3658,13 @@ export class MetaService implements OnModuleInit {
       'whatsapp',
     ]);
     const normalizedLeadPhone = leadPhone ? normalizeBrazilianPhone(leadPhone) : null;
+    const metaFormId = leadPayload.form_id ?? this.readString(context.form_id) ?? null;
+    const metaCampaignId = leadPayload.campaign_id ?? this.readString(context.campaign_id) ?? null;
+    const metaAdSetId = leadPayload.adgroup_id ?? this.readString(context.adgroup_id) ?? null;
+    const metaAdId = leadPayload.ad_id ?? this.readString(context.ad_id) ?? null;
+    const sourceCreatedAt = this.toDate(
+      leadPayload.created_time ?? this.readString(context.created_time),
+    );
 
     const existingImport = await this.db.metaLeadImport.findFirst({
       where: {
@@ -3658,6 +3708,16 @@ export class MetaService implements OnModuleInit {
           name: leadName,
           email: leadEmail ?? lead.email,
           phone: updatedPhone,
+          facebook_lead_id: metaLeadId,
+          facebook_form_id: metaFormId,
+          facebook_ad_id: metaAdId,
+          facebook_ad_set_id: metaAdSetId,
+          facebook_campaign_id: metaCampaignId,
+          source_created_at: sourceCreatedAt,
+          source_payload: this.toJsonValue({
+            lead_payload: leadPayload,
+            context,
+          }),
         },
       });
     } else {
@@ -3674,6 +3734,15 @@ export class MetaService implements OnModuleInit {
               email: leadEmail ?? duplicatePhone.email,
               phone: normalizedLeadPhone,
               facebook_lead_id: metaLeadId,
+              facebook_form_id: metaFormId,
+              facebook_ad_id: metaAdId,
+              facebook_ad_set_id: metaAdSetId,
+              facebook_campaign_id: metaCampaignId,
+              source_created_at: sourceCreatedAt,
+              source_payload: this.toJsonValue({
+                lead_payload: leadPayload,
+                context,
+              }),
             },
           });
         }
@@ -3688,6 +3757,15 @@ export class MetaService implements OnModuleInit {
             phone: normalizedLeadPhone,
             source: 'form_page',
             facebook_lead_id: metaLeadId,
+            facebook_form_id: metaFormId,
+            facebook_ad_id: metaAdId,
+            facebook_ad_set_id: metaAdSetId,
+            facebook_campaign_id: metaCampaignId,
+            source_created_at: sourceCreatedAt,
+            source_payload: this.toJsonValue({
+              lead_payload: leadPayload,
+              context,
+            }),
           },
         });
       }
@@ -3698,11 +3776,13 @@ export class MetaService implements OnModuleInit {
       meta_connection_id: connection.id,
       lead_id: lead.id,
       meta_lead_id: metaLeadId,
-      meta_form_id: leadPayload.form_id ?? this.readString(context.form_id) ?? null,
-      meta_campaign_id: leadPayload.campaign_id ?? this.readString(context.campaign_id) ?? null,
-      meta_ad_set_id: leadPayload.adgroup_id ?? this.readString(context.adgroup_id) ?? null,
-      meta_ad_id: leadPayload.ad_id ?? this.readString(context.ad_id) ?? null,
+      event_id: lead.event_interest_id,
+      meta_form_id: metaFormId,
+      meta_campaign_id: metaCampaignId,
+      meta_ad_set_id: metaAdSetId,
+      meta_ad_id: metaAdId,
       meta_creative_id: this.readString(context.creative_id) ?? null,
+      source_created_at: sourceCreatedAt,
       utm_campaign: this.readString(context.utm_campaign) ?? null,
       utm_content: this.readString(context.utm_content) ?? null,
       utm_term: this.readString(context.utm_term) ?? null,
@@ -3888,7 +3968,9 @@ export class MetaService implements OnModuleInit {
         `${pageId}/subscribed_apps`,
         pageAccessToken,
         undefined,
-        { subscribed_fields: 'leadgen' },
+        {
+          subscribed_fields: 'leadgen',
+        },
       );
       this.logger.log('Webhook assinado com sucesso para pagina Meta');
     } catch (error) {
@@ -3904,9 +3986,7 @@ export class MetaService implements OnModuleInit {
     for (const pageId of pageIds) {
       const pageAccessToken = await this.fetchPageAccessToken(pageId, accessToken);
       if (!pageAccessToken) {
-        this.logger.warn(
-          'Sem page access token; formularios de lead nao podem ser listados.',
-        );
+        this.logger.warn('Sem page access token; formularios de lead nao podem ser listados.');
         continue;
       }
 
@@ -4068,7 +4148,11 @@ export class MetaService implements OnModuleInit {
     shortLivedToken: string;
     appId: string;
     appSecret: string;
-  }): Promise<{ access_token: string; token_type?: string; expires_in?: string | number }> {
+  }): Promise<{
+    access_token: string;
+    token_type?: string;
+    expires_in?: string | number;
+  }> {
     try {
       const response = await this.graphGet<{
         access_token: string;
@@ -4088,9 +4172,7 @@ export class MetaService implements OnModuleInit {
       return response;
     } catch (error) {
       this.logger.warn(
-        `Falha ao trocar token Meta por long-lived; mantendo token curto: ${this.getErrorMessage(
-          error,
-        )}`,
+        `Falha ao trocar token Meta por long-lived; mantendo token curto: ${this.getErrorMessage(error)}`,
       );
       return { access_token: args.shortLivedToken };
     }

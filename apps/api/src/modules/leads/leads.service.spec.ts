@@ -32,6 +32,12 @@ describe('LeadsService', () => {
     salesTeamMember: { findFirst: jest.Mock };
     metaAssetSelection: { findMany: jest.Mock };
     metaLeadRoutingRule: { findMany: jest.Mock };
+    metaAd: { findMany: jest.Mock };
+    metaAdSet: { findMany: jest.Mock };
+    metaCampaign: { findMany: jest.Mock };
+    metaLeadImport: { upsert: jest.Mock };
+    conversation: { findFirst: jest.Mock; create: jest.Mock; update: jest.Mock };
+    message: { findUnique: jest.Mock; create: jest.Mock };
     $transaction: jest.Mock;
     $queryRaw: jest.Mock;
   };
@@ -42,6 +48,7 @@ describe('LeadsService', () => {
     emitLeadCheckin: jest.Mock;
     emitLeadUpdated: jest.Mock;
     emitVendorCalled: jest.Mock;
+    emitNewMessage: jest.Mock;
   };
   let leadTimeline: { record: jest.Mock; originFromSource: jest.Mock };
   let metaService: {
@@ -68,6 +75,12 @@ describe('LeadsService', () => {
       salesTeamMember: { findFirst: jest.fn() },
       metaAssetSelection: { findMany: jest.fn() },
       metaLeadRoutingRule: { findMany: jest.fn() },
+      metaAd: { findMany: jest.fn() },
+      metaAdSet: { findMany: jest.fn() },
+      metaCampaign: { findMany: jest.fn() },
+      metaLeadImport: { upsert: jest.fn() },
+      conversation: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
+      message: { findUnique: jest.fn(), create: jest.fn() },
       $transaction: jest.fn(),
       $queryRaw: jest.fn(),
     };
@@ -87,6 +100,24 @@ describe('LeadsService', () => {
       },
     ]);
     prisma.metaLeadRoutingRule.findMany.mockResolvedValue([]);
+    prisma.metaAd.findMany.mockResolvedValue([]);
+    prisma.metaAdSet.findMany.mockResolvedValue([]);
+    prisma.metaCampaign.findMany.mockResolvedValue([]);
+    prisma.metaLeadImport.upsert.mockResolvedValue({ id: 'meta-import-1' });
+    prisma.conversation.findFirst.mockResolvedValue(null);
+    prisma.conversation.create.mockResolvedValue({
+      id: 'conversation-1',
+      last_message_at: null,
+      created_at: new Date('2026-08-04T00:00:00.000Z'),
+    });
+    prisma.conversation.update.mockResolvedValue({});
+    prisma.message.findUnique.mockResolvedValue(null);
+    prisma.message.create.mockResolvedValue({
+      id: 'message-1',
+      conversation_id: 'conversation-1',
+      content: 'Template WhatsApp enviado: boas_vindas_a',
+      created_at: new Date('2026-08-04T00:00:01.000Z'),
+    });
     prisma.$transaction.mockImplementation(async (callback) => callback(prisma));
     prisma.$queryRaw.mockResolvedValue([]);
     clientsService = {
@@ -96,6 +127,7 @@ describe('LeadsService', () => {
       emitLeadCheckin: jest.fn(),
       emitLeadUpdated: jest.fn(),
       emitVendorCalled: jest.fn(),
+      emitNewMessage: jest.fn(),
     };
     leadTimeline = {
       record: jest.fn().mockResolvedValue(undefined),
@@ -227,8 +259,7 @@ describe('LeadsService', () => {
         {
           buffer: Buffer.from('conteudo falso'),
           originalname: 'leads.xlsx',
-          mimetype:
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         },
       ),
     ).rejects.toThrow('Arquivo XLSX invalido');
@@ -239,7 +270,13 @@ describe('LeadsService', () => {
     prisma.lead.createMany.mockResolvedValue({ count: 1 });
 
     const result = await service.importCsv(
-      { sub: 'vendor-1', role: Role.VENDEDOR, name: 'V', email: 'v@x', client_id: clientId },
+      {
+        sub: 'vendor-1',
+        role: Role.VENDEDOR,
+        name: 'V',
+        email: 'v@x',
+        client_id: clientId,
+      },
       {},
       {
         buffer: Buffer.from('name,phone\nLead Dup,11911111111\nLead Novo,11922222222', 'utf8'),
@@ -630,7 +667,11 @@ describe('LeadsService', () => {
         }),
       }),
     );
-    expect(result).toMatchObject({ received: 1, created: 1, already_existed: 0 });
+    expect(result).toMatchObject({
+      received: 1,
+      created: 1,
+      already_existed: 0,
+    });
     expect(result.validated_forms).toEqual([
       { id: '27515534804767924', name: 'Form - OFICIAL-copy' },
     ]);
@@ -680,7 +721,11 @@ describe('LeadsService', () => {
         }),
       }),
     );
-    expect(result).toMatchObject({ received: 1, created: 0, already_existed: 1 });
+    expect(result).toMatchObject({
+      received: 1,
+      created: 0,
+      already_existed: 1,
+    });
   });
 
   it('prioriza lead ativo pelo telefone quando o mesmo lead_id pertence a um arquivado', async () => {
@@ -710,9 +755,7 @@ describe('LeadsService', () => {
       if (conditions.some((condition: Record<string, unknown>) => 'phone' in condition)) {
         return activeLead;
       }
-      if (
-        conditions.some((condition: Record<string, unknown>) => 'external_ref' in condition)
-      ) {
+      if (conditions.some((condition: Record<string, unknown>) => 'external_ref' in condition)) {
         return archivedLead;
       }
       return null;
@@ -785,7 +828,11 @@ describe('LeadsService', () => {
         }),
       }),
     );
-    expect(result).toMatchObject({ received: 1, created: 0, already_existed: 1 });
+    expect(result).toMatchObject({
+      received: 1,
+      created: 0,
+      already_existed: 1,
+    });
   });
 
   it('rejeita formulario do Facebook que nao foi selecionado para o cliente', async () => {
@@ -858,14 +905,9 @@ describe('LeadsService', () => {
     },
   });
 
-  const buildAutomaticLead = (
-    id: string,
-    data: Record<string, unknown>,
-    suffix: string,
-  ) => {
+  const buildAutomaticLead = (id: string, data: Record<string, unknown>, suffix: string) => {
     const stageId = typeof data.crm_stage_id === 'string' ? data.crm_stage_id : null;
-    const pipelineId =
-      typeof data.crm_pipeline_id === 'string' ? data.crm_pipeline_id : null;
+    const pipelineId = typeof data.crm_pipeline_id === 'string' ? data.crm_pipeline_id : null;
     const interestEventId =
       typeof data.event_interest_id === 'string' ? data.event_interest_id : null;
 
@@ -886,20 +928,12 @@ describe('LeadsService', () => {
       crm_stage: stageId
         ? {
             id: stageId,
-            code: stageId.includes('whatsapp')
-              ? `WHATSAPP_${suffix}`
-              : `CALL_${suffix}`,
-            name: stageId.includes('whatsapp')
-              ? `WhatsApp ${suffix}`
-              : `Ligacao ${suffix}`,
+            code: stageId.includes('whatsapp') ? `WHATSAPP_${suffix}` : `CALL_${suffix}`,
+            name: stageId.includes('whatsapp') ? `WhatsApp ${suffix}` : `Ligacao ${suffix}`,
           }
         : null,
-      crm_pipeline: pipelineId
-        ? { id: pipelineId, code: `PIPELINE_${suffix}` }
-        : null,
-      event_interest: interestEventId
-        ? { id: interestEventId, name: `Evento ${suffix}` }
-        : null,
+      crm_pipeline: pipelineId ? { id: pipelineId, code: `PIPELINE_${suffix}` } : null,
+      event_interest: interestEventId ? { id: interestEventId, name: `Evento ${suffix}` } : null,
       updated_at: new Date('2026-08-03T19:00:00.000Z'),
     };
   };
@@ -909,12 +943,12 @@ describe('LeadsService', () => {
       {
         form_id: 'form-cliente-a',
         form_name: 'Formulario Cliente A',
-        meta_connection: { client_id: clientId },
+        meta_connection: { id: 'connection-a', client_id: clientId },
       },
       {
         form_id: 'form-cliente-b',
         form_name: 'Formulario Cliente B',
-        meta_connection: { client_id: partnerClientId },
+        meta_connection: { id: 'connection-b', client_id: partnerClientId },
       },
     ]);
     prisma.metaLeadRoutingRule.findMany.mockResolvedValueOnce([
@@ -970,7 +1004,7 @@ describe('LeadsService', () => {
       },
     ]);
 
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
     expect(prisma.lead.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -1032,6 +1066,7 @@ describe('LeadsService', () => {
             template_name: 'boas_vindas_a',
             template_language: 'pt_BR',
             message_id: 'wamid-template-1',
+            chat_recorded: true,
           },
         }),
         expect.objectContaining({
@@ -1066,6 +1101,91 @@ describe('LeadsService', () => {
     );
   });
 
+  it('enriquece e grava a atribuicao anuncio -> conjunto -> campanha na mesma transacao', async () => {
+    prisma.metaAssetSelection.findMany.mockResolvedValueOnce([
+      {
+        form_id: 'form-cliente-a',
+        form_name: 'Formulario Cliente A',
+        meta_connection: { id: 'connection-a', client_id: clientId },
+      },
+    ]);
+    prisma.metaLeadRoutingRule.findMany.mockResolvedValueOnce([
+      buildAutomaticRoutingRule('form-cliente-a', clientId, 'A'),
+    ]);
+    prisma.metaAd.findMany.mockResolvedValueOnce([
+      {
+        meta_connection_id: 'connection-a',
+        meta_ad_id: 'ad-1',
+        meta_ad_set_id: 'adset-1',
+        meta_campaign_id: 'campaign-1',
+        meta_creative_id: 'creative-1',
+        name: 'Anuncio 1',
+      },
+    ]);
+    prisma.metaAdSet.findMany.mockResolvedValueOnce([
+      {
+        meta_connection_id: 'connection-a',
+        meta_ad_set_id: 'adset-1',
+        meta_campaign_id: 'campaign-1',
+        name: 'Conjunto 1',
+      },
+    ]);
+    prisma.metaCampaign.findMany.mockResolvedValueOnce([
+      {
+        meta_connection_id: 'connection-a',
+        meta_campaign_id: 'campaign-1',
+        name: 'Campanha 1',
+      },
+    ]);
+    prisma.lead.create.mockImplementation(async ({ data }) =>
+      buildAutomaticLead('lead-attributed', data, 'A'),
+    );
+
+    await service.createFacebookLeadsAutomatically([
+      {
+        lead_id: 'meta-attributed',
+        nome: 'Lead atribuido',
+        telefone: '11977777777',
+        formulario_id: 'form-cliente-a',
+        anuncio_id: 'ad-1',
+        preferencia_atendimento: 'whatsapp',
+        criado_em: '2026-08-04T00:45:49.000Z',
+      },
+    ]);
+
+    expect(prisma.lead.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          facebook_ad_id: 'ad-1',
+          facebook_ad_name: 'Anuncio 1',
+          facebook_ad_set_id: 'adset-1',
+          facebook_ad_set_name: 'Conjunto 1',
+          facebook_campaign_id: 'campaign-1',
+          facebook_campaign_name: 'Campanha 1',
+        }),
+      }),
+    );
+    expect(prisma.metaLeadImport.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          meta_connection_id_meta_lead_id: {
+            meta_connection_id: 'connection-a',
+            meta_lead_id: 'meta-attributed',
+          },
+        },
+        create: expect.objectContaining({
+          lead_id: 'lead-attributed',
+          event_id: 'event-A',
+          meta_campaign_id: 'campaign-1',
+          meta_ad_set_id: 'adset-1',
+          meta_ad_id: 'ad-1',
+          meta_creative_id: 'creative-1',
+          preferred_contact_channel: 'whatsapp',
+        }),
+      }),
+    );
+  });
+
   it('bloqueia o lote automatico inteiro quando o formulario e desconhecido', async () => {
     prisma.metaAssetSelection.findMany.mockResolvedValueOnce([]);
     await expect(
@@ -1091,12 +1211,12 @@ describe('LeadsService', () => {
       {
         form_id: 'form-duplicado',
         form_name: 'Formulario duplicado',
-        meta_connection: { client_id: clientId },
+        meta_connection: { id: 'connection-a', client_id: clientId },
       },
       {
         form_id: 'form-duplicado',
         form_name: 'Formulario duplicado',
-        meta_connection: { client_id: partnerClientId },
+        meta_connection: { id: 'connection-b', client_id: partnerClientId },
       },
     ]);
     await expect(
@@ -1120,7 +1240,7 @@ describe('LeadsService', () => {
       {
         form_id: 'form-sem-regra',
         form_name: 'Formulario sem regra',
-        meta_connection: { client_id: clientId },
+        meta_connection: { id: 'connection-a', client_id: clientId },
       },
     ]);
     prisma.metaLeadRoutingRule.findMany.mockResolvedValueOnce([]);
@@ -1145,7 +1265,7 @@ describe('LeadsService', () => {
       {
         form_id: 'form-cliente-a',
         form_name: 'Formulario Cliente A',
-        meta_connection: { client_id: clientId },
+        meta_connection: { id: 'connection-a', client_id: clientId },
       },
     ]);
     prisma.metaLeadRoutingRule.findMany.mockResolvedValueOnce([
@@ -1211,7 +1331,7 @@ describe('LeadsService', () => {
       {
         form_id: 'form-cliente-a',
         form_name: 'Formulario Cliente A',
-        meta_connection: { client_id: clientId },
+        meta_connection: { id: 'connection-a', client_id: clientId },
       },
     ]);
     prisma.metaLeadRoutingRule.findMany.mockResolvedValueOnce([
@@ -1270,7 +1390,13 @@ describe('LeadsService', () => {
 
     await expect(
       service.create(
-        { sub: gestorId, role: Role.GESTOR, name: 'G', email: 'g@x', client_id: null } as never,
+        {
+          sub: gestorId,
+          role: Role.GESTOR,
+          name: 'G',
+          email: 'g@x',
+          client_id: null,
+        } as never,
         {
           client_id: clientId,
           name: 'Lead X',
@@ -1284,7 +1410,10 @@ describe('LeadsService', () => {
     expect(prisma.lead.create).not.toHaveBeenCalled();
     expect(prisma.crmStage.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: '99999999-9999-4999-8999-999999999999', client_id: clientId },
+        where: {
+          id: '99999999-9999-4999-8999-999999999999',
+          client_id: clientId,
+        },
       }),
     );
   });
@@ -1294,7 +1423,13 @@ describe('LeadsService', () => {
 
     await expect(
       service.create(
-        { sub: gestorId, role: Role.GESTOR, name: 'G', email: 'g@x', client_id: null } as never,
+        {
+          sub: gestorId,
+          role: Role.GESTOR,
+          name: 'G',
+          email: 'g@x',
+          client_id: null,
+        } as never,
         {
           client_id: clientId,
           name: 'Lead Y',
@@ -1322,7 +1457,13 @@ describe('LeadsService', () => {
 
     await expect(
       service.create(
-        { sub: gestorId, role: Role.GESTOR, name: 'G', email: 'g@x', client_id: null } as never,
+        {
+          sub: gestorId,
+          role: Role.GESTOR,
+          name: 'G',
+          email: 'g@x',
+          client_id: null,
+        } as never,
         {
           client_id: clientId,
           name: 'Lead Dup Email',
@@ -1349,7 +1490,13 @@ describe('LeadsService', () => {
     });
 
     const result = await service.closeAttendance(
-      { sub: vendorId, role: Role.VENDEDOR, name: 'V', email: 'v@x', client_id: clientId } as never,
+      {
+        sub: vendorId,
+        role: Role.VENDEDOR,
+        name: 'V',
+        email: 'v@x',
+        client_id: clientId,
+      } as never,
       baseExistingLead.id,
       { sold: false },
     );
@@ -1401,7 +1548,13 @@ describe('LeadsService', () => {
     });
 
     await service.closeAttendance(
-      { sub: vendorId, role: Role.VENDEDOR, name: 'V', email: 'v@x', client_id: clientId } as never,
+      {
+        sub: vendorId,
+        role: Role.VENDEDOR,
+        name: 'V',
+        email: 'v@x',
+        client_id: clientId,
+      } as never,
       baseExistingLead.id,
       { sold: true },
     );

@@ -216,6 +216,8 @@ model Lead {
   facebook_form_id            String?                    @db.VarChar(100)
   facebook_ad_id              String?                    @db.VarChar(100)
   facebook_ad_name            String?                    @db.VarChar(255)
+  facebook_ad_set_id          String?                    @db.VarChar(100)
+  facebook_ad_set_name        String?                    @db.VarChar(255)
   facebook_campaign_id        String?                    @db.VarChar(100)
   facebook_campaign_name      String?                    @db.VarChar(255)
   preferred_contact_channel   String?                    @db.VarChar(50)
@@ -316,6 +318,7 @@ model Event {
   client                        Client                   @relation(fields: [client_id], references: [id])
   interested_leads              Lead[]
   meta_campaign_assignments     MetaCampaignAssignment[]
+  meta_lead_imports             MetaLeadImport[]
   meta_lead_routing_rules       MetaLeadRoutingRule[]
   rubinho_events                RubinhoAgentEvent[]
   sales_teams                   SalesTeam[]
@@ -818,30 +821,42 @@ model MetaLeadForm {
 }
 
 model MetaLeadImport {
-  id                 String         @id @default(uuid()) @db.Uuid
-  client_id          String         @db.Uuid
-  meta_connection_id String         @db.Uuid
-  lead_id            String?        @db.Uuid
-  meta_lead_id       String         @db.VarChar(100)
-  meta_form_id       String?        @db.VarChar(100)
-  meta_campaign_id   String?        @db.VarChar(100)
-  meta_ad_set_id     String?        @db.VarChar(100)
-  meta_ad_id         String?        @db.VarChar(100)
-  meta_creative_id   String?        @db.VarChar(100)
-  utm_campaign       String?        @db.VarChar(255)
-  utm_content        String?        @db.VarChar(255)
-  utm_term           String?        @db.VarChar(255)
-  referral_context   String?        @db.VarChar(255)
-  raw_payload        Json?
-  imported_at        DateTime       @default(now())
-  client             Client         @relation(fields: [client_id], references: [id])
-  lead               Lead?          @relation(fields: [lead_id], references: [id])
-  meta_connection    MetaConnection @relation(fields: [meta_connection_id], references: [id])
+  id                        String         @id @default(uuid()) @db.Uuid
+  client_id                 String         @db.Uuid
+  meta_connection_id        String         @db.Uuid
+  lead_id                   String?        @db.Uuid
+  event_id                  String?        @db.Uuid
+  meta_lead_id              String         @db.VarChar(100)
+  meta_form_id              String?        @db.VarChar(100)
+  meta_campaign_id          String?        @db.VarChar(100)
+  meta_campaign_name        String?        @db.VarChar(255)
+  meta_ad_set_id            String?        @db.VarChar(100)
+  meta_ad_set_name          String?        @db.VarChar(255)
+  meta_ad_id                String?        @db.VarChar(100)
+  meta_ad_name              String?        @db.VarChar(255)
+  meta_creative_id          String?        @db.VarChar(100)
+  preferred_contact_channel String?        @db.VarChar(50)
+  source_created_at         DateTime?
+  utm_campaign              String?        @db.VarChar(255)
+  utm_content               String?        @db.VarChar(255)
+  utm_term                  String?        @db.VarChar(255)
+  referral_context          String?        @db.VarChar(255)
+  raw_payload               Json?
+  imported_at               DateTime       @default(now())
+  client                    Client         @relation(fields: [client_id], references: [id])
+  event                     Event?         @relation(fields: [event_id], references: [id])
+  lead                      Lead?          @relation(fields: [lead_id], references: [id])
+  meta_connection           MetaConnection @relation(fields: [meta_connection_id], references: [id])
 
   @@unique([meta_connection_id, meta_lead_id])
   @@index([client_id])
   @@index([meta_connection_id])
   @@index([lead_id])
+  @@index([event_id])
+  @@index([client_id, event_id])
+  @@index([meta_campaign_id])
+  @@index([meta_ad_set_id])
+  @@index([meta_ad_id])
   @@map("meta_lead_imports")
 }
 

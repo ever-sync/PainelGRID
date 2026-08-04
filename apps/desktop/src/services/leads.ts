@@ -41,6 +41,8 @@ export type ApiLead = {
   facebook_form_id?: string | null;
   facebook_ad_id?: string | null;
   facebook_ad_name?: string | null;
+  facebook_ad_set_id?: string | null;
+  facebook_ad_set_name?: string | null;
   facebook_campaign_id?: string | null;
   facebook_campaign_name?: string | null;
   preferred_contact_channel?: string | null;
@@ -139,6 +141,8 @@ export function mapApiLeadToLead(row: ApiLead): Lead {
     facebook_form_id: row.facebook_form_id ?? null,
     facebook_ad_id: row.facebook_ad_id ?? null,
     facebook_ad_name: row.facebook_ad_name ?? null,
+    facebook_ad_set_id: row.facebook_ad_set_id ?? null,
+    facebook_ad_set_name: row.facebook_ad_set_name ?? null,
     facebook_campaign_id: row.facebook_campaign_id ?? null,
     facebook_campaign_name: row.facebook_campaign_name ?? null,
     preferred_contact_channel: row.preferred_contact_channel ?? null,

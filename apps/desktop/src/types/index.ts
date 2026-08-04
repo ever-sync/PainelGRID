@@ -108,6 +108,8 @@ export interface Lead {
   facebook_form_id?: string | null;
   facebook_ad_id?: string | null;
   facebook_ad_name?: string | null;
+  facebook_ad_set_id?: string | null;
+  facebook_ad_set_name?: string | null;
   facebook_campaign_id?: string | null;
   facebook_campaign_name?: string | null;
   preferred_contact_channel?: string | null;

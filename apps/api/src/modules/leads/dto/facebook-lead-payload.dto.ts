@@ -1,7 +1,16 @@
 import { Transform } from 'class-transformer';
-import { IsDateString, IsEmail, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsDateString,
+  IsEmail,
+  IsNotEmpty,
+  IsObject,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
-const trimString = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
+const trimString = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim() : value;
 
 /**
  * Formato entregue pela automacao que recebe leads do Facebook Lead Ads.
@@ -56,6 +65,24 @@ export class FacebookLeadPayloadDto {
   @IsString()
   @MaxLength(255)
   anuncio?: string;
+
+  @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @MaxLength(100)
+  conjunto_id?: string;
+
+  @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @MaxLength(255)
+  conjunto?: string;
+
+  @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @MaxLength(100)
+  criativo_id?: string;
 
   @IsOptional()
   @Transform(trimString)

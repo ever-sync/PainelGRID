@@ -88,6 +88,8 @@ const leadSelect = {
   facebook_form_id: true,
   facebook_ad_id: true,
   facebook_ad_name: true,
+  facebook_ad_set_id: true,
+  facebook_ad_set_name: true,
   facebook_campaign_id: true,
   facebook_campaign_name: true,
   preferred_contact_channel: true,
@@ -140,8 +142,11 @@ type FacebookLeadMetadata = {
   facebookFormId: string | null;
   facebookAdId: string | null;
   facebookAdName: string | null;
+  facebookAdSetId: string | null;
+  facebookAdSetName: string | null;
   facebookCampaignId: string | null;
   facebookCampaignName: string | null;
+  facebookCreativeId: string | null;
   preferredContactChannel: string | null;
   sourceCreatedAt: Date | null;
   sourcePayload: Prisma.InputJsonValue;
@@ -150,6 +155,7 @@ type FacebookLeadMetadata = {
 type AutomaticFacebookRouting = {
   formId: string;
   formName: string;
+  metaConnectionId: string;
   clientId: string;
   eventId: string;
   eventName: string;
@@ -196,6 +202,7 @@ type AutomaticWhatsappDispatchResult = {
   template_name?: string;
   template_language?: string;
   message_id?: string | null;
+  chat_recorded?: boolean;
 };
 
 const AUTOMATIC_WHATSAPP_TEMPLATE_PARAMETER_KEYS = new Set<string>([
@@ -264,10 +271,7 @@ export class LeadsService {
       return null;
     }
     const eventScope: Prisma.LeadWhereInput = {
-      OR: [
-        { event_interest_id: eventId },
-        { appointments: { some: { event_id: eventId } } },
-      ],
+      OR: [{ event_interest_id: eventId }, { appointments: { some: { event_id: eventId } } }],
     };
     const exactPhoneScope: Prisma.LeadWhereInput = {
       OR: candidateSet.candidates.map((candidate) => ({ phone: candidate })),
@@ -278,9 +282,7 @@ export class LeadsService {
         client_id: clientId,
         deleted_at: null,
         ...(excludeLeadId ? { id: { not: excludeLeadId } } : {}),
-        ...(eventId
-          ? { AND: [eventScope, exactPhoneScope] }
-          : exactPhoneScope),
+        ...(eventId ? { AND: [eventScope, exactPhoneScope] } : exactPhoneScope),
       },
       select: leadSelect,
     });
@@ -314,9 +316,7 @@ export class LeadsService {
           client_id: clientId,
           deleted_at: null,
           ...(excludeLeadId ? { id: { not: excludeLeadId } } : {}),
-          ...(eventId
-            ? { AND: [eventScope, suffixPhoneScope] }
-            : suffixPhoneScope),
+          ...(eventId ? { AND: [eventScope, suffixPhoneScope] } : suffixPhoneScope),
         },
         select: leadSelect,
       });
@@ -539,7 +539,15 @@ export class LeadsService {
         .slice(0, 20);
 
       validRows.push({
-        data: { client_id: targetClientId, name, email, phone, source, tags, notes },
+        data: {
+          client_id: targetClientId,
+          name,
+          email,
+          phone,
+          source,
+          tags,
+          notes,
+        },
         line,
       });
     }
@@ -549,7 +557,11 @@ export class LeadsService {
     const existingPhones = new Set<string>();
     if (phonesToCheck.length > 0) {
       const existing = await this.prisma.lead.findMany({
-        where: { client_id: targetClientId, deleted_at: null, phone: { in: phonesToCheck } },
+        where: {
+          client_id: targetClientId,
+          deleted_at: null,
+          phone: { in: phonesToCheck },
+        },
         select: { phone: true },
       });
       for (const l of existing) {
@@ -691,7 +703,11 @@ export class LeadsService {
     if (dto.email) {
       const emailNorm = dto.email.toLowerCase().trim();
       const existingByEmail = await this.prisma.lead.findFirst({
-        where: { client_id: targetClientId, email: emailNorm, deleted_at: null },
+        where: {
+          client_id: targetClientId,
+          email: emailNorm,
+          deleted_at: null,
+        },
       });
       if (existingByEmail) {
         throw new BadRequestException('E-mail ja cadastrado para este cliente');
@@ -922,7 +938,9 @@ export class LeadsService {
           id: nextStageId,
           client_id: targetClientId,
           ...(dto.crm_pipeline_id || lead.crm_pipeline_id
-            ? { pipeline_id: dto.crm_pipeline_id ?? lead.crm_pipeline_id ?? undefined }
+            ? {
+                pipeline_id: dto.crm_pipeline_id ?? lead.crm_pipeline_id ?? undefined,
+              }
             : {}),
         },
         select: { id: true, client_id: true, pipeline_id: true },
@@ -1109,10 +1127,7 @@ export class LeadsService {
         { cpf: { contains: term, mode: 'insensitive' } },
         { phone: { contains: term, mode: 'insensitive' } },
         ...(cleanDigits.length >= 3
-          ? [
-              { cpf: { contains: cleanDigits } },
-              { phone: { contains: cleanDigits } },
-            ]
+          ? [{ cpf: { contains: cleanDigits } }, { phone: { contains: cleanDigits } }]
           : []),
       ],
     };
@@ -1190,9 +1205,7 @@ export class LeadsService {
     let targetStageId = lead.crm_stage_id;
     if (pipelineId) {
       const idBase = lead.client_id.replace(/-/g, '').toUpperCase().slice(0, 16);
-      const preferredCode = dto.sold
-        ? `${idBase}_COMPRARAM`
-        : `${idBase}_ATENDIMENTO_ENCERRADO`;
+      const preferredCode = dto.sold ? `${idBase}_COMPRARAM` : `${idBase}_ATENDIMENTO_ENCERRADO`;
       const fallbackCodes = dto.sold
         ? [`${idBase}_VENDIDO`, `${idBase}_CONVERTIDO`]
         : [`${idBase}_ATENDIMENTO_FINALIZADO`, `${idBase}_ENCERRADO`];
@@ -1242,9 +1255,7 @@ export class LeadsService {
           changed_by_user_id: user.sub,
           notes: `${
             dto.sold ? 'Atendimento encerrado com venda' : 'Atendimento encerrado sem venda'
-          }${wristbandNumber ? `. Pulseira: ${wristbandNumber}` : ''}${
-            cpf ? `, CPF: ${cpf}` : ''
-          }${
+          }${wristbandNumber ? `. Pulseira: ${wristbandNumber}` : ''}${cpf ? `, CPF: ${cpf}` : ''}${
             dto.attendance_duration_seconds != null
               ? `. Duração do atendimento: ${Math.floor(dto.attendance_duration_seconds / 60)}m ${dto.attendance_duration_seconds % 60}s (${dto.attendance_duration_seconds}s)`
               : ''
@@ -1437,7 +1448,10 @@ export class LeadsService {
       throw new BadRequestException('client_id obrigatorio para integracao');
     }
 
-    const where: Prisma.LeadWhereInput = { deleted_at: null, client_id: query.client_id };
+    const where: Prisma.LeadWhereInput = {
+      deleted_at: null,
+      client_id: query.client_id,
+    };
     const take = Math.min(Math.max(query.take ?? 50, 1), 200);
 
     if (query.source) where.source = query.source;
@@ -1447,7 +1461,9 @@ export class LeadsService {
     if (query.crm_stage_code || query.crm_stage_name) {
       where.crm_stage = {
         ...(query.crm_stage_code ? { code: query.crm_stage_code } : {}),
-        ...(query.crm_stage_name ? { name: { contains: query.crm_stage_name, mode: 'insensitive' } } : {}),
+        ...(query.crm_stage_name
+          ? { name: { contains: query.crm_stage_name, mode: 'insensitive' } }
+          : {}),
       };
     }
     if (query.search?.trim()) {
@@ -1460,7 +1476,14 @@ export class LeadsService {
       const phoneConditions: Prisma.LeadWhereInput[] = [
         { phone: { contains: term, mode: 'insensitive' } },
         ...(normalizedPhone
-          ? [{ phone: { contains: normalizedPhone, mode: 'insensitive' as const } }]
+          ? [
+              {
+                phone: {
+                  contains: normalizedPhone,
+                  mode: 'insensitive' as const,
+                },
+              },
+            ]
           : []),
         ...(digits && digits.length >= 8
           ? [{ phone: { contains: digits, mode: 'insensitive' as const } }]
@@ -1510,10 +1533,7 @@ export class LeadsService {
     };
   }
 
-  async createFacebookLeadsForIntegration(
-    clientId: string,
-    payloads: FacebookLeadPayloadDto[],
-  ) {
+  async createFacebookLeadsForIntegration(clientId: string, payloads: FacebookLeadPayloadDto[]) {
     if (payloads.length === 0) {
       throw new BadRequestException('Envie ao menos um lead do Facebook');
     }
@@ -1531,8 +1551,11 @@ export class LeadsService {
         facebookFormId: payload.formulario_id || null,
         facebookAdId: payload.anuncio_id || null,
         facebookAdName: payload.anuncio || null,
+        facebookAdSetId: payload.conjunto_id || null,
+        facebookAdSetName: payload.conjunto || null,
         facebookCampaignId: payload.campanha_id || null,
         facebookCampaignName: payload.campanha || null,
+        facebookCreativeId: payload.criativo_id || null,
         preferredContactChannel: payload.preferencia_atendimento || null,
         sourceCreatedAt: payload.criado_em ? new Date(payload.criado_em) : null,
         sourcePayload: JSON.parse(JSON.stringify(payload)) as Prisma.InputJsonValue,
@@ -1587,14 +1610,18 @@ export class LeadsService {
         form_id: true,
         form_name: true,
         meta_connection: {
-          select: { client_id: true },
+          select: { id: true, client_id: true },
         },
       },
     });
 
     const selectionsByForm = new Map<
       string,
-      Array<{ clientId: string; formName: string | null }>
+      Array<{
+        clientId: string;
+        formName: string | null;
+        metaConnectionId: string;
+      }>
     >();
     for (const selection of selectedForms) {
       if (!selection.form_id) continue;
@@ -1603,14 +1630,13 @@ export class LeadsService {
         entries.push({
           clientId: selection.meta_connection.client_id,
           formName: selection.form_name,
+          metaConnectionId: selection.meta_connection.id,
         });
       }
       selectionsByForm.set(selection.form_id, entries);
     }
 
-    const unknownFormIds = formIds.filter(
-      (formId) => !selectionsByForm.has(formId),
-    );
+    const unknownFormIds = formIds.filter((formId) => !selectionsByForm.has(formId));
     if (unknownFormIds.length > 0) {
       throw new ForbiddenException(
         `Formulario Meta nao vinculado a nenhum cliente ativo: ${unknownFormIds.join(', ')}`,
@@ -1632,6 +1658,7 @@ export class LeadsService {
         id: formId,
         name: selection.formName ?? formId,
         client_id: selection.clientId,
+        meta_connection_id: selection.metaConnectionId,
       };
     });
 
@@ -1720,6 +1747,7 @@ export class LeadsService {
       routingByForm.set(formId, {
         formId,
         formName: rule.form_name ?? selection.name,
+        metaConnectionId: selection.meta_connection_id,
         clientId: rule.client_id,
         clientName: rule.client.company_name,
         eventId: rule.event_id,
@@ -1748,12 +1776,106 @@ export class LeadsService {
       });
     }
 
+    // O payload normalizado do n8n historicamente nao trazia o conjunto. A
+    // hierarquia ja sincronizada da Meta permite completar anúncio -> conjunto
+    // -> campanha antes da transacao, sem depender de uma nova chamada Graph.
+    const metaConnectionIds = [
+      ...new Set([...routingByForm.values()].map((r) => r.metaConnectionId)),
+    ];
+    const adIds = [
+      ...new Set(payloads.map((payload) => payload.anuncio_id?.trim()).filter(Boolean)),
+    ] as string[];
+    const knownAds =
+      adIds.length > 0
+        ? await this.prisma.metaAd.findMany({
+            where: {
+              meta_connection_id: { in: metaConnectionIds },
+              meta_ad_id: { in: adIds },
+            },
+            select: {
+              meta_connection_id: true,
+              meta_ad_id: true,
+              meta_ad_set_id: true,
+              meta_campaign_id: true,
+              meta_creative_id: true,
+              name: true,
+            },
+          })
+        : [];
+    const adKey = (connectionId: string, entityId: string) => `${connectionId}:${entityId}`;
+    const knownAdById = new Map(
+      knownAds.map((ad) => [adKey(ad.meta_connection_id, ad.meta_ad_id), ad]),
+    );
+    const adSetIds = [
+      ...new Set([
+        ...knownAds.map((ad) => ad.meta_ad_set_id).filter(Boolean),
+        ...payloads.map((payload) => payload.conjunto_id?.trim()).filter(Boolean),
+      ]),
+    ] as string[];
+    const knownAdSets =
+      adSetIds.length > 0
+        ? await this.prisma.metaAdSet.findMany({
+            where: {
+              meta_connection_id: { in: metaConnectionIds },
+              meta_ad_set_id: { in: adSetIds },
+            },
+            select: {
+              meta_connection_id: true,
+              meta_ad_set_id: true,
+              meta_campaign_id: true,
+              name: true,
+            },
+          })
+        : [];
+    const knownAdSetById = new Map(
+      knownAdSets.map((adSet) => [adKey(adSet.meta_connection_id, adSet.meta_ad_set_id), adSet]),
+    );
+    const campaignIds = [
+      ...new Set([
+        ...knownAds.map((ad) => ad.meta_campaign_id).filter(Boolean),
+        ...knownAdSets.map((adSet) => adSet.meta_campaign_id).filter(Boolean),
+        ...payloads.map((payload) => payload.campanha_id?.trim()).filter(Boolean),
+      ]),
+    ] as string[];
+    const knownCampaigns =
+      campaignIds.length > 0
+        ? await this.prisma.metaCampaign.findMany({
+            where: {
+              meta_connection_id: { in: metaConnectionIds },
+              meta_campaign_id: { in: campaignIds },
+            },
+            select: {
+              meta_connection_id: true,
+              meta_campaign_id: true,
+              name: true,
+            },
+          })
+        : [];
+    const knownCampaignById = new Map(
+      knownCampaigns.map((campaign) => [
+        adKey(campaign.meta_connection_id, campaign.meta_campaign_id),
+        campaign,
+      ]),
+    );
+
     // Canal, datas e metadados sao validados antes de abrir a transacao. Um
     // item invalido nunca deixa os itens anteriores gravados parcialmente.
     const prepared = payloads.map((payload): AutomaticFacebookPreparedLead => {
       const routing = routingByForm.get(payload.formulario_id.trim())!;
       const channel = this.normalizeFacebookContactChannel(payload.preferencia_atendimento);
       const targetStage = channel === 'ligacao' ? routing.callStage : routing.whatsappStage;
+      const knownAd = payload.anuncio_id
+        ? knownAdById.get(adKey(routing.metaConnectionId, payload.anuncio_id))
+        : undefined;
+      const facebookAdSetId = payload.conjunto_id || knownAd?.meta_ad_set_id || null;
+      const knownAdSet = facebookAdSetId
+        ? knownAdSetById.get(adKey(routing.metaConnectionId, facebookAdSetId))
+        : undefined;
+      const facebookCampaignId =
+        payload.campanha_id || knownAd?.meta_campaign_id || knownAdSet?.meta_campaign_id || null;
+      const knownCampaign = facebookCampaignId
+        ? knownCampaignById.get(adKey(routing.metaConnectionId, facebookCampaignId))
+        : undefined;
       const sourceCreatedAt = payload.criado_em ? new Date(payload.criado_em) : null;
       if (sourceCreatedAt && Number.isNaN(sourceCreatedAt.getTime())) {
         throw new BadRequestException(`criado_em invalido para o lead Meta: ${payload.lead_id}`);
@@ -1770,9 +1892,12 @@ export class LeadsService {
           facebookLeadId: payload.lead_id,
           facebookFormId: payload.formulario_id,
           facebookAdId: payload.anuncio_id || null,
-          facebookAdName: payload.anuncio || null,
-          facebookCampaignId: payload.campanha_id || null,
-          facebookCampaignName: payload.campanha || null,
+          facebookAdName: payload.anuncio || knownAd?.name || null,
+          facebookAdSetId,
+          facebookAdSetName: payload.conjunto || knownAdSet?.name || null,
+          facebookCampaignId,
+          facebookCampaignName: payload.campanha || knownCampaign?.name || null,
+          facebookCreativeId: payload.criativo_id || knownAd?.meta_creative_id || null,
           preferredContactChannel: channel,
           sourceCreatedAt,
           sourcePayload: JSON.parse(JSON.stringify(payload)) as Prisma.InputJsonValue,
@@ -1960,6 +2085,8 @@ export class LeadsService {
         ),
       });
 
+      const chatRecorded = await this.recordAutomaticWhatsappMessage(item, messageId);
+
       await this.leadTimeline.record({
         clientId: lead.client_id,
         leadId: lead.id,
@@ -1982,6 +2109,7 @@ export class LeadsService {
         template_name: templateName,
         template_language: templateLanguage,
         message_id: messageId,
+        chat_recorded: chatRecorded,
       };
     } catch (error) {
       this.logger.warn(
@@ -1992,7 +2120,86 @@ export class LeadsService {
         reason: 'provider_error',
         template_name: templateName,
         template_language: templateLanguage,
+        chat_recorded: false,
       };
+    }
+  }
+
+  /**
+   * O envio automatico usa a API da Meta diretamente. Para que o operador
+   * tambem veja a mensagem no Chat do painel, espelhamos o envio na mesma
+   * conversa WhatsApp usada pelos demais disparos.
+   */
+  private async recordAutomaticWhatsappMessage(
+    item: AutomaticFacebookTransactionItem,
+    messageId: string | null,
+  ): Promise<boolean> {
+    const { lead, prepared } = item;
+    const templateName = prepared.routing.whatsappTemplateName;
+    if (!messageId || !templateName) return false;
+
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        let conversation = await tx.conversation.findFirst({
+          where: {
+            client_id: lead.client_id,
+            lead_id: lead.id,
+            channel: 'whatsapp',
+          },
+          orderBy: [{ last_message_at: 'desc' }, { created_at: 'desc' }],
+        });
+        if (!conversation) {
+          conversation = await tx.conversation.create({
+            data: {
+              client_id: lead.client_id,
+              lead_id: lead.id,
+              channel: 'whatsapp',
+            },
+          });
+        }
+
+        const existingMessage = await tx.message.findUnique({
+          where: { external_id: messageId },
+          select: { id: true, conversation_id: true, content: true, media_id: true, media_url: true, created_at: true },
+        });
+        if (existingMessage) {
+          return { conversation, message: existingMessage, created: false };
+        }
+
+        const message = await tx.message.create({
+          data: {
+            conversation_id: conversation.id,
+            sender_type: 'user',
+            sender_id: null,
+            content: `Template WhatsApp enviado: ${templateName}`,
+            external_id: messageId,
+          },
+        });
+        await tx.conversation.update({
+          where: { id: conversation.id },
+          data: { last_message_at: message.created_at },
+        });
+        return { conversation, message, created: true };
+      });
+
+      if (result.created) {
+        this.realtimeEvents.emitNewMessage(lead.client_id, {
+          conversation_id: result.conversation.id,
+          message_id: result.message.id,
+          sender_type: 'user',
+          sender_id: null,
+          content: result.message.content,
+          media_id: null,
+          media_url: null,
+          created_at: result.message.created_at,
+        });
+      }
+      return true;
+    } catch (error) {
+      this.logger.warn(
+        `Template Meta enviado, mas nao foi espelhado no Chat para o lead ${lead.id}: ${this.errorMessage(error)}`,
+      );
+      return false;
     }
   }
 
@@ -2157,6 +2364,8 @@ export class LeadsService {
           facebook_form_id: metadata.facebookFormId,
           facebook_ad_id: metadata.facebookAdId,
           facebook_ad_name: metadata.facebookAdName,
+          facebook_ad_set_id: metadata.facebookAdSetId,
+          facebook_ad_set_name: metadata.facebookAdSetName,
           facebook_campaign_id: metadata.facebookCampaignId,
           facebook_campaign_name: metadata.facebookCampaignName,
           preferred_contact_channel: metadata.preferredContactChannel,
@@ -2175,6 +2384,7 @@ export class LeadsService {
           notes: `Lead Meta criado e roteado para ${targetStage.name}`,
         },
       });
+      await this.upsertAutomaticFacebookAttribution(tx, lead.id, prepared);
 
       return {
         lead,
@@ -2227,6 +2437,8 @@ export class LeadsService {
       patch.facebook_form_id = metadata.facebookFormId;
       patch.facebook_ad_id = metadata.facebookAdId;
       patch.facebook_ad_name = metadata.facebookAdName;
+      patch.facebook_ad_set_id = metadata.facebookAdSetId;
+      patch.facebook_ad_set_name = metadata.facebookAdSetName;
       patch.facebook_campaign_id = metadata.facebookCampaignId;
       patch.facebook_campaign_name = metadata.facebookCampaignName;
       patch.preferred_contact_channel = metadata.preferredContactChannel;
@@ -2257,6 +2469,7 @@ export class LeadsService {
         },
       });
     }
+    await this.upsertAutomaticFacebookAttribution(tx, lead.id, prepared);
 
     return {
       lead,
@@ -2267,6 +2480,45 @@ export class LeadsService {
       shouldDispatchWhatsapp: shouldApplyRouting,
       prepared,
     };
+  }
+
+  private async upsertAutomaticFacebookAttribution(
+    tx: Prisma.TransactionClient,
+    leadId: string,
+    prepared: AutomaticFacebookPreparedLead,
+  ) {
+    const { routing, metadata } = prepared;
+    const attribution = {
+      client_id: routing.clientId,
+      lead_id: leadId,
+      event_id: routing.eventId,
+      meta_form_id: metadata.facebookFormId,
+      meta_campaign_id: metadata.facebookCampaignId,
+      meta_campaign_name: metadata.facebookCampaignName,
+      meta_ad_set_id: metadata.facebookAdSetId,
+      meta_ad_set_name: metadata.facebookAdSetName,
+      meta_ad_id: metadata.facebookAdId,
+      meta_ad_name: metadata.facebookAdName,
+      meta_creative_id: metadata.facebookCreativeId,
+      preferred_contact_channel: metadata.preferredContactChannel,
+      source_created_at: metadata.sourceCreatedAt,
+      raw_payload: metadata.sourcePayload,
+    };
+
+    await tx.metaLeadImport.upsert({
+      where: {
+        meta_connection_id_meta_lead_id: {
+          meta_connection_id: routing.metaConnectionId,
+          meta_lead_id: metadata.facebookLeadId,
+        },
+      },
+      create: {
+        ...attribution,
+        meta_connection_id: routing.metaConnectionId,
+        meta_lead_id: metadata.facebookLeadId,
+      },
+      update: attribution,
+    });
   }
 
   /**
@@ -2318,10 +2570,7 @@ export class LeadsService {
    * ou e-mail para o mesmo cliente, retorna o lead existente com
    * `already_existed: true` sem criar duplicata nem disparar webhook.
    */
-  async createForIntegration(
-    dto: CreateLeadDto,
-    facebookMetadata?: FacebookLeadMetadata,
-  ) {
+  async createForIntegration(dto: CreateLeadDto, facebookMetadata?: FacebookLeadMetadata) {
     this.assertPipelineStageConsistency(dto.crm_pipeline_id, dto.crm_stage_id);
 
     if (dto.crm_stage_id) {
@@ -2345,7 +2594,9 @@ export class LeadsService {
       const digits = phoneDigits(phone);
       dedupeOr.push({ phone });
       if (digits.length >= 10) {
-        dedupeOr.push({ phone: { contains: digits.slice(-10), mode: 'insensitive' } });
+        dedupeOr.push({
+          phone: { contains: digits.slice(-10), mode: 'insensitive' },
+        });
       }
     }
 
@@ -2447,6 +2698,8 @@ export class LeadsService {
                 facebook_form_id: facebookMetadata.facebookFormId,
                 facebook_ad_id: facebookMetadata.facebookAdId,
                 facebook_ad_name: facebookMetadata.facebookAdName,
+                facebook_ad_set_id: facebookMetadata.facebookAdSetId,
+                facebook_ad_set_name: facebookMetadata.facebookAdSetName,
                 facebook_campaign_id: facebookMetadata.facebookCampaignId,
                 facebook_campaign_name: facebookMetadata.facebookCampaignName,
                 preferred_contact_channel: facebookMetadata.preferredContactChannel,
@@ -2605,6 +2858,12 @@ export class LeadsService {
         if (facebookMetadata.facebookAdName) {
           patch.facebook_ad_name = facebookMetadata.facebookAdName;
         }
+        if (facebookMetadata.facebookAdSetId) {
+          patch.facebook_ad_set_id = facebookMetadata.facebookAdSetId;
+        }
+        if (facebookMetadata.facebookAdSetName) {
+          patch.facebook_ad_set_name = facebookMetadata.facebookAdSetName;
+        }
         if (facebookMetadata.facebookCampaignId) {
           patch.facebook_campaign_id = facebookMetadata.facebookCampaignId;
         }
@@ -2634,16 +2893,10 @@ export class LeadsService {
     return { ...this.toResponse(updated), already_existed: true };
   }
 
-  async getFipeDataPublic(
-    plate: string,
-    user?: AuthenticatedUser,
-    eventId?: string,
-  ) {
+  async getFipeDataPublic(plate: string, user?: AuthenticatedUser, eventId?: string) {
     if (user?.role === Role.VENDEDOR) {
       if (!user.client_id || !eventId) {
-        throw new ForbiddenException(
-          'Consulta FIPE não permitida para o vendedor neste evento.',
-        );
+        throw new ForbiddenException('Consulta FIPE não permitida para o vendedor neste evento.');
       }
       const allowedEvent = await this.prisma.event.findFirst({
         where: {
@@ -2654,15 +2907,15 @@ export class LeadsService {
         select: { id: true },
       });
       if (!allowedEvent) {
-        throw new ForbiddenException(
-          'Consulta FIPE não permitida para o vendedor neste evento.',
-        );
+        throw new ForbiddenException('Consulta FIPE não permitida para o vendedor neste evento.');
       }
     }
 
     const normalized = plate.replace(/[^A-Z0-9]/gi, '').toUpperCase();
     if (!normalized || normalized.length < 7) {
-      throw new BadRequestException('Informe uma placa válida com pelo menos 7 caracteres. Ex: ABC1D23');
+      throw new BadRequestException(
+        'Informe uma placa válida com pelo menos 7 caracteres. Ex: ABC1D23',
+      );
     }
 
     const token = process.env.APIBRASIL_TOKEN;
@@ -2733,9 +2986,7 @@ export class LeadsService {
           })
         : null;
       if (!allowedEvent) {
-        throw new ForbiddenException(
-          'Check-in não permitido para o vendedor neste evento.',
-        );
+        throw new ForbiddenException('Check-in não permitido para o vendedor neste evento.');
       }
     }
 
@@ -2795,7 +3046,9 @@ export class LeadsService {
       where: {
         lead_id: lead.id,
         client_id: lead.client_id,
-        status: { in: [AppointmentStatus.scheduled, AppointmentStatus.confirmed] },
+        status: {
+          in: [AppointmentStatus.scheduled, AppointmentStatus.confirmed],
+        },
       },
       orderBy: { created_at: 'desc' },
     });
@@ -2892,9 +3145,7 @@ export class LeadsService {
         120, // 2 minutos
       );
     } catch (err: unknown) {
-      this.logger.error(
-        `Falha ao salvar chamada de vendedor no Redis: ${this.errorMessage(err)}`,
-      );
+      this.logger.error(`Falha ao salvar chamada de vendedor no Redis: ${this.errorMessage(err)}`);
     }
 
     this.realtimeEvents.emitVendorCalled(lead.client_id, callPayload);
@@ -2944,6 +3195,8 @@ export class LeadsService {
       facebook_form_id: lead.facebook_form_id,
       facebook_ad_id: lead.facebook_ad_id,
       facebook_ad_name: lead.facebook_ad_name,
+      facebook_ad_set_id: lead.facebook_ad_set_id,
+      facebook_ad_set_name: lead.facebook_ad_set_name,
       facebook_campaign_id: lead.facebook_campaign_id,
       facebook_campaign_name: lead.facebook_campaign_name,
       preferred_contact_channel: lead.preferred_contact_channel,
@@ -3000,8 +3253,7 @@ export class LeadsService {
     nextStatus: ConfirmationStatus | null | undefined,
   ): boolean {
     const isTarget =
-      nextStatus === ConfirmationStatus.confirmed ||
-      nextStatus === ConfirmationStatus.scheduled;
+      nextStatus === ConfirmationStatus.confirmed || nextStatus === ConfirmationStatus.scheduled;
     const isDifferent = lead.confirmation_status !== nextStatus;
     return isTarget && isDifferent;
   }
@@ -3090,7 +3342,12 @@ export class LeadsService {
 
   private buildCheckinWhatsappCaption(
     lead: LeadWithRelations,
-    event: { id: string; name: string; event_date: Date; location: string | null } | null,
+    event: {
+      id: string;
+      name: string;
+      event_date: Date;
+      location: string | null;
+    } | null,
     voucher?: string,
   ): string {
     const firstName = lead.name?.trim().split(/\s+/)[0] ?? '';
@@ -3297,7 +3554,9 @@ export class LeadsService {
     if (query.crm_stage_code || query.crm_stage_name) {
       where.crm_stage = {
         ...(query.crm_stage_code ? { code: query.crm_stage_code } : {}),
-        ...(query.crm_stage_name ? { name: { contains: query.crm_stage_name, mode: 'insensitive' } } : {}),
+        ...(query.crm_stage_name
+          ? { name: { contains: query.crm_stage_name, mode: 'insensitive' } }
+          : {}),
       };
     }
 
@@ -3540,9 +3799,7 @@ export class LeadsService {
       }
       const sheet = await readSheet(file.buffer);
       if (sheet.length > MAX_IMPORT_ROWS + 1) {
-        throw new BadRequestException(
-          `A planilha excede o limite de ${MAX_IMPORT_ROWS} linhas.`,
-        );
+        throw new BadRequestException(`A planilha excede o limite de ${MAX_IMPORT_ROWS} linhas.`);
       }
       if (sheet.some((row) => row.length > MAX_IMPORT_COLUMNS)) {
         throw new BadRequestException(
@@ -3550,23 +3807,17 @@ export class LeadsService {
         );
       }
       return sheet.map((row) =>
-        row.map((cell) =>
-          cell instanceof Date ? cell.toISOString() : String(cell ?? ''),
-        ),
+        row.map((cell) => (cell instanceof Date ? cell.toISOString() : String(cell ?? ''))),
       );
     }
 
     const text = file.buffer.toString('utf8');
     const rows = this.parseCsv(text);
     if (rows.length > MAX_IMPORT_ROWS + 1) {
-      throw new BadRequestException(
-        `O CSV excede o limite de ${MAX_IMPORT_ROWS} linhas.`,
-      );
+      throw new BadRequestException(`O CSV excede o limite de ${MAX_IMPORT_ROWS} linhas.`);
     }
     if (rows.some((row) => row.length > MAX_IMPORT_COLUMNS)) {
-      throw new BadRequestException(
-        `O CSV excede o limite de ${MAX_IMPORT_COLUMNS} colunas.`,
-      );
+      throw new BadRequestException(`O CSV excede o limite de ${MAX_IMPORT_COLUMNS} colunas.`);
     }
     return rows;
   }
@@ -3724,16 +3975,21 @@ export class LeadsService {
     throw new ForbiddenException('Sem permissao para importar leads');
   }
 
-  private async fetchFipeDataByPlate(plate: string): Promise<{ brand: string; model: string; modelYear: string; value: string } | null> {
+  private async fetchFipeDataByPlate(plate: string): Promise<{
+    brand: string;
+    model: string;
+    modelYear: string;
+    value: string;
+  } | null> {
     const token = process.env.APIBRASIL_TOKEN;
     const deviceId = process.env.APIBRASIL_DEVICE;
-    
+
     if (token && deviceId) {
       try {
         const response = await fetch(`https://placa.apibrasil.com.br/api/v1/placa/${plate}`, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
             'Device-Id': deviceId,
             'Content-Type': 'application/json',
           },
@@ -3747,7 +4003,7 @@ export class LeadsService {
             ['dados', 'veiculo', 'result', 'response', 'fipe']
               .map((key) => this.toUnknownRecord(raw[key]))
               .find((value) => Object.keys(value).length > 0) ?? raw;
-          
+
           const brand =
             this.firstDefined(data, ['brand', 'marca']) ??
             this.firstDefined(raw, ['brand', 'marca']);
@@ -3766,7 +4022,9 @@ export class LeadsService {
             if (typeof rawValue === 'number') {
               formattedValue = `R$ ${rawValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
             } else if (rawValue) {
-              formattedValue = String(rawValue).startsWith('R$') ? String(rawValue) : `R$ ${rawValue}`;
+              formattedValue = String(rawValue).startsWith('R$')
+                ? String(rawValue)
+                : `R$ ${rawValue}`;
             }
 
             return {
@@ -3787,7 +4045,7 @@ export class LeadsService {
     } else {
       this.logger.warn('APIBRASIL_TOKEN ou APIBRASIL_DEVICE ausentes');
     }
-    
+
     return null;
   }
 
@@ -3800,7 +4058,9 @@ export class LeadsService {
       if (!fipe) return;
 
       const cleanNotes = currentNotes
-        ? currentNotes.replace(/\n\n--- 🚗 Avaliação FIPE [\s\S]*?-----------------------------------\n/g, '').trim()
+        ? currentNotes
+            .replace(/\n\n--- 🚗 Avaliação FIPE [\s\S]*?-----------------------------------\n/g, '')
+            .trim()
         : '';
 
       const fipeBlock = `\n\n--- 🚗 Avaliação FIPE (Automática) ---\nModelo: ${fipe.brand} ${fipe.model}\nAno: ${fipe.modelYear}\nValor FIPE estimado: ${fipe.value}\nPlaca: ${normalized}\n-----------------------------------\n`;
@@ -3815,7 +4075,8 @@ export class LeadsService {
         where: { id: leadId },
         data: {
           notes: updatedNotes,
-          vehicle_model: existing?.vehicle_model || `${fipe.brand} ${fipe.model}`.trim().slice(0, 100),
+          vehicle_model:
+            existing?.vehicle_model || `${fipe.brand} ${fipe.model}`.trim().slice(0, 100),
           vehicle_year: existing?.vehicle_year || String(fipe.modelYear).slice(0, 50),
         },
         select: leadSelect,
@@ -3840,10 +4101,7 @@ export class LeadsService {
       : {};
   }
 
-  private firstDefined(
-    record: Record<string, unknown>,
-    keys: string[],
-  ): unknown {
+  private firstDefined(record: Record<string, unknown>, keys: string[]): unknown {
     for (const key of keys) {
       const value = record[key];
       if (value !== undefined && value !== null && value !== '') {

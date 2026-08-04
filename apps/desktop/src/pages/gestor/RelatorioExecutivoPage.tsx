@@ -19,6 +19,7 @@ import {
   getEventDashboardTv,
   getEventExecutiveReport,
   mapApiEventToEvent,
+  type ExecutiveAttributionRow,
   type EventDashboardTvResponse,
   type ExecutiveReportResponse,
 } from "../../services/events";
@@ -472,7 +473,8 @@ type CampaignRow = {
   compareceram: number;
   vendas: number;
   receita: number;
-  roi: number;
+  roas: number;
+  roiPercent: number;
 };
 
 type ReportModel = ReturnType<typeof buildReport>;
@@ -491,7 +493,28 @@ function buildReport(
     sold: 0,
   };
 
-  const metaSpend = campaigns.reduce((s, c) => s + (c.spend || 0), 0);
+  const legacyCampaignAttribution: ExecutiveAttributionRow[] = (
+    exec?.attribution ?? []
+  ).map((row) => ({
+    ...row,
+    level: "campaign",
+    entity_id: row.entity_id ?? row.meta_campaign_id,
+    meta_ad_set_id: null,
+    spend: row.spend ?? 0,
+    cpl: row.cpl ?? 0,
+    cost_per_scheduled: row.cost_per_scheduled ?? 0,
+    cost_per_sale: row.cost_per_sale ?? 0,
+    roas: row.roas ?? 0,
+    roi_percent: row.roi_percent ?? 0,
+  }));
+  const levelAttribution = exec?.attribution_by_level ?? {
+    campaigns: legacyCampaignAttribution,
+    ad_sets: [],
+    ads: [],
+  };
+  const metaSpend = levelAttribution.campaigns.length
+    ? levelAttribution.campaigns.reduce((sum, row) => sum + (row.spend || 0), 0)
+    : campaigns.reduce((sum, campaign) => sum + (campaign.spend || 0), 0);
   // Prefere o investimento declarado no evento; cai para o gasto do Meta.
   const investimento = exec?.investment?.total ?? metaSpend;
   const paidTraffic = exec?.investment?.paid_traffic ?? metaSpend;
@@ -526,26 +549,38 @@ function buildReport(
 
   // Atribuição REAL por campanha (exec) cruzada com o custo de mídia (campaigns)
   const attrById = new Map(
-    (exec?.attribution ?? []).map((a) => [a.meta_campaign_id, a]),
+    levelAttribution.campaigns.map((attribution) => [
+      attribution.entity_id,
+      attribution,
+    ]),
   );
-  const campaignRows: CampaignRow[] = campaigns.map((c) => {
-    const a = attrById.get(c.id);
+  const campaignMetricsById = new Map(
+    campaigns.map((campaign) => [campaign.id, campaign]),
+  );
+  const campaignIds = new Set([
+    ...campaignMetricsById.keys(),
+    ...attrById.keys(),
+  ]);
+  const campaignRows: CampaignRow[] = [...campaignIds].map((campaignId) => {
+    const c = campaignMetricsById.get(campaignId);
+    const a = attrById.get(campaignId);
     const receita = a?.revenue ?? 0;
     return {
-      id: c.id,
-      name: c.name,
-      investimento: c.spend || 0,
-      leads: c.leads || 0,
-      cpl: c.cost_per_lead || 0,
-      impressoes: c.impressions || 0,
-      conversas: c.conversations || 0,
-      custoConversa: c.cost_per_conversation || 0,
-      alcance: c.reach || 0,
+      id: campaignId,
+      name: a?.name ?? c?.name ?? "Campanha sem nome",
+      investimento: a?.spend ?? c?.spend ?? 0,
+      leads: a?.leads ?? c?.leads ?? 0,
+      cpl: a?.cpl ?? c?.cost_per_lead ?? 0,
+      impressoes: c?.impressions || 0,
+      conversas: c?.conversations || 0,
+      custoConversa: c?.cost_per_conversation || 0,
+      alcance: c?.reach || 0,
       agendados: a?.scheduled ?? 0,
       compareceram: a?.checked_in ?? 0,
       vendas: a?.sold ?? 0,
       receita,
-      roi: (c.spend || 0) > 0 ? receita / (c.spend || 1) : 0,
+      roas: a?.roas ?? 0,
+      roiPercent: a?.roi_percent ?? 0,
     };
   });
   const attrReal = Boolean(exec);
@@ -560,8 +595,11 @@ function buildReport(
   const vendors = (tv?.vendors ?? [])
     .map((v, idx) => {
       const rt = ratingByVendor.get(v.vendor_id);
-      const tempoAtendimentoMin = v.leads > 0 ? Math.round(v.leads * 14 + (idx * 3)) : 0;
-      const tempoAusenteMin = Math.round(((v.vendor_id.charCodeAt(0) || 1) % 5) * 12 + 5);
+      const tempoAtendimentoMin =
+        v.leads > 0 ? Math.round(v.leads * 14 + idx * 3) : 0;
+      const tempoAusenteMin = Math.round(
+        ((v.vendor_id.charCodeAt(0) || 1) % 5) * 12 + 5,
+      );
 
       return {
         id: v.vendor_id,
@@ -679,7 +717,7 @@ function buildReport(
   const bestCamp = [...campaignRows].sort((a, b) => b.receita - a.receita)[0];
   if (bestCamp && bestCamp.receita > 0) {
     narrative.push(
-      `A campanha "${bestCamp.name}" gerou a maior receita atribuída (${formatCurrencyCompact(bestCamp.receita)}), com ROI de ${bestCamp.roi.toFixed(0)}x.`,
+      `A campanha "${bestCamp.name}" gerou a maior receita atribuída (${formatCurrencyCompact(bestCamp.receita)}), com ROAS de ${bestCamp.roas.toFixed(2)}x.`,
     );
   }
   if (peakHour) {
@@ -706,6 +744,7 @@ function buildReport(
     roi,
     retornoPorReal,
     campaignRows,
+    attributionByLevel: levelAttribution,
     attrReal,
     coverage,
     vendors,
@@ -1114,14 +1153,49 @@ function CampaignsToCrm({
   isDark: boolean;
 }) {
   const t = tableClasses(isDark);
-  const rows = report.campaignRows;
-  if (rows.length === 0) {
+  const [level, setLevel] = useState<"campaigns" | "ad_sets" | "ads">(
+    "campaigns",
+  );
+  const levelOptions = [
+    { key: "campaigns" as const, label: "Campanhas" },
+    { key: "ad_sets" as const, label: "Conjuntos" },
+    { key: "ads" as const, label: "Anúncios" },
+  ];
+  const attributedRows = report.attributionByLevel[level];
+  const campaignFallback: ExecutiveAttributionRow[] = report.campaignRows.map(
+    (row) => ({
+      level: "campaign",
+      entity_id: row.id,
+      name: row.name,
+      meta_campaign_id: row.id,
+      meta_ad_set_id: null,
+      leads: row.leads,
+      scheduled: row.agendados,
+      checked_in: row.compareceram,
+      sold: row.vendas,
+      revenue: row.receita,
+      spend: row.investimento,
+      cpl: row.cpl,
+      cost_per_scheduled:
+        row.agendados > 0 ? row.investimento / row.agendados : 0,
+      cost_per_sale: row.vendas > 0 ? row.investimento / row.vendas : 0,
+      roas: row.roas,
+      roi_percent: row.roiPercent,
+    }),
+  );
+  const rows =
+    attributedRows.length > 0
+      ? attributedRows
+      : level === "campaigns"
+        ? campaignFallback
+        : [];
+  if (report.campaignRows.length === 0 && rows.length === 0) {
     return (
       <EmptyNote isDark={isDark} text="Sem campanhas para cruzar com o CRM." />
     );
   }
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <p
         className={clsx("text-xs", isDark ? "text-zinc-500" : "text-zinc-400")}
       >
@@ -1142,42 +1216,103 @@ function CampaignsToCrm({
           <>Atribuição indisponível para este evento.</>
         )}
       </p>
-      <div className={t.wrap}>
-        <table className={t.table}>
-          <thead>
-            <tr className={t.thead}>
-              <th className={t.th}>Campanha</th>
-              <th className={t.th}>Leads</th>
-              <th className={t.th}>Agendados</th>
-              <th className={t.th}>Compareceram</th>
-              <th className={t.th}>Vendas</th>
-              <th className={t.th}>Receita</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((c) => (
-              <tr key={c.id} className={t.row}>
-                <td className={clsx(t.td, "font-semibold")}>{c.name}</td>
-                <td className={t.td}>{formatNumber(c.leads)}</td>
-                <td className={t.td}>{formatNumber(c.agendados)}</td>
-                <td className={t.td}>{formatNumber(c.compareceram)}</td>
-                <td
-                  className={clsx(t.td, "font-bold")}
-                  style={{ color: BRAND }}
-                >
-                  {formatNumber(c.vendas)}
-                </td>
-                <td
-                  className={clsx(t.td, "font-bold")}
-                  style={{ color: "#10b981" }}
-                >
-                  {formatCurrencyCompact(c.receita)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="flex flex-wrap gap-2">
+        {levelOptions.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            onClick={() => setLevel(option.key)}
+            className={clsx(
+              "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+              level === option.key
+                ? "border-[#FF0636] bg-[#FF0636] text-white"
+                : isDark
+                  ? "border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-zinc-500"
+                  : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-400",
+            )}
+          >
+            {option.label}
+            <span className="ml-1.5 opacity-70">
+              {formatNumber(
+                option.key === "campaigns" &&
+                  report.attributionByLevel.campaigns.length === 0
+                  ? campaignFallback.length
+                  : report.attributionByLevel[option.key].length,
+              )}
+            </span>
+          </button>
+        ))}
       </div>
+      {rows.length === 0 ? (
+        <EmptyNote
+          isDark={isDark}
+          text={`Nenhum ${level === "ad_sets" ? "conjunto" : "anúncio"} atribuído neste evento.`}
+        />
+      ) : (
+        <div className={t.wrap}>
+          <table className={t.table}>
+            <thead>
+              <tr className={t.thead}>
+                <th className={t.th}>
+                  {level === "campaigns"
+                    ? "Campanha"
+                    : level === "ad_sets"
+                      ? "Conjunto"
+                      : "Anúncio"}
+                </th>
+                <th className={t.th}>Investimento</th>
+                <th className={t.th}>Leads</th>
+                <th className={t.th}>CPL</th>
+                <th className={t.th}>Agendados</th>
+                <th className={t.th}>Custo/agend.</th>
+                <th className={t.th}>Compareceram</th>
+                <th className={t.th}>Vendas</th>
+                <th className={t.th}>Custo/venda</th>
+                <th className={t.th}>Receita</th>
+                <th className={t.th}>ROAS</th>
+                <th className={t.th}>ROI</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.entity_id} className={t.row}>
+                  <td className={clsx(t.td, "min-w-56 font-semibold")}>
+                    <div>{row.name}</div>
+                    <div className="mt-0.5 font-mono text-[10px] font-normal opacity-50">
+                      ID {row.entity_id}
+                    </div>
+                  </td>
+                  <td className={t.td}>{formatCurrency(row.spend)}</td>
+                  <td className={t.td}>{formatNumber(row.leads)}</td>
+                  <td className={t.td}>{formatCurrency(row.cpl, 2)}</td>
+                  <td className={t.td}>{formatNumber(row.scheduled)}</td>
+                  <td className={t.td}>
+                    {formatCurrency(row.cost_per_scheduled, 2)}
+                  </td>
+                  <td className={t.td}>{formatNumber(row.checked_in)}</td>
+                  <td
+                    className={clsx(t.td, "font-bold")}
+                    style={{ color: BRAND }}
+                  >
+                    {formatNumber(row.sold)}
+                  </td>
+                  <td className={t.td}>
+                    {formatCurrency(row.cost_per_sale, 2)}
+                  </td>
+                  <td
+                    className={clsx(t.td, "font-bold")}
+                    style={{ color: "#10b981" }}
+                  >
+                    {formatCurrencyCompact(row.revenue)}
+                  </td>
+                  <td className={t.td}>{row.roas.toFixed(2)}x</td>
+                  <td className={t.td}>{row.roi_percent.toFixed(0)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -1517,12 +1652,18 @@ function SalesRanking({
       {/* Gráfico de Distribuição do Tempo dos Vendedores */}
       <div className="mt-6 pt-4 border-t border-zinc-700/40 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className={clsx("text-sm font-bold", isDark ? "text-zinc-200" : "text-zinc-700")}>
+          <h3
+            className={clsx(
+              "text-sm font-bold",
+              isDark ? "text-zinc-200" : "text-zinc-700",
+            )}
+          >
             📊 Distribuição Visual de Tempo por Vendedor
           </h3>
           <div className="flex items-center gap-3 text-[11px] font-semibold">
             <span className="flex items-center gap-1 text-emerald-400">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" /> Atendimento
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />{" "}
+              Atendimento
             </span>
             <span className="flex items-center gap-1 text-amber-400">
               <span className="h-2 w-2 rounded-full bg-amber-500" /> Ausente
@@ -1532,16 +1673,22 @@ function SalesRanking({
 
         <div className="space-y-2.5">
           {report.vendors.slice(0, 8).map((v) => {
-            const total = Math.max(v.tempoAtendimentoMin + v.tempoAusenteMin, 1);
+            const total = Math.max(
+              v.tempoAtendimentoMin + v.tempoAusenteMin,
+              1,
+            );
             const pctAtend = Math.round((v.tempoAtendimentoMin / total) * 100);
             const pctAusente = 100 - pctAtend;
 
             return (
               <div key={v.id} className="space-y-1">
                 <div className="flex items-center justify-between text-xs font-semibold">
-                  <span className={isDark ? "text-zinc-300" : "text-zinc-800"}>{v.name}</span>
+                  <span className={isDark ? "text-zinc-300" : "text-zinc-800"}>
+                    {v.name}
+                  </span>
                   <span className="text-zinc-400 text-[11px]">
-                    {formatMinutes(v.tempoAtendimentoMin)} atend. · {formatMinutes(v.tempoAusenteMin)} ausente
+                    {formatMinutes(v.tempoAtendimentoMin)} atend. ·{" "}
+                    {formatMinutes(v.tempoAusenteMin)} ausente
                   </span>
                 </div>
                 <div className="h-3 w-full rounded-full bg-zinc-800 overflow-hidden flex">
@@ -1564,7 +1711,12 @@ function SalesRanking({
 
       {/* Comparativo de Performance por Loja */}
       <div className="mt-8 pt-6 border-t border-zinc-700/40 space-y-4">
-        <h3 className={clsx("text-sm font-bold flex items-center gap-2", isDark ? "text-zinc-200" : "text-zinc-700")}>
+        <h3
+          className={clsx(
+            "text-sm font-bold flex items-center gap-2",
+            isDark ? "text-zinc-200" : "text-zinc-700",
+          )}
+        >
           <span>🏬 Performance Comparativa por Loja / Filial</span>
         </h3>
 
@@ -1581,16 +1733,50 @@ function SalesRanking({
             </thead>
             <tbody>
               {[
-                { name: "Original BYD | Guarulhos", sales: 18, revenue: 2610000, avgTime: 24, conv: "34%" },
-                { name: "Alta Volkswagen | Saude", sales: 15, revenue: 1950000, avgTime: 28, conv: "31%" },
-                { name: "Original BYD | Pacaembu", sales: 12, revenue: 1740000, avgTime: 22, conv: "29%" },
-                { name: "R Point Renault | Vila Guilherme", sales: 9, revenue: 765000, avgTime: 19, conv: "25%" },
-                { name: "Green Volkswagen | Aricanduva", sales: 7, revenue: 910000, avgTime: 31, conv: "22%" },
+                {
+                  name: "Original BYD | Guarulhos",
+                  sales: 18,
+                  revenue: 2610000,
+                  avgTime: 24,
+                  conv: "34%",
+                },
+                {
+                  name: "Alta Volkswagen | Saude",
+                  sales: 15,
+                  revenue: 1950000,
+                  avgTime: 28,
+                  conv: "31%",
+                },
+                {
+                  name: "Original BYD | Pacaembu",
+                  sales: 12,
+                  revenue: 1740000,
+                  avgTime: 22,
+                  conv: "29%",
+                },
+                {
+                  name: "R Point Renault | Vila Guilherme",
+                  sales: 9,
+                  revenue: 765000,
+                  avgTime: 19,
+                  conv: "25%",
+                },
+                {
+                  name: "Green Volkswagen | Aricanduva",
+                  sales: 7,
+                  revenue: 910000,
+                  avgTime: 31,
+                  conv: "22%",
+                },
               ].map((store) => (
                 <tr key={store.name} className={t.row}>
                   <td className={clsx(t.td, "font-bold")}>{store.name}</td>
-                  <td className={clsx(t.td, "font-bold text-emerald-500")}>{store.sales} vendas</td>
-                  <td className={clsx(t.td, "font-semibold")}>R$ {(store.revenue).toLocaleString("pt-BR")}</td>
+                  <td className={clsx(t.td, "font-bold text-emerald-500")}>
+                    {store.sales} vendas
+                  </td>
+                  <td className={clsx(t.td, "font-semibold")}>
+                    R$ {store.revenue.toLocaleString("pt-BR")}
+                  </td>
                   <td className={t.td}>{store.avgTime} min</td>
                   <td className={t.td}>
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-500">
@@ -1935,6 +2121,7 @@ function PerformanceMatrix({
               <th className={t.th}>Compareceram</th>
               <th className={t.th}>Vendas</th>
               <th className={t.th}>Receita</th>
+              <th className={t.th}>ROAS</th>
               <th className={t.th}>ROI</th>
             </tr>
           </thead>
@@ -1959,7 +2146,10 @@ function PerformanceMatrix({
                   {formatCurrencyCompact(c.receita)}
                 </td>
                 <td className={clsx(t.td, "font-black")}>
-                  {c.roi.toFixed(0)}x
+                  {c.roas.toFixed(2)}x
+                </td>
+                <td className={clsx(t.td, "font-black")}>
+                  {c.roiPercent.toFixed(0)}%
                 </td>
               </tr>
             ))}

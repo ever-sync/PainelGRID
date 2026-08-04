@@ -41,6 +41,9 @@ O endpoint recebe um array, mesmo quando existe somente um lead:
     "formulario_id": "27515534804767924",
     "anuncio_id": "120247888509270620",
     "anuncio": "Novo anuncio de Leads",
+    "conjunto_id": "120247888509260620",
+    "conjunto": "Publico amplo",
+    "criativo_id": "120247888509280620",
     "campanha_id": "120247888509250620",
     "campanha": "Campanha de teste",
     "criado_em": "2026-07-14T02:25:25+0000",
@@ -52,6 +55,8 @@ O endpoint recebe um array, mesmo quando existe somente um lead:
 
 Nao envie `client_id`. A API resolve o cliente por `formulario_id`, usando
 somente formularios selecionados em uma conexao Meta ativa no painel do gestor.
+`conjunto_id`, `conjunto` e `criativo_id` sao opcionais. Quando nao vierem do
+n8n, a API completa a hierarquia pelo `anuncio_id` ja sincronizado da Meta.
 
 ## Roteamento e template
 
@@ -91,3 +96,19 @@ fila de retries e alertas será tratada na fase operacional seguinte.
 Todos os formularios do lote sao resolvidos antes da primeira gravacao. Depois
 da resolucao, a importacao reutiliza a deduplicacao existente por lead Meta,
 telefone e e-mail.
+
+## Atribuicao para relatorios
+
+Na mesma transacao do cadastro, a API grava uma entrada de atribuicao com lead,
+formulario, evento, campanha, conjunto, anuncio, criativo, canal e data original.
+Esse historico e usado para cruzar os dados comerciais com o investimento diario
+sincronizado da Meta nos tres niveis:
+
+- leads, agendamentos, comparecimentos e vendas;
+- receita atribuida;
+- CPL, custo por agendamento e custo por venda;
+- ROAS e ROI sobre a receita atribuida.
+
+Para leads anteriores a esta versao, a migracao recupera campanha, conjunto e
+anuncio usando os IDs que ja estavam salvos. Ela nao reenvia templates nem cria
+mensagens de WhatsApp.

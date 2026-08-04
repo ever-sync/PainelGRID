@@ -50,7 +50,7 @@ export type MetaCampaignReportRow = {
   page_engagement: number;
   cost_per_engagement: number;
   messaging_replies: number;
-  /** So no nivel de campanha; conjunto e anuncio nao tem atribuicao por lead. */
+  /** Leads recebidos e persistidos no sistema neste nivel de atribuicao. */
   leads_in_system?: number;
 };
 

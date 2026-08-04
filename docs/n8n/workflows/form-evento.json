@@ -12,10 +12,7 @@
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
-      "position": [
-        -960,
-        0
-      ],
+      "position": [-960, 0],
       "id": "74b93160-bc88-47af-9d32-8ec2e1770818",
       "name": "RECEBER LEAD META",
       "webhookId": "ded2b859-a6d3-4da5-b41f-94e43ea8c1c5"
@@ -26,10 +23,7 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        -720,
-        0
-      ],
+      "position": [-720, 0],
       "id": "554c7667-90ac-4446-ac3f-5af784ba6260",
       "name": "EXTRAIR EVENTO LEADGEN"
     },
@@ -43,7 +37,7 @@
           "parameters": [
             {
               "name": "fields",
-              "value": "id,created_time,field_data,form_id,ad_id,ad_name,campaign_id,campaign_name"
+              "value": "id,created_time,field_data,form_id,ad_id,ad_name,adgroup_id,campaign_id,campaign_name"
             }
           ]
         },
@@ -51,10 +45,7 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [
-        -480,
-        0
-      ],
+      "position": [-480, 0],
       "id": "2655ee48-8b46-449c-96a8-3b10f2cf1d5d",
       "name": "BUSCAR DADOS DO LEAD NA META",
       "credentials": {
@@ -66,14 +57,11 @@
     },
     {
       "parameters": {
-        "jsCode": "const fieldData = Array.isArray($json.field_data) ? $json.field_data : [];\nconst normalize = (value) => String(value ?? \"\")\n  .normalize(\"NFD\")\n  .replace(/[\\u0300-\\u036f]/g, \"\")\n  .replace(/:\\s*$/, \"\")\n  .trim()\n  .toLowerCase();\n\nconst allFields = {};\nfor (const field of fieldData) {\n  allFields[field.name] = field.values?.[0] ?? null;\n}\n\nconst getField = (...aliases) => {\n  const wanted = aliases.map(normalize);\n  const exact = fieldData.find((field) => wanted.includes(normalize(field.name)));\n  if (exact) return exact.values?.[0] ?? null;\n  const partial = fieldData.find((field) =>\n    wanted.some((alias) => normalize(field.name).includes(alias)),\n  );\n  return partial?.values?.[0] ?? null;\n};\n\nconst rawChannel = getField(\n  \"prefere_ser_atendido_por\",\n  \"preferencia_atendimento\",\n  \"gostaria_de_confirmar_sua_credencial_por\",\n);\nconst normalizedChannel = normalize(rawChannel);\nconst preferredChannel = normalizedChannel.includes(\"whatsapp\")\n  ? \"whatsapp\"\n  : normalizedChannel.includes(\"ligacao\") || normalizedChannel.includes(\"telefone\")\n    ? \"ligacao\"\n    : rawChannel;\nconst fullName = getField(\"full_name\", \"nome_completo\", \"nome\")\n  ?? [getField(\"first_name\", \"primeiro_nome\"), getField(\"last_name\", \"sobrenome\")]\n    .filter(Boolean)\n    .join(\" \")\n    .trim();\n\nreturn {\n  lead_id: String($json.id ?? \"\"),\n  nome: fullName,\n  email: getField(\"email\"),\n  telefone: getField(\"phone_number\", \"telefone\", \"celular\"),\n  preferencia_atendimento: preferredChannel,\n  formulario_id: String($json.form_id ?? \"\"),\n  anuncio_id: $json.ad_id ? String($json.ad_id) : null,\n  anuncio: $json.ad_name ?? null,\n  campanha_id: $json.campaign_id ? String($json.campaign_id) : null,\n  campanha: $json.campaign_name ?? null,\n  criado_em: $json.created_time ?? null,\n  origem: \"facebook_lead_ads\",\n  todos_os_campos: allFields,\n};"
+        "jsCode": "const fieldData = Array.isArray($json.field_data) ? $json.field_data : [];\nconst normalize = (value) => String(value ?? \"\")\n  .normalize(\"NFD\")\n  .replace(/[\\u0300-\\u036f]/g, \"\")\n  .replace(/:\\s*$/, \"\")\n  .trim()\n  .toLowerCase();\n\nconst allFields = {};\nfor (const field of fieldData) {\n  allFields[field.name] = field.values?.[0] ?? null;\n}\n\nconst getField = (...aliases) => {\n  const wanted = aliases.map(normalize);\n  const exact = fieldData.find((field) => wanted.includes(normalize(field.name)));\n  if (exact) return exact.values?.[0] ?? null;\n  const partial = fieldData.find((field) =>\n    wanted.some((alias) => normalize(field.name).includes(alias)),\n  );\n  return partial?.values?.[0] ?? null;\n};\n\nconst rawChannel = getField(\n  \"prefere_ser_atendido_por\",\n  \"preferencia_atendimento\",\n  \"gostaria_de_confirmar_sua_credencial_por\",\n);\nconst normalizedChannel = normalize(rawChannel);\nconst preferredChannel = normalizedChannel.includes(\"whatsapp\")\n  ? \"whatsapp\"\n  : normalizedChannel.includes(\"ligacao\") || normalizedChannel.includes(\"telefone\")\n    ? \"ligacao\"\n    : rawChannel;\nconst fullName = getField(\"full_name\", \"nome_completo\", \"nome\")\n  ?? [getField(\"first_name\", \"primeiro_nome\"), getField(\"last_name\", \"sobrenome\")]\n    .filter(Boolean)\n    .join(\" \")\n    .trim();\n\nreturn {\n  lead_id: String($json.id ?? \"\"),\n  nome: fullName,\n  email: getField(\"email\"),\n  telefone: getField(\"phone_number\", \"telefone\", \"celular\"),\n  preferencia_atendimento: preferredChannel,\n  formulario_id: String($json.form_id ?? \"\"),\n  anuncio_id: $json.ad_id ? String($json.ad_id) : null,\n  anuncio: $json.ad_name ?? null,\n  conjunto_id: $json.adgroup_id ? String($json.adgroup_id) : null,\n  campanha_id: $json.campaign_id ? String($json.campaign_id) : null,\n  campanha: $json.campaign_name ?? null,\n  criado_em: $json.created_time ?? null,\n  origem: \"facebook_lead_ads\",\n  todos_os_campos: allFields,\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        -240,
-        0
-      ],
+      "position": [-240, 0],
       "id": "bafe6133-126f-4c97-be02-0936822d57bd",
       "name": "MAPEAR CAMPOS DO LEAD"
     },
@@ -85,10 +73,7 @@
       "name": "VALIDAR PAYLOAD DO LEAD",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        0,
-        0
-      ]
+      "position": [0, 0]
     },
     {
       "parameters": {
@@ -114,10 +99,7 @@
       "name": "IMPORTAR LEAD - ROTEAMENTO AUTOMATICO",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        240,
-        0
-      ],
+      "position": [240, 0],
       "credentials": {
         "httpHeaderAuth": {
           "id": "<CREDENTIAL_ID>",

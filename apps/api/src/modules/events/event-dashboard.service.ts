@@ -137,10 +137,7 @@ export class EventDashboardService {
       }),
       this.prisma.scoreEvent.findMany({
         where: {
-          OR: [
-            { appointment: { event_id: eventId } },
-            { lead: { event_interest_id: eventId } },
-          ],
+          OR: [{ appointment: { event_id: eventId } }, { lead: { event_interest_id: eventId } }],
         },
         select: { vendor_id: true, points: true },
       }),
@@ -158,7 +155,10 @@ export class EventDashboardService {
     const vendorTeam = new Map<string, { team_id: string; team_name: string }>();
     teams.forEach((team) => {
       team.members.forEach((member) => {
-        vendorTeam.set(member.user_id, { team_id: team.id, team_name: team.name });
+        vendorTeam.set(member.user_id, {
+          team_id: team.id,
+          team_name: team.name,
+        });
       });
     });
 
@@ -460,10 +460,22 @@ export class EventDashboardService {
       }),
     ]);
 
-    type Funnel = { leads: number; scheduled: number; confirmed: number; checked_in: number; sold: number };
+    type Funnel = {
+      leads: number;
+      scheduled: number;
+      confirmed: number;
+      checked_in: number;
+      sold: number;
+    };
     const funnelByEvent = new Map<string, Funnel>();
     events.forEach((event) => {
-      funnelByEvent.set(event.id, { leads: 0, scheduled: 0, confirmed: 0, checked_in: 0, sold: 0 });
+      funnelByEvent.set(event.id, {
+        leads: 0,
+        scheduled: 0,
+        confirmed: 0,
+        checked_in: 0,
+        sold: 0,
+      });
     });
 
     leadGroups.forEach((row) => {
@@ -543,6 +555,7 @@ export class EventDashboardService {
         id: true,
         client_id: true,
         event_date: true,
+        event_end_date: true,
         total_investment: true,
         paid_traffic_investment: true,
         participants: { select: { client_id: true } },
@@ -557,7 +570,17 @@ export class EventDashboardService {
       new Set([event.client_id, ...event.participants.map((p) => p.client_id)]),
     );
 
-    const [leads, sales, imports, metaCampaigns, ratingRows] = await Promise.all([
+    const [
+      leads,
+      sales,
+      imports,
+      metaCampaigns,
+      metaAdSets,
+      metaAds,
+      appointments,
+      campaignAssignments,
+      ratingRows,
+    ] = await Promise.all([
       this.prisma.lead.findMany({
         where: { event_interest_id: eventId, deleted_at: null },
         select: { id: true, confirmation_status: true },
@@ -567,12 +590,49 @@ export class EventDashboardService {
         select: { lead_id: true, value: true },
       }),
       this.prisma.metaLeadImport.findMany({
-        where: { client_id: { in: clientIds }, lead_id: { not: null } },
-        select: { lead_id: true, meta_campaign_id: true },
+        where: {
+          client_id: { in: clientIds },
+          lead_id: { not: null },
+          lead: { deleted_at: null },
+          OR: [{ event_id: eventId }, { event_id: null, lead: { event_interest_id: eventId } }],
+        },
+        select: {
+          lead_id: true,
+          meta_campaign_id: true,
+          meta_campaign_name: true,
+          meta_ad_set_id: true,
+          meta_ad_set_name: true,
+          meta_ad_id: true,
+          meta_ad_name: true,
+          source_created_at: true,
+          imported_at: true,
+          lead: { select: { confirmation_status: true } },
+        },
       }),
       this.prisma.metaCampaign.findMany({
         where: { client_id: { in: clientIds } },
-        select: { meta_campaign_id: true, name: true },
+        select: { meta_campaign_id: true, name: true, start_time: true },
+      }),
+      this.prisma.metaAdSet.findMany({
+        where: { client_id: { in: clientIds } },
+        select: { meta_campaign_id: true, meta_ad_set_id: true, name: true },
+      }),
+      this.prisma.metaAd.findMany({
+        where: { client_id: { in: clientIds } },
+        select: {
+          meta_campaign_id: true,
+          meta_ad_set_id: true,
+          meta_ad_id: true,
+          name: true,
+        },
+      }),
+      this.prisma.appointment.findMany({
+        where: { event_id: eventId },
+        select: { lead_id: true, status: true },
+      }),
+      this.prisma.metaCampaignAssignment.findMany({
+        where: { event_id: eventId, client_id: { in: clientIds } },
+        select: { meta_campaign_id: true },
       }),
       this.prisma.serviceRating.groupBy({
         by: ['vendor_id'],
@@ -596,91 +656,298 @@ export class EventDashboardService {
       }
       if (s === ConfirmationStatus.checked_in) checkedInIds.add(lead.id);
     }
-
-    // lead_id -> meta_campaign_id (só leads deste evento)
-    const campaignByLead = new Map<string, string>();
-    for (const imp of imports) {
-      if (imp.lead_id && imp.meta_campaign_id && eventLeadIds.has(imp.lead_id)) {
-        campaignByLead.set(imp.lead_id, imp.meta_campaign_id);
+    for (const appointment of appointments) {
+      if (
+        appointment.status === AppointmentStatus.scheduled ||
+        appointment.status === AppointmentStatus.confirmed ||
+        appointment.status === AppointmentStatus.completed ||
+        appointment.status === AppointmentStatus.no_show
+      ) {
+        scheduledIds.add(appointment.lead_id);
+      }
+      if (appointment.status === AppointmentStatus.completed) {
+        checkedInIds.add(appointment.lead_id);
       }
     }
+
+    // Last-touch por evento: um mesmo telefone pode preencher mais de um
+    // formulario. Cada resultado comercial pertence somente a ultima entrada
+    // Meta daquele lead neste evento, evitando duplicar receita e vendas.
+    const latestImportByLead = new Map<string, (typeof imports)[number]>();
+    const attributionOccurredAt = (entry: (typeof imports)[number]) =>
+      (entry.source_created_at ?? entry.imported_at).getTime();
+    for (const entry of imports) {
+      if (!entry.lead_id) continue;
+      const current = latestImportByLead.get(entry.lead_id);
+      if (!current || attributionOccurredAt(entry) > attributionOccurredAt(current)) {
+        latestImportByLead.set(entry.lead_id, entry);
+      }
+    }
+    for (const [leadId, entry] of latestImportByLead) {
+      eventLeadIds.add(leadId);
+      const status = entry.lead?.confirmation_status;
+      if (
+        status === ConfirmationStatus.scheduled ||
+        status === ConfirmationStatus.confirmed ||
+        status === ConfirmationStatus.checked_in
+      ) {
+        scheduledIds.add(leadId);
+      }
+      if (status === ConfirmationStatus.checked_in) checkedInIds.add(leadId);
+    }
+
     const campaignName = new Map<string, string>();
     for (const c of metaCampaigns) campaignName.set(c.meta_campaign_id, c.name);
+    const adSetName = new Map<string, string>();
+    for (const adSet of metaAdSets) adSetName.set(adSet.meta_ad_set_id, adSet.name);
+    const adName = new Map<string, string>();
+    for (const ad of metaAds) adName.set(ad.meta_ad_id, ad.name);
 
     const revenueByLead = new Map<string, number>();
     for (const sale of sales) {
-      revenueByLead.set(
-        sale.lead_id,
-        (revenueByLead.get(sale.lead_id) ?? 0) + Number(sale.value),
-      );
+      revenueByLead.set(sale.lead_id, (revenueByLead.get(sale.lead_id) ?? 0) + Number(sale.value));
     }
     const soldLeadIds = new Set(sales.map((s) => s.lead_id));
 
     type Attr = {
-      meta_campaign_id: string;
+      level: 'campaign' | 'adset' | 'ad';
+      entity_id: string;
       name: string;
+      meta_campaign_id: string | null;
+      meta_ad_set_id: string | null;
       leads: number;
       scheduled: number;
       checked_in: number;
       sold: number;
       revenue: number;
+      spend: number;
+      cpl: number;
+      cost_per_scheduled: number;
+      cost_per_sale: number;
+      roas: number;
+      roi_percent: number;
     };
-    const attrMap = new Map<string, Attr>();
-    const ensureAttr = (cid: string): Attr => {
-      let a = attrMap.get(cid);
+    const attributionMaps = {
+      campaign: new Map<string, Attr>(),
+      adset: new Map<string, Attr>(),
+      ad: new Map<string, Attr>(),
+    };
+    const ensureAttr = (
+      level: Attr['level'],
+      entityId: string,
+      name: string,
+      campaignId: string | null,
+      adSetId: string | null,
+    ): Attr => {
+      const map = attributionMaps[level];
+      let a = map.get(entityId);
       if (!a) {
         a = {
-          meta_campaign_id: cid,
-          name: campaignName.get(cid) ?? 'Sem campanha',
+          level,
+          entity_id: entityId,
+          name,
+          meta_campaign_id: campaignId,
+          meta_ad_set_id: adSetId,
           leads: 0,
           scheduled: 0,
           checked_in: 0,
           sold: 0,
           revenue: 0,
+          spend: 0,
+          cpl: 0,
+          cost_per_scheduled: 0,
+          cost_per_sale: 0,
+          roas: 0,
+          roi_percent: 0,
         };
-        attrMap.set(cid, a);
+        map.set(entityId, a);
       }
       return a;
     };
-    for (const lead of leads) {
-      const cid = campaignByLead.get(lead.id);
-      if (!cid) continue;
-      const a = ensureAttr(cid);
-      a.leads += 1;
-      if (scheduledIds.has(lead.id)) a.scheduled += 1;
-      if (checkedInIds.has(lead.id)) a.checked_in += 1;
-      if (soldLeadIds.has(lead.id)) {
-        a.sold += 1;
-        a.revenue += revenueByLead.get(lead.id) ?? 0;
+
+    const reportCampaignIds = new Set(
+      campaignAssignments.map((assignment) => assignment.meta_campaign_id),
+    );
+    for (const entry of latestImportByLead.values()) {
+      if (entry.meta_campaign_id) reportCampaignIds.add(entry.meta_campaign_id);
+    }
+    for (const campaignId of reportCampaignIds) {
+      ensureAttr(
+        'campaign',
+        campaignId,
+        campaignName.get(campaignId) ?? 'Campanha sem nome',
+        campaignId,
+        null,
+      );
+    }
+    for (const adSet of metaAdSets) {
+      if (!adSet.meta_campaign_id || !reportCampaignIds.has(adSet.meta_campaign_id)) continue;
+      ensureAttr(
+        'adset',
+        adSet.meta_ad_set_id,
+        adSet.name,
+        adSet.meta_campaign_id,
+        adSet.meta_ad_set_id,
+      );
+    }
+    for (const ad of metaAds) {
+      if (!ad.meta_campaign_id || !reportCampaignIds.has(ad.meta_campaign_id)) continue;
+      ensureAttr('ad', ad.meta_ad_id, ad.name, ad.meta_campaign_id, ad.meta_ad_set_id);
+    }
+
+    for (const [leadId, entry] of latestImportByLead) {
+      const rows: Attr[] = [];
+      if (entry.meta_campaign_id) {
+        rows.push(
+          ensureAttr(
+            'campaign',
+            entry.meta_campaign_id,
+            entry.meta_campaign_name ??
+              campaignName.get(entry.meta_campaign_id) ??
+              'Campanha sem nome',
+            entry.meta_campaign_id,
+            null,
+          ),
+        );
+      }
+      if (entry.meta_ad_set_id) {
+        rows.push(
+          ensureAttr(
+            'adset',
+            entry.meta_ad_set_id,
+            entry.meta_ad_set_name ?? adSetName.get(entry.meta_ad_set_id) ?? 'Conjunto sem nome',
+            entry.meta_campaign_id,
+            entry.meta_ad_set_id,
+          ),
+        );
+      }
+      if (entry.meta_ad_id) {
+        rows.push(
+          ensureAttr(
+            'ad',
+            entry.meta_ad_id,
+            entry.meta_ad_name ?? adName.get(entry.meta_ad_id) ?? 'Anuncio sem nome',
+            entry.meta_campaign_id,
+            entry.meta_ad_set_id,
+          ),
+        );
+      }
+      for (const row of rows) {
+        row.leads += 1;
+        if (scheduledIds.has(leadId)) row.scheduled += 1;
+        if (checkedInIds.has(leadId)) row.checked_in += 1;
+        if (soldLeadIds.has(leadId)) {
+          row.sold += 1;
+          row.revenue += revenueByLead.get(leadId) ?? 0;
+        }
       }
     }
-    const attribution = Array.from(attrMap.values())
-      .map((a) => ({ ...a, revenue: Math.round(a.revenue * 100) / 100 }))
-      .sort((x, y) => y.revenue - x.revenue);
 
-    const attributedLeadCount = campaignByLead.size;
-    const attributedSold = attribution.reduce((s, a) => s + a.sold, 0);
+    const campaignIds = [...attributionMaps.campaign.keys()];
+    const adSetIds = [...attributionMaps.adset.keys()];
+    const adIds = [...attributionMaps.ad.keys()];
+    const campaignStarts = metaCampaigns
+      .filter((campaign) => reportCampaignIds.has(campaign.meta_campaign_id))
+      .map((campaign) => campaign.start_time)
+      .filter((date): date is Date => Boolean(date));
+    const attributionDates = [...latestImportByLead.values()].map(
+      (entry) => entry.source_created_at ?? entry.imported_at,
+    );
+    const rangeCandidates = [...campaignStarts, ...attributionDates];
+    const reportFrom =
+      rangeCandidates.length > 0
+        ? new Date(Math.min(...rangeCandidates.map((date) => date.getTime())))
+        : new Date(event.event_date);
+    reportFrom.setUTCHours(0, 0, 0, 0);
+    const reportTo = new Date(event.event_end_date ?? event.event_date);
+    reportTo.setUTCHours(23, 59, 59, 999);
+    const insightEntityFilters: Prisma.MetaDailyInsightWhereInput[] = [];
+    if (campaignIds.length > 0) {
+      insightEntityFilters.push({
+        level: 'campaign',
+        entity_id: { in: campaignIds },
+      });
+    }
+    if (adSetIds.length > 0) {
+      insightEntityFilters.push({
+        level: 'adset',
+        entity_id: { in: adSetIds },
+      });
+    }
+    if (adIds.length > 0) {
+      insightEntityFilters.push({ level: 'ad', entity_id: { in: adIds } });
+    }
+    const insightRows =
+      insightEntityFilters.length > 0
+        ? await this.prisma.metaDailyInsight.findMany({
+            where: {
+              client_id: { in: clientIds },
+              date: { gte: reportFrom, lte: reportTo },
+              OR: insightEntityFilters,
+            },
+            select: { level: true, entity_id: true, spend: true },
+          })
+        : [];
+    for (const insight of insightRows) {
+      if (insight.level !== 'campaign' && insight.level !== 'adset' && insight.level !== 'ad') {
+        continue;
+      }
+      const row = attributionMaps[insight.level].get(insight.entity_id);
+      if (row) row.spend += Number(insight.spend ?? 0);
+    }
+
+    const round2 = (value: number) => Math.round(value * 100) / 100;
+    const finalize = (rows: Map<string, Attr>) =>
+      [...rows.values()]
+        .map((row) => ({
+          ...row,
+          revenue: round2(row.revenue),
+          spend: round2(row.spend),
+          cpl: row.leads > 0 ? round2(row.spend / row.leads) : 0,
+          cost_per_scheduled: row.scheduled > 0 ? round2(row.spend / row.scheduled) : 0,
+          cost_per_sale: row.sold > 0 ? round2(row.spend / row.sold) : 0,
+          roas: row.spend > 0 ? round2(row.revenue / row.spend) : 0,
+          roi_percent: row.spend > 0 ? round2(((row.revenue - row.spend) / row.spend) * 100) : 0,
+        }))
+        .sort((left, right) =>
+          right.revenue !== left.revenue
+            ? right.revenue - left.revenue
+            : right.scheduled !== left.scheduled
+              ? right.scheduled - left.scheduled
+              : right.leads - left.leads,
+        );
+    const campaignAttribution = finalize(attributionMaps.campaign);
+    const adSetAttribution = finalize(attributionMaps.adset);
+    const adAttribution = finalize(attributionMaps.ad);
+    const attribution = campaignAttribution.map((row) => ({
+      ...row,
+      meta_campaign_id: row.entity_id,
+    }));
+
+    const attributedLeadCount = latestImportByLead.size;
+    const attributedSold = new Set(
+      [...latestImportByLead.keys()].filter((leadId) => soldLeadIds.has(leadId)),
+    ).size;
 
     // ── Rubinho ──
-    const [messageCount, conversations, agentLogCount, appointmentsAgent] =
-      await Promise.all([
-        this.prisma.message.count({
-          where: { conversation: { lead: { event_interest_id: eventId } } },
-        }),
-        this.prisma.conversation.findMany({
-          where: { lead: { event_interest_id: eventId }, channel: 'whatsapp' },
-          select: { id: true },
-        }),
-        this.prisma.agentActionLog.count({
-          where: { lead: { event_interest_id: eventId } },
-        }),
-        this.prisma.appointment.count({
-          where: {
-            event_id: eventId,
-            OR: [{ source: 'n8n_ai_agent' }, { created_by_type: 'external_agent' }],
-          },
-        }),
-      ]);
+    const [messageCount, conversations, agentLogCount, appointmentsAgent] = await Promise.all([
+      this.prisma.message.count({
+        where: { conversation: { lead: { event_interest_id: eventId } } },
+      }),
+      this.prisma.conversation.findMany({
+        where: { lead: { event_interest_id: eventId }, channel: 'whatsapp' },
+        select: { id: true },
+      }),
+      this.prisma.agentActionLog.count({
+        where: { lead: { event_interest_id: eventId } },
+      }),
+      this.prisma.appointment.count({
+        where: {
+          event_id: eventId,
+          OR: [{ source: 'n8n_ai_agent' }, { created_by_type: 'external_agent' }],
+        },
+      }),
+    ]);
 
     const eventRevenue = sales.reduce((s, sale) => s + Number(sale.value), 0);
     const rubinho = {
@@ -765,9 +1032,7 @@ export class EventDashboardService {
       investment: {
         total: event.total_investment != null ? Number(event.total_investment) : null,
         paid_traffic:
-          event.paid_traffic_investment != null
-            ? Number(event.paid_traffic_investment)
-            : null,
+          event.paid_traffic_investment != null ? Number(event.paid_traffic_investment) : null,
       },
       ratings: {
         overall_avg: overallAvg,
@@ -775,9 +1040,18 @@ export class EventDashboardService {
         by_vendor: vendorRatings,
       },
       attribution,
+      attribution_by_level: {
+        campaigns: campaignAttribution,
+        ad_sets: adSetAttribution,
+        ads: adAttribution,
+      },
+      attribution_period: {
+        from: reportFrom,
+        to: reportTo,
+      },
       attribution_coverage: {
         attributed_leads: attributedLeadCount,
-        total_leads: leads.length,
+        total_leads: eventLeadIds.size,
         attributed_sold: attributedSold,
         total_sold: soldLeadIds.size,
       },

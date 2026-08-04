@@ -132,16 +132,18 @@ describe('MetaService', () => {
       service.receiveWebhook({ object: 'page' }, 'sha256=invalid', rawBody),
     ).rejects.toThrow(ForbiddenException);
 
-    const signature = `sha256=${createHmac('sha256', 'meta-secret')
-      .update(rawBody)
-      .digest('hex')}`;
-    await expect(
-      service.receiveWebhook({ object: 'page' }, signature, undefined),
-    ).rejects.toThrow(ForbiddenException);
+    const signature = `sha256=${createHmac('sha256', 'meta-secret').update(rawBody).digest('hex')}`;
+    await expect(service.receiveWebhook({ object: 'page' }, signature, undefined)).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 
   it('cadastra automaticamente leads do formulário da Meta como form_page', async () => {
-    const connection = { id: 'conn-1', client_id: 'client-1', access_token: 'token-1' };
+    const connection = {
+      id: 'conn-1',
+      client_id: 'client-1',
+      access_token: 'token-1',
+    };
     const leadPayload = {
       id: 'meta-lead-1',
       form_id: 'form-1',
@@ -191,9 +193,16 @@ describe('MetaService', () => {
   });
 
   it('enfileira a importacao de leads antigos da Meta (job pendente)', async () => {
-    const connection = { id: 'conn-1', client_id: 'client-1', access_token: 'token-1' };
+    const connection = {
+      id: 'conn-1',
+      client_id: 'client-1',
+      access_token: 'token-1',
+    };
 
-    prisma.client.findUnique.mockResolvedValue({ id: 'client-1', gestor_id: 'gestor-1' });
+    prisma.client.findUnique.mockResolvedValue({
+      id: 'client-1',
+      gestor_id: 'gestor-1',
+    });
     prisma.metaConnection.findFirst.mockResolvedValue(connection);
     prisma.metaAssetSelection.findMany.mockResolvedValue([
       { form_id: 'form-1', form_name: 'Form 1', page_id: 'page-1' },
@@ -208,7 +217,9 @@ describe('MetaService', () => {
       client_id: 'client-1',
     };
 
-    const result = await service.importHistoricalLeads(user, { client_id: 'client-1' });
+    const result = await service.importHistoricalLeads(user, {
+      client_id: 'client-1',
+    });
 
     expect(result).toMatchObject({
       client_id: 'client-1',
@@ -234,7 +245,11 @@ describe('MetaService', () => {
   });
 
   it('importa leads antigos dos formularios selecionados ao rodar o job (worker)', async () => {
-    const connection = { id: 'conn-1', client_id: 'client-1', access_token: 'token-1' };
+    const connection = {
+      id: 'conn-1',
+      client_id: 'client-1',
+      access_token: 'token-1',
+    };
     const leadPayload = {
       id: 'meta-lead-1',
       form_id: 'form-1',
@@ -289,8 +304,14 @@ describe('MetaService', () => {
     const gestor = { sub: 'gestor-1', role: Role.GESTOR } as AuthenticatedUser;
 
     beforeEach(() => {
-      prisma.client.findUnique.mockResolvedValue({ id: 'client-1', gestor_id: 'gestor-1' });
-      prisma.metaConnection.findFirst.mockResolvedValue({ id: 'conn-1', client_id: 'client-1' });
+      prisma.client.findUnique.mockResolvedValue({
+        id: 'client-1',
+        gestor_id: 'gestor-1',
+      });
+      prisma.metaConnection.findFirst.mockResolvedValue({
+        id: 'conn-1',
+        client_id: 'client-1',
+      });
       prisma.metaCampaign.findMany.mockResolvedValue([]);
       prisma.metaAdSet.findMany.mockResolvedValue([]);
       prisma.metaAd.findMany.mockResolvedValue([]);
@@ -303,7 +324,7 @@ describe('MetaService', () => {
       prisma.metaCampaignAssignment.findMany.mockResolvedValue([]);
     });
 
-    it('filtra os leads importados por `imported_at`, o campo real do modelo', async () => {
+    it('filtra pela data real da origem e usa imported_at apenas como fallback', async () => {
       await service.getCampaignsReport(gestor, 'client-1', {
         from: '2026-07-04',
         to: '2026-08-02',
@@ -312,12 +333,14 @@ describe('MetaService', () => {
       const [args] = prisma.metaLeadImport.groupBy.mock.calls[0] as [
         { where: Record<string, unknown> },
       ];
-      // `created_at` nao existe em MetaLeadImport e quebrava a query em runtime.
-      expect(args.where).not.toHaveProperty('created_at');
-      expect(args.where.imported_at).toEqual({
+      const range = {
         gte: new Date('2026-07-04T00:00:00.000Z'),
         lte: new Date('2026-08-02T23:59:59.999Z'),
-      });
+      };
+      expect(args.where.OR).toEqual([
+        { source_created_at: range },
+        { source_created_at: null, imported_at: range },
+      ]);
     });
 
     it('sem periodo, nao aplica recorte de data nos leads importados', async () => {
@@ -326,7 +349,7 @@ describe('MetaService', () => {
       const [args] = prisma.metaLeadImport.groupBy.mock.calls[0] as [
         { where: Record<string, unknown> },
       ];
-      expect(args.where).not.toHaveProperty('imported_at');
+      expect(args.where).not.toHaveProperty('OR');
     });
 
     it('only_linked restringe as campanhas no banco, nao no front', async () => {
@@ -346,6 +369,49 @@ describe('MetaService', () => {
         status: 'ACTIVE',
         meta_campaign_id: { in: ['campaign-1'] },
       });
+    });
+
+    it('conta leads persistidos por campanha, conjunto e anuncio', async () => {
+      prisma.metaCampaign.findMany.mockResolvedValue([
+        { meta_campaign_id: 'campaign-1', name: 'Campanha 1', status: 'ACTIVE' },
+      ]);
+      prisma.metaAdSet.findMany.mockResolvedValue([
+        {
+          meta_campaign_id: 'campaign-1',
+          meta_ad_set_id: 'adset-1',
+          name: 'Conjunto 1',
+          status: 'ACTIVE',
+        },
+      ]);
+      prisma.metaAd.findMany.mockResolvedValue([
+        {
+          meta_campaign_id: 'campaign-1',
+          meta_ad_set_id: 'adset-1',
+          meta_ad_id: 'ad-1',
+          name: 'Anuncio 1',
+          status: 'ACTIVE',
+        },
+      ]);
+      prisma.metaLeadImport.groupBy.mockResolvedValue([
+        {
+          meta_campaign_id: 'campaign-1',
+          meta_ad_set_id: 'adset-1',
+          meta_ad_id: 'ad-1',
+          _count: { _all: 3 },
+        },
+      ]);
+
+      const result = await service.getCampaignsReport(gestor, 'client-1', {});
+      const campaign = result.campaigns[0] as any;
+
+      expect(campaign.leads_in_system).toBe(3);
+      expect(campaign.ad_sets[0].leads_in_system).toBe(3);
+      expect(campaign.ad_sets[0].ads[0].leads_in_system).toBe(3);
+      expect(prisma.metaLeadImport.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          by: ['meta_campaign_id', 'meta_ad_set_id', 'meta_ad_id'],
+        }),
+      );
     });
   });
 
@@ -378,7 +444,12 @@ describe('MetaService', () => {
           form_id: 'form-1',
           event: { id: 'event-1', name: 'Evento' },
           crm_pipeline: { id: 'pipeline-1', name: 'Pipeline', code: 'PL' },
-          call_stage: { id: 'stage-1', name: 'Ligacao', code: 'LIG', color: '#111111' },
+          call_stage: {
+            id: 'stage-1',
+            name: 'Ligacao',
+            code: 'LIG',
+            color: '#111111',
+          },
           whatsapp_stage: {
             id: 'stage-2',
             name: 'WhatsApp',
@@ -408,7 +479,9 @@ describe('MetaService', () => {
         .mockResolvedValueOnce(null);
       prisma.metaLeadRoutingRule.findUnique.mockResolvedValue(null);
       prisma.event.findFirst.mockResolvedValue({ id: dto.event_id });
-      prisma.crmPipeline.findFirst.mockResolvedValue({ id: dto.crm_pipeline_id });
+      prisma.crmPipeline.findFirst.mockResolvedValue({
+        id: dto.crm_pipeline_id,
+      });
       prisma.crmStage.findMany.mockResolvedValue([
         { id: dto.call_stage_id },
         { id: dto.whatsapp_stage_id },
@@ -419,11 +492,7 @@ describe('MetaService', () => {
         ...dto,
       });
 
-      const result = await service.upsertLeadRoutingRule(
-        gestor,
-        'client-1',
-        dto,
-      );
+      const result = await service.upsertLeadRoutingRule(gestor, 'client-1', dto);
 
       expect(result).toMatchObject({ id: 'routing-1', ...dto });
       expect(prisma.metaLeadRoutingRule.upsert).toHaveBeenCalledWith(
@@ -443,10 +512,9 @@ describe('MetaService', () => {
         ...dto,
         whatsapp_template_name: 'boas_vindas_evento',
         whatsapp_template_language: 'pt_BR',
-        whatsapp_template_parameter_keys: [
-          'lead_name',
-          'event_name',
-        ] as Array<'lead_name' | 'event_name'>,
+        whatsapp_template_parameter_keys: ['lead_name', 'event_name'] as Array<
+          'lead_name' | 'event_name'
+        >,
       };
       jest.spyOn(service, 'listClientWhatsappTemplates').mockResolvedValue({
         client_id: 'client-1',
@@ -468,7 +536,9 @@ describe('MetaService', () => {
         .mockResolvedValueOnce(null);
       prisma.metaLeadRoutingRule.findUnique.mockResolvedValue(null);
       prisma.event.findFirst.mockResolvedValue({ id: dto.event_id });
-      prisma.crmPipeline.findFirst.mockResolvedValue({ id: dto.crm_pipeline_id });
+      prisma.crmPipeline.findFirst.mockResolvedValue({
+        id: dto.crm_pipeline_id,
+      });
       prisma.crmStage.findMany.mockResolvedValue([
         { id: dto.call_stage_id },
         { id: dto.whatsapp_stage_id },
@@ -534,15 +604,17 @@ describe('MetaService', () => {
         .mockResolvedValueOnce({ id: 'selection-other-client' });
       prisma.metaLeadRoutingRule.findUnique.mockResolvedValue(null);
       prisma.event.findFirst.mockResolvedValue({ id: dto.event_id });
-      prisma.crmPipeline.findFirst.mockResolvedValue({ id: dto.crm_pipeline_id });
+      prisma.crmPipeline.findFirst.mockResolvedValue({
+        id: dto.crm_pipeline_id,
+      });
       prisma.crmStage.findMany.mockResolvedValue([
         { id: dto.call_stage_id },
         { id: dto.whatsapp_stage_id },
       ]);
 
-      await expect(
-        service.upsertLeadRoutingRule(gestor, 'client-1', dto),
-      ).rejects.toThrow('Formulario Meta ja esta vinculado a outro cliente');
+      await expect(service.upsertLeadRoutingRule(gestor, 'client-1', dto)).rejects.toThrow(
+        'Formulario Meta ja esta vinculado a outro cliente',
+      );
 
       expect(prisma.metaLeadRoutingRule.upsert).not.toHaveBeenCalled();
     });
@@ -553,12 +625,12 @@ describe('MetaService', () => {
         .mockResolvedValueOnce(null);
       prisma.metaLeadRoutingRule.findUnique.mockResolvedValue(null);
       prisma.event.findFirst.mockResolvedValue({ id: dto.event_id });
-      prisma.crmPipeline.findFirst.mockResolvedValue({ id: dto.crm_pipeline_id });
+      prisma.crmPipeline.findFirst.mockResolvedValue({
+        id: dto.crm_pipeline_id,
+      });
       prisma.crmStage.findMany.mockResolvedValue([{ id: dto.call_stage_id }]);
 
-      await expect(
-        service.upsertLeadRoutingRule(gestor, 'client-1', dto),
-      ).rejects.toThrow(
+      await expect(service.upsertLeadRoutingRule(gestor, 'client-1', dto)).rejects.toThrow(
         'As etapas de ligacao e WhatsApp devem pertencer ao pipeline selecionado',
       );
 
@@ -570,7 +642,10 @@ describe('MetaService', () => {
     const gestor = { sub: 'gestor-1', role: Role.GESTOR } as AuthenticatedUser;
 
     beforeEach(() => {
-      prisma.client.findUnique.mockResolvedValue({ id: 'client-1', gestor_id: 'gestor-1' });
+      prisma.client.findUnique.mockResolvedValue({
+        id: 'client-1',
+        gestor_id: 'gestor-1',
+      });
     });
 
     it('soma o gasto real das campanhas vinculadas ao evento', async () => {
@@ -598,7 +673,10 @@ describe('MetaService', () => {
       // O gasto vem das campanhas do evento, nao da conta inteira.
       expect(prisma.metaDailyInsight.aggregate).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { level: 'campaign', entity_id: { in: ['campaign-1', 'campaign-2'] } },
+          where: {
+            level: 'campaign',
+            entity_id: { in: ['campaign-1', 'campaign-2'] },
+          },
         }),
       );
     });
@@ -613,7 +691,11 @@ describe('MetaService', () => {
 
       const result = await service.getEventAdSpend(gestor, 'event-1');
 
-      expect(result).toMatchObject({ linked_campaigns: 0, spend: 500, source: 'manual' });
+      expect(result).toMatchObject({
+        linked_campaigns: 0,
+        spend: 500,
+        source: 'manual',
+      });
       expect(prisma.metaDailyInsight.aggregate).not.toHaveBeenCalled();
     });
 
@@ -645,11 +727,7 @@ describe('MetaService', () => {
     };
     const ADSET_SEM_ATRIBUICAO = { id: 'adset-3', campaign_id: 'campaign-3' };
 
-    const TODAS_AS_CAMPANHAS = [
-      { id: 'campaign-1' },
-      { id: 'campaign-2' },
-      { id: 'campaign-3' },
-    ];
+    const TODAS_AS_CAMPANHAS = [{ id: 'campaign-1' }, { id: 'campaign-2' }, { id: 'campaign-3' }];
 
     /** Prepara o sync isolando as chamadas de rede; devolve os spies de gravacao. */
     function armarSync({
@@ -683,30 +761,22 @@ describe('MetaService', () => {
             );
           }
           // Chamada dos assets selecionados da conexao.
-          return Promise.resolve([
-            { ad_account_id: 'act1', page_id: 'page-A', form_id: 'form-A' },
-          ]);
+          return Promise.resolve([{ ad_account_id: 'act1', page_id: 'page-A', form_id: 'form-A' }]);
         },
       );
 
       jest
         .spyOn(service as any, 'fetchAdSetsForAccount')
         .mockResolvedValue([ADSET_DA_CASA, ADSET_DE_OUTRO_CLIENTE, ADSET_SEM_ATRIBUICAO]);
-      jest
-        .spyOn(service as any, 'fetchCampaignsForAccount')
-        .mockResolvedValue(TODAS_AS_CAMPANHAS);
-      jest
-        .spyOn(service as any, 'fetchAdsForAccount')
-        .mockResolvedValue([
-          { id: 'ad-1', campaign_id: 'campaign-1' },
-          { id: 'ad-2', campaign_id: 'campaign-2' },
-        ]);
-      jest
-        .spyOn(service as any, 'fetchInsightsForAccount')
-        .mockResolvedValue([
-          { campaign_id: 'campaign-1', spend: '10' },
-          { campaign_id: 'campaign-2', spend: '999' },
-        ]);
+      jest.spyOn(service as any, 'fetchCampaignsForAccount').mockResolvedValue(TODAS_AS_CAMPANHAS);
+      jest.spyOn(service as any, 'fetchAdsForAccount').mockResolvedValue([
+        { id: 'ad-1', campaign_id: 'campaign-1' },
+        { id: 'ad-2', campaign_id: 'campaign-2' },
+      ]);
+      jest.spyOn(service as any, 'fetchInsightsForAccount').mockResolvedValue([
+        { campaign_id: 'campaign-1', spend: '10' },
+        { campaign_id: 'campaign-2', spend: '999' },
+      ]);
       jest.spyOn(service as any, 'fetchLeadForms').mockResolvedValue([]);
       jest.spyOn(service as any, 'syncLeadForms').mockResolvedValue(0);
 

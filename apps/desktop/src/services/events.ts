@@ -312,6 +312,25 @@ export function mapApiEventToEvent(row: ApiEvent): Event {
 
 // ── Relatório Executivo (atribuição real, Rubinho, histórico) ───────────────
 
+export type ExecutiveAttributionRow = {
+  level: "campaign" | "adset" | "ad";
+  entity_id: string;
+  name: string;
+  meta_campaign_id: string | null;
+  meta_ad_set_id: string | null;
+  leads: number;
+  scheduled: number;
+  checked_in: number;
+  sold: number;
+  revenue: number;
+  spend: number;
+  cpl: number;
+  cost_per_scheduled: number;
+  cost_per_sale: number;
+  roas: number;
+  roi_percent: number;
+};
+
 export type ExecutiveReportResponse = {
   event_id: string;
   investment: {
@@ -323,15 +342,13 @@ export type ExecutiveReportResponse = {
     total: number;
     by_vendor: Array<{ vendor_id: string; avg_score: number; count: number }>;
   };
-  attribution: Array<{
-    meta_campaign_id: string;
-    name: string;
-    leads: number;
-    scheduled: number;
-    checked_in: number;
-    sold: number;
-    revenue: number;
-  }>;
+  attribution: Array<ExecutiveAttributionRow & { meta_campaign_id: string }>;
+  attribution_by_level: {
+    campaigns: ExecutiveAttributionRow[];
+    ad_sets: ExecutiveAttributionRow[];
+    ads: ExecutiveAttributionRow[];
+  };
+  attribution_period: { from: string; to: string };
   attribution_coverage: {
     attributed_leads: number;
     total_leads: number;
