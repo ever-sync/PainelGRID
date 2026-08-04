@@ -119,8 +119,36 @@ function parseDateKey(dateKey: string) {
   return new Date(year, (month || 1) - 1, day || 1);
 }
 
-function isDateOnOrBefore(date: string, boundary: Date) {
-  return new Date(date).getTime() <= boundary.getTime();
+const isScheduledLead = (lead: Lead) =>
+  lead.confirmation_status === "scheduled" ||
+  lead.crm_stage === "agendado" ||
+  Boolean(lead.active_appointment?.scheduled_at);
+
+const isConfirmedLead = (lead: Lead) =>
+  lead.confirmation_status === "confirmed";
+
+const isCancelledLead = (lead: Lead) =>
+  lead.confirmation_status === "cancelled" || lead.crm_stage === "perdido";
+
+const isCheckedInLead = (lead: Lead) =>
+  lead.confirmation_status === "checked_in";
+
+function countCampaignMetrics(leads: Lead[]) {
+  return {
+    totalLeads: leads.length,
+    scheduledLeads: leads.filter(isScheduledLead).length,
+    confirmedLeads: leads.filter(isConfirmedLead).length,
+    cancelledLeads: leads.filter(isCancelledLead).length,
+    checkedInLeads: leads.filter(isCheckedInLead).length,
+  };
+}
+
+/** Chave de dia no fuso do navegador — mesma base do rotulo do eixo. Agrupar em
+ *  UTC jogaria o lead criado depois das 21h (BRT) para o dia seguinte. */
+function localDayKey(date: Date) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
 }
 
 function buildCampaignChartData(
@@ -130,50 +158,40 @@ function buildCampaignChartData(
   periodDays: 7 | 15 | 30 = 7,
 ): CampaignChartPoint[] {
   const relevantLeads = allLeads.filter((lead) => lead.event_id === eventId);
-  const endDate = eventDateIso ? new Date(eventDateIso) : new Date();
-  const startDate = new Date(
-    Date.UTC(
-      endDate.getUTCFullYear(),
-      endDate.getUTCMonth(),
-      endDate.getUTCDate() - (periodDays - 1),
-    ),
-  );
+
+  // A janela termina hoje. Se o evento ja aconteceu, termina na data dele:
+  // depois disso nao entra lead novo e o grafico seria uma fila de zeros.
+  const today = new Date();
+  const eventDate = eventDateIso ? new Date(eventDateIso) : null;
+  const endDate =
+    eventDate &&
+    !Number.isNaN(eventDate.getTime()) &&
+    eventDate.getTime() < today.getTime()
+      ? eventDate
+      : today;
+
+  // Leads do dia, nao acumulado ate o dia: o acumulado repetia o total da
+  // campanha em todas as barras sempre que nada novo entrava no periodo.
+  const leadsByDay = new Map<string, Lead[]>();
+  for (const lead of relevantLeads) {
+    const createdAt = new Date(lead.created_at);
+    if (Number.isNaN(createdAt.getTime())) continue;
+    const key = localDayKey(createdAt);
+    const bucket = leadsByDay.get(key);
+    if (bucket) bucket.push(lead);
+    else leadsByDay.set(key, [lead]);
+  }
 
   return Array.from({ length: periodDays }, (_, index) => {
     const currentDate = new Date(
-      Date.UTC(
-        startDate.getUTCFullYear(),
-        startDate.getUTCMonth(),
-        startDate.getUTCDate() + index,
-      ),
-    );
-    const dayBoundary = new Date(currentDate);
-    dayBoundary.setUTCHours(23, 59, 59, 999);
-
-    const leadsUntilDay = relevantLeads.filter((lead) =>
-      isDateOnOrBefore(lead.created_at, dayBoundary),
+      endDate.getFullYear(),
+      endDate.getMonth(),
+      endDate.getDate() - (periodDays - 1) + index,
     );
 
     return {
       day: formatShortDate(currentDate),
-      totalLeads: leadsUntilDay.length,
-      scheduledLeads: leadsUntilDay.filter(
-        (lead) =>
-          lead.confirmation_status === "scheduled" ||
-          lead.crm_stage === "agendado" ||
-          Boolean(lead.active_appointment?.scheduled_at),
-      ).length,
-      confirmedLeads: leadsUntilDay.filter(
-        (lead) => lead.confirmation_status === "confirmed",
-      ).length,
-      cancelledLeads: leadsUntilDay.filter(
-        (lead) =>
-          lead.confirmation_status === "cancelled" ||
-          lead.crm_stage === "perdido",
-      ).length,
-      checkedInLeads: leadsUntilDay.filter(
-        (lead) => lead.confirmation_status === "checked_in",
-      ).length,
+      ...countCampaignMetrics(leadsByDay.get(localDayKey(currentDate)) ?? []),
     };
   });
 }
@@ -664,6 +682,7 @@ export function DashboardGestorPage() {
     selectedEventForChart?.event_date,
     periodDays,
   );
+  // Pilula do cabecalho: o ultimo dia do periodo.
   const campaignSummary = campaignChartData[campaignChartData.length - 1] ?? {
     day: "--",
     totalLeads: 0,
@@ -672,6 +691,10 @@ export function DashboardGestorPage() {
     cancelledLeads: 0,
     checkedInLeads: 0,
   };
+  // Cards embaixo do grafico: total da campanha, sem recorte de periodo.
+  const campaignTotals = countCampaignMetrics(
+    leads.filter((lead) => lead.event_id === (selectedCampaign?.id ?? "")),
+  );
   const activeMetric =
     campaignMetrics.find((metric) => metric.key === activeMetricKey) ??
     campaignMetrics[0];
@@ -1485,7 +1508,7 @@ export function DashboardGestorPage() {
                     className="mt-1.5 text-2xl font-black tracking-tight"
                     style={{ color: metric.stroke }}
                   >
-                    {campaignSummary[metric.key]}
+                    {campaignTotals[metric.key]}
                   </p>
                 </div>
               );
