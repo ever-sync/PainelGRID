@@ -3650,10 +3650,14 @@ export function ClienteDetailPage() {
         <button
           type="button"
           onClick={() => void handleDeleteClient()}
-          disabled={deleteLoading}
+          disabled={deleteLoading || client.status === "active"}
           aria-label="Excluir cliente"
-          title="Excluir cliente"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#E51838] text-white shadow-[0_10px_22px_rgba(229,24,56,0.28)] transition-colors hover:bg-[#c01530] disabled:opacity-60"
+          title={
+            client.status === "active"
+              ? "Cliente ativo não pode ser excluído — desative antes"
+              : "Excluir cliente"
+          }
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#E51838] text-white shadow-[0_10px_22px_rgba(229,24,56,0.28)] transition-colors hover:bg-[#c01530] disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Trash2 size={16} />
         </button>

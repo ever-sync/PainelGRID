@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -475,12 +476,43 @@ export class ClientsService {
     }
   }
 
+  /**
+   * Cliente ativo nao pode ser excluido: a exclusao apaga leads, eventos,
+   * usuarios e conversas junto, entao exige desativar antes como confirmacao
+   * deliberada. `is_active` ausente conta como ativo (o padrao do cadastro).
+   */
+  private async assertClientIsInactive(clientId: string) {
+    const client = await this.prisma.client.findUnique({
+      where: { id: clientId },
+      select: { settings: true },
+    });
+    if (!client) {
+      throw new NotFoundException("Cliente nao encontrado");
+    }
+
+    const settings =
+      client.settings &&
+      typeof client.settings === "object" &&
+      !Array.isArray(client.settings)
+        ? (client.settings as Record<string, unknown>)
+        : {};
+    const isActive =
+      typeof settings.is_active === "boolean" ? settings.is_active : true;
+
+    if (isActive) {
+      throw new ConflictException(
+        "Cliente ativo nao pode ser excluido. Desative o cliente antes de excluir.",
+      );
+    }
+  }
+
   async deleteForUser(user: AuthenticatedUser, clientId: string) {
     if (user.role !== Role.GESTOR) {
       throw new ForbiddenException("Apenas gestor pode excluir empresa");
     }
 
     await this.assertGestorOwnsClient(user.sub, clientId);
+    await this.assertClientIsInactive(clientId);
 
     await this.prisma.$transaction(
       async (tx) => {

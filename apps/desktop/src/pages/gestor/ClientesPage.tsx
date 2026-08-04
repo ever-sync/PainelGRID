@@ -667,10 +667,17 @@ export function ClientesPage() {
                                 onClick={() =>
                                   void handleDeleteClientFromList(client)
                                 }
-                                disabled={deletingClientId === client.id}
+                                disabled={
+                                  deletingClientId === client.id ||
+                                  client.status === "active"
+                                }
                                 aria-label={`Excluir ${client.company_name}`}
-                                title="Excluir"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100 disabled:opacity-60"
+                                title={
+                                  client.status === "active"
+                                    ? "Cliente ativo não pode ser excluído — desative antes"
+                                    : "Excluir"
+                                }
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
                               >
                                 <Trash2 size={14} />
                               </button>

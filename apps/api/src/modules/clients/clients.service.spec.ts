@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { ForbiddenException } from "@nestjs/common";
+import { ConflictException, ForbiddenException } from "@nestjs/common";
 import { Role } from "../../common/types";
 import { ClientsService } from "./clients.service";
 
@@ -121,6 +121,10 @@ describe("ClientsService", () => {
           company_name: "Acme",
         }),
       );
+      // So cliente desativado pode ser excluido.
+      prisma.client.findUnique.mockResolvedValue({
+        settings: { is_active: false },
+      });
 
       await service.deleteForUser(
         {
@@ -151,6 +155,32 @@ describe("ClientsService", () => {
       expect(redis.client.del).toHaveBeenCalledWith(
         `clients:access:${clientId}`,
       );
+    });
+
+    it.each([
+      ["ativo explicitamente", { is_active: true }],
+      // Cadastro antigo sem a flag conta como ativo.
+      ["sem a flag is_active", {}],
+    ])("cliente %s: bloqueia a exclusao", async (_label, settings) => {
+      prisma.$transaction = jest.fn();
+      redis.client.get.mockResolvedValue(
+        JSON.stringify({ id: clientId, gestor_id: gestorId }),
+      );
+      prisma.client.findUnique.mockResolvedValue({ settings });
+
+      await expect(
+        service.deleteForUser(
+          {
+            sub: gestorId,
+            role: Role.GESTOR,
+            email: "gestor@example.com",
+            name: "Gestor",
+            client_id: null,
+          },
+          clientId,
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
 
