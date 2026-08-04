@@ -23,6 +23,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
+  ArrowDownWideNarrow,
   CalendarDays,
   Check,
   CheckSquare,
@@ -114,6 +115,7 @@ import {
 } from "./crm-page.model";
 
 type ViewMode = "kanban" | "compact" | "list";
+type CardSort = "recent" | "oldest" | "visit" | "updated" | "name";
 type StageFilter = "all" | string;
 type ConfirmationFilter = "all" | Lead["confirmation_status"];
 type LeadMotionKind = "new" | "stage-change" | "update";
@@ -124,6 +126,60 @@ type Toast = {
   message: string;
   type: "success" | "error" | "info";
 };
+
+const CARD_SORT_OPTIONS = [
+  ["recent", "Mais recentes"],
+  ["oldest", "Mais antigos"],
+  ["visit", "Visita mais proxima"],
+  ["updated", "Atualizados por ultimo"],
+  ["name", "Nome (A-Z)"],
+] as const satisfies ReadonlyArray<readonly [CardSort, string]>;
+
+const CARD_SORT_STORAGE_KEY = "crm_card_sort";
+
+/** Compara duas datas ISO. Lead sem data (ou com data invalida) sempre vai
+ *  para o fim da coluna, nas duas direcoes. */
+function compareByDate(
+  a: string | null | undefined,
+  b: string | null | undefined,
+  direction: "asc" | "desc",
+) {
+  const aTime = a ? Date.parse(a) : Number.NaN;
+  const bTime = b ? Date.parse(b) : Number.NaN;
+  const aMissing = Number.isNaN(aTime);
+  const bMissing = Number.isNaN(bTime);
+  if (aMissing && bMissing) return 0;
+  if (aMissing) return 1;
+  if (bMissing) return -1;
+  return direction === "asc" ? aTime - bTime : bTime - aTime;
+}
+
+/** Ordenacao dos cards dentro da etapa. O desempate por nome mantem a ordem
+ *  estavel quando dois leads tem a mesma data. */
+function compareLeads(sort: CardSort) {
+  return (a: Lead, b: Lead) => {
+    const byName = a.name.localeCompare(b.name);
+    switch (sort) {
+      case "recent":
+        return compareByDate(a.created_at, b.created_at, "desc") || byName;
+      case "oldest":
+        return compareByDate(a.created_at, b.created_at, "asc") || byName;
+      case "visit":
+        return (
+          compareByDate(
+            a.store_visit_datetime,
+            b.store_visit_datetime,
+            "asc",
+          ) || byName
+        );
+      case "updated":
+        return compareByDate(a.updated_at, b.updated_at, "desc") || byName;
+      case "name":
+      default:
+        return byName;
+    }
+  };
+}
 
 function ToastStack({
   toasts,
@@ -1694,6 +1750,12 @@ export function CRMPage() {
     const stored = localStorage.getItem("crm_view_mode");
     return (stored as ViewMode) || "kanban";
   });
+  const [cardSort, setCardSort] = useState<CardSort>(() => {
+    const stored = localStorage.getItem(CARD_SORT_STORAGE_KEY);
+    return CARD_SORT_OPTIONS.some(([value]) => value === stored)
+      ? (stored as CardSort)
+      : "recent";
+  });
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [hideMenuOpen, setHideMenuOpen] = useState(false);
@@ -1907,11 +1969,12 @@ export function CRMPage() {
               return false;
             return true;
           })
-          .sort((a, b) => a.name.localeCompare(b.name)),
+          .sort(compareLeads(cardSort)),
       ]),
     ) as Record<string, Lead[]>;
   }, [
     boardState,
+    cardSort,
     kanbanColumns,
     search,
     sourceFilter,
@@ -3102,6 +3165,44 @@ export function CRMPage() {
                   ? `${selectedLeadIds.size} selecionados`
                   : "Selecionar"}
               </button>
+              <div className="relative">
+                <ArrowDownWideNarrow
+                  size={14}
+                  className={clsx(
+                    "pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2",
+                    isDarkMode ? "text-zinc-400" : "text-zinc-500",
+                  )}
+                />
+                <select
+                  value={cardSort}
+                  onChange={(event) => {
+                    const value = event.target.value as CardSort;
+                    setCardSort(value);
+                    localStorage.setItem(CARD_SORT_STORAGE_KEY, value);
+                  }}
+                  title="Ordenar cards dentro da etapa"
+                  aria-label="Ordenar cards dentro da etapa"
+                  className={clsx(
+                    "cursor-pointer appearance-none rounded-full border py-2 pl-9 pr-8 text-xs font-semibold outline-none transition-colors focus:border-[#FF0636]",
+                    isDarkMode
+                      ? "border-zinc-700 bg-[#111111] text-zinc-200 hover:bg-[#1b1b1b]"
+                      : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50",
+                  )}
+                >
+                  {CARD_SORT_OPTIONS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={14}
+                  className={clsx(
+                    "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2",
+                    isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                  )}
+                />
+              </div>
               <button
                 type="button"
                 onClick={() => setFiltersOpen(true)}
