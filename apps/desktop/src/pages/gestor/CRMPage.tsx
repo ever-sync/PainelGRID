@@ -2156,6 +2156,49 @@ export function CRMPage() {
     refreshBoardRef.current = refreshBoard;
   }, [refreshBoard]);
 
+  /** Ajusta os contadores por etapa junto com a movimentacao otimista, para o
+   *  badge nao ficar velho sem precisar refazer o board inteiro. */
+  const adjustStageCounts = useCallback(
+    (moves: Array<{ from?: string | null; to: string }>) => {
+      if (moves.length === 0) return;
+      setStageCounts((prev) => {
+        // Sem contagem do servidor ainda: o badge cai para o total local.
+        if (Object.keys(prev).length === 0) return prev;
+        const next = { ...prev };
+        for (const move of moves) {
+          if (move.from && next[move.from] != null) {
+            next[move.from] = Math.max(0, next[move.from] - 1);
+          }
+          next[move.to] = (next[move.to] ?? 0) + 1;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  /** Leads movidos por esta aba nos ultimos segundos. O evento de realtime
+   *  volta para quem originou a mudanca; sem isso, cada arraste dispararia um
+   *  refreshBoard completo (ate 10 requisicoes) logo apos o move. */
+  const selfMovedLeadsRef = useRef<Map<string, number>>(new Map());
+  const SELF_MOVE_ECHO_MS = 8_000;
+
+  const markSelfMoved = useCallback((leadIds: string[]) => {
+    const now = Date.now();
+    for (const [leadId, at] of selfMovedLeadsRef.current) {
+      if (now - at > SELF_MOVE_ECHO_MS)
+        selfMovedLeadsRef.current.delete(leadId);
+    }
+    for (const leadId of leadIds) selfMovedLeadsRef.current.set(leadId, now);
+  }, []);
+
+  const consumeSelfMovedEcho = useCallback((leadId: string) => {
+    const at = selfMovedLeadsRef.current.get(leadId);
+    if (at == null) return false;
+    selfMovedLeadsRef.current.delete(leadId);
+    return Date.now() - at <= SELF_MOVE_ECHO_MS;
+  }, []);
+
   // Busca server-side com debounce: encontra leads alem do teto carregado no board,
   // sem refazer o refreshBoard a cada tecla. O primeiro render é ignorado (o efeito
   // de montagem ja carrega o board).
@@ -2228,13 +2271,17 @@ export function CRMPage() {
           setOpenLeadHistoryVersion((current) => current + 1);
         }
 
-        if (realtimeReconcileTimerRef.current != null) {
-          window.clearTimeout(realtimeReconcileTimerRef.current);
+        // Eco do proprio move: o `getLead` acima ja trouxe a verdade do
+        // servidor para esse lead, entao o resync completo seria redundante.
+        if (!consumeSelfMovedEcho(freshLead.id)) {
+          if (realtimeReconcileTimerRef.current != null) {
+            window.clearTimeout(realtimeReconcileTimerRef.current);
+          }
+          realtimeReconcileTimerRef.current = window.setTimeout(() => {
+            realtimeReconcileTimerRef.current = null;
+            refreshBoard();
+          }, 350);
         }
-        realtimeReconcileTimerRef.current = window.setTimeout(() => {
-          realtimeReconcileTimerRef.current = null;
-          refreshBoard();
-        }, 350);
       } catch (error) {
         if (error instanceof HttpError && error.status === 404) {
           setBoardState((prev) => removeLeadFromBoard(prev, leadId));
@@ -2246,6 +2293,7 @@ export function CRMPage() {
     [
       apiStages,
       clientLeads,
+      consumeSelfMovedEcho,
       openLead?.id,
       refreshBoard,
       selectedClient,
@@ -2602,10 +2650,22 @@ export function CRMPage() {
       next[targetStageId] = [...(next[targetStageId] ?? []), ...movedLeads];
       return next;
     });
+    adjustStageCounts(
+      movedLeads.map((moved) => ({
+        from: originalStageById[moved.id],
+        to: targetStageId,
+      })),
+    );
 
     const movedIds = movedLeads.map((lead) => lead.id);
     const revert = (message: string) => {
       showToast(message, "error");
+      adjustStageCounts(
+        movedLeads.map((moved) => ({
+          from: targetStageId,
+          to: originalStageById[moved.id],
+        })),
+      );
       setBoardState((prev) => {
         const next = { ...prev };
         next[targetStageId] = (next[targetStageId] ?? []).filter(
@@ -2643,6 +2703,8 @@ export function CRMPage() {
       return;
     }
 
+    // Antes da chamada: o evento de realtime pode chegar antes da resposta.
+    markSelfMoved(movedIds);
     void bulkMoveCrmLeads(
       {
         lead_ids: movedIds,
@@ -2658,7 +2720,9 @@ export function CRMPage() {
           result.moved > 0 ? "success" : "info",
         );
         exitSelectionMode();
-        refreshBoard();
+        // O board otimista ja reflete o sucesso total; so vale refazer tudo
+        // quando a API pulou algum lead e o estado local ficou por corrigir.
+        if (result.moved !== movedIds.length) refreshBoard();
       })
       .catch((error) => {
         const detail = error instanceof Error ? error.message : "";
@@ -2700,6 +2764,9 @@ export function CRMPage() {
       return null;
     }
 
+    // Antes da chamada: o evento de realtime pode chegar antes da resposta.
+    markSelfMoved([lead.id]);
+
     try {
       const result = await moveCrmLead(
         lead.id,
@@ -2738,11 +2805,13 @@ export function CRMPage() {
         next[targetStageId] = [...(next[targetStageId] ?? []), updated];
         return next;
       });
+      adjustStageCounts([
+        { from: result.from_stage_id ?? lead.crm_stage_id, to: targetStageId },
+      ]);
       setOpenLead((current) => (current?.id === lead.id ? updated : current));
       // Recarrega a timeline do modal para mostrar a movimentacao recem-criada.
       setOpenLeadHistoryVersion((version) => version + 1);
       showToast(`${lead.name} movido para ${targetColumn.label}.`, "success");
-      refreshBoard();
       return updated;
     } catch (error) {
       const detail = error instanceof Error ? error.message : "";
@@ -2812,12 +2881,17 @@ export function CRMPage() {
     if (!movedLead || !originalStageId || originalStageId === targetStageId)
       return;
 
+    adjustStageCounts([{ from: originalStageId, to: targetStageId }]);
+
     const session = readStoredSession();
     const accessToken = session?.accessToken;
     const stageCode = stageCodeById(apiStages, targetStageId);
 
     const revert = (message: string) => {
       showToast(message, "error");
+      if (originalStageId) {
+        adjustStageCounts([{ from: targetStageId, to: originalStageId }]);
+      }
       setBoardState((prev) => {
         const next = { ...prev };
         next[targetStageId] = (next[targetStageId] ?? []).filter(
@@ -2842,6 +2916,8 @@ export function CRMPage() {
       return;
     }
 
+    // Antes da chamada: o evento de realtime pode chegar antes da resposta.
+    markSelfMoved([movedLead.id]);
     void moveCrmLead(
       movedLead.id,
       {
@@ -2881,7 +2957,6 @@ export function CRMPage() {
           `${movedLead?.name} movido para ${targetColumn?.label ?? "nova etapa"}.`,
           "success",
         );
-        refreshBoard();
       })
       .catch((error) => {
         const detail = error instanceof Error ? error.message : "";
