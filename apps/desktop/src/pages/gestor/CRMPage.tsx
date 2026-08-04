@@ -1498,11 +1498,12 @@ function StageColumn({
     <div
       className={clsx(
         "flex flex-col gap-2",
-        // No mobile a pagina rola normalmente (altura fixa). No desktop a coluna
-        // e um flex item do board e o `align-items: stretch` preenche a altura,
-        // sem depender de cadeia de `height: 100%`.
+        // No modo compacto a coluna conserva a altura propria. No Kanban, ela
+        // ocupa exatamente a altura do quadro para que apenas os cards rolem.
         "h-[calc(100vh-11.5rem)] min-h-[36rem]",
-        fillHeight ? "w-[272px] shrink-0 md:h-auto md:min-h-0" : "w-full",
+        fillHeight
+          ? "w-[272px] shrink-0 md:h-full md:max-h-full md:min-h-0"
+          : "w-full",
       )}
     >
       {/* ── Column header ── */}
@@ -1553,7 +1554,7 @@ function StageColumn({
               : "bg-zinc-50/70",
         )}
       >
-        <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto pr-1 [-ms-overflow-style:none] [scrollbar-width:thin]">
+        <div className="flex min-h-0 flex-1 touch-pan-y flex-col gap-2.5 overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable] [-ms-overflow-style:none] [scrollbar-width:thin]">
           {leads.map((lead, index) => (
             <LeadCard
               key={lead.id}
@@ -2737,7 +2738,7 @@ export function CRMPage() {
       className={clsx(
         "flex flex-col gap-6",
         // Preenche a altura util do layout (mesma faixa do sidebar fixo).
-        viewMode === "kanban" && "md:h-full md:min-h-0",
+        viewMode === "kanban" && "md:h-full md:min-h-0 md:overflow-hidden",
         isDarkMode && "dashboard-dark bg-black",
       )}
     >
@@ -3076,9 +3077,9 @@ export function CRMPage() {
                 ))}
             </div>
           ) : (
-            <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden pb-2 [-ms-overflow-style:none] [scrollbar-width:thin]">
+            <div className="min-h-0 max-h-full flex-1 overflow-x-auto overflow-y-hidden pb-2 [-ms-overflow-style:none] [scrollbar-width:thin]">
               <div
-                className="flex h-full gap-3"
+                className="flex h-full min-h-0 max-h-full items-stretch gap-3"
                 style={{ minWidth: "max-content" }}
               >
                 {kanbanColumns
