@@ -10,5 +10,6 @@ import { ConversationsService } from './conversations.service';
   imports: [ClientsModule, RealtimeModule, MetaModule, CrmModule],
   controllers: [ConversationsController],
   providers: [ConversationsService],
+  exports: [ConversationsService],
 })
 export class ConversationsModule {}

@@ -9,9 +9,10 @@ import { IntegrationCredentialsController } from './integration-credentials.cont
 import { IntegrationCredentialsService } from './integration-credentials.service';
 import { MetaLeadIngestionController } from './meta-lead-ingestion.controller';
 import { MetaLeadIngestionKeyGuard } from './meta-lead-ingestion-key.guard';
+import { ConversationsModule } from '../conversations/conversations.module';
 
 @Module({
-  imports: [LeadsModule, CrmModule, EventsModule, RubinhoModule],
+  imports: [LeadsModule, CrmModule, EventsModule, RubinhoModule, ConversationsModule],
   controllers: [
     IntegrationController,
     IntegrationCredentialsController,

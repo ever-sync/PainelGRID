@@ -40,8 +40,16 @@ describe('ConversationsService', () => {
 
   beforeEach(() => {
     prisma = {
-      conversation: { findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
-      message: { findMany: jest.fn(), create: jest.fn() },
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      $transaction: jest.fn(),
+      conversation: {
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
+      message: { createMany: jest.fn(), findMany: jest.fn(), create: jest.fn() },
       lead: { findUnique: jest.fn() },
       agentActionLog: { findMany: jest.fn() },
       conversationState: { upsert: jest.fn().mockResolvedValue({ updated_at: new Date() }) },
@@ -49,6 +57,7 @@ describe('ConversationsService', () => {
     clientsService = { assertGestorOwnsClient: jest.fn().mockResolvedValue(undefined) };
     realtimeEvents = { emitNewMessage: jest.fn() };
     metaService = { sendClientWhatsappMessage: jest.fn().mockResolvedValue('wamid-1') };
+    prisma.$transaction.mockImplementation((callback: (tx: any) => unknown) => callback(prisma));
     service = new ConversationsService(
       prisma,
       clientsService,
@@ -57,6 +66,53 @@ describe('ConversationsService', () => {
       { dispatch: jest.fn() } as never,
       { upload: jest.fn(), download: jest.fn().mockResolvedValue(null) } as never,
     );
+  });
+
+  describe('syncN8nHistoryForClient', () => {
+    it('importa apenas mensagens humanas e respostas finais com IDs idempotentes', async () => {
+      prisma.$queryRaw = jest.fn().mockResolvedValue([
+        {
+          history_id: 10,
+          lead_id: leadId,
+          message_type: 'human',
+          content: 'Oi',
+        },
+        {
+          history_id: 11,
+          lead_id: leadId,
+          message_type: 'ai',
+          content: 'Ola!',
+        },
+      ]);
+      prisma.conversation.findFirst.mockResolvedValue({
+        ...makeConv(),
+        last_message_at: null,
+      });
+      prisma.message.createMany.mockResolvedValue({ count: 2 });
+      prisma.conversation.update.mockResolvedValue({});
+
+      await expect(service.syncN8nHistoryForClient(clientId)).resolves.toBe(2);
+      expect(prisma.message.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          skipDuplicates: true,
+          data: [
+            expect.objectContaining({
+              sender_type: SenderType.lead,
+              external_id: 'n8n-history:10',
+            }),
+            expect.objectContaining({
+              sender_type: SenderType.user,
+              external_id: 'n8n-history:11',
+            }),
+          ],
+        }),
+      );
+    });
+
+    it('nao derruba a listagem quando a tabela historica nao existe', async () => {
+      prisma.$queryRaw = jest.fn().mockRejectedValue({ code: 'P2010', meta: { code: '42P01' } });
+      await expect(service.syncN8nHistoryForClient(clientId)).resolves.toBe(0);
+    });
   });
 
   // ─── findAll ─────────────────────────────────────────────────────────────

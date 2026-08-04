@@ -30,6 +30,7 @@ import { IntegrationFindEventQueryDto } from './dto/find-event-query.dto';
 import { IntegrationKeyGuard } from './integration-key.guard';
 import type { IntegrationRequest } from './integration-request';
 import { RubinhoService } from '../rubinho/rubinho.service';
+import { ConversationsService } from '../conversations/conversations.service';
 
 @ApiTags('integrations')
 @Controller('integrations/v1')
@@ -43,6 +44,7 @@ export class IntegrationController {
     private readonly crmService: CrmService,
     private readonly eventsService: EventsService,
     private readonly rubinhoService: RubinhoService,
+    private readonly conversationsService: ConversationsService,
   ) {}
 
   @Get('events')
@@ -139,8 +141,10 @@ export class IntegrationController {
     required: false,
     description: 'Quantidade de itens por página (1–200, padrão 50)',
   })
-  listLeads(@Query() query: FindLeadsQueryDto) {
-    return this.leadsService.findAllForIntegration(query);
+  async listLeads(@Query() query: FindLeadsQueryDto) {
+    const result = await this.leadsService.findAllForIntegration(query);
+    await this.conversationsService.syncN8nHistoryForClient(query.client_id!);
+    return result;
   }
 
   @Post('leads')

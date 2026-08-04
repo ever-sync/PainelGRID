@@ -1,5 +1,5 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, SenderType } from '@prisma/client';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConversationChannel, Prisma, SenderType } from '@prisma/client';
 import { Role } from '../../common/types';
 import { PrismaService } from '../../config/prisma.service';
 import { StorageService } from '../../config/storage.service';
@@ -12,8 +12,18 @@ import { CreateMessageDto } from './dto/create-message.dto';
 import { EnsureConversationDto } from './dto/ensure-conversation.dto';
 import { FindConversationsQueryDto } from './dto/find-conversations-query.dto';
 
+type N8nHistoryRow = {
+  history_id: number;
+  lead_id: string;
+  message_type: 'human' | 'ai';
+  content: string;
+};
+
 @Injectable()
 export class ConversationsService {
+  private readonly logger = new Logger(ConversationsService.name);
+  private readonly n8nHistorySyncs = new Map<string, Promise<number>>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly clientsService: ClientsService,
@@ -59,6 +69,7 @@ export class ConversationsService {
 
   async findAll(user: AuthenticatedUser, query: FindConversationsQueryDto) {
     await this.assertClientRead(user, query.client_id);
+    await this.syncN8nHistoryForClient(query.client_id);
 
     const where: Prisma.ConversationWhereInput = { client_id: query.client_id };
     if (user.role === Role.VENDEDOR) {
@@ -96,6 +107,155 @@ export class ConversationsService {
       handoff_updated_at: row.state?.updated_at ?? null,
       created_at: row.created_at,
     }));
+  }
+
+  /**
+   * O workflow legado do Rubinho grava a memoria do LangChain em
+   * agent_chat_history, fora das tabelas que alimentam o chat do painel.
+   * Copia apenas mensagens visiveis e usa o ID da memoria como chave
+   * idempotente, permitindo rodar a cada consulta sem criar duplicatas.
+   */
+  async syncN8nHistoryForClient(clientId: string): Promise<number> {
+    if (typeof this.prisma.$queryRaw !== 'function') return 0;
+
+    const running = this.n8nHistorySyncs.get(clientId);
+    if (running) return running;
+
+    const sync = this.importN8nHistoryForClient(clientId)
+      .catch((error: unknown) => {
+        const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
+        const code = record?.code ? String(record.code) : '';
+        const meta = record?.meta && typeof record.meta === 'object' ? (record.meta as Record<string, unknown>) : null;
+        const databaseCode = meta?.code ? String(meta.code) : '';
+        const missingHistoryTable = code === '42P01' || (code === 'P2010' && databaseCode === '42P01');
+        if (!missingHistoryTable) {
+          const message = error instanceof Error ? error.message : String(error);
+          this.logger.warn(`Falha ao sincronizar historico do n8n: ${message}`);
+        }
+        return 0;
+      })
+      .finally(() => this.n8nHistorySyncs.delete(clientId));
+
+    this.n8nHistorySyncs.set(clientId, sync);
+    return sync;
+  }
+
+  private async importN8nHistoryForClient(clientId: string): Promise<number> {
+    const rows = await this.prisma.$queryRaw<N8nHistoryRow[]>(Prisma.sql`
+      SELECT
+        history.id AS history_id,
+        matched_lead.id AS lead_id,
+        history.message->>'type' AS message_type,
+        history.message->>'content' AS content
+      FROM agent_chat_history history
+      JOIN LATERAL (
+        SELECT lead.id
+        FROM leads lead
+        WHERE lead.client_id = ${clientId}::uuid
+          AND lead.deleted_at IS NULL
+          AND length(regexp_replace(COALESCE(lead.phone, ''), '[^0-9]', '', 'g')) >= 10
+          AND (
+            regexp_replace(COALESCE(lead.phone, ''), '[^0-9]', '', 'g') =
+              regexp_replace(history.session_id, '[^0-9]', '', 'g')
+            OR right(regexp_replace(COALESCE(lead.phone, ''), '[^0-9]', '', 'g'), 11) =
+              right(regexp_replace(history.session_id, '[^0-9]', '', 'g'), 11)
+          )
+        ORDER BY lead.updated_at DESC, lead.id DESC
+        LIMIT 1
+      ) matched_lead ON true
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM messages stored_message
+        WHERE stored_message.external_id = 'n8n-history:' || history.id::text
+      )
+        AND (
+          history.message->>'type' = 'human'
+          OR (
+            history.message->>'type' = 'ai'
+            AND CASE
+              WHEN jsonb_typeof(history.message->'tool_calls') = 'array'
+                THEN jsonb_array_length(history.message->'tool_calls') = 0
+              ELSE true
+            END
+          )
+        )
+      ORDER BY history.id ASC
+      LIMIT 1000
+    `);
+
+    const usableRows = rows.filter((row) => row.content?.trim());
+    if (usableRows.length === 0) return 0;
+
+    // A tabela do LangChain nao possui timestamp. Preservamos a ordem pelo ID
+    // e ancoramos o lote no instante da importacao.
+    const importedAt = Date.now();
+    const timestampByHistoryId = new Map(
+      usableRows.map((row, index) => [row.history_id, new Date(importedAt - (usableRows.length - index - 1) * 1_000)]),
+    );
+    const byLead = new Map<string, N8nHistoryRow[]>();
+    for (const row of usableRows) {
+      const leadRows = byLead.get(row.lead_id) ?? [];
+      leadRows.push(row);
+      byLead.set(row.lead_id, leadRows);
+    }
+
+    let imported = 0;
+    for (const [leadId, historyRows] of byLead) {
+      imported += await this.prisma.$transaction(async (tx) => {
+        const lockKey = `${clientId}:${leadId}:${ConversationChannel.whatsapp}`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+
+        let conversation = await tx.conversation.findFirst({
+          where: {
+            client_id: clientId,
+            lead_id: leadId,
+            channel: ConversationChannel.whatsapp,
+          },
+          orderBy: [{ last_message_at: 'desc' }, { created_at: 'desc' }],
+        });
+        if (!conversation) {
+          conversation = await tx.conversation.create({
+            data: {
+              client_id: clientId,
+              lead_id: leadId,
+              channel: ConversationChannel.whatsapp,
+            },
+          });
+        }
+
+        const created = await tx.message.createMany({
+          data: historyRows.map((row) => ({
+            conversation_id: conversation.id,
+            sender_type: row.message_type === 'human' ? SenderType.lead : SenderType.user,
+            sender_id: null,
+            content: row.content.trim(),
+            external_id: `n8n-history:${row.history_id}`,
+            created_at: timestampByHistoryId.get(row.history_id)!,
+          })),
+          skipDuplicates: true,
+        });
+
+        if (created.count > 0) {
+          const latest = historyRows.reduce(
+            (value, row) => {
+              const timestamp = timestampByHistoryId.get(row.history_id)!;
+              return timestamp.getTime() > value.getTime() ? timestamp : value;
+            },
+            conversation.last_message_at ?? new Date(0),
+          );
+          if (!conversation.last_message_at || latest.getTime() > conversation.last_message_at.getTime()) {
+            await tx.conversation.update({
+              where: { id: conversation.id },
+              data: { last_message_at: latest },
+            });
+          }
+        }
+
+        return created.count;
+      });
+    }
+
+    return imported;
   }
 
   async ensureConversation(user: AuthenticatedUser, dto: EnsureConversationDto) {
