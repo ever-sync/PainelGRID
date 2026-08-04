@@ -140,6 +140,26 @@ const CARD_SORT_OPTIONS = [
 
 const CARD_SORT_STORAGE_KEY = "crm_card_sort";
 
+/** true abaixo do breakpoint `md` do Tailwind (768px). No celular o Kanban
+ *  mostra uma etapa por vez em vez do quadro rolando na horizontal. */
+function useIsMobileViewport() {
+  const query = "(max-width: 767px)";
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(query).matches,
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const handleChange = (event: MediaQueryListEvent) =>
+      setIsMobile(event.matches);
+    setIsMobile(media.matches);
+    media.addEventListener("change", handleChange);
+    return () => media.removeEventListener("change", handleChange);
+  }, []);
+
+  return isMobile;
+}
+
 /** Compara duas datas ISO. Lead sem data (ou com data invalida) sempre vai
  *  para o fim da coluna, nas duas direcoes. */
 function compareByDate(
@@ -1801,6 +1821,8 @@ export function CRMPage() {
     const stored = localStorage.getItem("crm_view_mode");
     return (stored as ViewMode) || "kanban";
   });
+  const isMobileViewport = useIsMobileViewport();
+  const [mobileStageId, setMobileStageId] = useState<string | null>(null);
   const [cardSort, setCardSort] = useState<CardSort>(() => {
     const stored = localStorage.getItem(CARD_SORT_STORAGE_KEY);
     return CARD_SORT_OPTIONS.some(([value]) => value === stored)
@@ -2051,6 +2073,13 @@ export function CRMPage() {
       ),
     [kanbanColumns, stageFilter, hiddenStageIds],
   );
+
+  /** Etapa aberta no celular. Cai na primeira visivel quando a escolhida some
+   *  (filtro de etapa, etapa ocultada, troca de cliente). */
+  const activeMobileStage =
+    visibleStages.find((stage) => stage.id === mobileStageId) ??
+    visibleStages[0] ??
+    null;
 
   const visibleLeads = Object.values(visibleBoard).flat();
   const activeLead = activeId
@@ -3533,6 +3562,81 @@ export function CRMPage() {
                   }
                 />
               ))}
+            </div>
+          ) : isMobileViewport ? (
+            // Celular: uma etapa por vez. O quadro rolando na horizontal com
+            // colunas de 272px nao cabe em tela estreita, e arrastar um card
+            // para uma coluna fora da viewport e impraticavel — para trocar de
+            // etapa aqui, use a trilha de etapas dentro do card.
+            <div className="flex min-h-0 flex-1 flex-col gap-3">
+              <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:thin]">
+                {visibleStages.map((stage) => {
+                  const isActive = activeMobileStage?.id === stage.id;
+                  const count = cardFiltersActive
+                    ? (visibleBoard[stage.id]?.length ?? 0)
+                    : (stageCounts[stage.id] ??
+                      visibleBoard[stage.id]?.length ??
+                      0);
+                  return (
+                    <button
+                      key={stage.id}
+                      type="button"
+                      aria-pressed={isActive}
+                      onClick={(event) => {
+                        setMobileStageId(stage.id);
+                        event.currentTarget.scrollIntoView({
+                          behavior: "smooth",
+                          inline: "center",
+                          block: "nearest",
+                        });
+                      }}
+                      className={clsx(
+                        "inline-flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-bold transition-colors",
+                        isActive
+                          ? "border-[#FF0636] bg-[#FF0636]/10 text-[#FF0636]"
+                          : isDarkMode
+                            ? "border-zinc-800 bg-[#111111] text-zinc-300"
+                            : "border-zinc-200 bg-white text-zinc-600",
+                      )}
+                    >
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ backgroundColor: stage.color }}
+                      />
+                      {stage.label}
+                      <span
+                        className={clsx(
+                          "tabular-nums",
+                          isActive ? "text-[#FF0636]" : "text-zinc-400",
+                        )}
+                      >
+                        {formatStageLeadCount(count)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {activeMobileStage && (
+                <StageColumn
+                  key={activeMobileStage.id}
+                  stage={activeMobileStage}
+                  leads={visibleBoard[activeMobileStage.id] ?? []}
+                  vendorsById={vendorsById}
+                  dark={isDarkMode}
+                  liveKind={liveStageKinds[activeMobileStage.id]}
+                  liveLeadKinds={liveLeadKinds}
+                  selectionMode={selectionMode}
+                  selectedLeadIds={selectedLeadIds}
+                  onToggleSelect={toggleSelection}
+                  onLeadOpen={setOpenLead}
+                  onLeadKeyboardMove={moveLeadToNeighborStage}
+                  totalCount={
+                    cardFiltersActive
+                      ? undefined
+                      : stageCounts[activeMobileStage.id]
+                  }
+                />
+              )}
             </div>
           ) : (
             <div className="min-h-0 max-h-full flex-1 overflow-x-auto overflow-y-hidden pb-2 [-ms-overflow-style:none] [scrollbar-width:thin]">
