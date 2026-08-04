@@ -35,8 +35,8 @@ import {
   FileText,
   Mail,
   HelpCircle,
-  PanelLeftClose,
-  PanelLeftOpen,
+  ChevronLeft,
+  ChevronRight,
   Bell,
 } from "lucide-react";
 import clsx from "clsx";
@@ -1037,7 +1037,16 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
         )}
       >
         {/* Cabeçalho do Sidebar com Logo + Botão de Abrir/Fechar */}
-        <div className={clsx("mb-6 flex items-center shrink-0 w-full", isSidebarExpanded ? "justify-between px-1" : "justify-center")}>
+        <div
+          className={clsx(
+            "mb-6 flex shrink-0 w-full",
+            // Recolhido a barra tem 80px: logo (44px) + botao (32px) lado a
+            // lado nao cabem, entao o botao vai para baixo da logo.
+            isSidebarExpanded
+              ? "items-center justify-between px-1"
+              : "flex-col items-center gap-2",
+          )}
+        >
           <div className="flex items-center gap-3">
             <div
               className={clsx(
@@ -1071,7 +1080,11 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
             )}
             title={isSidebarExpanded ? "Recolher menu" : "Expandir menu"}
           >
-            {isSidebarExpanded ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+            {isSidebarExpanded ? (
+              <ChevronLeft size={18} />
+            ) : (
+              <ChevronRight size={18} />
+            )}
           </button>
         </div>
 
@@ -1111,12 +1124,19 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
 
         <div
           className={clsx(
-            "mt-4 flex w-full shrink-0 flex-col items-center gap-1.5 border-t pt-4",
+            "mt-4 flex w-full shrink-0 flex-col border-t pt-4",
+            // Aberto: linhas de menu com rotulo. Recolhido: pilha de icones.
+            isSidebarExpanded ? "gap-1" : "items-center gap-1.5",
             dashboardDark ? "border-zinc-800" : "border-zinc-100",
           )}
         >
           {/* BOTÃO SINO DE NOTIFICAÇÕES (ACIMA DO BOTÃO DARKMODE) */}
-          <div className="relative flex items-center justify-center">
+          <div
+            className={clsx(
+              "relative flex items-center",
+              isSidebarExpanded ? "w-full" : "justify-center",
+            )}
+          >
             <button
               type="button"
               onClick={() => {
@@ -1126,7 +1146,10 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                 }
               }}
               className={clsx(
-                "relative flex h-11 w-11 items-center justify-center rounded-full transition-colors cursor-pointer",
+                "relative flex items-center transition-colors cursor-pointer",
+                isSidebarExpanded
+                  ? "h-11 w-full gap-3 rounded-2xl px-3.5 text-xs font-bold"
+                  : "h-11 w-11 justify-center rounded-full",
                 dashboardDark
                   ? "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
                   : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900",
@@ -1134,8 +1157,18 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
               title="Notificações do Sistema"
               aria-label="Notificações do Sistema"
             >
-              <Bell size={18} />
-              {unreadCount > 0 && (
+              <Bell size={18} className="shrink-0" />
+              {isSidebarExpanded && (
+                <>
+                  <span className="truncate">Notificações</span>
+                  {unreadCount > 0 && (
+                    <span className="ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#FF0636] px-1.5 text-[10px] font-black tabular-nums text-white">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                </>
+              )}
+              {!isSidebarExpanded && unreadCount > 0 && (
                 <span className="absolute top-2.5 right-2.5 flex h-2.5 w-2.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF0636] opacity-75" />
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#FF0636]" />
@@ -1209,7 +1242,10 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
               setDashboardDark(next);
             }}
             className={clsx(
-              "flex h-11 w-11 items-center justify-center rounded-full transition-colors",
+              "flex items-center transition-colors cursor-pointer",
+              isSidebarExpanded
+                ? "h-11 w-full gap-3 rounded-2xl px-3.5 text-xs font-bold"
+                : "h-11 w-11 justify-center rounded-full",
               dashboardDark
                 ? "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
                 : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700",
@@ -1217,22 +1253,71 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
             title="Alternar modo escuro"
             aria-label="Alternar modo escuro"
           >
-            {dashboardDark ? <Sun size={18} /> : <Moon size={18} />}
+            {dashboardDark ? (
+              <Sun size={18} className="shrink-0" />
+            ) : (
+              <Moon size={18} className="shrink-0" />
+            )}
+            {isSidebarExpanded && (
+              <span className="truncate">
+                {dashboardDark ? "Modo claro" : "Modo escuro"}
+              </span>
+            )}
           </button>
 
           {/* Avatar + menu de hover */}
-          <div className="group relative flex h-11 w-11 items-center justify-center">
+          <div
+            className={clsx(
+              "group relative flex items-center",
+              isSidebarExpanded ? "mt-1 w-full" : "h-11 w-11 justify-center",
+            )}
+          >
             <button
               type="button"
               className={clsx(
-                "flex h-11 w-11 select-none items-center justify-center rounded-full text-xs font-bold transition-colors",
+                "flex select-none items-center transition-colors cursor-pointer",
+                isSidebarExpanded
+                  ? "w-full gap-3 rounded-2xl p-1.5 text-left"
+                  : "h-11 w-11 justify-center rounded-full text-xs font-bold",
                 dashboardDark
-                  ? "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
-                  : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200",
+                  ? isSidebarExpanded
+                    ? "hover:bg-zinc-800/70"
+                    : "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+                  : isSidebarExpanded
+                    ? "hover:bg-zinc-100"
+                    : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200",
               )}
               aria-label="Abrir menu de perfil"
             >
-              {initials}
+              {isSidebarExpanded ? (
+                <>
+                  <span
+                    className={clsx(
+                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                      dashboardDark
+                        ? "bg-zinc-800 text-zinc-200"
+                        : "bg-zinc-100 text-zinc-700",
+                    )}
+                  >
+                    {initials}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={clsx(
+                        "block truncate text-xs font-bold",
+                        dashboardDark ? "text-zinc-100" : "text-zinc-900",
+                      )}
+                    >
+                      {user.name}
+                    </span>
+                    <span className="block truncate text-[10px] font-medium text-zinc-400">
+                      {roleLabels[user.role] ?? user.role}
+                    </span>
+                  </span>
+                </>
+              ) : (
+                initials
+              )}
             </button>
 
             <div
