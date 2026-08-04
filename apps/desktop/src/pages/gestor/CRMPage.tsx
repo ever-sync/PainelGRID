@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
@@ -1338,6 +1339,7 @@ const LeadCard = memo(function LeadCard({
   selected,
   onToggleSelect,
   onOpen,
+  onKeyboardMove,
   enterIndex,
 }: {
   lead: Lead;
@@ -1349,6 +1351,8 @@ const LeadCard = memo(function LeadCard({
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
   onOpen: (lead: Lead) => void;
+  /** Alt + seta move o card para a etapa vizinha (alternativa ao arraste). */
+  onKeyboardMove?: (lead: Lead, direction: -1 | 1) => void;
   enterIndex?: number;
 }) {
   const vendorName = lead.assigned_vendor_id
@@ -1400,6 +1404,30 @@ const LeadCard = memo(function LeadCard({
     onOpen(lead);
   };
 
+  // Teclado: Enter/Espaco abre o lead e Alt + seta troca de etapa. E a unica
+  // via de movimentacao para quem nao usa mouse — o dnd-kit so tem sensores de
+  // mouse e toque (o KeyboardSensor moveria o card de 25px por tecla, inutil
+  // para alcancar a coluna vizinha).
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    // So responde com o foco no proprio card: senao o Enter no botao interno
+    // de abrir o chat tambem abriria o modal do lead.
+    if (event.target !== event.currentTarget) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleClick();
+      return;
+    }
+    if (!onKeyboardMove) return;
+    if (!event.altKey && !event.metaKey && !event.ctrlKey) return;
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      onKeyboardMove(lead, -1);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      onKeyboardMove(lead, 1);
+    }
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -1407,15 +1435,21 @@ const LeadCard = memo(function LeadCard({
       {...attributes}
       {...listeners}
       role="group"
+      tabIndex={0}
       aria-roledescription="Lead arrastável"
-      aria-label={`Lead ${lead.name}, etapa ${lead.crm_stage}, fonte ${lead.source}`}
+      aria-label={clsx(
+        `Lead ${lead.name}, etapa ${lead.crm_stage}, fonte ${lead.source}`,
+        onKeyboardMove && "— Alt e seta esquerda ou direita move de etapa",
+      )}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
       className={clsx(
         // `shrink-0`: a lista de cards e flex-col; sem isso os cards
         // comprimiriam quando a coluna nao coubesse na altura.
         "group shrink-0 cursor-pointer rounded-[18px] border p-3.5 transition-all duration-150",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF0636]/70",
         dark
           ? "border-[#222] bg-[#111] hover:border-[#333] hover:shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
           : "border-zinc-100/80 bg-white hover:border-zinc-200 hover:shadow-[0_4px_16px_rgba(15,23,42,0.08)]",
@@ -1589,6 +1623,7 @@ function StageColumn({
   selectedLeadIds,
   onToggleSelect,
   onLeadOpen,
+  onLeadKeyboardMove,
   totalCount,
   fillHeight,
 }: {
@@ -1603,6 +1638,7 @@ function StageColumn({
   selectedLeadIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
   onLeadOpen: (lead: Lead) => void;
+  onLeadKeyboardMove?: (lead: Lead, direction: -1 | 1) => void;
   totalCount?: number;
   /** Kanban: preenche a altura do board (o pai controla). Compact: altura fixa. */
   fillHeight?: boolean;
@@ -1713,6 +1749,7 @@ function StageColumn({
               selected={selectedLeadIds?.has(lead.id)}
               onToggleSelect={onToggleSelect}
               onOpen={onLeadOpen}
+              onKeyboardMove={onLeadKeyboardMove}
               enterIndex={index}
             />
           ))}
@@ -2002,6 +2039,18 @@ export function CRMPage() {
     stageFilter,
     confirmationFilter,
   ]);
+
+  /** Etapas realmente renderizadas, na ordem do funil. Serve tanto para o
+   *  render das colunas quanto para achar a etapa vizinha no atalho de teclado. */
+  const visibleStages = useMemo(
+    () =>
+      kanbanColumns.filter(
+        (stage) =>
+          (stageFilter === "all" || stage.id === stageFilter) &&
+          !hiddenStageIds.has(stage.id),
+      ),
+    [kanbanColumns, stageFilter, hiddenStageIds],
+  );
 
   const visibleLeads = Object.values(visibleBoard).flat();
   const activeLead = activeId
@@ -2934,6 +2983,25 @@ export function CRMPage() {
     }
   };
 
+  /** Atalho de teclado do card: manda o lead para a etapa vizinha visivel. */
+  const moveLeadToNeighborStage = (lead: Lead, direction: -1 | 1) => {
+    const currentIndex = visibleStages.findIndex(
+      (stage) => stage.id === lead.crm_stage_id,
+    );
+    if (currentIndex === -1) return;
+    const target = visibleStages[currentIndex + direction];
+    if (!target) {
+      showToast(
+        direction === 1
+          ? "Este lead ja esta na ultima etapa visivel."
+          : "Este lead ja esta na primeira etapa visivel.",
+        "info",
+      );
+      return;
+    }
+    void moveLeadToStage(lead, target.id, { source: "desktop_keyboard" });
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
@@ -3445,18 +3513,38 @@ export function CRMPage() {
             </div>
           ) : viewMode === "compact" ? (
             <div className="space-y-4">
-              {kanbanColumns
-                .filter(
-                  (stage) =>
-                    (stageFilter === "all" || stage.id === stageFilter) &&
-                    !hiddenStageIds.has(stage.id),
-                )
-                .map((stage) => (
+              {visibleStages.map((stage) => (
+                <StageColumn
+                  key={stage.id}
+                  stage={stage}
+                  leads={visibleBoard[stage.id] ?? []}
+                  dense
+                  vendorsById={vendorsById}
+                  dark={isDarkMode}
+                  liveKind={liveStageKinds[stage.id]}
+                  liveLeadKinds={liveLeadKinds}
+                  selectionMode={selectionMode}
+                  selectedLeadIds={selectedLeadIds}
+                  onToggleSelect={toggleSelection}
+                  onLeadOpen={setOpenLead}
+                  onLeadKeyboardMove={moveLeadToNeighborStage}
+                  totalCount={
+                    cardFiltersActive ? undefined : stageCounts[stage.id]
+                  }
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="min-h-0 max-h-full flex-1 overflow-x-auto overflow-y-hidden pb-2 [-ms-overflow-style:none] [scrollbar-width:thin]">
+              <div
+                className="flex h-full min-h-0 max-h-full items-stretch gap-3"
+                style={{ minWidth: "max-content" }}
+              >
+                {visibleStages.map((stage) => (
                   <StageColumn
                     key={stage.id}
                     stage={stage}
                     leads={visibleBoard[stage.id] ?? []}
-                    dense
                     vendorsById={vendorsById}
                     dark={isDarkMode}
                     liveKind={liveStageKinds[stage.id]}
@@ -3465,43 +3553,13 @@ export function CRMPage() {
                     selectedLeadIds={selectedLeadIds}
                     onToggleSelect={toggleSelection}
                     onLeadOpen={setOpenLead}
+                    onLeadKeyboardMove={moveLeadToNeighborStage}
                     totalCount={
                       cardFiltersActive ? undefined : stageCounts[stage.id]
                     }
+                    fillHeight
                   />
                 ))}
-            </div>
-          ) : (
-            <div className="min-h-0 max-h-full flex-1 overflow-x-auto overflow-y-hidden pb-2 [-ms-overflow-style:none] [scrollbar-width:thin]">
-              <div
-                className="flex h-full min-h-0 max-h-full items-stretch gap-3"
-                style={{ minWidth: "max-content" }}
-              >
-                {kanbanColumns
-                  .filter(
-                    (stage) =>
-                      (stageFilter === "all" || stage.id === stageFilter) &&
-                      !hiddenStageIds.has(stage.id),
-                  )
-                  .map((stage) => (
-                    <StageColumn
-                      key={stage.id}
-                      stage={stage}
-                      leads={visibleBoard[stage.id] ?? []}
-                      vendorsById={vendorsById}
-                      dark={isDarkMode}
-                      liveKind={liveStageKinds[stage.id]}
-                      liveLeadKinds={liveLeadKinds}
-                      selectionMode={selectionMode}
-                      selectedLeadIds={selectedLeadIds}
-                      onToggleSelect={toggleSelection}
-                      onLeadOpen={setOpenLead}
-                      totalCount={
-                        cardFiltersActive ? undefined : stageCounts[stage.id]
-                      }
-                      fillHeight
-                    />
-                  ))}
               </div>
             </div>
           )}
