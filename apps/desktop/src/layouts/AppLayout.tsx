@@ -48,7 +48,11 @@ import {
   readDashboardDarkEnabled,
 } from "../lib/dashboard-dark-mode";
 import { LazyQrScanner } from "../components/shared/LazyQrScanner";
-import { checkInLeadByToken, queryFipeData, closeLeadAttendance } from "../services/leads";
+import {
+  checkInLeadByToken,
+  queryFipeData,
+  closeLeadAttendance,
+} from "../services/leads";
 import { readStoredSession } from "../services/auth";
 import { listEvents } from "../services/events";
 import { connectRealtime } from "../services/realtime";
@@ -297,7 +301,11 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
 
   // Solicita permissão para Web Push Notifications ao carregar o aplicativo
   useEffect(() => {
-    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+    if (
+      typeof window !== "undefined" &&
+      "Notification" in window &&
+      Notification.permission === "default"
+    ) {
       void Notification.requestPermission();
     }
   }, []);
@@ -322,7 +330,11 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
         triggerHapticFeedback();
 
         // Dispara notificação nativa do sistema (Web Push) mesmo com aba em segundo plano
-        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+        if (
+          typeof window !== "undefined" &&
+          "Notification" in window &&
+          Notification.permission === "granted"
+        ) {
           try {
             const notif = new Notification("🚨 CHAMADA DA RECEPÇÃO!", {
               body: `O cliente ${payload.lead_name} chegou na recepção e está aguardando você!`,
@@ -388,11 +400,18 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
   }, [vendorCallAlert]);
 
   // ── Status do Vendedor (Online / Ausente / Offline) ────────────────────────
-  const [vendorStatus, setVendorStatusState] = useState<"online" | "away" | "offline">(() => {
-    return (localStorage.getItem(`vendor_status_${user.id}`) as "online" | "away" | "offline") || "online";
+  const [vendorStatus, setVendorStatusState] = useState<
+    "online" | "away" | "offline"
+  >(() => {
+    return (
+      (localStorage.getItem(`vendor_status_${user.id}`) as
+        "online" | "away" | "offline") || "online"
+    );
   });
 
-  const handleUpdateVendorStatus = (newStatus: "online" | "away" | "offline") => {
+  const handleUpdateVendorStatus = (
+    newStatus: "online" | "away" | "offline",
+  ) => {
     setVendorStatusState(newStatus);
     try {
       localStorage.setItem(`vendor_status_${user.id}`, newStatus);
@@ -402,7 +421,10 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     const clientId = resolveClientId(user);
     if (clientId) {
       const socket = connectRealtime(clientId);
-      socket.emit("vendor_status_change", { vendor_id: user.id, status: newStatus });
+      socket.emit("vendor_status_change", {
+        vendor_id: user.id,
+        status: newStatus,
+      });
     }
   };
 
@@ -429,18 +451,21 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
 
   // ── Central de Notificações ────────────────────────────────────────────────
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Array<{
-    id: string;
-    title: string;
-    description: string;
-    time: string;
-    read: boolean;
-    type: "info" | "alert" | "appointment";
-  }>>([
+  const [notifications, setNotifications] = useState<
+    Array<{
+      id: string;
+      title: string;
+      description: string;
+      time: string;
+      read: boolean;
+      type: "info" | "alert" | "appointment";
+    }>
+  >([
     {
       id: "notif-1",
       title: "🎉 Novo agendamento de lead",
-      description: "Edney Ulisses agendou visita para Original Volkswagen | Guarulhos.",
+      description:
+        "Edney Ulisses agendou visita para Original Volkswagen | Guarulhos.",
       time: "Há 10 min",
       read: false,
       type: "appointment",
@@ -494,7 +519,10 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       return;
     }
     const updateTimer = () => {
-      const secs = Math.max(0, Math.floor((Date.now() - activeAttendance.startedAt) / 1000));
+      const secs = Math.max(
+        0,
+        Math.floor((Date.now() - activeAttendance.startedAt) / 1000),
+      );
       setElapsedSeconds(secs);
     };
     updateTimer();
@@ -523,7 +551,10 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     if (!activeAttendance) return;
     const t = readStoredSession()?.accessToken;
     if (t) {
-      const durationSecs = Math.max(1, Math.floor((Date.now() - activeAttendance.startedAt) / 1000));
+      const durationSecs = Math.max(
+        1,
+        Math.floor((Date.now() - activeAttendance.startedAt) / 1000),
+      );
       try {
         await closeLeadAttendance(
           activeAttendance.lead_id,
@@ -598,13 +629,10 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
               ),
             fipe:
               permissionEvents.length > 0 &&
-              permissionEvents.some(
-                (event) => event.allow_vendor_fipe ?? true,
-              ),
+              permissionEvents.some((event) => event.allow_vendor_fipe ?? true),
             fipeEventId:
-              permissionEvents.find(
-                (event) => event.allow_vendor_fipe ?? true,
-              )?.id ?? null,
+              permissionEvents.find((event) => event.allow_vendor_fipe ?? true)
+                ?.id ?? null,
           });
         })
         .catch(() => {
@@ -943,7 +971,8 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
             {/* Alerta de Atendimento Longo (+40 min) */}
             {elapsedSeconds >= 2400 && (
               <div className="rounded-2xl border border-amber-500/50 bg-amber-500/15 p-3 text-xs font-bold text-amber-300 shadow-md animate-pulse">
-                ⚠️ ALERTA DE ATENDIMENTO LONGO (+40 MIN): Negociação em andamento estendida. Considere apoio do gestor na mesa!
+                ⚠️ ALERTA DE ATENDIMENTO LONGO (+40 MIN): Negociação em
+                andamento estendida. Considere apoio do gestor na mesa!
               </div>
             )}
 
@@ -1030,7 +1059,9 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       <aside
         className={clsx(
           "fixed bottom-4 left-4 top-4 z-50 hidden flex-col overflow-visible rounded-[28px] py-5 shadow-xl transition-all duration-300 border md:flex",
-          isSidebarExpanded ? "w-64 px-4 items-start" : "w-20 px-0 items-center",
+          isSidebarExpanded
+            ? "w-64 px-4 items-start"
+            : "w-20 px-0 items-center",
           dashboardDark
             ? "border-zinc-800/80 bg-[#0f1015] text-zinc-100"
             : "border-zinc-200/80 bg-white ring-1 ring-[#dfdfdf]/50 text-zinc-900",
@@ -1115,7 +1146,9 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
               >
                 <span className="shrink-0">{item.icon}</span>
                 {isSidebarExpanded && (
-                  <span className="truncate text-xs font-semibold">{item.label}</span>
+                  <span className="truncate text-xs font-semibold">
+                    {item.label}
+                  </span>
                 )}
               </NavLink>
             );
@@ -1221,7 +1254,9 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                 </div>
 
                 <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 flex justify-between items-center text-[11px]">
-                  <span className="text-zinc-400">Total: {notifications.length}</span>
+                  <span className="text-zinc-400">
+                    Total: {notifications.length}
+                  </span>
                   <button
                     type="button"
                     onClick={markAllNotificationsRead}
@@ -1536,10 +1571,10 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                   {quickAction === "appointment"
                     ? "Criar agendamento"
                     : quickAction === "checkin"
-                        ? "Fazer check-in"
-                        : quickAction === "fipe"
-                          ? "Consultar Placa (FIPE)"
-                          : "O que deseja fazer?"}
+                      ? "Fazer check-in"
+                      : quickAction === "fipe"
+                        ? "Consultar Placa (FIPE)"
+                        : "O que deseja fazer?"}
                 </h2>
               </div>
               <button

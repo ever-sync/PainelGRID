@@ -1,4 +1,4 @@
-import { IsOptional, IsUUID } from 'class-validator';
+import { IsOptional, IsUUID } from "class-validator";
 
 /** Filtros aceitos ao buscar um evento via integração externa. */
 export class IntegrationFindEventQueryDto {

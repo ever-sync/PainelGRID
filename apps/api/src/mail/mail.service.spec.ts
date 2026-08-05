@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { ConfigService } from "@nestjs/config";
 import { MailService } from "./mail.service";
 

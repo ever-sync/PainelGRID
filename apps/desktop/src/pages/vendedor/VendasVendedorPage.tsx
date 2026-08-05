@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
-import { DollarSign, Plus, ShoppingBag, TrendingUp, Search, Calendar, Tag } from "lucide-react";
+import {
+  DollarSign,
+  Plus,
+  ShoppingBag,
+  TrendingUp,
+  Search,
+  Calendar,
+  Tag,
+} from "lucide-react";
 import clsx from "clsx";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Button } from "../../components/ui/Button";
@@ -111,7 +119,8 @@ export function VendasVendedorPage() {
         !q ||
         s.product.toLowerCase().includes(q) ||
         (s.lead?.name && s.lead.name.toLowerCase().includes(q)) ||
-        (s.appointment?.event?.name && s.appointment.event.name.toLowerCase().includes(q));
+        (s.appointment?.event?.name &&
+          s.appointment.event.name.toLowerCase().includes(q));
       const matchType = typeFilter === "all" || s.type === typeFilter;
       return matchQuery && matchType;
     });
@@ -271,7 +280,8 @@ export function VendasVendedorPage() {
                       </p>
                     </td>
                     <td className="py-3 px-3 text-gray-600 dark:text-zinc-400 font-medium">
-                      {sale.appointment?.event?.name ?? "Venda Direta / Sem Evento"}
+                      {sale.appointment?.event?.name ??
+                        "Venda Direta / Sem Evento"}
                     </td>
                     <td className="py-3 px-3">
                       <span

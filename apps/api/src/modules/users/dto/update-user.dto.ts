@@ -9,9 +9,9 @@ import {
   MaxLength,
   MinLength,
   Validate,
-} from 'class-validator';
-import { Role, VendorCategory } from '../../../common/types';
-import { IsStrongPasswordConstraint } from '../../../common/validators/is-strong-password.validator';
+} from "class-validator";
+import { Role, VendorCategory } from "../../../common/types";
+import { IsStrongPasswordConstraint } from "../../../common/validators/is-strong-password.validator";
 
 export class UpdateUserDto {
   @IsOptional()

@@ -1,9 +1,16 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
-import { IsArray, IsBoolean, IsOptional, IsString, IsUUID, ValidateIf } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { Transform } from "class-transformer";
+import {
+  IsArray,
+  IsBoolean,
+  IsOptional,
+  IsString,
+  IsUUID,
+  ValidateIf,
+} from "class-validator";
 
 export class SelectMetaAssetsDto {
-  @ApiProperty({ format: 'uuid' })
+  @ApiProperty({ format: "uuid" })
   @IsUUID()
   client_id!: string;
 
@@ -13,9 +20,11 @@ export class SelectMetaAssetsDto {
   @IsString()
   oauth_session_id?: string;
 
-  @ApiPropertyOptional({ description: 'Aplicar seleção usando token Meta persistido do gestor.' })
+  @ApiPropertyOptional({
+    description: "Aplicar seleção usando token Meta persistido do gestor.",
+  })
   @IsOptional()
-  @Transform(({ value }) => value === true || value === 'true')
+  @Transform(({ value }) => value === true || value === "true")
   @IsBoolean()
   gestor_token?: boolean;
 

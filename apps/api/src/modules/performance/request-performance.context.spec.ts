@@ -1,7 +1,7 @@
-import { RequestPerformanceContext } from './request-performance.context';
+import { RequestPerformanceContext } from "./request-performance.context";
 
-describe('RequestPerformanceContext', () => {
-  it('soma duração e quantidade de queries dentro da requisição', async () => {
+describe("RequestPerformanceContext", () => {
+  it("soma duração e quantidade de queries dentro da requisição", async () => {
     await RequestPerformanceContext.run(async () => {
       await Promise.resolve();
       RequestPerformanceContext.recordDatabaseQuery(25);

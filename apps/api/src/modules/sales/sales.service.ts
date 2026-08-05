@@ -4,20 +4,20 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
+} from "@nestjs/common";
 import {
   AppointmentActorType,
   AppointmentStatus,
   ConfirmationStatus,
   Prisma,
-} from '@prisma/client';
-import { Role } from '../../common/types';
-import { PrismaService } from '../../config/prisma.service';
-import { AuthenticatedUser } from '../auth/auth.types';
-import { RealtimeEventsService } from '../realtime/realtime-events.service';
-import { ScoreEventsService } from '../score-events/score-events.service';
-import { resolveConfirmationStatusForStage } from '../clients/client-settings';
-import { CreateSaleDto } from './dto/create-sale.dto';
+} from "@prisma/client";
+import { Role } from "../../common/types";
+import { PrismaService } from "../../config/prisma.service";
+import { AuthenticatedUser } from "../auth/auth.types";
+import { RealtimeEventsService } from "../realtime/realtime-events.service";
+import { ScoreEventsService } from "../score-events/score-events.service";
+import { resolveConfirmationStatusForStage } from "../clients/client-settings";
+import { CreateSaleDto } from "./dto/create-sale.dto";
 
 @Injectable()
 export class SalesService {
@@ -29,7 +29,7 @@ export class SalesService {
 
   async create(user: AuthenticatedUser, dto: CreateSaleDto) {
     if (!user.client_id) {
-      throw new ForbiddenException('Empresa nao identificada');
+      throw new ForbiddenException("Empresa nao identificada");
     }
 
     const appointment = await this.prisma.appointment.findUnique({
@@ -38,16 +38,22 @@ export class SalesService {
     });
 
     if (!appointment) {
-      throw new NotFoundException('Agendamento nao encontrado');
+      throw new NotFoundException("Agendamento nao encontrado");
     }
     if (appointment.client_id !== user.client_id) {
-      throw new ForbiddenException('Agendamento nao pertence a esta empresa');
+      throw new ForbiddenException("Agendamento nao pertence a esta empresa");
     }
-    if (user.role === Role.VENDEDOR && appointment.created_by_type === AppointmentActorType.user && appointment.created_by_id !== user.sub) {
+    if (
+      user.role === Role.VENDEDOR &&
+      appointment.created_by_type === AppointmentActorType.user &&
+      appointment.created_by_id !== user.sub
+    ) {
       // Vendedores registram suas proprias vendas ou do seu lead atribuido
     }
     if (appointment.sale) {
-      throw new ConflictException('Este agendamento ja possui venda registrada');
+      throw new ConflictException(
+        "Este agendamento ja possui venda registrada",
+      );
     }
     const sellableStatuses = new Set<AppointmentStatus>([
       AppointmentStatus.scheduled,
@@ -55,12 +61,12 @@ export class SalesService {
       AppointmentStatus.completed,
     ]);
     if (!sellableStatuses.has(appointment.status)) {
-      throw new BadRequestException('Status do agendamento nao permite venda');
+      throw new BadRequestException("Status do agendamento nao permite venda");
     }
 
     const saleValue = this.parseCurrency(dto.value);
     const soldAt = dto.sold_at ? new Date(dto.sold_at) : new Date();
-    const product = (dto.product ?? dto.model ?? '').trim();
+    const product = (dto.product ?? dto.model ?? "").trim();
 
     // Vendedor que sera creditado na venda e no ranking de pontuacao
     const creditedVendorId = appointment.lead.assigned_vendor_id || user.sub;
@@ -71,7 +77,7 @@ export class SalesService {
       appointment.lead_id,
     );
     if (!product) {
-      throw new BadRequestException('Produto da venda invalido');
+      throw new BadRequestException("Produto da venda invalido");
     }
 
     const sale = await this.prisma.$transaction(async (tx) => {
@@ -124,17 +130,27 @@ export class SalesService {
             where: {
               client_id: vendorBinding.clientId,
               pipeline_id: appointment.lead.crm_pipeline_id,
-              OR: [{ code: 'CONVERTIDO' }, { name: 'Convertido' }, { code: 'COMPRARAM' }],
+              OR: [
+                { code: "CONVERTIDO" },
+                { name: "Convertido" },
+                { code: "COMPRARAM" },
+              ],
             },
           })
         : null;
 
-      if (convertedStage && convertedStage.id !== appointment.lead.crm_stage_id) {
+      if (
+        convertedStage &&
+        convertedStage.id !== appointment.lead.crm_stage_id
+      ) {
         const client = await tx.client.findUnique({
           where: { id: vendorBinding.clientId },
           select: { settings: true },
         });
-        const mappedStatus = resolveConfirmationStatusForStage(client?.settings, convertedStage.id);
+        const mappedStatus = resolveConfirmationStatusForStage(
+          client?.settings,
+          convertedStage.id,
+        );
         await tx.lead.update({
           where: { id: appointment.lead_id },
           data: {
@@ -150,8 +166,8 @@ export class SalesService {
             changed_by_user_id: user.sub,
             notes:
               mappedStatus != null
-                ? 'Lead movido para CONVERTIDO ao registrar venda\nStatus automático atualizado pela etapa do CRM'
-                : 'Lead movido para CONVERTIDO ao registrar venda',
+                ? "Lead movido para CONVERTIDO ao registrar venda\nStatus automático atualizado pela etapa do CRM"
+                : "Lead movido para CONVERTIDO ao registrar venda",
           },
         });
       }
@@ -161,7 +177,7 @@ export class SalesService {
         vendor_id: creditedVendorId,
         lead_id: appointment.lead_id,
         appointment_id: appointment.id,
-        kind: 'checked_in',
+        kind: "checked_in",
         earned_at: soldAt,
       });
 
@@ -171,7 +187,7 @@ export class SalesService {
         lead_id: appointment.lead_id,
         appointment_id: appointment.id,
         sale_id: sale.id,
-        kind: 'sold',
+        kind: "sold",
         earned_at: soldAt,
       });
 
@@ -181,7 +197,7 @@ export class SalesService {
     this.realtimeEvents.emitLeadUpdated(vendorBinding.clientId, {
       client_id: vendorBinding.clientId,
       lead_id: appointment.lead_id,
-      action: 'sale_created',
+      action: "sale_created",
       updated_at: new Date().toISOString(),
     });
 
@@ -190,7 +206,7 @@ export class SalesService {
 
   async listMine(user: AuthenticatedUser) {
     if (user.role !== Role.VENDEDOR || !user.client_id) {
-      throw new ForbiddenException('Apenas vendedor pode listar vendas');
+      throw new ForbiddenException("Apenas vendedor pode listar vendas");
     }
 
     const sales = await this.prisma.sale.findMany({
@@ -221,14 +237,18 @@ export class SalesService {
         },
       },
       orderBy: {
-        sold_at: 'desc',
+        sold_at: "desc",
       },
     });
 
     return sales.map((sale) => this.toResponse(sale));
   }
 
-  private async resolveVendorBinding(vendorId: string, appointmentId: string, leadId: string) {
+  private async resolveVendorBinding(
+    vendorId: string,
+    appointmentId: string,
+    leadId: string,
+  ) {
     const membership = await this.prisma.salesTeamMember.findFirst({
       where: {
         user_id: vendorId,
@@ -256,7 +276,7 @@ export class SalesService {
     const clientId = membership?.user.client_id;
     if (!clientId) {
       throw new BadRequestException(
-        'Vendedor precisa estar vinculado a um time do evento para registrar a venda',
+        "Vendedor precisa estar vinculado a um time do evento para registrar a venda",
       );
     }
 
@@ -269,11 +289,11 @@ export class SalesService {
   private parseCurrency(value: string): Prisma.Decimal {
     const normalized = value
       .trim()
-      .replace(/[R$\s.]/g, '')
-      .replace(',', '.');
+      .replace(/[R$\s.]/g, "")
+      .replace(",", ".");
     const amount = Number(normalized);
     if (!Number.isFinite(amount) || amount <= 0) {
-      throw new BadRequestException('Valor da venda invalido');
+      throw new BadRequestException("Valor da venda invalido");
     }
     return new Prisma.Decimal(amount.toFixed(2));
   }

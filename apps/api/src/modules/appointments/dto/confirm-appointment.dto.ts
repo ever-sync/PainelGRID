@@ -1,5 +1,5 @@
-import { AppointmentSource } from '@prisma/client';
-import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { AppointmentSource } from "@prisma/client";
+import { IsEnum, IsOptional, IsString, MaxLength } from "class-validator";
 
 export class ConfirmAppointmentDto {
   @IsOptional()

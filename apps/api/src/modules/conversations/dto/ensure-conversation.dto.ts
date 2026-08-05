@@ -1,5 +1,5 @@
-import { ConversationChannel } from '@prisma/client';
-import { IsEnum, IsUUID } from 'class-validator';
+import { ConversationChannel } from "@prisma/client";
+import { IsEnum, IsUUID } from "class-validator";
 
 export class EnsureConversationDto {
   @IsUUID()

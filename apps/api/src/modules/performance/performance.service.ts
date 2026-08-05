@@ -3,12 +3,12 @@ import {
   Logger,
   OnModuleDestroy,
   OnModuleInit,
-} from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { Request } from 'express';
-import { PrismaService } from '../../config/prisma.service';
-import { PerformanceSummaryQueryDto } from './dto/performance-summary-query.dto';
-import { RecordWebVitalDto } from './dto/record-web-vital.dto';
+} from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { Request } from "express";
+import { PrismaService } from "../../config/prisma.service";
+import { PerformanceSummaryQueryDto } from "./dto/performance-summary-query.dto";
+import { RecordWebVitalDto } from "./dto/record-web-vital.dto";
 
 interface ApiRequestSample {
   request_id: string;
@@ -130,7 +130,7 @@ export class PerformanceService implements OnModuleInit, OnModuleDestroy {
         connection_type: dto.connectionType,
         viewport: dto.viewport,
         device_memory_gb: dto.deviceMemoryGb,
-        user_agent: request.get('user-agent')?.slice(0, 500),
+        user_agent: request.get("user-agent")?.slice(0, 500),
         recorded_at: recordedAt,
       },
     });
@@ -149,7 +149,7 @@ export class PerformanceService implements OnModuleInit, OnModuleDestroy {
     if (this.apiBuffer.length >= 5_000) {
       this.apiBuffer.shift();
       this.logger.warn(
-        'Buffer de métricas da API cheio; a amostra mais antiga foi descartada',
+        "Buffer de métricas da API cheio; a amostra mais antiga foi descartada",
       );
     }
     this.apiBuffer.push(sample);
@@ -202,8 +202,8 @@ export class PerformanceService implements OnModuleInit, OnModuleDestroy {
         status:
           row.p75 <=
           (WEB_VITAL_GOOD_LIMITS[row.name] ?? Number.POSITIVE_INFINITY)
-            ? 'good'
-            : 'needs-attention',
+            ? "good"
+            : "needs-attention",
       })),
       segments: segments.map((segment) => ({
         ...segment,
@@ -211,8 +211,8 @@ export class PerformanceService implements OnModuleInit, OnModuleDestroy {
         status:
           segment.p75 <=
           (WEB_VITAL_GOOD_LIMITS[segment.name] ?? Number.POSITIVE_INFINITY)
-            ? 'good'
-            : 'needs-attention',
+            ? "good"
+            : "needs-attention",
       })),
     };
   }
@@ -227,7 +227,11 @@ export class PerformanceService implements OnModuleInit, OnModuleDestroy {
    */
   async getDatabaseConnections() {
     const rows = await this.prisma.$queryRaw<
-      Array<{ usename: string | null; application_name: string | null; total: number }>
+      Array<{
+        usename: string | null;
+        application_name: string | null;
+        total: number;
+      }>
     >(Prisma.sql`
       SELECT
         "usename",
@@ -254,7 +258,7 @@ export class PerformanceService implements OnModuleInit, OnModuleDestroy {
 
     // 75% e o ponto em que ainda da tempo de agir; 90% ja e risco de recusa.
     const status =
-      usedPercent >= 90 ? 'critical' : usedPercent >= 75 ? 'warning' : 'good';
+      usedPercent >= 90 ? "critical" : usedPercent >= 75 ? "warning" : "good";
 
     return {
       generatedAt: new Date().toISOString(),
@@ -263,8 +267,8 @@ export class PerformanceService implements OnModuleInit, OnModuleDestroy {
       usedPercent,
       status,
       byClient: rows.map((row) => ({
-        user: row.usename ?? 'desconhecido',
-        application: row.application_name ?? '-',
+        user: row.usename ?? "desconhecido",
+        application: row.application_name ?? "-",
         connections: Number(row.total),
       })),
     };
@@ -308,12 +312,12 @@ export class PerformanceService implements OnModuleInit, OnModuleDestroy {
 
   normalizeApiPath(path: string): string {
     return path
-      .split('?')[0]
+      .split("?")[0]
       .replace(
         /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi,
-        ':id',
+        ":id",
       )
-      .replace(/\/\d+(?=\/|$)/g, '/:id')
+      .replace(/\/\d+(?=\/|$)/g, "/:id")
       .slice(0, 500);
   }
 
@@ -323,8 +327,8 @@ export class PerformanceService implements OnModuleInit, OnModuleDestroy {
   }
 
   private normalizeBrowserPath(path: string): string {
-    const normalized = path.trim().split('?')[0].split('#')[0];
-    return (normalized.startsWith('/') ? normalized : `/${normalized}`).slice(
+    const normalized = path.trim().split("?")[0].split("#")[0];
+    return (normalized.startsWith("/") ? normalized : `/${normalized}`).slice(
       0,
       500,
     );

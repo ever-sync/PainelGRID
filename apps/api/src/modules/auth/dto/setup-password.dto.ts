@@ -1,5 +1,5 @@
-import { IsString, MaxLength, MinLength, Validate } from 'class-validator';
-import { IsStrongPasswordConstraint } from '../../../common/validators/is-strong-password.validator';
+import { IsString, MaxLength, MinLength, Validate } from "class-validator";
+import { IsStrongPasswordConstraint } from "../../../common/validators/is-strong-password.validator";
 
 /** Primeira senha do vendedor aprovado. Espelha ResetPasswordDto. */
 export class SetupPasswordDto {

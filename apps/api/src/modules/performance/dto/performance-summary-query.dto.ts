@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Type } from "class-transformer";
 import {
   IsInt,
   IsOptional,
@@ -6,7 +6,7 @@ import {
   Max,
   MaxLength,
   Min,
-} from 'class-validator';
+} from "class-validator";
 
 export class PerformanceSummaryQueryDto {
   @IsOptional()

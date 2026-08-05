@@ -1,5 +1,12 @@
-import { Type } from 'class-transformer';
-import { IsDateString, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { Type } from "class-transformer";
+import {
+  IsDateString,
+  IsInt,
+  IsOptional,
+  IsUUID,
+  Max,
+  Min,
+} from "class-validator";
 
 export class VendorScoreRankingQueryDto {
   @IsOptional()

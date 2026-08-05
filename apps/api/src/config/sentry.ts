@@ -1,4 +1,4 @@
-import * as Sentry from '@sentry/node';
+import * as Sentry from "@sentry/node";
 
 let initialized = false;
 
@@ -14,7 +14,10 @@ export function initSentryFromEnv() {
 
   Sentry.init({
     dsn,
-    environment: process.env.SENTRY_ENVIRONMENT?.trim() || process.env.NODE_ENV || 'development',
+    environment:
+      process.env.SENTRY_ENVIRONMENT?.trim() ||
+      process.env.NODE_ENV ||
+      "development",
   });
   initialized = true;
 }

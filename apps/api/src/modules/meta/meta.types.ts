@@ -79,7 +79,7 @@ export interface WhatsappUploadMediaResponse {
 }
 
 export interface MetaOauthStateCache {
-  kind?: 'client' | 'gestor';
+  kind?: "client" | "gestor";
   clientId?: string;
   gestorId?: string;
   createdAt: string;
@@ -179,7 +179,7 @@ export interface MetaInsightPayload {
   actions?: Array<{ action_type?: string; value?: string }>;
 }
 
-export type MetaInsightLevel = 'campaign' | 'adset' | 'ad';
+export type MetaInsightLevel = "campaign" | "adset" | "ad";
 
 export interface MetaLeadPayload {
   id?: string;
@@ -193,7 +193,7 @@ export interface MetaLeadPayload {
 }
 
 export interface InitialSyncResult {
-  status: 'completed' | 'failed' | 'queued';
+  status: "completed" | "failed" | "queued";
   message?: string;
   summary?: Record<string, unknown>;
 }

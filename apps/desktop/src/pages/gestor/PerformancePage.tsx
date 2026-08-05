@@ -135,8 +135,8 @@ export function PerformancePage() {
                 <Database size={16} /> Conexões do banco
               </h2>
               <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                O n8n fala direto com o Postgres, fora do pool da API. Se estourar
-                o limite, API e integração caem juntas.
+                O n8n fala direto com o Postgres, fora do pool da API. Se
+                estourar o limite, API e integração caem juntas.
               </p>
             </div>
             <div className="text-right">
@@ -155,7 +155,9 @@ export function PerformancePage() {
                   / {conns.maxConnections}
                 </span>
               </p>
-              <p className="text-xs text-zinc-500">{conns.usedPercent}% em uso</p>
+              <p className="text-xs text-zinc-500">
+                {conns.usedPercent}% em uso
+              </p>
             </div>
           </div>
 

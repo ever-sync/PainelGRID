@@ -1,7 +1,11 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from '../../config/prisma.service';
-import { UpdateConversationStateDto } from './dto/update-conversation-state.dto';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { PrismaService } from "../../config/prisma.service";
+import { UpdateConversationStateDto } from "./dto/update-conversation-state.dto";
 
 @Injectable()
 export class ConversationStateService {
@@ -27,7 +31,7 @@ export class ConversationStateService {
     });
 
     if (!conversation) {
-      throw new NotFoundException('Conversa nao encontrada');
+      throw new NotFoundException("Conversa nao encontrada");
     }
 
     return conversation;
@@ -88,7 +92,7 @@ export class ConversationStateService {
     const currentState = await this.findByConversationId(conversationId);
 
     if (currentState?.handoff_required && dto.handoff_required !== false) {
-      throw new ConflictException('Handoff humano ativo para esta conversa');
+      throw new ConflictException("Handoff humano ativo para esta conversa");
     }
 
     if (dto.last_offered_event_id) {
@@ -106,7 +110,7 @@ export class ConversationStateService {
         : [];
 
       if (!event || !participantClientIds.includes(conversation.client_id)) {
-        throw new NotFoundException('Evento nao encontrado para esta conversa');
+        throw new NotFoundException("Evento nao encontrado para esta conversa");
       }
     }
 
@@ -114,7 +118,9 @@ export class ConversationStateService {
       current_intent: dto.current_intent,
       awaiting_confirmation: dto.awaiting_confirmation,
       last_offered_event_id: dto.last_offered_event_id,
-      last_offered_slot: dto.last_offered_slot ? new Date(dto.last_offered_slot) : undefined,
+      last_offered_slot: dto.last_offered_slot
+        ? new Date(dto.last_offered_slot)
+        : undefined,
       last_agent_action: dto.last_agent_action,
       handoff_required: dto.handoff_required,
       handoff_reason: dto.handoff_reason,

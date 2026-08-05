@@ -39,8 +39,10 @@ const INITIAL_EMAILS_LOGS: SentEmailLog[] = [
     when: "21/07/2026 13:40",
     origin: "agendamento",
     status: "sent",
-    recipients: "automobvolks@clientelydia.com.br, volkswagenautomob@clientelydia.com.br",
-    subject: "🎉 Novo lead agendado — Everton Ricardo (Original Volkswagen | Guarulhos)",
+    recipients:
+      "automobvolks@clientelydia.com.br, volkswagenautomob@clientelydia.com.br",
+    subject:
+      "🎉 Novo lead agendado — Everton Ricardo (Original Volkswagen | Guarulhos)",
     storeId: "31",
     actor: "—",
     error: "—",
@@ -66,7 +68,8 @@ const INITIAL_EMAILS_LOGS: SentEmailLog[] = [
     origin: "agendamento",
     status: "sent",
     recipients: "automobfiat@clientelydia.com.br",
-    subject: "🎉 Novo lead agendado — Massagem E Vida (Original Fiat | São Miguel)",
+    subject:
+      "🎉 Novo lead agendado — Massagem E Vida (Original Fiat | São Miguel)",
     storeId: "11",
     actor: "—",
     error: "—",
@@ -78,7 +81,8 @@ const INITIAL_EMAILS_LOGS: SentEmailLog[] = [
     when: "20/07/2026 12:19",
     origin: "agendamento",
     status: "sent",
-    recipients: "automobvolks@clientelydia.com.br, volkswagenautomob@clientelydia.com.br",
+    recipients:
+      "automobvolks@clientelydia.com.br, volkswagenautomob@clientelydia.com.br",
     subject: "🎉 Novo lead agendado — Kayque (Green Volkswagen | Aricanduva)",
     storeId: "45",
     actor: "—",
@@ -96,15 +100,15 @@ const INITIAL_EMAILS_LOGS: SentEmailLog[] = [
     storeId: "53",
     actor: "—",
     error: "—",
-    bodyContent:
-      "Novo agendamento realizado para a loja Jaracaty.",
+    bodyContent: "Novo agendamento realizado para a loja Jaracaty.",
   },
   {
     id: "e-6",
     when: "20/07/2026 12:19",
     origin: "agendamento",
     status: "sent",
-    recipients: "automobvolks@clientelydia.com.br, volkswagenautomob@clientelydia.com.br",
+    recipients:
+      "automobvolks@clientelydia.com.br, volkswagenautomob@clientelydia.com.br",
     subject: "🎉 Novo lead agendado — Andre (Alta Volkswagen | Braz Leme)",
     storeId: "40",
     actor: "—",
@@ -246,7 +250,9 @@ export function EmailsEnviadosPage() {
       <div
         className={clsx(
           "rounded-3xl border overflow-x-auto shadow-sm",
-          isDarkMode ? "border-zinc-800 bg-[#121212]" : "border-zinc-200 bg-white",
+          isDarkMode
+            ? "border-zinc-800 bg-[#121212]"
+            : "border-zinc-200 bg-white",
         )}
       >
         <table className="w-full text-left text-xs sm:text-sm">
@@ -299,8 +305,12 @@ export function EmailsEnviadosPage() {
                 <td className="py-4 px-4 text-zinc-600 dark:text-zinc-400 font-mono text-xs">
                   {item.storeId}
                 </td>
-                <td className="py-4 px-4 text-zinc-400 font-mono text-xs">{item.actor}</td>
-                <td className="py-4 px-4 text-zinc-400 font-mono text-xs">{item.error}</td>
+                <td className="py-4 px-4 text-zinc-400 font-mono text-xs">
+                  {item.actor}
+                </td>
+                <td className="py-4 px-4 text-zinc-400 font-mono text-xs">
+                  {item.error}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -319,7 +329,9 @@ export function EmailsEnviadosPage() {
             <div className="space-y-1.5 text-xs text-zinc-700 dark:text-zinc-300 border-b border-zinc-200 dark:border-zinc-800 pb-3">
               <p>
                 <span className="font-bold">Assunto: </span>
-                <span className="font-semibold text-zinc-900 dark:text-white">{selectedEmail.subject}</span>
+                <span className="font-semibold text-zinc-900 dark:text-white">
+                  {selectedEmail.subject}
+                </span>
               </p>
               <p>
                 <span className="font-bold">Destinatários: </span>
@@ -327,19 +339,26 @@ export function EmailsEnviadosPage() {
               </p>
               <p>
                 <span className="font-bold">Disparado em: </span>
-                <span className="font-mono">{selectedEmail.when}</span> (Origem: {selectedEmail.origin})
+                <span className="font-mono">
+                  {selectedEmail.when}
+                </span> (Origem: {selectedEmail.origin})
               </p>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-zinc-400 block uppercase">Conteúdo do Mensagem</label>
+              <label className="text-xs font-bold text-zinc-400 block uppercase">
+                Conteúdo do Mensagem
+              </label>
               <div
                 className={clsx(
                   "p-4 rounded-2xl border text-xs font-mono whitespace-pre-wrap leading-relaxed",
-                  isDarkMode ? "border-zinc-800 bg-[#111] text-zinc-300" : "border-zinc-200 bg-zinc-50 text-zinc-800",
+                  isDarkMode
+                    ? "border-zinc-800 bg-[#111] text-zinc-300"
+                    : "border-zinc-200 bg-zinc-50 text-zinc-800",
                 )}
               >
-                {selectedEmail.bodyContent || "Conteúdo HTML enviado pelo servidor SMTP."}
+                {selectedEmail.bodyContent ||
+                  "Conteúdo HTML enviado pelo servidor SMTP."}
               </div>
             </div>
 

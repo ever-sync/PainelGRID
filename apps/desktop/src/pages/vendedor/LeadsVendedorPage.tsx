@@ -234,7 +234,15 @@ export function LeadsVendedorPage() {
 
       return true;
     });
-  }, [leads, searchQuery, selectedStageTab, isLeadNew, isLeadScheduled, isLeadCheckin, isLeadDone]);
+  }, [
+    leads,
+    searchQuery,
+    selectedStageTab,
+    isLeadNew,
+    isLeadScheduled,
+    isLeadCheckin,
+    isLeadDone,
+  ]);
   const normalizedLeadPhone = useMemo(
     () => normalizeBrPhoneToE164(leadPhone),
     [leadPhone],
@@ -389,12 +397,7 @@ export function LeadsVendedorPage() {
         .finally(() => setCheckingPhone(false));
     }, 280);
     return () => window.clearTimeout(timeout);
-  }, [
-    appointmentEventId,
-    clientId,
-    normalizedLeadPhone,
-    phoneCheckRetryNonce,
-  ]);
+  }, [appointmentEventId, clientId, normalizedLeadPhone, phoneCheckRetryNonce]);
 
   useEffect(() => {
     const pipelineId = stageModal?.crm_pipeline_id;
@@ -716,11 +719,7 @@ export function LeadsVendedorPage() {
     setActionError("");
     setSaving(true);
     try {
-      await closeLeadAttendance(
-        closeAttendanceModal.id,
-        { sold },
-        t,
-      );
+      await closeLeadAttendance(closeAttendanceModal.id, { sold }, t);
       setCloseAttendanceModal(null);
       setCloseAttendanceStep("confirm");
       await refreshLeads();
@@ -829,10 +828,22 @@ export function LeadsVendedorPage() {
     leadModalStep === "checking" || leadModalStep === "decision";
   const verifyStepDone = leadModalStep === "data";
 
-  const countNew = useMemo(() => leads.filter(isLeadNew).length, [leads, isLeadNew]);
-  const countScheduled = useMemo(() => leads.filter(isLeadScheduled).length, [leads, isLeadScheduled]);
-  const countCheckin = useMemo(() => leads.filter(isLeadCheckin).length, [leads, isLeadCheckin]);
-  const countDone = useMemo(() => leads.filter(isLeadDone).length, [leads, isLeadDone]);
+  const countNew = useMemo(
+    () => leads.filter(isLeadNew).length,
+    [leads, isLeadNew],
+  );
+  const countScheduled = useMemo(
+    () => leads.filter(isLeadScheduled).length,
+    [leads, isLeadScheduled],
+  );
+  const countCheckin = useMemo(
+    () => leads.filter(isLeadCheckin).length,
+    [leads, isLeadCheckin],
+  );
+  const countDone = useMemo(
+    () => leads.filter(isLeadDone).length,
+    [leads, isLeadDone],
+  );
 
   return (
     <div>
@@ -1081,7 +1092,11 @@ export function LeadsVendedorPage() {
                   onClick={() => openLeadChat(lead)}
                   disabled={lead.confirmation_status === "closed"}
                   className="flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900 disabled:opacity-30 transition-all active:scale-95"
-                  title={lead.confirmation_status === "closed" ? "Atendimento encerrado" : "WhatsApp"}
+                  title={
+                    lead.confirmation_status === "closed"
+                      ? "Atendimento encerrado"
+                      : "WhatsApp"
+                  }
                 >
                   <MessageCircle size={15} />
                   <span className="mt-0.5">Whats</span>
@@ -1160,7 +1175,11 @@ export function LeadsVendedorPage() {
                         onClick={() => openLeadChat(lead)}
                         disabled={lead.confirmation_status === "closed"}
                         className="rounded-lg p-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors disabled:opacity-30"
-                        title={lead.confirmation_status === "closed" ? "Atendimento encerrado" : "Abrir WhatsApp"}
+                        title={
+                          lead.confirmation_status === "closed"
+                            ? "Atendimento encerrado"
+                            : "Abrir WhatsApp"
+                        }
                       >
                         <MessageCircle size={16} />
                       </button>

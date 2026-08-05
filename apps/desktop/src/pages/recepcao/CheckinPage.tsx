@@ -148,10 +148,14 @@ export function CheckinPage() {
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [scannerTab, setScannerTab] = useState<"qr" | "manual">("qr");
   const [onlineVendorIds, setOnlineVendorIds] = useState<string[]>([]);
-  const [vendorStatuses, setVendorStatuses] = useState<Record<string, "online" | "away" | "offline">>({});
+  const [vendorStatuses, setVendorStatuses] = useState<
+    Record<string, "online" | "away" | "offline">
+  >({});
   const [scannerKey, setScannerKey] = useState(0);
   const [callingVendorId, setCallingVendorId] = useState<string | null>(null);
-  const [closingAttendanceId, setClosingAttendanceId] = useState<string | null>(null);
+  const [closingAttendanceId, setClosingAttendanceId] = useState<string | null>(
+    null,
+  );
 
   // Modal de Venda (Fluxo com Comprador Lead vs Outro)
   const [saleModalLead, setSaleModalLead] = useState<Lead | null>(null);
@@ -167,16 +171,22 @@ export function CheckinPage() {
   // Modal de Venda Avulsa na Recepção (Busca Cliente + Seleciona Vendedor)
   const [showStandaloneSaleModal, setShowStandaloneSaleModal] = useState(false);
   const [standaloneLeadSearch, setStandaloneLeadSearch] = useState("");
-  const [selectedLeadForSale, setSelectedLeadForSale] = useState<Lead | null>(null);
+  const [selectedLeadForSale, setSelectedLeadForSale] = useState<Lead | null>(
+    null,
+  );
 
   // Modal de transferencia rapida de lead para outro vendedor.
   const [reassignModalLead, setReassignModalLead] = useState<Lead | null>(null);
   const [reassigning, setReassigning] = useState(false);
-  const [selectedVendorIdForSale, setSelectedVendorIdForSale] = useState<string>("");
-  const [standaloneBuyerType, setStandaloneBuyerType] = useState<"lead" | "outro">("lead");
+  const [selectedVendorIdForSale, setSelectedVendorIdForSale] =
+    useState<string>("");
+  const [standaloneBuyerType, setStandaloneBuyerType] = useState<
+    "lead" | "outro"
+  >("lead");
   const [standaloneNotes, setStandaloneNotes] = useState("");
   const [standaloneWristband, setStandaloneWristband] = useState("");
-  const [standaloneCategory, setStandaloneCategory] = useState<SaleType>("NOVO");
+  const [standaloneCategory, setStandaloneCategory] =
+    useState<SaleType>("NOVO");
   const [standaloneVehicle, setStandaloneVehicle] = useState("");
   const [standaloneValue, setStandaloneValue] = useState("");
   const [standaloneSubmitting, setStandaloneSubmitting] = useState(false);
@@ -212,7 +222,9 @@ export function CheckinPage() {
       return;
     }
     if (requireWristband && !standaloneWristband.trim()) {
-      setStandaloneError("O número da pulseira é obrigatório para este evento.");
+      setStandaloneError(
+        "O número da pulseira é obrigatório para este evento.",
+      );
       return;
     }
     if (!standaloneVehicle.trim()) {
@@ -220,7 +232,9 @@ export function CheckinPage() {
       return;
     }
     if (standaloneBuyerType === "outro" && !standaloneNotes.trim()) {
-      setStandaloneError("Por favor, informe quem realizou a compra no campo observação.");
+      setStandaloneError(
+        "Por favor, informe quem realizou a compra no campo observação.",
+      );
       return;
     }
 
@@ -231,13 +245,18 @@ export function CheckinPage() {
     setStandaloneError("");
 
     try {
-      const formattedNotes = standaloneBuyerType === "outro"
-        ? `Venda avulsa recepção (familiar/outro): ${standaloneNotes.trim()}`
-        : standaloneNotes.trim();
+      const formattedNotes =
+        standaloneBuyerType === "outro"
+          ? `Venda avulsa recepção (familiar/outro): ${standaloneNotes.trim()}`
+          : standaloneNotes.trim();
 
       // Se o vendedor selecionado for diferente do atribuído originalmente, atualiza o assigned_vendor_id do lead
       if (selectedLeadForSale.assigned_vendor_id !== selectedVendorIdForSale) {
-        await updateLead(selectedLeadForSale.id, { assigned_vendor_id: selectedVendorIdForSale }, t).catch(() => {});
+        await updateLead(
+          selectedLeadForSale.id,
+          { assigned_vendor_id: selectedVendorIdForSale },
+          t,
+        ).catch(() => {});
       }
 
       // 1. Encerra atendimento registrando a venda
@@ -252,7 +271,8 @@ export function CheckinPage() {
 
       // 2. Cria a venda no CRM
       if (selectedLeadForSale.active_appointment?.id) {
-        const numericValue = standaloneValue.replace(/[R$\s.]/g, "").replace(",", ".") || "0";
+        const numericValue =
+          standaloneValue.replace(/[R$\s.]/g, "").replace(",", ".") || "0";
         await createSale(t, {
           appointment_id: selectedLeadForSale.active_appointment.id,
           type: standaloneCategory,
@@ -265,7 +285,9 @@ export function CheckinPage() {
       setShowStandaloneSaleModal(false);
       refreshCheckinData();
     } catch (err) {
-      setStandaloneError(err instanceof Error ? err.message : "Erro ao registrar venda avulsa.");
+      setStandaloneError(
+        err instanceof Error ? err.message : "Erro ao registrar venda avulsa.",
+      );
     } finally {
       setStandaloneSubmitting(false);
     }
@@ -304,16 +326,19 @@ export function CheckinPage() {
     }
 
     if (buyerType === "outro" && !saleNotes.trim()) {
-      setSaleError("Por favor, informe quem realizou a compra no campo observação.");
+      setSaleError(
+        "Por favor, informe quem realizou a compra no campo observação.",
+      );
       return;
     }
 
     setSaleSubmitting(true);
     setSaleError("");
     try {
-      const formattedNotes = buyerType === "outro"
-        ? `Compra realizada por outro (familiar): ${saleNotes.trim()}`
-        : saleNotes.trim();
+      const formattedNotes =
+        buyerType === "outro"
+          ? `Compra realizada por outro (familiar): ${saleNotes.trim()}`
+          : saleNotes.trim();
 
       // 1. Encerra atendimento registrando a venda (e pulseira se houver)
       await closeLeadAttendance(
@@ -327,7 +352,8 @@ export function CheckinPage() {
 
       // 2. Registra o detalhamento da venda se houver agendamento
       if (saleModalLead.active_appointment?.id) {
-        const numericValue = saleValue.replace(/[R$\s.]/g, "").replace(",", ".") || "0";
+        const numericValue =
+          saleValue.replace(/[R$\s.]/g, "").replace(",", ".") || "0";
         await createSale(t, {
           appointment_id: saleModalLead.active_appointment.id,
           type: saleCategory,
@@ -343,7 +369,9 @@ export function CheckinPage() {
       refreshCheckinData();
     } catch (err) {
       setSaleError(
-        err instanceof Error ? err.message : "Não foi possível registrar a venda.",
+        err instanceof Error
+          ? err.message
+          : "Não foi possível registrar a venda.",
       );
     } finally {
       setSaleSubmitting(false);
@@ -370,7 +398,11 @@ export function CheckinPage() {
 
     setReassigning(true);
     try {
-      await updateLead(reassignModalLead.id, { assigned_vendor_id: vendorId }, t);
+      await updateLead(
+        reassignModalLead.id,
+        { assigned_vendor_id: vendorId },
+        t,
+      );
       refreshCheckinData();
       setReassignModalLead(null);
     } catch (err) {
@@ -428,9 +460,15 @@ export function CheckinPage() {
   useEffect(() => {
     if (!clientId) return;
     const socket = connectRealtime(clientId);
-    const handleStatusChange = (data: { vendor_id: string; status: "online" | "away" | "offline" }) => {
+    const handleStatusChange = (data: {
+      vendor_id: string;
+      status: "online" | "away" | "offline";
+    }) => {
       if (data?.vendor_id && data?.status) {
-        setVendorStatuses((prev) => ({ ...prev, [data.vendor_id]: data.status }));
+        setVendorStatuses((prev) => ({
+          ...prev,
+          [data.vendor_id]: data.status,
+        }));
         try {
           localStorage.setItem(`vendor_status_${data.vendor_id}`, data.status);
         } catch {
@@ -1254,20 +1292,30 @@ export function CheckinPage() {
                     {vendorName && (
                       <div className="flex flex-wrap items-center gap-1.5 text-xs">
                         <User size={11} className="text-zinc-400" />
-                        <span className={clsx("font-semibold", isDarkMode ? "text-zinc-300" : "text-zinc-700")}>
+                        <span
+                          className={clsx(
+                            "font-semibold",
+                            isDarkMode ? "text-zinc-300" : "text-zinc-700",
+                          )}
+                        >
                           {vendorName.split(" ")[0]}
                         </span>
 
                         {(() => {
                           const vId = lead.assigned_vendor_id!;
-                          const storedStatus = vendorStatuses[vId] || (localStorage.getItem(`vendor_status_${vId}`) as "online" | "away" | "offline" | null);
+                          const storedStatus =
+                            vendorStatuses[vId] ||
+                            (localStorage.getItem(`vendor_status_${vId}`) as
+                              "online" | "away" | "offline" | null);
                           const isOnlineNetwork = onlineVendorIds.includes(vId);
 
-                          const finalStatus = storedStatus === "offline" || (!isOnlineNetwork && storedStatus !== "away")
-                            ? "offline"
-                            : storedStatus === "away"
-                              ? "away"
-                              : "online";
+                          const finalStatus =
+                            storedStatus === "offline" ||
+                            (!isOnlineNetwork && storedStatus !== "away")
+                              ? "offline"
+                              : storedStatus === "away"
+                                ? "away"
+                                : "online";
 
                           if (finalStatus === "offline") {
                             return (
@@ -1640,7 +1688,11 @@ export function CheckinPage() {
           {/* Número da Pulseira (quando exigido pelo evento ou para cadastro) */}
           <div className="space-y-1.5">
             <Input
-              label={requireWristband ? "Número da Pulseira *" : "Número da Pulseira (opcional)"}
+              label={
+                requireWristband
+                  ? "Número da Pulseira *"
+                  : "Número da Pulseira (opcional)"
+              }
               dark={isDarkMode}
               value={wristbandNumber}
               onChange={(e) => setWristbandNumber(e.target.value)}
@@ -1696,7 +1748,8 @@ export function CheckinPage() {
       >
         <div className="space-y-4 pt-2">
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Selecione o novo vendedor para quem deseja transferir este lead. Os vendedores online estão em destaque no topo da lista.
+            Selecione o novo vendedor para quem deseja transferir este lead. Os
+            vendedores online estão em destaque no topo da lista.
           </p>
 
           <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
@@ -1724,13 +1777,17 @@ export function CheckinPage() {
                     </div>
                     <div>
                       <p className="text-xs font-bold">{v.name}</p>
-                      <p className="text-[10px] text-zinc-500">{v.email || "Vendedor"}</p>
+                      <p className="text-[10px] text-zinc-500">
+                        {v.email || "Vendedor"}
+                      </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
                     {isCurrent ? (
-                      <span className="text-[10px] font-semibold text-zinc-400">Atual</span>
+                      <span className="text-[10px] font-semibold text-zinc-400">
+                        Atual
+                      </span>
                     ) : isOnline ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-500">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -1757,9 +1814,7 @@ export function CheckinPage() {
         dark={isDarkMode}
       >
         <div className="space-y-4 pt-2">
-          {standaloneError && (
-            <Notice tone="error">{standaloneError}</Notice>
-          )}
+          {standaloneError && <Notice tone="error">{standaloneError}</Notice>}
 
           {/* PASSO 1: Buscar e Selecionar o Cliente */}
           <div className="space-y-2">
@@ -1780,7 +1835,8 @@ export function CheckinPage() {
                 <div className="max-h-44 overflow-y-auto space-y-1 pr-1 border rounded-xl p-2 bg-zinc-500/5">
                   {filteredLeadsForSale.length === 0 ? (
                     <p className="text-xs text-zinc-500 text-center py-3">
-                      Nenhum cliente encontrado. Tente digitar o nome ou telefone.
+                      Nenhum cliente encontrado. Tente digitar o nome ou
+                      telefone.
                     </p>
                   ) : (
                     filteredLeadsForSale.map((lead) => (
@@ -1797,7 +1853,9 @@ export function CheckinPage() {
                       >
                         <div>
                           <span className="font-bold block">{lead.name}</span>
-                          <span className="text-[10px] text-zinc-400">{lead.phone}</span>
+                          <span className="text-[10px] text-zinc-400">
+                            {lead.phone}
+                          </span>
                         </div>
                         <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">
                           Selecionar
@@ -1810,9 +1868,15 @@ export function CheckinPage() {
             ) : (
               <div className="flex items-center justify-between p-3 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-300">
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-emerald-400 block">Cliente Selecionado</span>
-                  <span className="font-extrabold text-sm text-white">{selectedLeadForSale.name}</span>
-                  <span className="text-xs text-emerald-200 block">{selectedLeadForSale.phone}</span>
+                  <span className="text-[10px] uppercase font-bold text-emerald-400 block">
+                    Cliente Selecionado
+                  </span>
+                  <span className="font-extrabold text-sm text-white">
+                    {selectedLeadForSale.name}
+                  </span>
+                  <span className="text-xs text-emerald-200 block">
+                    {selectedLeadForSale.phone}
+                  </span>
                 </div>
                 <button
                   type="button"
@@ -1895,7 +1959,11 @@ export function CheckinPage() {
 
             {/* Número da Pulseira */}
             <Input
-              label={requireWristband ? "Número da Pulseira *" : "Número da Pulseira (opcional)"}
+              label={
+                requireWristband
+                  ? "Número da Pulseira *"
+                  : "Número da Pulseira (opcional)"
+              }
               dark={isDarkMode}
               value={standaloneWristband}
               onChange={(e) => setStandaloneWristband(e.target.value)}
@@ -1907,7 +1975,9 @@ export function CheckinPage() {
               label="Categoria *"
               dark={isDarkMode}
               value={standaloneCategory}
-              onChange={(e) => setStandaloneCategory(e.target.value as SaleType)}
+              onChange={(e) =>
+                setStandaloneCategory(e.target.value as SaleType)
+              }
               options={[
                 { value: "NOVO", label: "Veículo Novo" },
                 { value: "SEMINOVO", label: "Seminovo" },
@@ -1942,7 +2012,11 @@ export function CheckinPage() {
               className="w-full h-12 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-sm font-bold text-white shadow-lg active:scale-95 disabled:opacity-50 transition-all cursor-pointer"
             >
               <ShoppingBag size={18} />
-              <span>{standaloneSubmitting ? "Gravando Venda..." : "Confirmar e Lançar Venda"}</span>
+              <span>
+                {standaloneSubmitting
+                  ? "Gravando Venda..."
+                  : "Confirmar e Lançar Venda"}
+              </span>
             </button>
           </div>
         </div>

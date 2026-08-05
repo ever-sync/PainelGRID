@@ -1,11 +1,15 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../config/prisma.service';
-import { ClientsService } from '../clients/clients.service';
-import { AuthenticatedUser } from '../auth/auth.types';
-import { Role } from '../../common/types';
-import { CreateVehicleDto } from './dto/create-vehicle.dto';
-import { UpdateVehicleDto } from './dto/update-vehicle.dto';
-import { Prisma } from '@prisma/client';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { PrismaService } from "../../config/prisma.service";
+import { ClientsService } from "../clients/clients.service";
+import { AuthenticatedUser } from "../auth/auth.types";
+import { Role } from "../../common/types";
+import { CreateVehicleDto } from "./dto/create-vehicle.dto";
+import { UpdateVehicleDto } from "./dto/update-vehicle.dto";
+import { Prisma } from "@prisma/client";
 
 @Injectable()
 export class VehiclesService {
@@ -14,18 +18,23 @@ export class VehiclesService {
     private readonly clientsService: ClientsService,
   ) {}
 
-  private async assertGestorClientAccess(user: AuthenticatedUser, clientId: string) {
+  private async assertGestorClientAccess(
+    user: AuthenticatedUser,
+    clientId: string,
+  ) {
     if (user.role === Role.GESTOR) {
       await this.clientsService.assertGestorOwnsClient(user.sub, clientId);
       return;
     }
     if (user.role === Role.CLIENTE) {
       if (user.client_id !== clientId) {
-        throw new ForbiddenException('Sem permissão para este cliente');
+        throw new ForbiddenException("Sem permissão para este cliente");
       }
       return;
     }
-    throw new ForbiddenException('Apenas gestores e clientes possuem acesso aos veículos');
+    throw new ForbiddenException(
+      "Apenas gestores e clientes possuem acesso aos veículos",
+    );
   }
 
   async create(user: AuthenticatedUser, dto: CreateVehicleDto) {
@@ -70,14 +79,14 @@ export class VehiclesService {
 
     if (filters?.search) {
       where.OR = [
-        { brand: { contains: filters.search, mode: 'insensitive' } },
-        { model: { contains: filters.search, mode: 'insensitive' } },
+        { brand: { contains: filters.search, mode: "insensitive" } },
+        { model: { contains: filters.search, mode: "insensitive" } },
       ];
     }
 
     return this.prisma.vehicle.findMany({
       where,
-      orderBy: { brand: 'asc' },
+      orderBy: { brand: "asc" },
     });
   }
 
@@ -87,7 +96,7 @@ export class VehiclesService {
     });
 
     if (!vehicle) {
-      throw new NotFoundException('Veículo não encontrado');
+      throw new NotFoundException("Veículo não encontrado");
     }
 
     await this.assertGestorClientAccess(user, vehicle.client_id);

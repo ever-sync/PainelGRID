@@ -31,36 +31,128 @@ export type MetaColumn = {
   /** Coluna de custo: mostra "—" quando o denominador e zero. */
   denominator?: keyof MetaCampaignReportRow;
   /** Grupo no configurador de colunas. */
-  group: "Investimento" | "Formulário" | "Mensagens" | "Alcance" | "Tráfego" | "Engajamento";
+  group:
+    | "Investimento"
+    | "Formulário"
+    | "Mensagens"
+    | "Alcance"
+    | "Tráfego"
+    | "Engajamento";
 };
 
 export const META_COLUMNS: MetaColumn[] = [
-  { id: "spend", label: "Valor investido", format: "currency", group: "Investimento" },
+  {
+    id: "spend",
+    label: "Valor investido",
+    format: "currency",
+    group: "Investimento",
+  },
 
   { id: "leads", label: "Leads (Meta)", format: "number", group: "Formulário" },
-  { id: "leads_in_system", label: "Leads no sistema", format: "number", group: "Formulário" },
-  { id: "cost_per_lead", label: "Custo por lead", format: "currency", denominator: "leads", group: "Formulário" },
+  {
+    id: "leads_in_system",
+    label: "Leads no sistema",
+    format: "number",
+    group: "Formulário",
+  },
+  {
+    id: "cost_per_lead",
+    label: "Custo por lead",
+    format: "currency",
+    denominator: "leads",
+    group: "Formulário",
+  },
 
-  { id: "conversations", label: "Conversas", format: "number", group: "Mensagens" },
-  { id: "cost_per_conversation", label: "Custo / conversa", format: "currency", denominator: "conversations", group: "Mensagens" },
-  { id: "messaging_replies", label: "Primeiras respostas", format: "number", group: "Mensagens" },
+  {
+    id: "conversations",
+    label: "Conversas",
+    format: "number",
+    group: "Mensagens",
+  },
+  {
+    id: "cost_per_conversation",
+    label: "Custo / conversa",
+    format: "currency",
+    denominator: "conversations",
+    group: "Mensagens",
+  },
+  {
+    id: "messaging_replies",
+    label: "Primeiras respostas",
+    format: "number",
+    group: "Mensagens",
+  },
 
-  { id: "impressions", label: "Impressões", format: "number", group: "Alcance" },
-  { id: "reach", label: "Contas alcançadas", format: "number", group: "Alcance" },
+  {
+    id: "impressions",
+    label: "Impressões",
+    format: "number",
+    group: "Alcance",
+  },
+  {
+    id: "reach",
+    label: "Contas alcançadas",
+    format: "number",
+    group: "Alcance",
+  },
   { id: "frequency", label: "Frequência", format: "decimal", group: "Alcance" },
   { id: "cpm", label: "CPM", format: "currency", group: "Alcance" },
 
   { id: "clicks", label: "Cliques", format: "number", group: "Tráfego" },
   { id: "ctr", label: "CTR", format: "percent", group: "Tráfego" },
-  { id: "cost_per_click", label: "CPC", format: "currency", denominator: "clicks", group: "Tráfego" },
-  { id: "link_clicks", label: "Cliques no link", format: "number", group: "Tráfego" },
-  { id: "cost_per_link_click", label: "Custo / clique no link", format: "currency", denominator: "link_clicks", group: "Tráfego" },
+  {
+    id: "cost_per_click",
+    label: "CPC",
+    format: "currency",
+    denominator: "clicks",
+    group: "Tráfego",
+  },
+  {
+    id: "link_clicks",
+    label: "Cliques no link",
+    format: "number",
+    group: "Tráfego",
+  },
+  {
+    id: "cost_per_link_click",
+    label: "Custo / clique no link",
+    format: "currency",
+    denominator: "link_clicks",
+    group: "Tráfego",
+  },
 
-  { id: "video_views", label: "Views de vídeo", format: "number", group: "Engajamento" },
-  { id: "cost_per_video_view", label: "Custo / view", format: "currency", denominator: "video_views", group: "Engajamento" },
-  { id: "post_engagement", label: "Engaj. publicação", format: "number", group: "Engajamento" },
-  { id: "page_engagement", label: "Engaj. página", format: "number", group: "Engajamento" },
-  { id: "cost_per_engagement", label: "Custo / engajamento", format: "currency", denominator: "post_engagement", group: "Engajamento" },
+  {
+    id: "video_views",
+    label: "Views de vídeo",
+    format: "number",
+    group: "Engajamento",
+  },
+  {
+    id: "cost_per_video_view",
+    label: "Custo / view",
+    format: "currency",
+    denominator: "video_views",
+    group: "Engajamento",
+  },
+  {
+    id: "post_engagement",
+    label: "Engaj. publicação",
+    format: "number",
+    group: "Engajamento",
+  },
+  {
+    id: "page_engagement",
+    label: "Engaj. página",
+    format: "number",
+    group: "Engajamento",
+  },
+  {
+    id: "cost_per_engagement",
+    label: "Custo / engajamento",
+    format: "currency",
+    denominator: "post_engagement",
+    group: "Engajamento",
+  },
 ];
 
 export const META_COLUMN_BY_ID = new Map(META_COLUMNS.map((c) => [c.id, c]));
@@ -81,17 +173,45 @@ export const OBJECTIVE_PRESETS: MetaObjectivePreset[] = [
   {
     label: "Formulário (Leads)",
     matches: ["OUTCOME_LEADS", "LEAD_GENERATION"],
-    columns: ["spend", "leads", "leads_in_system", "cost_per_lead", "impressions", "clicks", "ctr"],
+    columns: [
+      "spend",
+      "leads",
+      "leads_in_system",
+      "cost_per_lead",
+      "impressions",
+      "clicks",
+      "ctr",
+    ],
   },
   {
     label: "Mensagens / WhatsApp",
     matches: ["MESSAGES", "OUTCOME_MESSAGES"],
-    columns: ["spend", "conversations", "cost_per_conversation", "messaging_replies", "impressions", "reach"],
+    columns: [
+      "spend",
+      "conversations",
+      "cost_per_conversation",
+      "messaging_replies",
+      "impressions",
+      "reach",
+    ],
   },
   {
     label: "Engajamento",
-    matches: ["OUTCOME_ENGAGEMENT", "POST_ENGAGEMENT", "PAGE_LIKES", "VIDEO_VIEWS"],
-    columns: ["spend", "post_engagement", "cost_per_engagement", "video_views", "conversations", "impressions", "reach"],
+    matches: [
+      "OUTCOME_ENGAGEMENT",
+      "POST_ENGAGEMENT",
+      "PAGE_LIKES",
+      "VIDEO_VIEWS",
+    ],
+    columns: [
+      "spend",
+      "post_engagement",
+      "cost_per_engagement",
+      "video_views",
+      "conversations",
+      "impressions",
+      "reach",
+    ],
   },
   {
     label: "Alcance / Reconhecimento",
@@ -101,12 +221,28 @@ export const OBJECTIVE_PRESETS: MetaObjectivePreset[] = [
   {
     label: "Tráfego",
     matches: ["OUTCOME_TRAFFIC", "LINK_CLICKS", "TRAFFIC"],
-    columns: ["spend", "link_clicks", "cost_per_link_click", "clicks", "ctr", "cost_per_click", "impressions"],
+    columns: [
+      "spend",
+      "link_clicks",
+      "cost_per_link_click",
+      "clicks",
+      "ctr",
+      "cost_per_click",
+      "impressions",
+    ],
   },
   {
     label: "Vendas / Conversões",
     matches: ["OUTCOME_SALES", "CONVERSIONS"],
-    columns: ["spend", "leads", "cost_per_lead", "clicks", "ctr", "impressions", "reach"],
+    columns: [
+      "spend",
+      "leads",
+      "cost_per_lead",
+      "clicks",
+      "ctr",
+      "impressions",
+      "reach",
+    ],
   },
 ];
 
@@ -125,7 +261,8 @@ export const DEFAULT_COLUMNS: MetaColumnId[] = [
 export function presetForObjective(objective: string | null | undefined) {
   if (!objective) return null;
   return (
-    OBJECTIVE_PRESETS.find((preset) => preset.matches.includes(objective)) ?? null
+    OBJECTIVE_PRESETS.find((preset) => preset.matches.includes(objective)) ??
+    null
   );
 }
 

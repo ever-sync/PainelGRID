@@ -1,5 +1,5 @@
-import { PrismaClient } from '@prisma/client';
-import type { CreatePipelineStageInputDto } from './dto/create-pipeline.dto';
+import { PrismaClient } from "@prisma/client";
+import type { CreatePipelineStageInputDto } from "./dto/create-pipeline.dto";
 
 export type DefaultCrmStageDef = {
   suffix: string;
@@ -10,155 +10,185 @@ export type DefaultCrmStageDef = {
 };
 
 /** Funil padrão alinhado ao Bitrix (18 etapas) e à integração n8n. */
-export const DEFAULT_CRM_PIPELINE_NAME = 'Funil de Vendas';
+export const DEFAULT_CRM_PIPELINE_NAME = "Funil de Vendas";
 export const DEFAULT_CRM_PIPELINE_DESCRIPTION =
-  'Pipeline padrão com 18 etapas (espelho Bitrix / automações)';
+  "Pipeline padrão com 18 etapas (espelho Bitrix / automações)";
 
 export const DEFAULT_CRM_STAGES: readonly DefaultCrmStageDef[] = [
-  { suffix: 'NOVO_LEAD', name: 'Novo Lead', order: 1, color: '#FF0636', is_final_stage: false },
   {
-    suffix: 'TENTATIVA_CONTATO',
-    name: 'Tentativa contato',
+    suffix: "NOVO_LEAD",
+    name: "Novo Lead",
+    order: 1,
+    color: "#FF0636",
+    is_final_stage: false,
+  },
+  {
+    suffix: "TENTATIVA_CONTATO",
+    name: "Tentativa contato",
     order: 2,
-    color: '#F59E0B',
+    color: "#F59E0B",
     is_final_stage: false,
   },
-  { suffix: 'LIGACAO', name: 'Ligação', order: 3, color: '#EC4899', is_final_stage: false },
-  { suffix: 'EM_CONTATO', name: 'Em Contato', order: 4, color: '#3D56A2', is_final_stage: false },
   {
-    suffix: 'PRESENCA_AGENDADA',
-    name: 'Presença agendada',
+    suffix: "LIGACAO",
+    name: "Ligação",
+    order: 3,
+    color: "#EC4899",
+    is_final_stage: false,
+  },
+  {
+    suffix: "EM_CONTATO",
+    name: "Em Contato",
+    order: 4,
+    color: "#3D56A2",
+    is_final_stage: false,
+  },
+  {
+    suffix: "PRESENCA_AGENDADA",
+    name: "Presença agendada",
     order: 5,
-    color: '#FBBB49',
+    color: "#FBBB49",
     is_final_stage: false,
   },
   {
-    suffix: 'ENVIAR_CONFIRMACAO',
-    name: 'Enviar confirmação',
+    suffix: "ENVIAR_CONFIRMACAO",
+    name: "Enviar confirmação",
     order: 6,
-    color: '#22D3EE',
+    color: "#22D3EE",
     is_final_stage: false,
   },
   {
-    suffix: 'AGENDADOS_CONFIRMADOS',
-    name: 'Agend. confirmados',
+    suffix: "AGENDADOS_CONFIRMADOS",
+    name: "Agend. confirmados",
     order: 7,
-    color: '#10B981',
+    color: "#10B981",
     is_final_stage: false,
   },
   {
-    suffix: 'PRESENCA_REAGENDADA',
-    name: 'Presença reagendada',
+    suffix: "PRESENCA_REAGENDADA",
+    name: "Presença reagendada",
     order: 8,
-    color: '#FB923C',
+    color: "#FB923C",
     is_final_stage: false,
   },
   {
-    suffix: 'PRESENCA_CANCELADA',
-    name: 'Presença cancelada',
+    suffix: "PRESENCA_CANCELADA",
+    name: "Presença cancelada",
     order: 9,
-    color: '#EF4444',
+    color: "#EF4444",
     is_final_stage: false,
   },
-  { suffix: 'LEMBRETE', name: 'Lembrete', order: 10, color: '#06B6D4', is_final_stage: false },
   {
-    suffix: 'RECUPERACAO_VENDA',
-    name: 'Recuperação de venda',
+    suffix: "LEMBRETE",
+    name: "Lembrete",
+    order: 10,
+    color: "#06B6D4",
+    is_final_stage: false,
+  },
+  {
+    suffix: "RECUPERACAO_VENDA",
+    name: "Recuperação de venda",
     order: 11,
-    color: '#D97706',
+    color: "#D97706",
     is_final_stage: false,
   },
   {
-    suffix: 'RECUPERACAO_PRESENCA',
-    name: 'Recuperação de presença',
+    suffix: "RECUPERACAO_PRESENCA",
+    name: "Recuperação de presença",
     order: 12,
-    color: '#4F46E5',
+    color: "#4F46E5",
     is_final_stage: false,
   },
   {
-    suffix: 'RECUPERACAO_RESPONDIDA',
-    name: 'Recuperação respondida',
+    suffix: "RECUPERACAO_RESPONDIDA",
+    name: "Recuperação respondida",
     order: 13,
-    color: '#059669',
+    color: "#059669",
     is_final_stage: false,
   },
   {
-    suffix: 'DESINTERESSE',
-    name: 'Desinteresse',
+    suffix: "DESINTERESSE",
+    name: "Desinteresse",
     order: 14,
-    color: '#78716C',
-    is_final_stage: true,
-  },
-  { suffix: 'AGUARDANDO', name: 'Aguardando', order: 15, color: '#A78BFA', is_final_stage: false },
-  {
-    suffix: 'PRESENCA_CONFIRMADA',
-    name: 'Presença confirmada',
-    order: 16,
-    color: '#059669',
+    color: "#78716C",
     is_final_stage: true,
   },
   {
-    suffix: 'COMPRARAM',
-    name: 'Compraram',
-    order: 17,
-    color: '#10B981',
-    is_final_stage: true,
-  },
-  {
-    suffix: 'LEAD_PERDIDO',
-    name: 'Lead perdido',
-    order: 18,
-    color: '#DC2626',
-    is_final_stage: true,
-  },
-  {
-    suffix: 'LEAD_AUSENTE',
-    name: 'Lead ausente',
-    order: 19,
-    color: '#991B1B',
-    is_final_stage: true,
-  },
-  {
-    suffix: 'ATENDIMENTO_ENCERRADO',
-    name: 'Atendimento encerrado',
-    order: 20,
-    color: '#6B7280',
-    is_final_stage: true,
-  },
-  {
-    suffix: 'FEEDBACK',
-    name: 'Feedback',
-    order: 21,
-    color: '#8B5CF6',
+    suffix: "AGUARDANDO",
+    name: "Aguardando",
+    order: 15,
+    color: "#A78BFA",
     is_final_stage: false,
   },
   {
-    suffix: 'RESPONDEU_FEEDBACK',
-    name: 'Respondeu feedback',
+    suffix: "PRESENCA_CONFIRMADA",
+    name: "Presença confirmada",
+    order: 16,
+    color: "#059669",
+    is_final_stage: true,
+  },
+  {
+    suffix: "COMPRARAM",
+    name: "Compraram",
+    order: 17,
+    color: "#10B981",
+    is_final_stage: true,
+  },
+  {
+    suffix: "LEAD_PERDIDO",
+    name: "Lead perdido",
+    order: 18,
+    color: "#DC2626",
+    is_final_stage: true,
+  },
+  {
+    suffix: "LEAD_AUSENTE",
+    name: "Lead ausente",
+    order: 19,
+    color: "#991B1B",
+    is_final_stage: true,
+  },
+  {
+    suffix: "ATENDIMENTO_ENCERRADO",
+    name: "Atendimento encerrado",
+    order: 20,
+    color: "#6B7280",
+    is_final_stage: true,
+  },
+  {
+    suffix: "FEEDBACK",
+    name: "Feedback",
+    order: 21,
+    color: "#8B5CF6",
+    is_final_stage: false,
+  },
+  {
+    suffix: "RESPONDEU_FEEDBACK",
+    name: "Respondeu feedback",
     order: 22,
-    color: '#EC4899',
+    color: "#EC4899",
     is_final_stage: true,
   },
 ] as const;
 
 /** Mapeia sufixos do funil antigo (7 etapas) para o funil padrão de 18. */
 const LEGACY_STAGE_SUFFIX_MAP: Record<string, string> = {
-  NOVO: 'NOVO_LEAD',
-  CONTACTADO: 'EM_CONTATO',
-  NAO_RESP: 'LEAD_PERDIDO',
-  AGENDADO: 'PRESENCA_AGENDADA',
-  CHECKIN: 'PRESENCA_CONFIRMADA',
-  CONVERTIDO: 'PRESENCA_CONFIRMADA',
-  PERDIDO: 'LEAD_PERDIDO',
+  NOVO: "NOVO_LEAD",
+  CONTACTADO: "EM_CONTATO",
+  NAO_RESP: "LEAD_PERDIDO",
+  AGENDADO: "PRESENCA_AGENDADA",
+  CHECKIN: "PRESENCA_CONFIRMADA",
+  CONVERTIDO: "PRESENCA_CONFIRMADA",
+  PERDIDO: "LEAD_PERDIDO",
   // Removidas: colunas "Pré-agendamento" e "Conf. Pré-agendamento" — leads voltam para Novo Lead.
-  PRE_AGENDAMENTO: 'NOVO_LEAD',
-  CONF_PRE_AGENDAMENTO: 'NOVO_LEAD',
+  PRE_AGENDAMENTO: "NOVO_LEAD",
+  CONF_PRE_AGENDAMENTO: "NOVO_LEAD",
 };
 
-type PrismaLike = Pick<PrismaClient, 'crmPipeline' | 'crmStage' | 'lead'>;
+type PrismaLike = Pick<PrismaClient, "crmPipeline" | "crmStage" | "lead">;
 
 export function clientIdToIdBase(clientId: string): string {
-  return clientId.replace(/-/g, '').toUpperCase().slice(0, 16);
+  return clientId.replace(/-/g, "").toUpperCase().slice(0, 16);
 }
 
 export function clientIdToPipelineCode(clientId: string): string {
@@ -169,7 +199,9 @@ export function clientIdToStageCode(clientId: string, suffix: string): string {
   return `${clientIdToIdBase(clientId)}_${suffix}`;
 }
 
-export function getDefaultStageInputs(clientId: string): CreatePipelineStageInputDto[] {
+export function getDefaultStageInputs(
+  clientId: string,
+): CreatePipelineStageInputDto[] {
   const idBase = clientIdToIdBase(clientId);
   return DEFAULT_CRM_STAGES.map((def) => ({
     code: `${idBase}_${def.suffix}`,
@@ -267,7 +299,9 @@ export async function provisionDefaultCrmPipeline(
     }
 
     const targetSuffix = LEGACY_STAGE_SUFFIX_MAP[suffix];
-    const targetStage = targetSuffix ? stageBySuffix.get(targetSuffix) : undefined;
+    const targetStage = targetSuffix
+      ? stageBySuffix.get(targetSuffix)
+      : undefined;
 
     if (targetStage) {
       await prisma.lead.updateMany({

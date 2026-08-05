@@ -5,7 +5,11 @@
  * comandos pendentes presos para sempre em vez de rejeitar — sem esse teto, o
  * `onModuleInit` trava e a aplicacao nunca chega a `app.listen()`.
  */
-export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+export function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error(`${label} excedeu ${timeoutMs}ms`));

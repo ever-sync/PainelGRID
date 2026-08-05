@@ -128,14 +128,17 @@ async function clearServerSessionCookie(): Promise<void> {
     if (native && !nativeRefreshToken) {
       return;
     }
-    await fetch(`${API_BASE}${native ? "/auth/mobile/logout" : "/auth/logout"}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        nativeRefreshToken ? { refreshToken: nativeRefreshToken } : {},
-      ),
-      credentials: "include",
-    });
+    await fetch(
+      `${API_BASE}${native ? "/auth/mobile/logout" : "/auth/logout"}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          nativeRefreshToken ? { refreshToken: nativeRefreshToken } : {},
+        ),
+        credentials: "include",
+      },
+    );
   } catch {
     /* noop */
   } finally {

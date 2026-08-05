@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { ConflictException, ForbiddenException } from "@nestjs/common";
 import { Role } from "../../common/types";
 import { ClientsService } from "./clients.service";

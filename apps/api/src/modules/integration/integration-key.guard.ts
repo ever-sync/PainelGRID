@@ -5,14 +5,14 @@ import {
   Injectable,
   Optional,
   UnauthorizedException,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Request } from 'express';
-import { createHash, timingSafeEqual } from 'crypto';
-import { PrismaService } from '../../config/prisma.service';
-import type { IntegrationRequest } from './integration-request';
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { Request } from "express";
+import { createHash, timingSafeEqual } from "crypto";
+import { PrismaService } from "../../config/prisma.service";
+import type { IntegrationRequest } from "./integration-request";
 
-const HEADER = 'x-leadflow-integration-key';
+const HEADER = "x-leadflow-integration-key";
 
 @Injectable()
 export class IntegrationKeyGuard implements CanActivate {
@@ -23,9 +23,9 @@ export class IntegrationKeyGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<IntegrationRequest>();
-    const provided = String(req.headers[HEADER] ?? '').trim();
+    const provided = String(req.headers[HEADER] ?? "").trim();
     if (!provided) {
-      throw new UnauthorizedException('Chave de integracao invalida');
+      throw new UnauthorizedException("Chave de integracao invalida");
     }
 
     const credentialClientId = await this.findCredentialClientId(provided);
@@ -36,26 +36,22 @@ export class IntegrationKeyGuard implements CanActivate {
     }
 
     const legacyKey = this.config
-      .get<string>('LEADFLOW_INTEGRATION_API_KEY')
+      .get<string>("LEADFLOW_INTEGRATION_API_KEY")
       ?.trim();
     const nodeEnv = (
-      this.config.get<string>('NODE_ENV') ?? 'development'
+      this.config.get<string>("NODE_ENV") ?? "development"
     ).toLowerCase();
     const legacyFlag = this.config
-      .get<string>('ALLOW_LEGACY_INTEGRATION_KEY')
+      .get<string>("ALLOW_LEGACY_INTEGRATION_KEY")
       ?.trim()
       .toLowerCase();
     const legacyEnabled =
-      nodeEnv !== 'production' || legacyFlag === 'true' || legacyFlag === '1';
+      nodeEnv !== "production" || legacyFlag === "true" || legacyFlag === "1";
     const legacyClientId = this.config
-      .get<string>('LEADFLOW_INTEGRATION_CLIENT_ID')
+      .get<string>("LEADFLOW_INTEGRATION_CLIENT_ID")
       ?.trim();
-    if (
-      !legacyEnabled ||
-      !legacyKey ||
-      !this.safeEqual(provided, legacyKey)
-    ) {
-      throw new UnauthorizedException('Chave de integracao invalida');
+    if (!legacyEnabled || !legacyKey || !this.safeEqual(provided, legacyKey)) {
+      throw new UnauthorizedException("Chave de integracao invalida");
     }
     if (legacyClientId) {
       await this.assertClientScope(req, legacyClientId);
@@ -65,11 +61,13 @@ export class IntegrationKeyGuard implements CanActivate {
     return true;
   }
 
-  private async findCredentialClientId(provided: string): Promise<string | null> {
+  private async findCredentialClientId(
+    provided: string,
+  ): Promise<string | null> {
     if (!this.prisma?.integrationCredential) {
       return null;
     }
-    const keyHash = createHash('sha256').update(provided, 'utf8').digest('hex');
+    const keyHash = createHash("sha256").update(provided, "utf8").digest("hex");
     const credential = await this.prisma.integrationCredential.findUnique({
       where: { key_hash: keyHash },
       select: {
@@ -103,8 +101,8 @@ export class IntegrationKeyGuard implements CanActivate {
   }
 
   private safeEqual(provided: string, expected: string): boolean {
-    const left = Buffer.from(provided, 'utf8');
-    const right = Buffer.from(expected, 'utf8');
+    const left = Buffer.from(provided, "utf8");
+    const right = Buffer.from(expected, "utf8");
     return left.length === right.length && timingSafeEqual(left, right);
   }
 
@@ -117,7 +115,7 @@ export class IntegrationKeyGuard implements CanActivate {
     this.assertExplicitClientId(body.client_id, clientId);
     this.assertExplicitClientId(query.client_id, clientId);
 
-    const path = (req.originalUrl || req.url).split('?')[0];
+    const path = (req.originalUrl || req.url).split("?")[0];
     const routeId = this.firstRouteParam(req.params);
 
     if (/\/agent\/appointments\/[^/]+(?:\/|$)/.test(path) && routeId) {
@@ -140,7 +138,7 @@ export class IntegrationKeyGuard implements CanActivate {
       await this.assertEvent(routeId, clientId);
     }
 
-    if (path.endsWith('/agent/appointments') && req.method === 'POST') {
+    if (path.endsWith("/agent/appointments") && req.method === "POST") {
       await this.assertLead(this.stringValue(body.lead_id), clientId);
       await this.assertEvent(this.stringValue(body.event_id), clientId);
       const conversationId = this.stringValue(body.conversation_id);
@@ -200,14 +198,14 @@ export class IntegrationKeyGuard implements CanActivate {
       select: { id: true },
     });
     if (!participant) {
-      throw new ForbiddenException('Recurso fora do escopo da integracao');
+      throw new ForbiddenException("Recurso fora do escopo da integracao");
     }
   }
 
   private assertExplicitClientId(value: unknown, clientId: string): void {
     const supplied = this.stringValue(value);
     if (supplied && supplied !== clientId) {
-      throw new ForbiddenException('Cliente fora do escopo da integracao');
+      throw new ForbiddenException("Cliente fora do escopo da integracao");
     }
   }
 
@@ -216,22 +214,22 @@ export class IntegrationKeyGuard implements CanActivate {
     clientId: string,
   ): void {
     if (!resourceClientId || resourceClientId !== clientId) {
-      throw new ForbiddenException('Recurso fora do escopo da integracao');
+      throw new ForbiddenException("Recurso fora do escopo da integracao");
     }
   }
 
-  private firstRouteParam(params: Request['params']): string | undefined {
+  private firstRouteParam(params: Request["params"]): string | undefined {
     const record = this.asRecord(params);
     return this.stringValue(record.id);
   }
 
   private asRecord(value: unknown): Record<string, unknown> {
-    return value && typeof value === 'object'
+    return value && typeof value === "object"
       ? (value as Record<string, unknown>)
       : {};
   }
 
   private stringValue(value: unknown): string | undefined {
-    return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
   }
 }

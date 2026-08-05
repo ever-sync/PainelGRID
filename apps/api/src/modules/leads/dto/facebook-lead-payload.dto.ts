@@ -1,4 +1,4 @@
-import { Transform } from 'class-transformer';
+import { Transform } from "class-transformer";
 import {
   IsDateString,
   IsEmail,
@@ -7,10 +7,10 @@ import {
   IsOptional,
   IsString,
   MaxLength,
-} from 'class-validator';
+} from "class-validator";
 
 const trimString = ({ value }: { value: unknown }) =>
-  typeof value === 'string' ? value.trim() : value;
+  typeof value === "string" ? value.trim() : value;
 
 /**
  * Formato entregue pela automacao que recebe leads do Facebook Lead Ads.

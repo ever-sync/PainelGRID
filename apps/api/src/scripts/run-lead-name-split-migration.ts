@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -9,10 +9,10 @@ ALTER TABLE "leads" ADD COLUMN IF NOT EXISTS "last_name" VARCHAR(150);
 `;
 
 async function main() {
-  console.log('Iniciando migração de nome e sobrenome na tabela leads...');
-  
+  console.log("Iniciando migração de nome e sobrenome na tabela leads...");
+
   const queries = sql
-    .split(';')
+    .split(";")
     .map((q) => q.trim())
     .filter((q) => q.length > 0);
 
@@ -21,16 +21,16 @@ async function main() {
       console.log(`Executando query...`);
       await prisma.$executeRawUnsafe(query);
     } catch {
-      console.error('Erro ao executar query.');
+      console.error("Erro ao executar query.");
     }
   }
 
-  console.log('Migração concluída com sucesso!');
+  console.log("Migração concluída com sucesso!");
 }
 
 main()
   .catch(() => {
-    console.error('Falha na migração.');
+    console.error("Falha na migração.");
     process.exit(1);
   })
   .finally(async () => {

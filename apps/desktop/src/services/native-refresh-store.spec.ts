@@ -55,17 +55,21 @@ describe("native-refresh-store", () => {
     expect(mockPreferences.remove).toHaveBeenCalledWith({
       key: "painelgrid.auth.native_refresh_token",
     });
-    expect(
-      mockSecureStorage.setItem.mock.invocationCallOrder[0],
-    ).toBeLessThan(mockPreferences.remove.mock.invocationCallOrder[0]);
+    expect(mockSecureStorage.setItem.mock.invocationCallOrder[0]).toBeLessThan(
+      mockPreferences.remove.mock.invocationCallOrder[0],
+    );
   });
 
   it("preserva o token legado se a migracao segura falhar", async () => {
     mockSecureStorage.getItem.mockResolvedValue(null);
     mockPreferences.get.mockResolvedValue({ value: "legacy-token" });
-    mockSecureStorage.setItem.mockRejectedValue(new Error("keystore indisponivel"));
+    mockSecureStorage.setItem.mockRejectedValue(
+      new Error("keystore indisponivel"),
+    );
 
-    await expect(readNativeRefreshToken()).rejects.toThrow("keystore indisponivel");
+    await expect(readNativeRefreshToken()).rejects.toThrow(
+      "keystore indisponivel",
+    );
     expect(mockPreferences.remove).not.toHaveBeenCalled();
   });
 

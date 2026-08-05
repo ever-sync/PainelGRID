@@ -72,7 +72,9 @@ describe("auth-session", () => {
   it("persiste uma sessao lembrada somente no localStorage", () => {
     writePersistedSession(session, true);
 
-    expect(localStorage.getItem(AUTH_STORAGE_KEY)).toBe(JSON.stringify(session));
+    expect(localStorage.getItem(AUTH_STORAGE_KEY)).toBe(
+      JSON.stringify(session),
+    );
     expect(sessionStorage.getItem(AUTH_STORAGE_KEY)).toBeNull();
     expect(readPersistedSession()).toEqual(session);
     expect(isSessionRemembered()).toBe(true);
@@ -81,7 +83,9 @@ describe("auth-session", () => {
   it("persiste uma sessao temporaria somente no sessionStorage", () => {
     writePersistedSession(session, false);
 
-    expect(sessionStorage.getItem(AUTH_STORAGE_KEY)).toBe(JSON.stringify(session));
+    expect(sessionStorage.getItem(AUTH_STORAGE_KEY)).toBe(
+      JSON.stringify(session),
+    );
     expect(localStorage.getItem(AUTH_STORAGE_KEY)).toBeNull();
     expect(readPersistedSession()).toEqual(session);
     expect(isSessionRemembered()).toBe(false);
@@ -91,7 +95,10 @@ describe("auth-session", () => {
     localStorage.setItem(AUTH_STORAGE_KEY, "{invalido");
     expect(readPersistedSession()).toBeNull();
 
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ user, accessToken: "" }));
+    localStorage.setItem(
+      AUTH_STORAGE_KEY,
+      JSON.stringify({ user, accessToken: "" }),
+    );
     expect(readPersistedSession()).toBeNull();
   });
 
@@ -118,7 +125,8 @@ describe("auth-session", () => {
     notifyAuthSessionUpdated(session);
 
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
-    const event = dispatchEvent.mock.calls[0][0] as CustomEvent<PersistedAuthSession>;
+    const event = dispatchEvent.mock
+      .calls[0][0] as CustomEvent<PersistedAuthSession>;
     expect(event.type).toBe(AUTH_SESSION_UPDATED_EVENT);
     expect(event.detail).toEqual(session);
   });

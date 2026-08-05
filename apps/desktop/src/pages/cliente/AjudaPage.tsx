@@ -33,7 +33,8 @@ const FAQ_LIST: FaqItem[] = [
       "Na tela de Check-in da Recepção, basta clicar no botão verde [+ Venda Avulsa]. Em seguida, selecione o cliente pelo nome/CPF, escolha o vendedor vinculado e informe o veículo e valor.",
   },
   {
-    question: "Onde posso ver o tempo de atendimento e tempo ausente dos vendedores?",
+    question:
+      "Onde posso ver o tempo de atendimento e tempo ausente dos vendedores?",
     answer:
       "No Relatório Executivo (Capítulo 7 - Ranking Comercial), você encontra a tabela completa com tempo em atendimento, tempo ausente e o gráfico visual comparativo de cada vendedor.",
   },
@@ -62,13 +63,17 @@ export function AjudaPage() {
         <div
           className={clsx(
             "p-6 rounded-3xl border space-y-3 shadow-sm",
-            isDarkMode ? "border-zinc-800 bg-[#121212]" : "border-zinc-200 bg-white",
+            isDarkMode
+              ? "border-zinc-800 bg-[#121212]"
+              : "border-zinc-200 bg-white",
           )}
         >
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FF7A00]/10 text-[#FF7A00]">
             <MessageSquare size={24} />
           </div>
-          <h3 className="text-base font-bold text-zinc-900 dark:text-white">Suporte via WhatsApp</h3>
+          <h3 className="text-base font-bold text-zinc-900 dark:text-white">
+            Suporte via WhatsApp
+          </h3>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             Fale diretamente com nossa equipe de atendimento em tempo real.
           </p>
@@ -86,15 +91,20 @@ export function AjudaPage() {
         <div
           className={clsx(
             "p-6 rounded-3xl border space-y-3 shadow-sm",
-            isDarkMode ? "border-zinc-800 bg-[#121212]" : "border-zinc-200 bg-white",
+            isDarkMode
+              ? "border-zinc-800 bg-[#121212]"
+              : "border-zinc-200 bg-white",
           )}
         >
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FF7A00]/10 text-[#FF7A00]">
             <Video size={24} />
           </div>
-          <h3 className="text-base font-bold text-zinc-900 dark:text-white">Vídeo Aulas</h3>
+          <h3 className="text-base font-bold text-zinc-900 dark:text-white">
+            Vídeo Aulas
+          </h3>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Assista aos tutoriais passo a passo sobre como operar o sistema de vendas.
+            Assista aos tutoriais passo a passo sobre como operar o sistema de
+            vendas.
           </p>
           <button
             type="button"
@@ -109,15 +119,20 @@ export function AjudaPage() {
         <div
           className={clsx(
             "p-6 rounded-3xl border space-y-3 shadow-sm",
-            isDarkMode ? "border-zinc-800 bg-[#121212]" : "border-zinc-200 bg-white",
+            isDarkMode
+              ? "border-zinc-800 bg-[#121212]"
+              : "border-zinc-200 bg-white",
           )}
         >
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FF7A00]/10 text-[#FF7A00]">
             <Mail size={24} />
           </div>
-          <h3 className="text-base font-bold text-zinc-900 dark:text-white">Suporte via E-mail</h3>
+          <h3 className="text-base font-bold text-zinc-900 dark:text-white">
+            Suporte via E-mail
+          </h3>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Envie sua dúvida ou solicitação técnica para nossa equipe de engenharia.
+            Envie sua dúvida ou solicitação técnica para nossa equipe de
+            engenharia.
           </p>
           <a
             href="mailto:suporte@painelgrid.com.br"
@@ -132,12 +147,16 @@ export function AjudaPage() {
       <div
         className={clsx(
           "p-6 sm:p-8 rounded-3xl border space-y-6 shadow-sm",
-          isDarkMode ? "border-zinc-800 bg-[#121212]" : "border-zinc-200 bg-white",
+          isDarkMode
+            ? "border-zinc-800 bg-[#121212]"
+            : "border-zinc-200 bg-white",
         )}
       >
         <div className="flex items-center gap-2">
           <FileQuestion size={20} className="text-[#FF7A00]" />
-          <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Perguntas Frequentes (FAQ)</h3>
+          <h3 className="text-lg font-bold text-zinc-900 dark:text-white">
+            Perguntas Frequentes (FAQ)
+          </h3>
         </div>
 
         <div className="space-y-3">
@@ -148,7 +167,9 @@ export function AjudaPage() {
                 key={faq.question}
                 className={clsx(
                   "rounded-2xl border transition-all overflow-hidden",
-                  isDarkMode ? "border-zinc-800 bg-zinc-900/50" : "border-zinc-200 bg-zinc-50/60",
+                  isDarkMode
+                    ? "border-zinc-800 bg-zinc-900/50"
+                    : "border-zinc-200 bg-zinc-50/60",
                 )}
               >
                 <button
@@ -159,7 +180,10 @@ export function AjudaPage() {
                   <span>{faq.question}</span>
                   <ChevronDown
                     size={16}
-                    className={clsx("transition-transform text-zinc-400", isOpen && "rotate-180")}
+                    className={clsx(
+                      "transition-transform text-zinc-400",
+                      isOpen && "rotate-180",
+                    )}
                   />
                 </button>
 

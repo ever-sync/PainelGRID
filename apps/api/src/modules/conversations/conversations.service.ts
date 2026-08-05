@@ -1,22 +1,27 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { ConversationChannel, Prisma, SenderType } from '@prisma/client';
-import { Role } from '../../common/types';
-import { PrismaService } from '../../config/prisma.service';
-import { StorageService } from '../../config/storage.service';
-import { AuthenticatedUser } from '../auth/auth.types';
-import { ClientsService } from '../clients/clients.service';
-import { ClientWebhookService } from '../crm/client-webhook.service';
-import { MetaService } from '../meta/meta.service';
-import { RealtimeEventsService } from '../realtime/realtime-events.service';
-import { CreateMessageDto } from './dto/create-message.dto';
-import { EnsureConversationDto } from './dto/ensure-conversation.dto';
-import { FindConversationsQueryDto } from './dto/find-conversations-query.dto';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
+import { ConversationChannel, Prisma, SenderType } from "@prisma/client";
+import { Role } from "../../common/types";
+import { PrismaService } from "../../config/prisma.service";
+import { StorageService } from "../../config/storage.service";
+import { AuthenticatedUser } from "../auth/auth.types";
+import { ClientsService } from "../clients/clients.service";
+import { ClientWebhookService } from "../crm/client-webhook.service";
+import { MetaService } from "../meta/meta.service";
+import { RealtimeEventsService } from "../realtime/realtime-events.service";
+import { CreateMessageDto } from "./dto/create-message.dto";
+import { EnsureConversationDto } from "./dto/ensure-conversation.dto";
+import { FindConversationsQueryDto } from "./dto/find-conversations-query.dto";
 
 type N8nHistoryRow = {
   history_id: number;
   client_id: string;
   lead_id: string;
-  message_type: 'human' | 'ai';
+  message_type: "human" | "ai";
   content: string;
 };
 
@@ -43,13 +48,17 @@ export class ConversationsService {
       await this.clientsService.assertGestorOwnsClient(user.sub, clientId);
       return;
     }
-    if (user.role === Role.CLIENTE || user.role === Role.VENDEDOR || user.role === Role.RECEPCAO) {
+    if (
+      user.role === Role.CLIENTE ||
+      user.role === Role.VENDEDOR ||
+      user.role === Role.RECEPCAO
+    ) {
       if (!user.client_id || user.client_id !== clientId) {
-        throw new ForbiddenException('Sem permissao');
+        throw new ForbiddenException("Sem permissao");
       }
       return;
     }
-    throw new ForbiddenException('Sem permissao');
+    throw new ForbiddenException("Sem permissao");
   }
 
   private async assertConversationAccess(
@@ -64,7 +73,7 @@ export class ConversationsService {
       user.role === Role.VENDEDOR &&
       conversation.lead?.assigned_vendor_id !== user.sub
     ) {
-      throw new ForbiddenException('Conversa nao atribuida a este vendedor');
+      throw new ForbiddenException("Conversa nao atribuida a este vendedor");
     }
   }
 
@@ -76,7 +85,7 @@ export class ConversationsService {
     if (clientId) {
       await this.assertClientRead(user, clientId);
     } else if (user.role !== Role.GESTOR) {
-      throw new ForbiddenException('Usuario sem empresa vinculada');
+      throw new ForbiddenException("Usuario sem empresa vinculada");
     }
 
     await this.syncN8nHistoryForClient(clientId);
@@ -90,7 +99,7 @@ export class ConversationsService {
 
     const rows = await this.prisma.conversation.findMany({
       where,
-      orderBy: { last_message_at: 'desc' },
+      orderBy: { last_message_at: "desc" },
       include: {
         lead: { select: { id: true, name: true } },
         state: {
@@ -101,7 +110,7 @@ export class ConversationsService {
             updated_at: true,
           },
         },
-        messages: { orderBy: { created_at: 'desc' }, take: 1 },
+        messages: { orderBy: { created_at: "desc" }, take: 1 },
       },
     });
 
@@ -112,7 +121,7 @@ export class ConversationsService {
       lead_name: row.lead.name,
       channel: row.channel,
       last_message_at: row.last_message_at,
-      last_message: row.messages[0]?.content ?? '',
+      last_message: row.messages[0]?.content ?? "",
       handoff_required: row.state?.handoff_required ?? false,
       handoff_reason: row.state?.handoff_reason ?? null,
       last_agent_action: row.state?.last_agent_action ?? null,
@@ -128,21 +137,29 @@ export class ConversationsService {
    * idempotente, permitindo rodar a cada consulta sem criar duplicatas.
    */
   async syncN8nHistoryForClient(clientId: string | null): Promise<number> {
-    if (typeof this.prisma.$queryRaw !== 'function') return 0;
+    if (typeof this.prisma.$queryRaw !== "function") return 0;
 
-    const syncKey = clientId ?? '__all_clients__';
+    const syncKey = clientId ?? "__all_clients__";
     const running = this.n8nHistorySyncs.get(syncKey);
     if (running) return running;
 
     const sync = this.importN8nHistoryForClient(clientId)
       .catch((error: unknown) => {
-        const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
-        const code = record?.code ? String(record.code) : '';
-        const meta = record?.meta && typeof record.meta === 'object' ? (record.meta as Record<string, unknown>) : null;
-        const databaseCode = meta?.code ? String(meta.code) : '';
-        const missingHistoryTable = code === '42P01' || (code === 'P2010' && databaseCode === '42P01');
+        const record =
+          error && typeof error === "object"
+            ? (error as Record<string, unknown>)
+            : null;
+        const code = record?.code ? String(record.code) : "";
+        const meta =
+          record?.meta && typeof record.meta === "object"
+            ? (record.meta as Record<string, unknown>)
+            : null;
+        const databaseCode = meta?.code ? String(meta.code) : "";
+        const missingHistoryTable =
+          code === "42P01" || (code === "P2010" && databaseCode === "42P01");
         if (!missingHistoryTable) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message =
+            error instanceof Error ? error.message : String(error);
           this.logger.warn(`Falha ao sincronizar historico do n8n: ${message}`);
         }
         return 0;
@@ -209,7 +226,10 @@ export class ConversationsService {
     // e ancoramos o lote no instante da importacao.
     const importedAt = Date.now();
     const timestampByHistoryId = new Map(
-      usableRows.map((row, index) => [row.history_id, new Date(importedAt - (usableRows.length - index - 1) * 1_000)]),
+      usableRows.map((row, index) => [
+        row.history_id,
+        new Date(importedAt - (usableRows.length - index - 1) * 1_000),
+      ]),
     );
     const byLead = new Map<string, N8nHistoryRow[]>();
     for (const row of usableRows) {
@@ -232,7 +252,7 @@ export class ConversationsService {
             lead_id: leadId,
             channel: ConversationChannel.whatsapp,
           },
-          orderBy: [{ last_message_at: 'desc' }, { created_at: 'desc' }],
+          orderBy: [{ last_message_at: "desc" }, { created_at: "desc" }],
         });
         if (!conversation) {
           conversation = await tx.conversation.create({
@@ -247,7 +267,8 @@ export class ConversationsService {
         const created = await tx.message.createMany({
           data: historyRows.map((row) => ({
             conversation_id: conversation.id,
-            sender_type: row.message_type === 'human' ? SenderType.lead : SenderType.user,
+            sender_type:
+              row.message_type === "human" ? SenderType.lead : SenderType.user,
             sender_id: null,
             content: row.content.trim(),
             external_id: `n8n-history:${row.history_id}`,
@@ -264,7 +285,10 @@ export class ConversationsService {
             },
             conversation.last_message_at ?? new Date(0),
           );
-          if (!conversation.last_message_at || latest.getTime() > conversation.last_message_at.getTime()) {
+          if (
+            !conversation.last_message_at ||
+            latest.getTime() > conversation.last_message_at.getTime()
+          ) {
             await tx.conversation.update({
               where: { id: conversation.id },
               data: { last_message_at: latest },
@@ -279,7 +303,10 @@ export class ConversationsService {
     return imported;
   }
 
-  async ensureConversation(user: AuthenticatedUser, dto: EnsureConversationDto) {
+  async ensureConversation(
+    user: AuthenticatedUser,
+    dto: EnsureConversationDto,
+  ) {
     await this.assertClientRead(user, dto.client_id);
 
     const lead = await this.prisma.lead.findFirst({
@@ -291,10 +318,10 @@ export class ConversationsService {
       select: { id: true, assigned_vendor_id: true },
     });
     if (!lead) {
-      throw new NotFoundException('Lead nao encontrado para este cliente');
+      throw new NotFoundException("Lead nao encontrado para este cliente");
     }
     if (user.role === Role.VENDEDOR && lead.assigned_vendor_id !== user.sub) {
-      throw new ForbiddenException('Lead nao atribuido a este vendedor');
+      throw new ForbiddenException("Lead nao atribuido a este vendedor");
     }
 
     let conversation = await this.prisma.conversation.findFirst({
@@ -303,7 +330,7 @@ export class ConversationsService {
         lead_id: dto.lead_id,
         channel: dto.channel,
       },
-      orderBy: { created_at: 'desc' },
+      orderBy: { created_at: "desc" },
     });
 
     if (!conversation) {
@@ -329,12 +356,12 @@ export class ConversationsService {
             updated_at: true,
           },
         },
-        messages: { orderBy: { created_at: 'desc' }, take: 1 },
+        messages: { orderBy: { created_at: "desc" }, take: 1 },
       },
     });
 
     if (!row) {
-      throw new NotFoundException('Conversa nao encontrada');
+      throw new NotFoundException("Conversa nao encontrada");
     }
 
     return {
@@ -344,7 +371,7 @@ export class ConversationsService {
       lead_name: row.lead.name,
       channel: row.channel,
       last_message_at: row.last_message_at,
-      last_message: row.messages[0]?.content ?? '',
+      last_message: row.messages[0]?.content ?? "",
       handoff_required: row.state?.handoff_required ?? false,
       handoff_reason: row.state?.handoff_reason ?? null,
       last_agent_action: row.state?.last_agent_action ?? null,
@@ -359,13 +386,13 @@ export class ConversationsService {
       include: { lead: { select: { assigned_vendor_id: true } } },
     });
     if (!conv) {
-      throw new NotFoundException('Conversa nao encontrada');
+      throw new NotFoundException("Conversa nao encontrada");
     }
     await this.assertConversationAccess(user, conv);
 
     return this.prisma.message.findMany({
       where: { conversation_id: conversationId },
-      orderBy: { created_at: 'asc' },
+      orderBy: { created_at: "asc" },
     });
   }
 
@@ -379,24 +406,31 @@ export class ConversationsService {
       },
     });
     if (!msg) {
-      throw new NotFoundException('Mensagem nao encontrada');
+      throw new NotFoundException("Mensagem nao encontrada");
     }
     await this.assertConversationAccess(user, msg.conversation);
 
     if (!msg.media_id && !msg.media_url) {
-      throw new NotFoundException('Mensagem sem midia');
+      throw new NotFoundException("Mensagem sem midia");
     }
 
     const storageKey = this.mediaStorageKey(messageId);
     const cached = await this.storage.download(storageKey);
     if (cached) {
-      return { buffer: cached.buffer, contentType: cached.contentType, filename: messageId };
+      return {
+        buffer: cached.buffer,
+        contentType: cached.contentType,
+        filename: messageId,
+      };
     }
 
-    const media = await this.metaService.downloadClientWhatsappMedia(msg.conversation.client_id, {
-      mediaId: msg.media_id,
-      mediaUrl: msg.media_url,
-    });
+    const media = await this.metaService.downloadClientWhatsappMedia(
+      msg.conversation.client_id,
+      {
+        mediaId: msg.media_id,
+        mediaUrl: msg.media_url,
+      },
+    );
     void this.storage.upload(storageKey, media.buffer, media.contentType);
     return media;
   }
@@ -407,13 +441,13 @@ export class ConversationsService {
       include: { lead: { select: { assigned_vendor_id: true } } },
     });
     if (!conv) {
-      throw new NotFoundException('Conversa nao encontrada');
+      throw new NotFoundException("Conversa nao encontrada");
     }
     await this.assertConversationAccess(user, conv);
 
     const logs = await this.prisma.agentActionLog.findMany({
       where: { conversation_id: conversationId },
-      orderBy: { created_at: 'desc' },
+      orderBy: { created_at: "desc" },
       take: 8,
     });
 
@@ -434,32 +468,38 @@ export class ConversationsService {
     }));
   }
 
-  async addMessage(user: AuthenticatedUser, conversationId: string, dto: CreateMessageDto) {
+  async addMessage(
+    user: AuthenticatedUser,
+    conversationId: string,
+    dto: CreateMessageDto,
+  ) {
     const conv = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
       include: { lead: { select: { assigned_vendor_id: true } } },
     });
     if (!conv) {
-      throw new NotFoundException('Conversa nao encontrada');
+      throw new NotFoundException("Conversa nao encontrada");
     }
     await this.assertConversationAccess(user, conv);
 
     const senderType: SenderType =
-      user.role === Role.VENDEDOR || user.role === Role.CLIENTE || user.role === Role.GESTOR
+      user.role === Role.VENDEDOR ||
+      user.role === Role.CLIENTE ||
+      user.role === Role.GESTOR
         ? SenderType.user
         : SenderType.system;
     const senderId = user.sub;
     const content = dto.content.trim();
     let externalId: string | null = null;
 
-    if (conv.channel === 'whatsapp' && senderType === SenderType.user) {
+    if (conv.channel === "whatsapp" && senderType === SenderType.user) {
       const lead = await this.prisma.lead.findUnique({
         where: { id: conv.lead_id },
         select: { phone: true },
       });
       externalId = await this.metaService.sendClientWhatsappMessage(
         conv.client_id,
-        lead?.phone ?? '',
+        lead?.phone ?? "",
         content,
       );
     }
@@ -487,22 +527,22 @@ export class ConversationsService {
           client_id: conv.client_id,
           lead_id: conv.lead_id,
           handoff_required: true,
-          handoff_reason: 'Atendimento manual iniciado pelo painel',
-          last_agent_action: 'handoff_requested',
+          handoff_reason: "Atendimento manual iniciado pelo painel",
+          last_agent_action: "handoff_requested",
         },
         update: {
           handoff_required: true,
-          handoff_reason: 'Atendimento manual iniciado pelo painel',
-          last_agent_action: 'handoff_requested',
+          handoff_reason: "Atendimento manual iniciado pelo painel",
+          last_agent_action: "handoff_requested",
         },
       });
 
-      void this.clientWebhook.dispatch(conv.client_id, 'handoff.requested', {
+      void this.clientWebhook.dispatch(conv.client_id, "handoff.requested", {
         conversation_id: conversationId,
         lead_id: conv.lead_id,
         client_id: conv.client_id,
-        reason: 'Atendimento manual iniciado pelo painel',
-        requested_by_type: 'user',
+        reason: "Atendimento manual iniciado pelo painel",
+        requested_by_type: "user",
         requested_by_id: senderId,
         requested_at: state.updated_at.toISOString(),
       });
@@ -519,16 +559,20 @@ export class ConversationsService {
       created_at: msg.created_at,
     });
 
-    void this.clientWebhook.dispatch(conv.client_id, 'conversation.message.sent', {
-      message_id: msg.id,
-      conversation_id: msg.conversation_id,
-      lead_id: conv.lead_id,
-      sender_type: msg.sender_type,
-      sender_id: msg.sender_id,
-      content: msg.content,
-      channel: conv.channel,
-      created_at: msg.created_at.toISOString(),
-    });
+    void this.clientWebhook.dispatch(
+      conv.client_id,
+      "conversation.message.sent",
+      {
+        message_id: msg.id,
+        conversation_id: msg.conversation_id,
+        lead_id: conv.lead_id,
+        sender_type: msg.sender_type,
+        sender_id: msg.sender_id,
+        content: msg.content,
+        channel: conv.channel,
+        created_at: msg.created_at.toISOString(),
+      },
+    );
 
     return msg;
   }
@@ -536,24 +580,33 @@ export class ConversationsService {
   async addMediaMessage(
     user: AuthenticatedUser,
     conversationId: string,
-    args: { fileBuffer: Buffer; filename: string; mimeType: string; caption?: string },
+    args: {
+      fileBuffer: Buffer;
+      filename: string;
+      mimeType: string;
+      caption?: string;
+    },
   ) {
     const conv = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
       include: { lead: { select: { assigned_vendor_id: true } } },
     });
     if (!conv) {
-      throw new NotFoundException('Conversa nao encontrada');
+      throw new NotFoundException("Conversa nao encontrada");
     }
     await this.assertConversationAccess(user, conv);
 
     const senderType: SenderType =
-      user.role === Role.VENDEDOR || user.role === Role.CLIENTE || user.role === Role.GESTOR
+      user.role === Role.VENDEDOR ||
+      user.role === Role.CLIENTE ||
+      user.role === Role.GESTOR
         ? SenderType.user
         : SenderType.system;
 
-    if (conv.channel !== 'whatsapp' || senderType !== SenderType.user) {
-      throw new ForbiddenException('Envio de midia disponivel apenas para conversa WhatsApp.');
+    if (conv.channel !== "whatsapp" || senderType !== SenderType.user) {
+      throw new ForbiddenException(
+        "Envio de midia disponivel apenas para conversa WhatsApp.",
+      );
     }
 
     const lead = await this.prisma.lead.findUnique({
@@ -563,7 +616,7 @@ export class ConversationsService {
 
     const sent = await this.metaService.sendClientWhatsappMediaMessage({
       clientId: conv.client_id,
-      to: lead?.phone ?? '',
+      to: lead?.phone ?? "",
       fileBuffer: args.fileBuffer,
       filename: args.filename,
       mimeType: args.mimeType,
@@ -582,7 +635,11 @@ export class ConversationsService {
       },
     });
 
-    void this.storage.upload(this.mediaStorageKey(msg.id), args.fileBuffer, args.mimeType);
+    void this.storage.upload(
+      this.mediaStorageKey(msg.id),
+      args.fileBuffer,
+      args.mimeType,
+    );
 
     await this.prisma.conversation.update({
       where: { id: conversationId },
@@ -597,22 +654,22 @@ export class ConversationsService {
           client_id: conv.client_id,
           lead_id: conv.lead_id,
           handoff_required: true,
-          handoff_reason: 'Atendimento manual iniciado pelo painel',
-          last_agent_action: 'handoff_requested',
+          handoff_reason: "Atendimento manual iniciado pelo painel",
+          last_agent_action: "handoff_requested",
         },
         update: {
           handoff_required: true,
-          handoff_reason: 'Atendimento manual iniciado pelo painel',
-          last_agent_action: 'handoff_requested',
+          handoff_reason: "Atendimento manual iniciado pelo painel",
+          last_agent_action: "handoff_requested",
         },
       });
 
-      void this.clientWebhook.dispatch(conv.client_id, 'handoff.requested', {
+      void this.clientWebhook.dispatch(conv.client_id, "handoff.requested", {
         conversation_id: conversationId,
         lead_id: conv.lead_id,
         client_id: conv.client_id,
-        reason: 'Atendimento manual iniciado pelo painel',
-        requested_by_type: 'user',
+        reason: "Atendimento manual iniciado pelo painel",
+        requested_by_type: "user",
         requested_by_id: user.sub,
         requested_at: state.updated_at.toISOString(),
       });
@@ -629,18 +686,22 @@ export class ConversationsService {
       created_at: msg.created_at,
     });
 
-    void this.clientWebhook.dispatch(conv.client_id, 'conversation.message.sent', {
-      message_id: msg.id,
-      conversation_id: msg.conversation_id,
-      lead_id: conv.lead_id,
-      sender_type: msg.sender_type,
-      sender_id: msg.sender_id,
-      content: msg.content,
-      media_id: msg.media_id,
-      media_url: msg.media_url,
-      channel: conv.channel,
-      created_at: msg.created_at.toISOString(),
-    });
+    void this.clientWebhook.dispatch(
+      conv.client_id,
+      "conversation.message.sent",
+      {
+        message_id: msg.id,
+        conversation_id: msg.conversation_id,
+        lead_id: conv.lead_id,
+        sender_type: msg.sender_type,
+        sender_id: msg.sender_id,
+        content: msg.content,
+        media_id: msg.media_id,
+        media_url: msg.media_url,
+        channel: conv.channel,
+        created_at: msg.created_at.toISOString(),
+      },
+    );
 
     return msg;
   }

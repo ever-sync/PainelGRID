@@ -10,10 +10,7 @@ function lead(id: string, crmStageId: string | null): Lead {
   return { id, crm_stage_id: crmStageId } as Lead;
 }
 
-const stages = [
-  { id: "stage-new" },
-  { id: "stage-won" },
-] as ApiCrmStage[];
+const stages = [{ id: "stage-new" }, { id: "stage-won" }] as ApiCrmStage[];
 
 describe("crm page board model", () => {
   it("remove o lead sem alterar os arrays do quadro original", () => {

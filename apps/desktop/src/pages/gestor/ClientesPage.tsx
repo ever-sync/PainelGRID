@@ -77,9 +77,7 @@ export function ClientesPage() {
   const [facebookFilter, setFacebookFilter] = useState<
     "all" | "connected" | "pending"
   >("all");
-  const [planFilter, setPlanFilter] = useState<
-    "all" | Client["plan"]
-  >("all");
+  const [planFilter, setPlanFilter] = useState<"all" | Client["plan"]>("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -323,12 +321,9 @@ export function ClientesPage() {
           facebookFilter === "all" ||
           (facebookFilter === "connected" ? hasFacebook : !hasFacebook);
 
-        const matchesPlan =
-          planFilter === "all" || client.plan === planFilter;
+        const matchesPlan = planFilter === "all" || client.plan === planFilter;
 
-        return (
-          matchesSearch && matchesStatus && matchesFacebook && matchesPlan
-        );
+        return matchesSearch && matchesStatus && matchesFacebook && matchesPlan;
       })
       .sort((a, b) => b.leads_count - a.leads_count);
   }, [clients, search, statusFilter, facebookFilter, planFilter]);
@@ -535,9 +530,7 @@ export function ClientesPage() {
                       <th className="px-3 py-3 text-right font-semibold">
                         Eventos
                       </th>
-                      <th className="px-3 py-3 font-semibold">
-                        Evento ativo
-                      </th>
+                      <th className="px-3 py-3 font-semibold">Evento ativo</th>
                       <th className="px-5 py-3 text-right font-semibold">
                         Ações
                       </th>
@@ -547,7 +540,7 @@ export function ClientesPage() {
                     {filteredClients.map((client) => {
                       const hasFacebook = Boolean(
                         client.facebook_page_id ||
-                          client.facebook_ad_account_id,
+                        client.facebook_ad_account_id,
                       );
                       return (
                         <tr
@@ -596,9 +589,7 @@ export function ClientesPage() {
                               }
                               dot
                             >
-                              {client.status === "active"
-                                ? "Ativo"
-                                : "Inativo"}
+                              {client.status === "active" ? "Ativo" : "Inativo"}
                             </Badge>
                           </td>
                           <td className="px-3 py-3">
@@ -768,11 +759,21 @@ export function ClientesPage() {
         <div className="space-y-4 pt-1">
           {/* 1º CNPJ PRIMEIRO NO TOPO DA TELA */}
           <div className="space-y-1.5">
-            <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+            <label
+              className={clsx(
+                "block text-xs font-bold uppercase tracking-wider",
+                isDarkMode ? "text-zinc-400" : "text-zinc-600",
+              )}
+            >
               CNPJ (Preenchimento Automático)
             </label>
             <div className="relative flex items-center">
-              <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+              <div
+                className={clsx(
+                  "absolute left-3.5 flex items-center pointer-events-none",
+                  isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                )}
+              >
                 <Building2 size={16} />
               </div>
               <input
@@ -807,11 +808,21 @@ export function ClientesPage() {
 
           {/* 2º EMPRESA */}
           <div className="space-y-1.5">
-            <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+            <label
+              className={clsx(
+                "block text-xs font-bold uppercase tracking-wider",
+                isDarkMode ? "text-zinc-400" : "text-zinc-600",
+              )}
+            >
               Empresa (Nome Fantasia)
             </label>
             <div className="relative flex items-center">
-              <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+              <div
+                className={clsx(
+                  "absolute left-3.5 flex items-center pointer-events-none",
+                  isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                )}
+              >
                 <Store size={16} />
               </div>
               <input
@@ -831,11 +842,21 @@ export function ClientesPage() {
           {/* 3º TELEFONE & WHATSAPP */}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+              <label
+                className={clsx(
+                  "block text-xs font-bold uppercase tracking-wider",
+                  isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                )}
+              >
                 Telefone
               </label>
               <div className="relative flex items-center">
-                <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                <div
+                  className={clsx(
+                    "absolute left-3.5 flex items-center pointer-events-none",
+                    isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                  )}
+                >
                   <Phone size={16} />
                 </div>
                 <input
@@ -853,11 +874,21 @@ export function ClientesPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+              <label
+                className={clsx(
+                  "block text-xs font-bold uppercase tracking-wider",
+                  isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                )}
+              >
                 WhatsApp
               </label>
               <div className="relative flex items-center">
-                <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                <div
+                  className={clsx(
+                    "absolute left-3.5 flex items-center pointer-events-none",
+                    isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                  )}
+                >
                   <MessageSquare size={16} />
                 </div>
                 <input
@@ -877,11 +908,21 @@ export function ClientesPage() {
 
           {/* 4º E-MAIL DE CONTATO */}
           <div className="space-y-1.5">
-            <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+            <label
+              className={clsx(
+                "block text-xs font-bold uppercase tracking-wider",
+                isDarkMode ? "text-zinc-400" : "text-zinc-600",
+              )}
+            >
               E-mail de Contato
             </label>
             <div className="relative flex items-center">
-              <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+              <div
+                className={clsx(
+                  "absolute left-3.5 flex items-center pointer-events-none",
+                  isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                )}
+              >
                 <Mail size={16} />
               </div>
               <input
@@ -901,22 +942,39 @@ export function ClientesPage() {
 
           {/* 5º ENDEREÇO (CARTÃO CNPJ) */}
           <div className="space-y-3 pt-2">
-            <p className={clsx("text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-500")}>
+            <p
+              className={clsx(
+                "text-xs font-bold uppercase tracking-wider",
+                isDarkMode ? "text-zinc-400" : "text-zinc-500",
+              )}
+            >
               📍 Endereço (Cartão CNPJ)
             </p>
 
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="sm:col-span-2 space-y-1.5">
-                <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                <label
+                  className={clsx(
+                    "block text-[11px] font-bold uppercase",
+                    isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                  )}
+                >
                   Logradouro
                 </label>
                 <div className="relative flex items-center">
-                  <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                  <div
+                    className={clsx(
+                      "absolute left-3.5 flex items-center pointer-events-none",
+                      isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                    )}
+                  >
                     <MapPin size={15} />
                   </div>
                   <input
                     value={newClientAddressStreet}
-                    onChange={(event) => setNewClientAddressStreet(event.target.value)}
+                    onChange={(event) =>
+                      setNewClientAddressStreet(event.target.value)
+                    }
                     placeholder="Rua/Avenida"
                     className={clsx(
                       "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
@@ -929,16 +987,28 @@ export function ClientesPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                <label
+                  className={clsx(
+                    "block text-[11px] font-bold uppercase",
+                    isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                  )}
+                >
                   Número
                 </label>
                 <div className="relative flex items-center">
-                  <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                  <div
+                    className={clsx(
+                      "absolute left-3.5 flex items-center pointer-events-none",
+                      isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                    )}
+                  >
                     <Hash size={15} />
                   </div>
                   <input
                     value={newClientAddressNumber}
-                    onChange={(event) => setNewClientAddressNumber(event.target.value)}
+                    onChange={(event) =>
+                      setNewClientAddressNumber(event.target.value)
+                    }
                     placeholder="123"
                     className={clsx(
                       "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
@@ -953,16 +1023,28 @@ export function ClientesPage() {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                <label
+                  className={clsx(
+                    "block text-[11px] font-bold uppercase",
+                    isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                  )}
+                >
                   Complemento
                 </label>
                 <div className="relative flex items-center">
-                  <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                  <div
+                    className={clsx(
+                      "absolute left-3.5 flex items-center pointer-events-none",
+                      isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                    )}
+                  >
                     <Building size={15} />
                   </div>
                   <input
                     value={newClientAddressComplement}
-                    onChange={(event) => setNewClientAddressComplement(event.target.value)}
+                    onChange={(event) =>
+                      setNewClientAddressComplement(event.target.value)
+                    }
                     placeholder="Sala, bloco, etc."
                     className={clsx(
                       "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
@@ -975,16 +1057,28 @@ export function ClientesPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                <label
+                  className={clsx(
+                    "block text-[11px] font-bold uppercase",
+                    isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                  )}
+                >
                   Bairro
                 </label>
                 <div className="relative flex items-center">
-                  <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                  <div
+                    className={clsx(
+                      "absolute left-3.5 flex items-center pointer-events-none",
+                      isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                    )}
+                  >
                     <Home size={15} />
                   </div>
                   <input
                     value={newClientAddressDistrict}
-                    onChange={(event) => setNewClientAddressDistrict(event.target.value)}
+                    onChange={(event) =>
+                      setNewClientAddressDistrict(event.target.value)
+                    }
                     placeholder="Bairro"
                     className={clsx(
                       "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
@@ -999,16 +1093,28 @@ export function ClientesPage() {
 
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="sm:col-span-2 space-y-1.5">
-                <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                <label
+                  className={clsx(
+                    "block text-[11px] font-bold uppercase",
+                    isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                  )}
+                >
                   Cidade
                 </label>
                 <div className="relative flex items-center">
-                  <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                  <div
+                    className={clsx(
+                      "absolute left-3.5 flex items-center pointer-events-none",
+                      isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                    )}
+                  >
                     <Globe size={15} />
                   </div>
                   <input
                     value={newClientAddressCity}
-                    onChange={(event) => setNewClientAddressCity(event.target.value)}
+                    onChange={(event) =>
+                      setNewClientAddressCity(event.target.value)
+                    }
                     placeholder="Cidade"
                     className={clsx(
                       "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
@@ -1021,16 +1127,28 @@ export function ClientesPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                <label
+                  className={clsx(
+                    "block text-[11px] font-bold uppercase",
+                    isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                  )}
+                >
                   UF
                 </label>
                 <div className="relative flex items-center">
-                  <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                  <div
+                    className={clsx(
+                      "absolute left-3.5 flex items-center pointer-events-none",
+                      isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                    )}
+                  >
                     <Navigation size={15} />
                   </div>
                   <input
                     value={newClientAddressState}
-                    onChange={(event) => setNewClientAddressState(event.target.value.toUpperCase())}
+                    onChange={(event) =>
+                      setNewClientAddressState(event.target.value.toUpperCase())
+                    }
                     placeholder="UF"
                     maxLength={2}
                     className={clsx(
@@ -1045,16 +1163,28 @@ export function ClientesPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+              <label
+                className={clsx(
+                  "block text-[11px] font-bold uppercase",
+                  isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                )}
+              >
                 CEP
               </label>
               <div className="relative flex items-center">
-                <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                <div
+                  className={clsx(
+                    "absolute left-3.5 flex items-center pointer-events-none",
+                    isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                  )}
+                >
                   <FileText size={15} />
                 </div>
                 <input
                   value={newClientAddressZipcode}
-                  onChange={(event) => setNewClientAddressZipcode(event.target.value)}
+                  onChange={(event) =>
+                    setNewClientAddressZipcode(event.target.value)
+                  }
                   placeholder="00000-000"
                   className={clsx(
                     "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
@@ -1069,11 +1199,21 @@ export function ClientesPage() {
 
           {/* 6º WEBHOOK N8N */}
           <div className="space-y-1.5">
-            <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+            <label
+              className={clsx(
+                "block text-xs font-bold uppercase tracking-wider",
+                isDarkMode ? "text-zinc-400" : "text-zinc-600",
+              )}
+            >
               Webhook N8N
             </label>
             <div className="relative flex items-center">
-              <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+              <div
+                className={clsx(
+                  "absolute left-3.5 flex items-center pointer-events-none",
+                  isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                )}
+              >
                 <Workflow size={16} />
               </div>
               <input

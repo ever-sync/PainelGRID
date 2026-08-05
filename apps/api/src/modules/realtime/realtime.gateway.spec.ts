@@ -1,17 +1,17 @@
-import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
-import { Socket } from 'socket.io';
-import { Role } from '../../common/types';
-import { ClientsService } from '../clients/clients.service';
-import { RealtimeGateway } from './realtime.gateway';
+import { ConfigService } from "@nestjs/config";
+import { JwtService } from "@nestjs/jwt";
+import { Socket } from "socket.io";
+import { Role } from "../../common/types";
+import { ClientsService } from "../clients/clients.service";
+import { RealtimeGateway } from "./realtime.gateway";
 
-const CLIENT_ID = '3f4f8228-c9d7-4b0f-b95a-c7cfd960fe71';
+const CLIENT_ID = "3f4f8228-c9d7-4b0f-b95a-c7cfd960fe71";
 
-describe('RealtimeGateway security', () => {
+describe("RealtimeGateway security", () => {
   const jwtService = { verifyAsync: jest.fn() };
   const configService = {
     get: jest.fn((key: string, fallback?: string) =>
-      key === 'FRONTEND_URL' ? 'https://app.example.com' : fallback,
+      key === "FRONTEND_URL" ? "https://app.example.com" : fallback,
     ),
   };
   const clientsService = { assertGestorOwnsClient: jest.fn() };
@@ -48,36 +48,43 @@ describe('RealtimeGateway security', () => {
     gateway.server = { to: jest.fn(() => ({ emit: jest.fn() })) } as never;
   });
 
-  it('rejects a gestor that does not own the requested client', async () => {
+  it("rejects a gestor that does not own the requested client", async () => {
     jwtService.verifyAsync.mockResolvedValue({
-      sub: 'gestor-1',
+      sub: "gestor-1",
       role: Role.GESTOR,
-      type: 'access',
+      type: "access",
     });
-    clientsService.assertGestorOwnsClient.mockRejectedValue(new Error('forbidden'));
+    clientsService.assertGestorOwnsClient.mockRejectedValue(
+      new Error("forbidden"),
+    );
     const client = socket({
-      origin: 'https://app.example.com',
-      authToken: 'jwt',
+      origin: "https://app.example.com",
+      authToken: "jwt",
       clientId: CLIENT_ID,
     });
 
     await gateway.handleConnection(client);
 
-    expect(clientsService.assertGestorOwnsClient).toHaveBeenCalledWith('gestor-1', CLIENT_ID);
+    expect(clientsService.assertGestorOwnsClient).toHaveBeenCalledWith(
+      "gestor-1",
+      CLIENT_ID,
+    );
     expect(client.join).not.toHaveBeenCalled();
     expect(client.disconnect).toHaveBeenCalledWith(true);
   });
 
-  it('does not emit to an unauthorized tenant when a rejected socket disconnects', async () => {
+  it("does not emit to an unauthorized tenant when a rejected socket disconnects", async () => {
     jwtService.verifyAsync.mockResolvedValue({
-      sub: 'gestor-1',
+      sub: "gestor-1",
       role: Role.GESTOR,
-      type: 'access',
+      type: "access",
     });
-    clientsService.assertGestorOwnsClient.mockRejectedValue(new Error('forbidden'));
+    clientsService.assertGestorOwnsClient.mockRejectedValue(
+      new Error("forbidden"),
+    );
     const client = socket({
-      origin: 'https://app.example.com',
-      authToken: 'jwt',
+      origin: "https://app.example.com",
+      authToken: "jwt",
       clientId: CLIENT_ID,
     });
 
@@ -87,16 +94,16 @@ describe('RealtimeGateway security', () => {
     expect(gateway.server.to).not.toHaveBeenCalled();
   });
 
-  it('allows a gestor to join only a client it owns', async () => {
+  it("allows a gestor to join only a client it owns", async () => {
     jwtService.verifyAsync.mockResolvedValue({
-      sub: 'gestor-1',
+      sub: "gestor-1",
       role: Role.GESTOR,
-      type: 'access',
+      type: "access",
     });
     clientsService.assertGestorOwnsClient.mockResolvedValue({ id: CLIENT_ID });
     const client = socket({
-      origin: 'https://app.example.com',
-      authToken: 'jwt',
+      origin: "https://app.example.com",
+      authToken: "jwt",
       clientId: CLIENT_ID,
     });
 
@@ -107,10 +114,10 @@ describe('RealtimeGateway security', () => {
     expect(client.disconnect).not.toHaveBeenCalled();
   });
 
-  it('does not accept an access token from the URL query string', async () => {
+  it("does not accept an access token from the URL query string", async () => {
     const client = socket({
-      origin: 'https://app.example.com',
-      queryToken: 'jwt-in-url',
+      origin: "https://app.example.com",
+      queryToken: "jwt-in-url",
       clientId: CLIENT_ID,
     });
 
@@ -120,16 +127,16 @@ describe('RealtimeGateway security', () => {
     expect(client.disconnect).toHaveBeenCalledWith(true);
   });
 
-  it('rejects malformed client identifiers', async () => {
+  it("rejects malformed client identifiers", async () => {
     jwtService.verifyAsync.mockResolvedValue({
-      sub: 'gestor-1',
+      sub: "gestor-1",
       role: Role.GESTOR,
-      type: 'access',
+      type: "access",
     });
     const client = socket({
-      origin: 'https://app.example.com',
-      authToken: 'jwt',
-      clientId: 'not-a-uuid',
+      origin: "https://app.example.com",
+      authToken: "jwt",
+      clientId: "not-a-uuid",
     });
 
     await gateway.handleConnection(client);

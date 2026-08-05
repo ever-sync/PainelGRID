@@ -1,6 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { LeadTimelineEventType, LeadTimelineOrigin, Prisma } from '@prisma/client';
-import { PrismaService } from '../../config/prisma.service';
+import { Injectable, Logger } from "@nestjs/common";
+import {
+  LeadTimelineEventType,
+  LeadTimelineOrigin,
+  Prisma,
+} from "@prisma/client";
+import { PrismaService } from "../../config/prisma.service";
 
 export interface RecordTimelineParams {
   clientId: string;
@@ -43,7 +47,9 @@ export class LeadTimelineService {
           actor_id: params.actorId ?? null,
           actor_label: params.actorLabel ?? null,
           notes: params.notes ?? null,
-          ...(params.metadata !== undefined ? { metadata: params.metadata } : {}),
+          ...(params.metadata !== undefined
+            ? { metadata: params.metadata }
+            : {}),
           ...(params.occurredAt ? { occurred_at: params.occurredAt } : {}),
         },
       });
@@ -58,16 +64,16 @@ export class LeadTimelineService {
 
   /** Mapeia a `source` dos moves/integracoes para a origem da timeline. */
   originFromSource(source?: string | null): LeadTimelineOrigin {
-    switch ((source ?? '').toLowerCase()) {
-      case 'n8n':
-      case 'webhook':
+    switch ((source ?? "").toLowerCase()) {
+      case "n8n":
+      case "webhook":
         return LeadTimelineOrigin.n8n;
-      case 'integration':
+      case "integration":
         return LeadTimelineOrigin.integration;
-      case 'whatsapp':
+      case "whatsapp":
         return LeadTimelineOrigin.whatsapp;
-      case 'automation':
-      case 'auto':
+      case "automation":
+      case "auto":
         return LeadTimelineOrigin.automation;
       default:
         return LeadTimelineOrigin.crm;
@@ -77,7 +83,7 @@ export class LeadTimelineService {
   async listForLead(leadId: string) {
     return this.prisma.leadTimeline.findMany({
       where: { lead_id: leadId },
-      orderBy: [{ occurred_at: 'asc' }, { created_at: 'asc' }],
+      orderBy: [{ occurred_at: "asc" }, { created_at: "asc" }],
     });
   }
 }

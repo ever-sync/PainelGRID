@@ -10,9 +10,9 @@ import {
   MinLength,
   Validate,
   ValidateIf,
-} from 'class-validator';
-import { Role, VendorCategory } from '../../../common/types';
-import { IsStrongPasswordConstraint } from '../../../common/validators/is-strong-password.validator';
+} from "class-validator";
+import { Role, VendorCategory } from "../../../common/types";
+import { IsStrongPasswordConstraint } from "../../../common/validators/is-strong-password.validator";
 
 export class CreateUserDto {
   @IsString()
@@ -53,7 +53,10 @@ export class CreateUserDto {
   phone?: string;
 
   @ValidateIf(
-    (o) => o.role === Role.CLIENTE || o.role === Role.VENDEDOR || o.role === Role.RECEPCAO,
+    (o) =>
+      o.role === Role.CLIENTE ||
+      o.role === Role.VENDEDOR ||
+      o.role === Role.RECEPCAO,
   )
   @IsUUID()
   client_id?: string;

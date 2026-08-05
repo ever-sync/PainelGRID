@@ -1,12 +1,17 @@
-import { HttpException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { EventStatus } from '@prisma/client';
-import { PrismaService } from '../../config/prisma.service';
-import { verifyCheckinVoucher } from '../../common/checkin-voucher.util';
-import { encryptCheckinToken } from '../../common/utils/crypto.util';
-import type { SubmitRatingDto } from './dto/submit-rating.dto';
-import type { SubmitVendorSignupDto } from './dto/submit-vendor-signup.dto';
-import { UsersService } from '../users/users.service';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { EventStatus } from "@prisma/client";
+import { PrismaService } from "../../config/prisma.service";
+import { verifyCheckinVoucher } from "../../common/checkin-voucher.util";
+import { encryptCheckinToken } from "../../common/utils/crypto.util";
+import type { SubmitRatingDto } from "./dto/submit-rating.dto";
+import type { SubmitVendorSignupDto } from "./dto/submit-vendor-signup.dto";
+import { UsersService } from "../users/users.service";
 
 const PREVIEW_WINDOW_MS = 60_000;
 const PREVIEW_MAX_PER_WINDOW = 48;
@@ -37,20 +42,24 @@ export class PublicService {
   ) {}
 
   private voucherSecret(): string {
-    const dedicated = this.config.get<string>('LEADFLOW_CHECKIN_VOUCHER_SECRET')?.trim();
+    const dedicated = this.config
+      .get<string>("LEADFLOW_CHECKIN_VOUCHER_SECRET")
+      ?.trim();
     if (dedicated) {
       return dedicated;
     }
-    return this.config.get<string>('JWT_SECRET', 'leadflow_access_secret');
+    return this.config.get<string>("JWT_SECRET", "leadflow_access_secret");
   }
 
   private assertPreviewRateLimit(clientKey: string) {
     const now = Date.now();
     const since = now - PREVIEW_WINDOW_MS;
-    const hits = (this.previewHitsByKey.get(clientKey) ?? []).filter((t) => t > since);
+    const hits = (this.previewHitsByKey.get(clientKey) ?? []).filter(
+      (t) => t > since,
+    );
     if (hits.length >= PREVIEW_MAX_PER_WINDOW) {
       throw new HttpException(
-        'Muitas consultas. Aguarde cerca de um minuto.',
+        "Muitas consultas. Aguarde cerca de um minuto.",
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
@@ -59,11 +68,11 @@ export class PublicService {
   }
 
   async checkInPreview(voucherJwt: string, clientKey: string) {
-    this.assertPreviewRateLimit(clientKey || 'unknown');
+    this.assertPreviewRateLimit(clientKey || "unknown");
 
     const claims = verifyCheckinVoucher(this.voucherSecret(), voucherJwt);
     if (!claims) {
-      throw new NotFoundException('Convite invalido ou expirado');
+      throw new NotFoundException("Convite invalido ou expirado");
     }
 
     const encryptedToken = encryptCheckinToken(claims.t, this.voucherSecret());
@@ -83,7 +92,7 @@ export class PublicService {
     });
 
     if (!lead) {
-      throw new NotFoundException('Convite invalido ou expirado');
+      throw new NotFoundException("Convite invalido ou expirado");
     }
 
     const first = lead.name.trim().split(/\s+/)[0] ?? lead.name;
@@ -98,10 +107,12 @@ export class PublicService {
   private assertRatingSubmitRateLimit(clientKey: string) {
     const now = Date.now();
     const since = now - RATING_SUBMIT_WINDOW_MS;
-    const hits = (this.ratingSubmitHitsByKey.get(clientKey) ?? []).filter((t) => t > since);
+    const hits = (this.ratingSubmitHitsByKey.get(clientKey) ?? []).filter(
+      (t) => t > since,
+    );
     if (hits.length >= RATING_SUBMIT_MAX_PER_WINDOW) {
       throw new HttpException(
-        'Muitas tentativas. Aguarde um instante e tente novamente.',
+        "Muitas tentativas. Aguarde um instante e tente novamente.",
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
@@ -114,7 +125,7 @@ export class PublicService {
     const last = this.ratingSubmitCooldownByTokenAndIp.get(key);
     if (last != null && Date.now() - last < RATING_SUBMIT_COOLDOWN_MS) {
       throw new HttpException(
-        'Voce ja avaliou este vendedor recentemente. Obrigado pelo feedback!',
+        "Voce ja avaliou este vendedor recentemente. Obrigado pelo feedback!",
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
@@ -129,7 +140,7 @@ export class PublicService {
     );
     if (hits.length >= SIGNUP_SUBMIT_MAX_PER_WINDOW) {
       throw new HttpException(
-        'Muitas tentativas. Aguarde cerca de um minuto.',
+        "Muitas tentativas. Aguarde cerca de um minuto.",
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
@@ -142,7 +153,7 @@ export class PublicService {
     const last = this.signupCooldownByTokenAndIp.get(key);
     if (last != null && Date.now() - last < SIGNUP_SUBMIT_COOLDOWN_MS) {
       throw new HttpException(
-        'Ja recebemos um cadastro deste dispositivo ha pouco. Aguarde um pouco.',
+        "Ja recebemos um cadastro deste dispositivo ha pouco. Aguarde um pouco.",
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
@@ -157,7 +168,7 @@ export class PublicService {
     });
 
     if (!client) {
-      throw new NotFoundException('Link de cadastro invalido');
+      throw new NotFoundException("Link de cadastro invalido");
     }
 
     return client;
@@ -165,7 +176,7 @@ export class PublicService {
 
   /** Preview do formulario publico: so o necessario para a pessoa se situar. */
   async vendorSignupTarget(token: string, clientKey: string) {
-    this.assertPreviewRateLimit(clientKey || 'unknown');
+    this.assertPreviewRateLimit(clientKey || "unknown");
     const client = await this.findClientBySignupToken(token);
     return {
       company_name: client.company_name,
@@ -178,7 +189,7 @@ export class PublicService {
     dto: SubmitVendorSignupDto,
     clientKey: string,
   ) {
-    const key = clientKey || 'unknown';
+    const key = clientKey || "unknown";
     this.assertSignupSubmitRateLimit(key);
     this.assertSignupCooldown(token, key);
 
@@ -188,7 +199,7 @@ export class PublicService {
     return {
       received: true,
       message:
-        'Cadastro enviado! Voce recebera um e-mail assim que a empresa aprovar.',
+        "Cadastro enviado! Voce recebera um e-mail assim que a empresa aprovar.",
     };
   }
 
@@ -205,7 +216,7 @@ export class PublicService {
     });
 
     if (!vendor || !vendor.is_active) {
-      throw new NotFoundException('Link de avaliacao invalido');
+      throw new NotFoundException("Link de avaliacao invalido");
     }
 
     return vendor;
@@ -215,7 +226,7 @@ export class PublicService {
   private async resolveActiveEventId(clientId: string): Promise<string | null> {
     const active = await this.prisma.event.findFirst({
       where: { client_id: clientId, status: EventStatus.active },
-      orderBy: { event_date: 'desc' },
+      orderBy: { event_date: "desc" },
       select: { id: true },
     });
     if (active) {
@@ -224,14 +235,14 @@ export class PublicService {
 
     const latest = await this.prisma.event.findFirst({
       where: { client_id: clientId },
-      orderBy: { event_date: 'desc' },
+      orderBy: { event_date: "desc" },
       select: { id: true },
     });
     return latest?.id ?? null;
   }
 
   async ratingTarget(token: string, clientKey: string) {
-    this.assertPreviewRateLimit(clientKey || 'unknown');
+    this.assertPreviewRateLimit(clientKey || "unknown");
     const vendor = await this.findVendorByRatingToken(token);
 
     return {
@@ -241,12 +252,14 @@ export class PublicService {
   }
 
   async submitRating(token: string, dto: SubmitRatingDto, clientKey: string) {
-    const key = clientKey || 'unknown';
+    const key = clientKey || "unknown";
     this.assertRatingSubmitRateLimit(key);
     this.assertRatingSubmitCooldown(token, key);
 
     const vendor = await this.findVendorByRatingToken(token);
-    const eventId = vendor.client_id ? await this.resolveActiveEventId(vendor.client_id) : null;
+    const eventId = vendor.client_id
+      ? await this.resolveActiveEventId(vendor.client_id)
+      : null;
 
     await this.prisma.serviceRating.create({
       data: {
@@ -258,6 +271,6 @@ export class PublicService {
       },
     });
 
-    return { message: 'Avaliacao enviada com sucesso' };
+    return { message: "Avaliacao enviada com sucesso" };
   }
 }

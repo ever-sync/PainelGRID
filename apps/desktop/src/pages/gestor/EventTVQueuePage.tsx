@@ -249,13 +249,16 @@ export function EventTVQueuePage() {
 
     const socket = connectRealtime(clientId);
 
-    socket.on("vendor_called", (payload: { id: string; lead_name: string; vendor_name: string }) => {
-      setVendorCallBanner(payload);
-      announceLead(payload.lead_name, payload.vendor_name);
-      setTimeout(() => {
-        setVendorCallBanner(null);
-      }, 12000); // Exibe por 12 segundos em destaque na TV
-    });
+    socket.on(
+      "vendor_called",
+      (payload: { id: string; lead_name: string; vendor_name: string }) => {
+        setVendorCallBanner(payload);
+        announceLead(payload.lead_name, payload.vendor_name);
+        setTimeout(() => {
+          setVendorCallBanner(null);
+        }, 12000); // Exibe por 12 segundos em destaque na TV
+      },
+    );
 
     return () => {
       socket.disconnect();
@@ -621,7 +624,11 @@ export function EventTVQueuePage() {
             {vendorCallBanner.vendor_name}
           </h2>
           <p className="text-xl md:text-2xl text-zinc-300 font-semibold">
-            Cliente <span className="text-amber-400 font-bold">{vendorCallBanner.lead_name}</span> aguarda seu atendimento na recepção!
+            Cliente{" "}
+            <span className="text-amber-400 font-bold">
+              {vendorCallBanner.lead_name}
+            </span>{" "}
+            aguarda seu atendimento na recepção!
           </p>
         </div>
       )}

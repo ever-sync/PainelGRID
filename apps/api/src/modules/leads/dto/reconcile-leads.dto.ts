@@ -1,4 +1,11 @@
-import { ArrayMaxSize, IsArray, IsBoolean, IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from "class-validator";
 
 /**
  * Reconcilia os leads de um cliente com a fonte externa (ex.: Bitrix):

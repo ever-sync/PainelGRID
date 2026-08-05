@@ -1,5 +1,5 @@
-import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { Type } from "class-transformer";
+import { IsInt, IsOptional, IsUUID, Max, Min } from "class-validator";
 
 export class CleanupIdempotencyDto {
   @IsUUID()

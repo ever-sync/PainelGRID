@@ -1,4 +1,4 @@
-import { ValidateIf, IsUUID } from 'class-validator';
+import { ValidateIf, IsUUID } from "class-validator";
 
 export class GetAgentWhatsappContextQueryDto {
   @ValidateIf((o: GetAgentWhatsappContextQueryDto) => !o.lead_id)

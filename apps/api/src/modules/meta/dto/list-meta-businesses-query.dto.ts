@@ -1,9 +1,15 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
-import { IsBoolean, IsOptional, IsString, IsUUID, ValidateIf } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { Transform } from "class-transformer";
+import {
+  IsBoolean,
+  IsOptional,
+  IsString,
+  IsUUID,
+  ValidateIf,
+} from "class-validator";
 
 export class ListMetaBusinessesQueryDto {
-  @ApiProperty({ format: 'uuid' })
+  @ApiProperty({ format: "uuid" })
   @IsUUID()
   client_id!: string;
 
@@ -15,10 +21,10 @@ export class ListMetaBusinessesQueryDto {
   oauth_session_id?: string;
 
   @ApiPropertyOptional({
-    description: 'Usar token Meta do gestor autenticado (OAuth no dashboard).',
+    description: "Usar token Meta do gestor autenticado (OAuth no dashboard).",
   })
   @IsOptional()
-  @Transform(({ value }) => value === true || value === 'true')
+  @Transform(({ value }) => value === true || value === "true")
   @IsBoolean()
   gestor_token?: boolean;
 }

@@ -124,9 +124,7 @@ export class MailService {
     });
 
     if (!this.apiKey) {
-      this.logger.warn(
-        "Email de ativacao nao enviado: Resend nao configurado",
-      );
+      this.logger.warn("Email de ativacao nao enviado: Resend nao configurado");
       throw new Error("Resend nao configurado");
     }
 
@@ -419,7 +417,9 @@ export class MailService {
         </table>`
       : "";
 
-    const checkinToken = p.checkinToken?.trim() || `CHK-${firstName.toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const checkinToken =
+      p.checkinToken?.trim() ||
+      `CHK-${firstName.toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const checkinUrl = `${this.frontendUrl.replace(/\/+$/, "")}/recepcao/checkin?v=${encodeURIComponent(checkinToken)}`;
     const qrCodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(checkinUrl)}`;
 

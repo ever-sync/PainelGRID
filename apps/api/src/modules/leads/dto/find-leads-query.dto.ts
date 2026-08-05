@@ -1,5 +1,5 @@
-import { ConfirmationStatus, LeadSource } from '@prisma/client';
-import { Type } from 'class-transformer';
+import { ConfirmationStatus, LeadSource } from "@prisma/client";
+import { Type } from "class-transformer";
 import {
   IsDateString,
   IsEnum,
@@ -10,7 +10,7 @@ import {
   Max,
   MaxLength,
   Min,
-} from 'class-validator';
+} from "class-validator";
 
 export class FindLeadsQueryDto {
   @IsOptional()

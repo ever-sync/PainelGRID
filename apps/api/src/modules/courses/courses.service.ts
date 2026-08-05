@@ -1,8 +1,12 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Role } from '../../common/types';
-import { PrismaService } from '../../config/prisma.service';
-import { AuthenticatedUser } from '../auth/auth.types';
-import { UpdateLessonProgressDto } from './dto/update-lesson-progress.dto';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { Role } from "../../common/types";
+import { PrismaService } from "../../config/prisma.service";
+import { AuthenticatedUser } from "../auth/auth.types";
+import { UpdateLessonProgressDto } from "./dto/update-lesson-progress.dto";
 
 @Injectable()
 export class CoursesService {
@@ -10,14 +14,16 @@ export class CoursesService {
 
   private assertVendor(user: AuthenticatedUser) {
     if (user.role !== Role.VENDEDOR || !user.client_id) {
-      throw new ForbiddenException('Apenas vendedores podem atualizar progresso');
+      throw new ForbiddenException(
+        "Apenas vendedores podem atualizar progresso",
+      );
     }
   }
 
   async listPublished() {
     const rows = await this.prisma.course.findMany({
       where: { is_published: true },
-      orderBy: { created_at: 'desc' },
+      orderBy: { created_at: "desc" },
       include: {
         _count: { select: { lessons: true } },
       },
@@ -41,12 +47,12 @@ export class CoursesService {
     const row = await this.prisma.course.findFirst({
       where: { id, is_published: true },
       include: {
-        lessons: { orderBy: { display_order: 'asc' } },
+        lessons: { orderBy: { display_order: "asc" } },
       },
     });
 
     if (!row) {
-      throw new NotFoundException('Curso nao encontrado');
+      throw new NotFoundException("Curso nao encontrado");
     }
 
     return {
@@ -82,7 +88,7 @@ export class CoursesService {
         course: { select: { id: true, name: true } },
         lesson: { select: { id: true, title: true, display_order: true } },
       },
-      orderBy: { id: 'asc' },
+      orderBy: { id: "asc" },
     });
 
     return rows.map((r) => ({
@@ -101,7 +107,7 @@ export class CoursesService {
   /** Progresso de um vendedor (gestor ou cliente do mesmo client_id). */
   async progressForVendor(viewer: AuthenticatedUser, vendorId: string) {
     if (viewer.role !== Role.GESTOR && viewer.role !== Role.CLIENTE) {
-      throw new ForbiddenException('Sem permissao');
+      throw new ForbiddenException("Sem permissao");
     }
 
     const vendor = await this.prisma.user.findFirst({
@@ -109,12 +115,12 @@ export class CoursesService {
     });
 
     if (!vendor || !vendor.client_id) {
-      throw new NotFoundException('Vendedor nao encontrado');
+      throw new NotFoundException("Vendedor nao encontrado");
     }
 
     if (viewer.role === Role.CLIENTE) {
       if (!viewer.client_id || viewer.client_id !== vendor.client_id) {
-        throw new ForbiddenException('Sem permissao');
+        throw new ForbiddenException("Sem permissao");
       }
     }
 
@@ -123,7 +129,7 @@ export class CoursesService {
         where: { id: vendor.client_id },
       });
       if (!client) {
-        throw new ForbiddenException('Sem permissao');
+        throw new ForbiddenException("Sem permissao");
       }
     }
 
@@ -133,7 +139,7 @@ export class CoursesService {
         course: { select: { id: true, name: true } },
         lesson: { select: { id: true, title: true, display_order: true } },
       },
-      orderBy: { id: 'asc' },
+      orderBy: { id: "asc" },
     });
 
     return rows.map((r) => ({
@@ -163,7 +169,7 @@ export class CoursesService {
     });
 
     if (!lesson || !lesson.course.is_published) {
-      throw new NotFoundException('Aula nao encontrada');
+      throw new NotFoundException("Aula nao encontrada");
     }
 
     const row = await this.prisma.courseProgress.upsert({

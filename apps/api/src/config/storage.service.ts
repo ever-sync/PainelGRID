@@ -1,11 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import {
   GetObjectCommand,
   NoSuchKey,
   PutObjectCommand,
   S3Client,
-} from '@aws-sdk/client-s3';
+} from "@aws-sdk/client-s3";
 
 @Injectable()
 export class StorageService {
@@ -14,11 +14,13 @@ export class StorageService {
   private readonly bucket: string | undefined;
 
   constructor(private readonly config: ConfigService) {
-    const endpoint = this.config.get<string>('STORAGE_ENDPOINT');
-    const region = this.config.get<string>('STORAGE_REGION');
-    const accessKeyId = this.config.get<string>('STORAGE_ACCESS_KEY_ID');
-    const secretAccessKey = this.config.get<string>('STORAGE_SECRET_ACCESS_KEY');
-    this.bucket = this.config.get<string>('STORAGE_BUCKET');
+    const endpoint = this.config.get<string>("STORAGE_ENDPOINT");
+    const region = this.config.get<string>("STORAGE_REGION");
+    const accessKeyId = this.config.get<string>("STORAGE_ACCESS_KEY_ID");
+    const secretAccessKey = this.config.get<string>(
+      "STORAGE_SECRET_ACCESS_KEY",
+    );
+    this.bucket = this.config.get<string>("STORAGE_BUCKET");
 
     if (endpoint && region && accessKeyId && secretAccessKey && this.bucket) {
       this.client = new S3Client({
@@ -30,7 +32,7 @@ export class StorageService {
     } else {
       this.client = null;
       this.logger.warn(
-        'Storage nao configurado (STORAGE_* ausentes) - upload/cache de midia desativado.',
+        "Storage nao configurado (STORAGE_* ausentes) - upload/cache de midia desativado.",
       );
     }
   }
@@ -51,7 +53,9 @@ export class StorageService {
         }),
       );
     } catch (err) {
-      this.logger.warn(`Falha ao subir objeto '${key}' no storage: ${(err as Error).message}`);
+      this.logger.warn(
+        `Falha ao subir objeto '${key}' no storage: ${(err as Error).message}`,
+      );
     }
   }
 
@@ -67,11 +71,13 @@ export class StorageService {
       if (!bytes) return null;
       return {
         buffer: Buffer.from(bytes),
-        contentType: result.ContentType ?? 'application/octet-stream',
+        contentType: result.ContentType ?? "application/octet-stream",
       };
     } catch (err) {
       if (err instanceof NoSuchKey) return null;
-      this.logger.warn(`Falha ao baixar objeto '${key}' do storage: ${(err as Error).message}`);
+      this.logger.warn(
+        `Falha ao baixar objeto '${key}' do storage: ${(err as Error).message}`,
+      );
       return null;
     }
   }

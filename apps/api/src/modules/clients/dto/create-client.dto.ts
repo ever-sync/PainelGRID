@@ -6,7 +6,7 @@ import {
   IsUrl,
   MaxLength,
   MinLength,
-} from 'class-validator';
+} from "class-validator";
 
 export class CreateClientDto {
   @IsString()
@@ -31,7 +31,7 @@ export class CreateClientDto {
 
   @IsOptional()
   @IsString()
-  @IsUrl({ protocols: ['https'], require_protocol: true })
+  @IsUrl({ protocols: ["https"], require_protocol: true })
   @MaxLength(500)
   webhook_url_n8n?: string;
 

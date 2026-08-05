@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsNumber, IsOptional, IsString, Max, Min } from "class-validator";
 
 export class RequestConversationHandoffDto {
   @IsString()

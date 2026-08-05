@@ -13,7 +13,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-[#FF0636] text-white hover:bg-[#e1002d] shadow-sm cursor-pointer",
+        default:
+          "bg-[#FF0636] text-white hover:bg-[#e1002d] shadow-sm cursor-pointer",
         outline:
           "border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-800 dark:border-zinc-800 dark:bg-zinc-900/80 dark:hover:bg-zinc-800 dark:text-zinc-200 shadow-sm cursor-pointer",
         secondary:
@@ -27,8 +28,7 @@ const buttonVariants = cva(
         link: "text-[#FF0636] underline-offset-4 hover:underline cursor-pointer",
       },
       size: {
-        default:
-          "h-10 gap-2 px-4 text-xs sm:text-sm font-bold rounded-2xl",
+        default: "h-10 gap-2 px-4 text-xs sm:text-sm font-bold rounded-2xl",
         xs: "h-7 gap-1 px-2.5 text-[11px] font-semibold rounded-lg [&_svg:not([class*='size-'])]:size-3",
         sm: "h-8 gap-1.5 px-3 text-xs font-semibold rounded-xl",
         lg: "h-11 gap-2 px-5 text-xs sm:text-sm font-bold rounded-2xl",

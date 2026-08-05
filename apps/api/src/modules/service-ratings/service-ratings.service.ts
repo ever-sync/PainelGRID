@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { Role } from '../../common/types';
-import { PrismaService } from '../../config/prisma.service';
-import { ScoreEventsService } from '../score-events/score-events.service';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { Role } from "../../common/types";
+import { PrismaService } from "../../config/prisma.service";
+import { ScoreEventsService } from "../score-events/score-events.service";
 
 @Injectable()
 export class ServiceRatingsService {
@@ -18,7 +18,8 @@ export class ServiceRatingsService {
     });
 
     const count = aggregate._count.score;
-    const average = count > 0 ? Math.round((aggregate._avg.score ?? 0) * 10) / 10 : 0;
+    const average =
+      count > 0 ? Math.round((aggregate._avg.score ?? 0) * 10) / 10 : 0;
 
     return { average, count };
   }
@@ -43,14 +44,14 @@ export class ServiceRatingsService {
   async vendorProfileForGestor(vendorId: string) {
     const vendor = await this.findVendorBasicInfo(vendorId);
     if (!vendor || vendor.role !== Role.VENDEDOR) {
-      throw new NotFoundException('Vendedor nao encontrado');
+      throw new NotFoundException("Vendedor nao encontrado");
     }
 
     const [summary, ratingRows, metrics, ranking] = await Promise.all([
       this.summaryForVendor(vendorId),
       this.prisma.serviceRating.findMany({
         where: { vendor_id: vendorId },
-        orderBy: { created_at: 'desc' },
+        orderBy: { created_at: "desc" },
         select: {
           id: true,
           score: true,
@@ -73,7 +74,10 @@ export class ServiceRatingsService {
     return {
       vendor,
       metrics,
-      rank: rankIndex >= 0 ? { position: rankIndex + 1, total: ranking.length } : null,
+      rank:
+        rankIndex >= 0
+          ? { position: rankIndex + 1, total: ranking.length }
+          : null,
       ratings: {
         average: summary.average,
         count: summary.count,

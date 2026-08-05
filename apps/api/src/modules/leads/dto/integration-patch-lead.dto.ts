@@ -1,4 +1,4 @@
-import { ConfirmationStatus, LeadSource } from '@prisma/client';
+import { ConfirmationStatus, LeadSource } from "@prisma/client";
 import {
   IsArray,
   IsDateString,
@@ -8,7 +8,7 @@ import {
   IsString,
   IsUUID,
   MaxLength,
-} from 'class-validator';
+} from "class-validator";
 
 /** Campos que sistemas externos (ex.: Inno2in) podem atualizar sem JWT de usuario. */
 export class IntegrationPatchLeadDto {

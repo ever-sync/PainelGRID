@@ -43,13 +43,62 @@ export const LEGACY_STAGES: Array<{
   chip: string;
   emptyIcon: string;
 }> = [
-  { id: "novo", label: "Novo", color: "#FF0636", accent: "from-[#FF0636] to-[#FBBB49]", chip: "bg-[#FF0636]/10 text-[#FF0636]", emptyIcon: "✦" },
-  { id: "contactado", label: "Contactado", color: "#3D56A2", accent: "from-[#3D56A2] to-[#7c3aed]", chip: "bg-[#3D56A2]/10 text-[#3D56A2]", emptyIcon: "◎" },
-  { id: "nao_responde", label: "Não responde", color: "#F97316", accent: "from-[#F97316] to-[#FBBB49]", chip: "bg-orange-100 text-orange-700", emptyIcon: "◌" },
-  { id: "agendado", label: "Agendado", color: "#FBBB49", accent: "from-[#FBBB49] to-[#FF0636]", chip: "bg-[#FBBB49]/20 text-[#8a5a00]", emptyIcon: "◈" },
-  { id: "checkin", label: "Check-in", color: "#8B5CF6", accent: "from-[#8B5CF6] to-[#3D56A2]", chip: "bg-purple-100 text-purple-700", emptyIcon: "◇" },
-  { id: "convertido", label: "Convertido", color: "#10B981", accent: "from-emerald-500 to-[#3D56A2]", chip: "bg-emerald-500/10 text-emerald-700", emptyIcon: "◆" },
-  { id: "perdido", label: "Perdido", color: "#6B7280", accent: "from-zinc-500 to-[#FF0636]", chip: "bg-zinc-100 text-zinc-700", emptyIcon: "○" },
+  {
+    id: "novo",
+    label: "Novo",
+    color: "#FF0636",
+    accent: "from-[#FF0636] to-[#FBBB49]",
+    chip: "bg-[#FF0636]/10 text-[#FF0636]",
+    emptyIcon: "✦",
+  },
+  {
+    id: "contactado",
+    label: "Contactado",
+    color: "#3D56A2",
+    accent: "from-[#3D56A2] to-[#7c3aed]",
+    chip: "bg-[#3D56A2]/10 text-[#3D56A2]",
+    emptyIcon: "◎",
+  },
+  {
+    id: "nao_responde",
+    label: "Não responde",
+    color: "#F97316",
+    accent: "from-[#F97316] to-[#FBBB49]",
+    chip: "bg-orange-100 text-orange-700",
+    emptyIcon: "◌",
+  },
+  {
+    id: "agendado",
+    label: "Agendado",
+    color: "#FBBB49",
+    accent: "from-[#FBBB49] to-[#FF0636]",
+    chip: "bg-[#FBBB49]/20 text-[#8a5a00]",
+    emptyIcon: "◈",
+  },
+  {
+    id: "checkin",
+    label: "Check-in",
+    color: "#8B5CF6",
+    accent: "from-[#8B5CF6] to-[#3D56A2]",
+    chip: "bg-purple-100 text-purple-700",
+    emptyIcon: "◇",
+  },
+  {
+    id: "convertido",
+    label: "Convertido",
+    color: "#10B981",
+    accent: "from-emerald-500 to-[#3D56A2]",
+    chip: "bg-emerald-500/10 text-emerald-700",
+    emptyIcon: "◆",
+  },
+  {
+    id: "perdido",
+    label: "Perdido",
+    color: "#6B7280",
+    accent: "from-zinc-500 to-[#FF0636]",
+    chip: "bg-zinc-100 text-zinc-700",
+    emptyIcon: "○",
+  },
 ];
 
 export const CRM_SOURCE_OPTIONS = [

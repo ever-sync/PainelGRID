@@ -224,60 +224,62 @@ export function MetaCampaignFilters({
 
           {columnsOpen
             ? createPortal(
-            <div
-              ref={columnsRef}
-              style={{
-                top: menuPos.top,
-                right: menuPos.right,
-                maxHeight: `calc(100vh - ${menuPos.top + 16}px)`,
-              }}
-              className={clsx(
-                "fixed z-[70] w-64 overflow-y-auto rounded-2xl border p-2 shadow-xl",
-                isDarkMode
-                  ? "border-zinc-700 bg-[#121212]"
-                  : "border-zinc-200 bg-white",
-              )}
-            >
-              {Object.entries(grouped).map(([group, columns]) => (
-                <div key={group} className="mb-1">
-                  <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                    {group}
-                  </p>
-                  {columns.map((column) => {
-                    const checked = columnIds.includes(column.id);
-                    return (
-                      <button
-                        key={column.id}
-                        type="button"
-                        onClick={() => toggleColumn(column.id)}
-                        className={clsx(
-                          "flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors",
-                          isDarkMode
-                            ? "hover:bg-zinc-800"
-                            : "hover:bg-zinc-100",
-                        )}
-                      >
-                        <span
-                          className={clsx(
-                            "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                            checked
-                              ? "border-[#FF0636] bg-[#FF0636] text-white"
-                              : "border-zinc-300 dark:border-zinc-600",
-                          )}
-                        >
-                          {checked ? <Check size={11} strokeWidth={3} /> : null}
-                        </span>
-                        <span className="text-zinc-700 dark:text-zinc-300">
-                          {column.label}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>,
-            document.body,
-          )
+                <div
+                  ref={columnsRef}
+                  style={{
+                    top: menuPos.top,
+                    right: menuPos.right,
+                    maxHeight: `calc(100vh - ${menuPos.top + 16}px)`,
+                  }}
+                  className={clsx(
+                    "fixed z-[70] w-64 overflow-y-auto rounded-2xl border p-2 shadow-xl",
+                    isDarkMode
+                      ? "border-zinc-700 bg-[#121212]"
+                      : "border-zinc-200 bg-white",
+                  )}
+                >
+                  {Object.entries(grouped).map(([group, columns]) => (
+                    <div key={group} className="mb-1">
+                      <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                        {group}
+                      </p>
+                      {columns.map((column) => {
+                        const checked = columnIds.includes(column.id);
+                        return (
+                          <button
+                            key={column.id}
+                            type="button"
+                            onClick={() => toggleColumn(column.id)}
+                            className={clsx(
+                              "flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors",
+                              isDarkMode
+                                ? "hover:bg-zinc-800"
+                                : "hover:bg-zinc-100",
+                            )}
+                          >
+                            <span
+                              className={clsx(
+                                "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                                checked
+                                  ? "border-[#FF0636] bg-[#FF0636] text-white"
+                                  : "border-zinc-300 dark:border-zinc-600",
+                              )}
+                            >
+                              {checked ? (
+                                <Check size={11} strokeWidth={3} />
+                              ) : null}
+                            </span>
+                            <span className="text-zinc-700 dark:text-zinc-300">
+                              {column.label}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>,
+                document.body,
+              )
             : null}
         </div>
       </div>

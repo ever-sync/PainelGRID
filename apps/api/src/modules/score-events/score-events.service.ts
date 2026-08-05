@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import { ScoreEventKind } from '@prisma/client';
-import { PrismaService } from '../../config/prisma.service';
+import { Injectable } from "@nestjs/common";
+import { ScoreEventKind } from "@prisma/client";
+import { PrismaService } from "../../config/prisma.service";
 
 const SCORE_POINTS: Record<ScoreEventKind, number> = {
   contacted: 0,
@@ -10,7 +10,7 @@ const SCORE_POINTS: Record<ScoreEventKind, number> = {
 };
 
 type ScoreTx = {
-  scoreEvent: PrismaService['scoreEvent'];
+  scoreEvent: PrismaService["scoreEvent"];
 };
 
 export type ScoreEventInput = {
@@ -72,7 +72,7 @@ export class ScoreEventsService {
 
   async summaryForVendor(vendorId: string, clientId: string) {
     const rows = await this.prisma.scoreEvent.groupBy({
-      by: ['kind'],
+      by: ["kind"],
       where: {
         vendor_id: vendorId,
         client_id: clientId,
@@ -103,9 +103,7 @@ export class ScoreEventsService {
       vendor_id: vendorId,
       client_id: clientId,
       total_points:
-        byKind.scheduled.points +
-        byKind.checked_in.points +
-        byKind.sold.points,
+        byKind.scheduled.points + byKind.checked_in.points + byKind.sold.points,
       contacted: byKind.contacted,
       scheduled: byKind.scheduled,
       checked_in: byKind.checked_in,
@@ -121,7 +119,7 @@ export class ScoreEventsService {
     limit?: number;
   }): Promise<VendorScoreRankingItem[]> {
     const groupedRows = await this.prisma.scoreEvent.groupBy({
-      by: ['vendor_id', 'kind'],
+      by: ["vendor_id", "kind"],
       where: {
         client_id: params.clientId,
         lead: {
@@ -146,7 +144,7 @@ export class ScoreEventsService {
     const allClientVendors = await this.prisma.user.findMany({
       where: {
         client_id: params.clientId,
-        role: 'vendedor',
+        role: "vendedor",
         is_active: true,
       },
       select: { id: true, name: true },
@@ -161,7 +159,7 @@ export class ScoreEventsService {
 
     const [assignedCounts] = await Promise.all([
       this.prisma.lead.groupBy({
-        by: ['assigned_vendor_id'],
+        by: ["assigned_vendor_id"],
         where: {
           client_id: params.clientId,
           deleted_at: null,
@@ -172,11 +170,15 @@ export class ScoreEventsService {
       }),
     ]);
 
-    const vendorNameById = new Map(allClientVendors.map((vendor) => [vendor.id, vendor.name] as const));
+    const vendorNameById = new Map(
+      allClientVendors.map((vendor) => [vendor.id, vendor.name] as const),
+    );
     const assignedByVendorId = new Map(
       assignedCounts
         .filter((row) => !!row.assigned_vendor_id)
-        .map((row) => [row.assigned_vendor_id as string, row._count._all] as const),
+        .map(
+          (row) => [row.assigned_vendor_id as string, row._count._all] as const,
+        ),
     );
 
     const byVendor = new Map<string, VendorScoreRankingItem>();
@@ -200,7 +202,7 @@ export class ScoreEventsService {
     groupedRows.forEach((row) => {
       const current = byVendor.get(row.vendor_id) ?? {
         vendor_id: row.vendor_id,
-        vendor_name: vendorNameById.get(row.vendor_id) ?? 'Vendedor',
+        vendor_name: vendorNameById.get(row.vendor_id) ?? "Vendedor",
         total_points: 0,
         assigned: assignedByVendorId.get(row.vendor_id) ?? 0,
         visits: 0,

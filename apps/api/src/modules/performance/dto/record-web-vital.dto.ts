@@ -7,10 +7,10 @@ import {
   Max,
   MaxLength,
   Min,
-} from 'class-validator';
+} from "class-validator";
 
-const WEB_VITAL_NAMES = ['CLS', 'FCP', 'INP', 'LCP', 'TTFB'] as const;
-const WEB_VITAL_RATINGS = ['good', 'needs-improvement', 'poor'] as const;
+const WEB_VITAL_NAMES = ["CLS", "FCP", "INP", "LCP", "TTFB"] as const;
+const WEB_VITAL_RATINGS = ["good", "needs-improvement", "poor"] as const;
 
 export class RecordWebVitalDto {
   @IsIn(WEB_VITAL_NAMES)
@@ -56,8 +56,8 @@ export class RecordWebVitalDto {
   connectionType?: string;
 
   @IsOptional()
-  @IsIn(['mobile', 'tablet', 'desktop'])
-  viewport?: 'mobile' | 'tablet' | 'desktop';
+  @IsIn(["mobile", "tablet", "desktop"])
+  viewport?: "mobile" | "tablet" | "desktop";
 
   @IsOptional()
   @IsNumber()

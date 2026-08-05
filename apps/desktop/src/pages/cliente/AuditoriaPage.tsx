@@ -35,7 +35,8 @@ const MOCK_AUDIT_LOGS: AuditLogItem[] = [
     action: "Finalização de Atendimento",
     category: "venda",
     ipAddress: "189.120.45.12",
-    details: "Atendimento encerrado com venda registrada no valor de R$ 145.000,00 (Nissan Kicks).",
+    details:
+      "Atendimento encerrado com venda registrada no valor de R$ 145.000,00 (Nissan Kicks).",
   },
   {
     id: "log-102",
@@ -45,7 +46,8 @@ const MOCK_AUDIT_LOGS: AuditLogItem[] = [
     action: "Venda Avulsa Lançada",
     category: "venda",
     ipAddress: "189.120.45.10",
-    details: "Venda avulsa atribuída ao vendedor Ana Souza para o cliente Raphael Silva.",
+    details:
+      "Venda avulsa atribuída ao vendedor Ana Souza para o cliente Raphael Silva.",
   },
   {
     id: "log-103",
@@ -152,7 +154,9 @@ export function AuditoriaPage() {
 
         <button
           type="button"
-          onClick={() => alert("Relatório de auditoria exportado em formato CSV.")}
+          onClick={() =>
+            alert("Relatório de auditoria exportado em formato CSV.")
+          }
           className={clsx(
             "h-11 px-5 rounded-full border text-xs font-bold transition-all active:scale-95 inline-flex items-center gap-2 cursor-pointer",
             isDarkMode
@@ -205,7 +209,9 @@ export function AuditoriaPage() {
                 </td>
                 <td className="py-4 px-4 font-bold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
                   {log.user}
-                  <span className="block text-[10px] font-normal text-zinc-400">{log.role}</span>
+                  <span className="block text-[10px] font-normal text-zinc-400">
+                    {log.role}
+                  </span>
                 </td>
                 <td className="py-4 px-4 font-semibold text-zinc-800 dark:text-zinc-200">
                   {log.action}
@@ -226,7 +232,9 @@ export function AuditoriaPage() {
                     {log.category}
                   </span>
                 </td>
-                <td className="py-4 px-4 font-mono text-xs text-zinc-400">{log.ipAddress}</td>
+                <td className="py-4 px-4 font-mono text-xs text-zinc-400">
+                  {log.ipAddress}
+                </td>
                 <td className="py-4 px-4 text-xs text-zinc-600 dark:text-zinc-300">
                   {log.details}
                 </td>

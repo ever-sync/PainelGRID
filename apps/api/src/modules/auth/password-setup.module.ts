@@ -1,5 +1,5 @@
-import { Module } from '@nestjs/common';
-import { PasswordSetupService } from './password-setup.service';
+import { Module } from "@nestjs/common";
+import { PasswordSetupService } from "./password-setup.service";
 
 /**
  * Modulo minimo para o token de primeira senha, importado por AuthModule e UsersModule.

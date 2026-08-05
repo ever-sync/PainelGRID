@@ -52,7 +52,8 @@ const INITIAL_MOCK_LEADS: Lead[] = [
     event_interest: "Eventos Vendas SP",
     event_id: "evt-1",
     store_visit_datetime: "23/07 às 10:30",
-    notes: "O lead deseja realizar uma simulação de financiamento para um veículo.",
+    notes:
+      "O lead deseja realizar uma simulação de financiamento para um veículo.",
     cpf: "***.***.**8-43",
     cpf_validated: true,
     city: "São Paulo",
@@ -149,7 +150,8 @@ const INITIAL_MOCK_LEADS: Lead[] = [
     store_name: "R Point Renault | Vila Guilherme",
     trade_vehicle: "Sem troca",
     ai_status: "Em triagem inicial pela IA",
-    ai_summary: "Lead capturado com interesse em Kwid zero km. Aguardando retorno da proposta enviada.",
+    ai_summary:
+      "Lead capturado com interesse em Kwid zero km. Aguardando retorno da proposta enviada.",
     checkin_token: null,
     checkin_voucher: null,
     created_at: "2026-07-30T10:00:00Z",
@@ -190,7 +192,8 @@ const INITIAL_MOCK_LEADS: Lead[] = [
     store_name: "Original Volkswagen | Suzano",
     trade_vehicle: "HB20 2018",
     ai_status: "Agendamento realizado para dia 01/08",
-    ai_summary: "Cliente agendou visita na loja de Suzano para test drive no Polo 2026.",
+    ai_summary:
+      "Cliente agendou visita na loja de Suzano para test drive no Polo 2026.",
     checkin_token: "chk-4",
     checkin_voucher: null,
     created_at: "2026-07-29T16:00:00Z",
@@ -231,7 +234,9 @@ export function LeadsPage() {
         filterStatus === "todos" ? true : lead.crm_stage === filterStatus;
 
       const matchEngagement =
-        filterEngagement === "todos" ? true : lead.engagement_level === filterEngagement;
+        filterEngagement === "todos"
+          ? true
+          : lead.engagement_level === filterEngagement;
 
       const matchSentiment =
         filterSentiment === "todos" ? true : lead.sentiment === filterSentiment;
@@ -246,13 +251,14 @@ export function LeadsPage() {
           ? true
           : lead.brand_interest?.toLowerCase() === filterBrand.toLowerCase();
 
-      const matchCity =
-        !filterCity.trim()
-          ? true
-          : lead.city?.toLowerCase().includes(filterCity.toLowerCase());
+      const matchCity = !filterCity.trim()
+        ? true
+        : lead.city?.toLowerCase().includes(filterCity.toLowerCase());
 
       const matchUf =
-        filterUf === "todas" ? true : lead.state?.toUpperCase() === filterUf.toUpperCase();
+        filterUf === "todas"
+          ? true
+          : lead.state?.toUpperCase() === filterUf.toUpperCase();
 
       const matchCpf =
         filterCpfValidated === "todos"
@@ -325,7 +331,9 @@ export function LeadsPage() {
                 {selectedLead.crm_stage || "encaminhado"}
               </span>
               <span>·</span>
-              <span>engajamento {selectedLead.engagement_level || "medio"}</span>
+              <span>
+                engajamento {selectedLead.engagement_level || "medio"}
+              </span>
               <span>·</span>
               <span>sentimento {selectedLead.sentiment || "positivo"}</span>
             </div>
@@ -407,7 +415,9 @@ export function LeadsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
             {/* SEÇÃO 1: IDENTIFICAÇÃO */}
             <div className="space-y-3">
-              <h3 className="text-xl font-normal text-zinc-900 dark:text-white">Identificação</h3>
+              <h3 className="text-xl font-normal text-zinc-900 dark:text-white">
+                Identificação
+              </h3>
               <div className="space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
                 <p className="flex items-center gap-2">
                   <span>Telefone:</span>
@@ -417,7 +427,9 @@ export function LeadsPage() {
 
                 <p className="flex items-center gap-2">
                   <span>CPF:</span>
-                  <span className="font-mono">{selectedLead.cpf || "***.***.**8-43"}</span>
+                  <span className="font-mono">
+                    {selectedLead.cpf || "***.***.**8-43"}
+                  </span>
                   <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
                     validado
                   </span>
@@ -425,45 +437,62 @@ export function LeadsPage() {
 
                 <p>
                   <span>Cidade: </span>
-                  <span className="font-semibold">{selectedLead.city || "São Paulo"}/{selectedLead.state || "SP"}</span>
+                  <span className="font-semibold">
+                    {selectedLead.city || "São Paulo"}/
+                    {selectedLead.state || "SP"}
+                  </span>
                 </p>
 
                 <p>
                   <span>Consentimento de contato: </span>
-                  <span className="font-semibold">{selectedLead.contact_consent !== false ? "sim" : "não"}</span>
+                  <span className="font-semibold">
+                    {selectedLead.contact_consent !== false ? "sim" : "não"}
+                  </span>
                 </p>
               </div>
             </div>
 
             {/* SEÇÃO 2: INTERESSE */}
             <div className="space-y-3">
-              <h3 className="text-xl font-normal text-zinc-900 dark:text-white">Interesse</h3>
+              <h3 className="text-xl font-normal text-zinc-900 dark:text-white">
+                Interesse
+              </h3>
               <div className="space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
                 <p>
                   <span>Marcas: </span>
-                  <span className="font-semibold">{selectedLead.brand_interest || "Volkswagen"}</span>
+                  <span className="font-semibold">
+                    {selectedLead.brand_interest || "Volkswagen"}
+                  </span>
                 </p>
 
                 <p>
                   <span>Modelo: </span>
-                  <span className="font-semibold">{selectedLead.model_interest || "T-Cross 2026"}</span>
+                  <span className="font-semibold">
+                    {selectedLead.model_interest || "T-Cross 2026"}
+                  </span>
                 </p>
 
                 <p>
                   <span>Loja: </span>
-                  <span className="font-semibold">{selectedLead.store_name || "Alta Volkswagen | Saude"}</span>
+                  <span className="font-semibold">
+                    {selectedLead.store_name || "Alta Volkswagen | Saude"}
+                  </span>
                 </p>
 
                 <p>
                   <span>Preferência de visita: </span>
-                  <span className="font-semibold">{selectedLead.store_visit_datetime || "23/07 às 10:30"}</span>
+                  <span className="font-semibold">
+                    {selectedLead.store_visit_datetime || "23/07 às 10:30"}
+                  </span>
                 </p>
               </div>
             </div>
 
             {/* SEÇÃO 3: TROCA (VEÍCULO ATUAL) */}
             <div className="space-y-3 md:col-span-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
-              <h3 className="text-xl font-normal text-zinc-900 dark:text-white">Troca (veículo atual)</h3>
+              <h3 className="text-xl font-normal text-zinc-900 dark:text-white">
+                Troca (veículo atual)
+              </h3>
               <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
                 {selectedLead.trade_vehicle || "new fiesta 2017"}
               </p>
@@ -471,9 +500,13 @@ export function LeadsPage() {
 
             {/* SEÇÃO 4: ATENDIMENTO (IA) */}
             <div className="space-y-3 md:col-span-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
-              <h3 className="text-xl font-normal text-zinc-900 dark:text-white">Atendimento (IA)</h3>
+              <h3 className="text-xl font-normal text-zinc-900 dark:text-white">
+                Atendimento (IA)
+              </h3>
               <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-                Status IA: {selectedLead.ai_status || "Lead interessado, aguardando visita à loja para simulação"}
+                Status IA:{" "}
+                {selectedLead.ai_status ||
+                  "Lead interessado, aguardando visita à loja para simulação"}
               </p>
 
               {/* Caixa de Texto do Resumo IA */}
@@ -491,10 +524,20 @@ export function LeadsPage() {
 
               {/* Rodapé de Datas */}
               <p className="text-xs text-zinc-400 pt-1">
-                Criado {new Date(selectedLead.created_at).toLocaleDateString("pt-BR")} às{" "}
-                {new Date(selectedLead.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} ·
-                atualizado {new Date(selectedLead.updated_at).toLocaleDateString("pt-BR")} às{" "}
-                {new Date(selectedLead.updated_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                Criado{" "}
+                {new Date(selectedLead.created_at).toLocaleDateString("pt-BR")}{" "}
+                às{" "}
+                {new Date(selectedLead.created_at).toLocaleTimeString("pt-BR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}{" "}
+                · atualizado{" "}
+                {new Date(selectedLead.updated_at).toLocaleDateString("pt-BR")}{" "}
+                às{" "}
+                {new Date(selectedLead.updated_at).toLocaleTimeString("pt-BR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
               </p>
             </div>
           </div>
@@ -538,7 +581,9 @@ export function LeadsPage() {
                 onChange={(e) => setFilterStatus(e.target.value)}
                 className={clsx(
                   "h-10 rounded-full border px-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#FF7A00] cursor-pointer",
-                  isDarkMode ? "border-zinc-800 bg-[#121212] text-white" : "border-zinc-200 bg-white text-zinc-900",
+                  isDarkMode
+                    ? "border-zinc-800 bg-[#121212] text-white"
+                    : "border-zinc-200 bg-white text-zinc-900",
                 )}
               >
                 <option value="todos">status: todos</option>
@@ -553,7 +598,9 @@ export function LeadsPage() {
                 onChange={(e) => setFilterEngagement(e.target.value)}
                 className={clsx(
                   "h-10 rounded-full border px-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#FF7A00] cursor-pointer",
-                  isDarkMode ? "border-zinc-800 bg-[#121212] text-white" : "border-zinc-200 bg-white text-zinc-900",
+                  isDarkMode
+                    ? "border-zinc-800 bg-[#121212] text-white"
+                    : "border-zinc-200 bg-white text-zinc-900",
                 )}
               >
                 <option value="todos">engajamento</option>
@@ -567,7 +614,9 @@ export function LeadsPage() {
                 onChange={(e) => setFilterSentiment(e.target.value)}
                 className={clsx(
                   "h-10 rounded-full border px-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#FF7A00] cursor-pointer",
-                  isDarkMode ? "border-zinc-800 bg-[#121212] text-white" : "border-zinc-200 bg-white text-zinc-900",
+                  isDarkMode
+                    ? "border-zinc-800 bg-[#121212] text-white"
+                    : "border-zinc-200 bg-white text-zinc-900",
                 )}
               >
                 <option value="todos">sentimento</option>
@@ -581,7 +630,9 @@ export function LeadsPage() {
                 onChange={(e) => setFilterStore(e.target.value)}
                 className={clsx(
                   "h-10 rounded-full border px-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#FF7A00] cursor-pointer",
-                  isDarkMode ? "border-zinc-800 bg-[#121212] text-white" : "border-zinc-200 bg-white text-zinc-900",
+                  isDarkMode
+                    ? "border-zinc-800 bg-[#121212] text-white"
+                    : "border-zinc-200 bg-white text-zinc-900",
                 )}
               >
                 <option value="todas">loja</option>
@@ -596,7 +647,9 @@ export function LeadsPage() {
                 onChange={(e) => setFilterChannel(e.target.value)}
                 className={clsx(
                   "h-10 rounded-full border px-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#FF7A00] cursor-pointer",
-                  isDarkMode ? "border-zinc-800 bg-[#121212] text-white" : "border-zinc-200 bg-white text-zinc-900",
+                  isDarkMode
+                    ? "border-zinc-800 bg-[#121212] text-white"
+                    : "border-zinc-200 bg-white text-zinc-900",
                 )}
               >
                 <option value="todos">canal</option>
@@ -613,7 +666,9 @@ export function LeadsPage() {
                 onChange={(e) => setFilterBrand(e.target.value)}
                 className={clsx(
                   "h-10 rounded-full border px-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#FF7A00] cursor-pointer",
-                  isDarkMode ? "border-zinc-800 bg-[#121212] text-white" : "border-zinc-200 bg-white text-zinc-900",
+                  isDarkMode
+                    ? "border-zinc-800 bg-[#121212] text-white"
+                    : "border-zinc-200 bg-white text-zinc-900",
                 )}
               >
                 <option value="todas">marca de interesse</option>
@@ -641,7 +696,9 @@ export function LeadsPage() {
                 onChange={(e) => setFilterUf(e.target.value)}
                 className={clsx(
                   "h-10 rounded-full border px-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#FF7A00] cursor-pointer",
-                  isDarkMode ? "border-zinc-800 bg-[#121212] text-white" : "border-zinc-200 bg-white text-zinc-900",
+                  isDarkMode
+                    ? "border-zinc-800 bg-[#121212] text-white"
+                    : "border-zinc-200 bg-white text-zinc-900",
                 )}
               >
                 <option value="todas">UF</option>
@@ -656,7 +713,9 @@ export function LeadsPage() {
                 onChange={(e) => setFilterCpfValidated(e.target.value)}
                 className={clsx(
                   "h-10 rounded-full border px-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#FF7A00] cursor-pointer",
-                  isDarkMode ? "border-zinc-800 bg-[#121212] text-white" : "border-zinc-200 bg-white text-zinc-900",
+                  isDarkMode
+                    ? "border-zinc-800 bg-[#121212] text-white"
+                    : "border-zinc-200 bg-white text-zinc-900",
                 )}
               >
                 <option value="todos">CPF validado?</option>
@@ -728,7 +787,9 @@ export function LeadsPage() {
           <div
             className={clsx(
               "rounded-2xl border overflow-x-auto shadow-sm",
-              isDarkMode ? "border-zinc-800 bg-[#121212]" : "border-zinc-200 bg-white",
+              isDarkMode
+                ? "border-zinc-800 bg-[#121212]"
+                : "border-zinc-200 bg-white",
             )}
           >
             <table className="w-full text-left text-xs sm:text-sm">
@@ -767,15 +828,24 @@ export function LeadsPage() {
                       <div className="flex items-center gap-2">
                         <span>{lead.name}</span>
                         {lead.sentiment === "positivo" ? (
-                          <span className="inline-flex items-center rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-extrabold text-red-500 border border-red-500/20" title="Alta probabilidade de fechamento">
+                          <span
+                            className="inline-flex items-center rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-extrabold text-red-500 border border-red-500/20"
+                            title="Alta probabilidade de fechamento"
+                          >
                             🔥 Quente
                           </span>
                         ) : lead.sentiment === "negativo" ? (
-                          <span className="inline-flex items-center rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-extrabold text-blue-500 border border-blue-500/20" title="Baixo engajamento ou insatisfação">
+                          <span
+                            className="inline-flex items-center rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-extrabold text-blue-500 border border-blue-500/20"
+                            title="Baixo engajamento ou insatisfação"
+                          >
                             ❄️ Frio
                           </span>
                         ) : (
-                          <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-extrabold text-amber-500 border border-amber-500/20" title="Interesse intermediário">
+                          <span
+                            className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-extrabold text-amber-500 border border-amber-500/20"
+                            title="Interesse intermediário"
+                          >
                             🟡 Morno
                           </span>
                         )}
@@ -808,8 +878,14 @@ export function LeadsPage() {
                       {lead.store_name || "Alta Volkswagen | Saude"}
                     </td>
                     <td className="py-4 px-4 text-zinc-500 dark:text-zinc-400 font-mono text-xs whitespace-nowrap">
-                      {new Date(lead.updated_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}{" "}
-                      {new Date(lead.updated_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                      {new Date(lead.updated_at).toLocaleDateString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                      })}{" "}
+                      {new Date(lead.updated_at).toLocaleTimeString("pt-BR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </td>
                     <td className="py-4 px-4 text-right">
                       <button

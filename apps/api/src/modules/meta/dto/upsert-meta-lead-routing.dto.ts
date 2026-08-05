@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { ApiProperty } from "@nestjs/swagger";
+import { Transform } from "class-transformer";
 import {
   ArrayMaxSize,
   IsArray,
@@ -10,17 +10,17 @@ import {
   IsUUID,
   Matches,
   MaxLength,
-} from 'class-validator';
+} from "class-validator";
 
 const trimString = ({ value }: { value: unknown }) =>
-  typeof value === 'string' ? value.trim() : value;
+  typeof value === "string" ? value.trim() : value;
 
 export const META_LEAD_WHATSAPP_TEMPLATE_PARAMETER_KEYS = [
-  'lead_name',
-  'event_name',
-  'company_name',
-  'event_date',
-  'event_location',
+  "lead_name",
+  "event_name",
+  "company_name",
+  "event_date",
+  "event_location",
 ] as const;
 
 export type MetaLeadWhatsappTemplateParameterKey =
@@ -34,23 +34,23 @@ export class UpsertMetaLeadRoutingDto {
   @MaxLength(100)
   form_id!: string;
 
-  @ApiProperty({ format: 'uuid' })
+  @ApiProperty({ format: "uuid" })
   @IsUUID()
   event_id!: string;
 
-  @ApiProperty({ format: 'uuid' })
+  @ApiProperty({ format: "uuid" })
   @IsUUID()
   crm_pipeline_id!: string;
 
-  @ApiProperty({ format: 'uuid' })
+  @ApiProperty({ format: "uuid" })
   @IsUUID()
   call_stage_id!: string;
 
-  @ApiProperty({ format: 'uuid' })
+  @ApiProperty({ format: "uuid" })
   @IsUUID()
   whatsapp_stage_id!: string;
 
-  @ApiProperty({ required: false, example: 'boas_vindas_evento' })
+  @ApiProperty({ required: false, example: "boas_vindas_evento" })
   @IsOptional()
   @Transform(trimString)
   @IsString()
@@ -58,7 +58,7 @@ export class UpsertMetaLeadRoutingDto {
   @Matches(/^[a-z0-9_]+$/)
   whatsapp_template_name?: string;
 
-  @ApiProperty({ required: false, example: 'pt_BR' })
+  @ApiProperty({ required: false, example: "pt_BR" })
   @IsOptional()
   @Transform(trimString)
   @IsString()

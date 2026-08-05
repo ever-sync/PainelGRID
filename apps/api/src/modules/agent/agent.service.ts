@@ -1,8 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { AppointmentStatus, EventStatus } from '@prisma/client';
-import { PrismaService } from '../../config/prisma.service';
-import { GetAgentEventsAvailabilityQueryDto } from './dto/get-agent-events-availability-query.dto';
-import { GetAgentWhatsappContextQueryDto } from './dto/get-agent-whatsapp-context-query.dto';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { AppointmentStatus, EventStatus } from "@prisma/client";
+import { PrismaService } from "../../config/prisma.service";
+import { GetAgentEventsAvailabilityQueryDto } from "./dto/get-agent-events-availability-query.dto";
+import { GetAgentWhatsappContextQueryDto } from "./dto/get-agent-whatsapp-context-query.dto";
 
 const ACTIVE_APPOINTMENT_STATUSES = [
   AppointmentStatus.proposed,
@@ -29,64 +29,78 @@ export class AgentService {
       ? await this.prisma.conversation.findUnique({
           where: { id: query.conversation_id },
           include: {
-            messages: { orderBy: { created_at: 'desc' }, take: 20 },
+            messages: { orderBy: { created_at: "desc" }, take: 20 },
           },
         })
       : await this.prisma.conversation.findFirst({
           where: { lead_id: lead.id },
-          orderBy: [{ last_message_at: 'desc' }, { created_at: 'desc' }],
+          orderBy: [{ last_message_at: "desc" }, { created_at: "desc" }],
           include: {
-            messages: { orderBy: { created_at: 'desc' }, take: 20 },
+            messages: { orderBy: { created_at: "desc" }, take: 20 },
           },
         });
 
-    const [client, appointments, activeEvents, conversationState] = await Promise.all([
-      this.prisma.client.findUnique({
-        where: { id: lead.client_id },
-      }),
-      this.prisma.appointment.findMany({
-        where: { lead_id: lead.id },
-        orderBy: [{ scheduled_at: 'desc' }, { created_at: 'desc' }],
-        take: 10,
-        include: {
-          event: {
-            select: { id: true, name: true, event_date: true, status: true, location: true },
-          },
-        },
-      }),
-      this.prisma.event.findMany({
-        where: {
-          client_id: lead.client_id,
-          status: { in: [EventStatus.active, EventStatus.draft] },
-        },
-        orderBy: { event_date: 'asc' },
-        take: 10,
-      }),
-      conversation
-        ? this.prisma.conversationState.findUnique({
-            where: { conversation_id: conversation.id },
-            include: {
-              last_offered_event: {
-                select: { id: true, name: true, event_date: true, status: true },
+    const [client, appointments, activeEvents, conversationState] =
+      await Promise.all([
+        this.prisma.client.findUnique({
+          where: { id: lead.client_id },
+        }),
+        this.prisma.appointment.findMany({
+          where: { lead_id: lead.id },
+          orderBy: [{ scheduled_at: "desc" }, { created_at: "desc" }],
+          take: 10,
+          include: {
+            event: {
+              select: {
+                id: true,
+                name: true,
+                event_date: true,
+                status: true,
+                location: true,
               },
             },
-          })
-        : Promise.resolve(null),
-    ]);
+          },
+        }),
+        this.prisma.event.findMany({
+          where: {
+            client_id: lead.client_id,
+            status: { in: [EventStatus.active, EventStatus.draft] },
+          },
+          orderBy: { event_date: "asc" },
+          take: 10,
+        }),
+        conversation
+          ? this.prisma.conversationState.findUnique({
+              where: { conversation_id: conversation.id },
+              include: {
+                last_offered_event: {
+                  select: {
+                    id: true,
+                    name: true,
+                    event_date: true,
+                    status: true,
+                  },
+                },
+              },
+            })
+          : Promise.resolve(null),
+      ]);
 
     if (!client) {
-      throw new NotFoundException('Cliente nao encontrado');
+      throw new NotFoundException("Cliente nao encontrado");
     }
 
-    const recentMessages = [...(conversation?.messages ?? [])].reverse().map((message) => ({
-      id: message.id,
-      sender_type: message.sender_type,
-      sender_id: message.sender_id,
-      content: message.content,
-      media_url: message.media_url,
-      read_at: this.toIsoString(message.read_at),
-      created_at: this.toIsoString(message.created_at),
-    }));
+    const recentMessages = [...(conversation?.messages ?? [])]
+      .reverse()
+      .map((message) => ({
+        id: message.id,
+        sender_type: message.sender_type,
+        sender_id: message.sender_id,
+        content: message.content,
+        media_url: message.media_url,
+        read_at: this.toIsoString(message.read_at),
+        created_at: this.toIsoString(message.created_at),
+      }));
 
     return {
       lead: {
@@ -156,7 +170,8 @@ export class AgentService {
         source: appointment.source,
         confirmed_at: this.toIsoString(appointment.confirmed_at),
         cancelled_at: this.toIsoString(appointment.cancelled_at),
-        rescheduled_from_appointment_id: appointment.rescheduled_from_appointment_id,
+        rescheduled_from_appointment_id:
+          appointment.rescheduled_from_appointment_id,
         notes: appointment.notes,
       })),
       eligible_events: activeEvents.map((event) => ({
@@ -173,8 +188,11 @@ export class AgentService {
             current_intent: conversationState.current_intent,
             awaiting_confirmation: conversationState.awaiting_confirmation,
             last_offered_event_id: conversationState.last_offered_event_id,
-            last_offered_event_name: conversationState.last_offered_event?.name ?? null,
-            last_offered_slot: this.toIsoString(conversationState.last_offered_slot),
+            last_offered_event_name:
+              conversationState.last_offered_event?.name ?? null,
+            last_offered_slot: this.toIsoString(
+              conversationState.last_offered_slot,
+            ),
             last_agent_action: conversationState.last_agent_action,
             handoff_required: conversationState.handoff_required,
             handoff_reason: conversationState.handoff_reason,
@@ -184,9 +202,12 @@ export class AgentService {
         : null,
       flags: {
         has_active_appointment: appointments.some((appointment) =>
-          ACTIVE_APPOINTMENT_STATUSES.some((status) => status === appointment.status),
+          ACTIVE_APPOINTMENT_STATUSES.some(
+            (status) => status === appointment.status,
+          ),
         ),
-        awaiting_confirmation: conversationState?.awaiting_confirmation ?? false,
+        awaiting_confirmation:
+          conversationState?.awaiting_confirmation ?? false,
         handoff_required: conversationState?.handoff_required ?? false,
         ai_response_allowed: !(conversationState?.handoff_required ?? false),
         lead_deleted: Boolean(lead.deleted_at),
@@ -200,14 +221,14 @@ export class AgentService {
     });
 
     if (!client) {
-      throw new NotFoundException('Cliente nao encontrado');
+      throw new NotFoundException("Cliente nao encontrado");
     }
 
     let lead: Awaited<ReturnType<typeof this.resolveLeadById>> | null = null;
     if (query.lead_id) {
       lead = await this.resolveLeadById(query.lead_id);
       if (lead.client_id !== query.client_id) {
-        throw new NotFoundException('Lead nao encontrado para este cliente');
+        throw new NotFoundException("Lead nao encontrado para este cliente");
       }
     }
 
@@ -216,7 +237,7 @@ export class AgentService {
         client_id: query.client_id,
         status: { in: [EventStatus.active, EventStatus.draft] },
       },
-      orderBy: { event_date: 'asc' },
+      orderBy: { event_date: "asc" },
     });
 
     const eventIds = events.map((event) => event.id);
@@ -224,7 +245,12 @@ export class AgentService {
       ? await this.prisma.appointment.findMany({
           where: {
             event_id: { in: eventIds },
-            status: { in: [...CAPACITY_APPOINTMENT_STATUSES, ...ACTIVE_APPOINTMENT_STATUSES] },
+            status: {
+              in: [
+                ...CAPACITY_APPOINTMENT_STATUSES,
+                ...ACTIVE_APPOINTMENT_STATUSES,
+              ],
+            },
           },
           select: {
             id: true,
@@ -239,7 +265,11 @@ export class AgentService {
     const leadActiveByEvent = new Set<string>();
 
     for (const appointment of appointments) {
-      if (CAPACITY_APPOINTMENT_STATUSES.some((status) => status === appointment.status)) {
+      if (
+        CAPACITY_APPOINTMENT_STATUSES.some(
+          (status) => status === appointment.status,
+        )
+      ) {
         occupiedByEvent.set(
           appointment.event_id,
           (occupiedByEvent.get(appointment.event_id) ?? 0) + 1,
@@ -249,7 +279,9 @@ export class AgentService {
       if (
         lead &&
         appointment.lead_id === lead.id &&
-        ACTIVE_APPOINTMENT_STATUSES.some((status) => status === appointment.status)
+        ACTIVE_APPOINTMENT_STATUSES.some(
+          (status) => status === appointment.status,
+        )
       ) {
         leadActiveByEvent.add(appointment.event_id);
       }
@@ -261,17 +293,20 @@ export class AgentService {
       rules: client.settings,
       events: events.map((event) => {
         const occupied = occupiedByEvent.get(event.id) ?? 0;
-        const remaining = event.capacity == null ? null : Math.max(event.capacity - occupied, 0);
+        const remaining =
+          event.capacity == null
+            ? null
+            : Math.max(event.capacity - occupied, 0);
         const blockingReasons: string[] = [];
 
         if (event.status === EventStatus.draft) {
-          blockingReasons.push('event_in_draft');
+          blockingReasons.push("event_in_draft");
         }
         if (event.capacity != null && occupied >= event.capacity) {
-          blockingReasons.push('capacity_reached');
+          blockingReasons.push("capacity_reached");
         }
         if (leadActiveByEvent.has(event.id)) {
-          blockingReasons.push('lead_has_active_appointment');
+          blockingReasons.push("lead_has_active_appointment");
         }
 
         return {
@@ -307,7 +342,7 @@ export class AgentService {
     });
 
     if (!conversation) {
-      throw new NotFoundException('Conversa nao encontrada');
+      throw new NotFoundException("Conversa nao encontrada");
     }
 
     return conversation.lead;
@@ -324,7 +359,7 @@ export class AgentService {
     });
 
     if (!lead || lead.deleted_at) {
-      throw new NotFoundException('Lead nao encontrado');
+      throw new NotFoundException("Lead nao encontrado");
     }
 
     return lead;

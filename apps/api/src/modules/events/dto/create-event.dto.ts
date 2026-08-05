@@ -1,5 +1,5 @@
-import { Type } from 'class-transformer';
-import { EventStatus } from '@prisma/client';
+import { Type } from "class-transformer";
+import { EventStatus } from "@prisma/client";
 import {
   ArrayMaxSize,
   IsArray,
@@ -15,7 +15,7 @@ import {
   MaxLength,
   Min,
   ValidateNested,
-} from 'class-validator';
+} from "class-validator";
 
 export class EventDayDto {
   @IsString()

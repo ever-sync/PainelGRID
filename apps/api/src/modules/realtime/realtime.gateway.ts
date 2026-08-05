@@ -1,6 +1,6 @@
-import { Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
+import { Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { JwtService } from "@nestjs/jwt";
 import {
   ConnectedSocket,
   MessageBody,
@@ -9,18 +9,23 @@ import {
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
-} from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-import { AuthTokenPayload } from '../auth/auth.types';
-import { Role } from '../../common/types';
-import { normalizeWebOrigin, parseAllowedOrigins } from '../../config/cors-origins';
-import { ClientsService } from '../clients/clients.service';
+} from "@nestjs/websockets";
+import { Server, Socket } from "socket.io";
+import { AuthTokenPayload } from "../auth/auth.types";
+import { Role } from "../../common/types";
+import {
+  normalizeWebOrigin,
+  parseAllowedOrigins,
+} from "../../config/cors-origins";
+import { ClientsService } from "../clients/clients.service";
 
 @WebSocketGateway({
-  namespace: '/realtime',
+  namespace: "/realtime",
   cors: { origin: true, credentials: true },
 })
-export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class RealtimeGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   private readonly logger = new Logger(RealtimeGateway.name);
   private readonly allowedOrigins: Set<string>;
   private static readonly onlineUsers = new Map<string, Set<string>>();
@@ -31,7 +36,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     private readonly clientsService: ClientsService,
   ) {
     this.allowedOrigins = new Set(
-      parseAllowedOrigins(this.configService.get<string>('FRONTEND_URL'), 'http://localhost:5173'),
+      parseAllowedOrigins(
+        this.configService.get<string>("FRONTEND_URL"),
+        "http://localhost:5173",
+      ),
     );
   }
 
@@ -42,27 +50,34 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     try {
       const origin = this.extractOrigin(client);
       if (!origin || !this.allowedOrigins.has(normalizeWebOrigin(origin))) {
-        throw new Error('Origin nao autorizada');
+        throw new Error("Origin nao autorizada");
       }
 
       const token = this.extractTokenFromSocket(client);
       if (!token) {
-        throw new Error('Nenhum token fornecido');
+        throw new Error("Nenhum token fornecido");
       }
 
-      const secret = this.configService.get<string>('JWT_SECRET', 'leadflow_access_secret');
-      const payload = await this.jwtService.verifyAsync<AuthTokenPayload>(token, { secret });
+      const secret = this.configService.get<string>(
+        "JWT_SECRET",
+        "leadflow_access_secret",
+      );
+      const payload = await this.jwtService.verifyAsync<AuthTokenPayload>(
+        token,
+        { secret },
+      );
 
-      if (payload.type !== 'access') {
-        throw new Error('Tipo de token invalido');
+      if (payload.type !== "access") {
+        throw new Error("Tipo de token invalido");
       }
 
       client.data.user = payload;
 
       const requestedClientId = client.handshake.query.client_id;
-      const normalizedRequestedClientId = this.normalizeClientId(requestedClientId);
+      const normalizedRequestedClientId =
+        this.normalizeClientId(requestedClientId);
       if (requestedClientId !== undefined && !normalizedRequestedClientId) {
-        throw new Error('client_id invalido');
+        throw new Error("client_id invalido");
       }
       const clientId = normalizedRequestedClientId || payload.client_id;
       if (clientId) {
@@ -78,17 +93,20 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
         set.add(payload.sub);
 
         // Envia a lista para todos na sala da empresa
-        this.server.to(this.room(clientId)).emit('online_vendors', Array.from(set));
+        this.server
+          .to(this.room(clientId))
+          .emit("online_vendors", Array.from(set));
       }
     } catch {
-      this.logger.warn('Desconectando socket por falha de autenticacao');
+      this.logger.warn("Desconectando socket por falha de autenticacao");
       client.disconnect(true);
     }
   }
 
   handleDisconnect(client: Socket) {
     const payload = client.data.user as AuthTokenPayload | undefined;
-    const authorizedClientIds = client.data.authorizedClientIds as string[] | undefined;
+    const authorizedClientIds = client.data.authorizedClientIds as
+      string[] | undefined;
     if (!payload || !authorizedClientIds) {
       return;
     }
@@ -97,13 +115,18 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       const set = RealtimeGateway.onlineUsers.get(clientId);
       if (set) {
         set.delete(payload.sub);
-        this.server.to(this.room(clientId)).emit('online_vendors', Array.from(set));
+        this.server
+          .to(this.room(clientId))
+          .emit("online_vendors", Array.from(set));
       }
     }
   }
 
-  @SubscribeMessage('join_client')
-  async joinClient(@ConnectedSocket() client: Socket, @MessageBody() body: { client_id?: string }) {
+  @SubscribeMessage("join_client")
+  async joinClient(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { client_id?: string },
+  ) {
     const payload = client.data.user as AuthTokenPayload | undefined;
     if (!payload) {
       return { ok: false };
@@ -128,11 +151,15 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
     set.add(payload.sub);
 
-    this.server.to(this.room(clientId)).emit('online_vendors', Array.from(set));
+    this.server.to(this.room(clientId)).emit("online_vendors", Array.from(set));
     return { ok: true };
   }
 
-  emitToClient(clientId: string, event: string, payload: Record<string, unknown>) {
+  emitToClient(
+    clientId: string,
+    event: string,
+    payload: Record<string, unknown>,
+  ) {
     this.server.to(this.room(clientId)).emit(event, payload);
   }
 
@@ -142,11 +169,13 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   private trackAuthorizedClient(client: Socket, clientId: string): void {
     const current = client.data.authorizedClientIds as string[] | undefined;
-    client.data.authorizedClientIds = Array.from(new Set([...(current ?? []), clientId]));
+    client.data.authorizedClientIds = Array.from(
+      new Set([...(current ?? []), clientId]),
+    );
   }
 
   private normalizeClientId(value: unknown): string | null {
-    if (typeof value !== 'string') {
+    if (typeof value !== "string") {
       return null;
     }
     const trimmed = value.trim();
@@ -162,23 +191,29 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       return client.handshake.auth.token;
     }
     const authHeader = client.handshake.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
+    if (authHeader && authHeader.startsWith("Bearer ")) {
       return authHeader.substring(7);
     }
     return undefined;
   }
 
-  private async assertClientAccess(payload: AuthTokenPayload, clientId: string): Promise<void> {
+  private async assertClientAccess(
+    payload: AuthTokenPayload,
+    clientId: string,
+  ): Promise<void> {
     if (payload.role === Role.GESTOR) {
       await this.clientsService.assertGestorOwnsClient(payload.sub, clientId);
       return;
     }
     if (payload.client_id !== clientId) {
-      throw new Error('Acesso negado a este client_id');
+      throw new Error("Acesso negado a este client_id");
     }
   }
 
-  private async canAccessClient(payload: AuthTokenPayload, clientId: string): Promise<boolean> {
+  private async canAccessClient(
+    payload: AuthTokenPayload,
+    clientId: string,
+  ): Promise<boolean> {
     try {
       await this.assertClientAccess(payload, clientId);
       return true;
@@ -189,7 +224,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   private extractOrigin(client: Socket): string | undefined {
     const headerOrigin = client.handshake.headers.origin;
-    if (typeof headerOrigin === 'string') return headerOrigin;
+    if (typeof headerOrigin === "string") return headerOrigin;
     if (Array.isArray(headerOrigin)) return headerOrigin[0];
     return undefined;
   }

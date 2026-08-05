@@ -12,11 +12,14 @@
 export function normalizeBrazilianPhone(raw: string): string {
   if (!raw?.trim()) return raw;
 
-  const digits = raw.replace(/\D/g, '');
+  const digits = raw.replace(/\D/g, "");
 
   // Remove DDI 55 se o número tiver comprimento compatível (12 ou 13 dígitos)
   let local = digits;
-  if ((digits.length === 12 || digits.length === 13) && digits.startsWith('55')) {
+  if (
+    (digits.length === 12 || digits.length === 13) &&
+    digits.startsWith("55")
+  ) {
     local = digits.slice(2);
   }
 
@@ -33,9 +36,12 @@ export function normalizeBrazilianPhone(raw: string): string {
  * Remove DDI e código de país (+55 / 55).
  */
 export function phoneDigits(raw: string): string {
-  if (!raw?.trim()) return '';
-  const digits = raw.replace(/\D/g, '');
-  if ((digits.length === 12 || digits.length === 13) && digits.startsWith('55')) {
+  if (!raw?.trim()) return "";
+  const digits = raw.replace(/\D/g, "");
+  if (
+    (digits.length === 12 || digits.length === 13) &&
+    digits.startsWith("55")
+  ) {
     return digits.slice(2);
   }
   return digits;

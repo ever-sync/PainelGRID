@@ -1200,7 +1200,8 @@ export function ChatPage() {
     for (const conv of matched) {
       const lead = leadsById.get(conv.lead_id);
       const phoneDigits = lead?.phone ? lead.phone.replace(/\D/g, "") : "";
-      const dedupKey = phoneDigits.length >= 8 ? phoneDigits : conv.lead_id || conv.id;
+      const dedupKey =
+        phoneDigits.length >= 8 ? phoneDigits : conv.lead_id || conv.id;
 
       const existing = seenKeys.get(dedupKey);
       if (!existing) {
@@ -1633,7 +1634,9 @@ export function ChatPage() {
     <div
       className={clsx(
         "h-full w-full overflow-hidden rounded-[28px] border shadow-sm transition-all flex",
-        isDarkMode ? "border-zinc-800/80 bg-[#0f1015]" : "border-zinc-200/80 bg-white",
+        isDarkMode
+          ? "border-zinc-800/80 bg-[#0f1015]"
+          : "border-zinc-200/80 bg-white",
       )}
     >
       <div className="flex flex-col lg:flex-row h-full min-h-0 w-full">
@@ -1668,7 +1671,9 @@ export function ChatPage() {
                 dark={isDarkMode}
                 scrollRef={conversationScrollRef}
                 onOpenLeadDrawer={openLeadDrawer}
-                onQuickChangeStage={(stageId) => void handleQuickChangeStage(stageId)}
+                onQuickChangeStage={(stageId) =>
+                  void handleQuickChangeStage(stageId)
+                }
               />
 
               <footer
@@ -1699,7 +1704,11 @@ export function ChatPage() {
                     <button
                       key={reply.id}
                       type="button"
-                      onClick={() => setDraft((current) => current ? `${current} ${reply.text}` : reply.text)}
+                      onClick={() =>
+                        setDraft((current) =>
+                          current ? `${current} ${reply.text}` : reply.text,
+                        )
+                      }
                       className={clsx(
                         "shrink-0 rounded-xl border px-3 py-1 text-xs font-bold transition-all hover:scale-105 active:scale-95 shadow-xs",
                         isDarkMode
@@ -2101,68 +2110,89 @@ export function ChatPage() {
             </div>
           )}
         </main>
-      {hsmModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className={clsx(
-            "w-full max-w-lg rounded-3xl border p-6 shadow-2xl transition-all space-y-4",
-            isDarkMode ? "border-zinc-800 bg-[#121318] text-zinc-100" : "border-zinc-200 bg-white text-zinc-900"
-          )}>
-            <div className="flex items-center justify-between border-b pb-3 border-zinc-200 dark:border-zinc-800">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500 border border-amber-500/20 text-lg">
-                  ✉️
-                </div>
-                <div>
-                  <h3 className="text-base font-bold tracking-tight">Templates HSM WhatsApp Oficial (Meta)</h3>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">Modelos pré-aprovados para reengajamento após a janela de 24h</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setHsmModalOpen(false)}
-                className="rounded-full p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 transition-colors"
-                aria-label="Fechar"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
-              {META_HSM_TEMPLATES.map((tpl) => (
-                <div
-                  key={tpl.id}
-                  onClick={() => {
-                    const text = tpl.text
-                      .replace("{{1}}", profileLead?.name || "Cliente")
-                      .replace("{{2}}", profileLead?.event_interest || "PainelGRID")
-                      .replace("{{3}}", "14:00");
-                    setDraft(text);
-                    setHsmModalOpen(false);
-                    pushToast({
-                      message: `Template "${tpl.name}" selecionado!`,
-                      type: "success",
-                    });
-                  }}
-                  className={clsx(
-                    "group cursor-pointer rounded-2xl border p-4 transition-all hover:scale-[1.01] hover:border-[#FF0636]",
-                    isDarkMode ? "border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/80" : "border-zinc-200 bg-zinc-50 hover:bg-zinc-100"
-                  )}
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-bold text-[#FF0636] group-hover:underline">{tpl.name}</span>
-                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                      {tpl.category}
-                    </span>
+        {hsmModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+            <div
+              className={clsx(
+                "w-full max-w-lg rounded-3xl border p-6 shadow-2xl transition-all space-y-4",
+                isDarkMode
+                  ? "border-zinc-800 bg-[#121318] text-zinc-100"
+                  : "border-zinc-200 bg-white text-zinc-900",
+              )}
+            >
+              <div className="flex items-center justify-between border-b pb-3 border-zinc-200 dark:border-zinc-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500 border border-amber-500/20 text-lg">
+                    ✉️
                   </div>
-                  <p className={clsx("text-xs leading-relaxed", isDarkMode ? "text-zinc-300" : "text-zinc-700")}>
-                    {tpl.text}
-                  </p>
+                  <div>
+                    <h3 className="text-base font-bold tracking-tight">
+                      Templates HSM WhatsApp Oficial (Meta)
+                    </h3>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Modelos pré-aprovados para reengajamento após a janela de
+                      24h
+                    </p>
+                  </div>
                 </div>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => setHsmModalOpen(false)}
+                  className="rounded-full p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 transition-colors"
+                  aria-label="Fechar"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+                {META_HSM_TEMPLATES.map((tpl) => (
+                  <div
+                    key={tpl.id}
+                    onClick={() => {
+                      const text = tpl.text
+                        .replace("{{1}}", profileLead?.name || "Cliente")
+                        .replace(
+                          "{{2}}",
+                          profileLead?.event_interest || "PainelGRID",
+                        )
+                        .replace("{{3}}", "14:00");
+                      setDraft(text);
+                      setHsmModalOpen(false);
+                      pushToast({
+                        message: `Template "${tpl.name}" selecionado!`,
+                        type: "success",
+                      });
+                    }}
+                    className={clsx(
+                      "group cursor-pointer rounded-2xl border p-4 transition-all hover:scale-[1.01] hover:border-[#FF0636]",
+                      isDarkMode
+                        ? "border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/80"
+                        : "border-zinc-200 bg-zinc-50 hover:bg-zinc-100",
+                    )}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-bold text-[#FF0636] group-hover:underline">
+                        {tpl.name}
+                      </span>
+                      <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        {tpl.category}
+                      </span>
+                    </div>
+                    <p
+                      className={clsx(
+                        "text-xs leading-relaxed",
+                        isDarkMode ? "text-zinc-300" : "text-zinc-700",
+                      )}
+                    >
+                      {tpl.text}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
       </div>
     </div>
   );

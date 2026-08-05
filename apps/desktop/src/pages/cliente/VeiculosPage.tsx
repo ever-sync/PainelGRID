@@ -599,7 +599,11 @@ export function VeiculosPage() {
               value={vehiclesStatusFilter}
               onChange={(e) => {
                 const value = e.target.value;
-                if (value === "all" || value === "available" || value === "hidden") {
+                if (
+                  value === "all" ||
+                  value === "available" ||
+                  value === "hidden"
+                ) {
                   setVehiclesStatusFilter(value);
                 }
               }}

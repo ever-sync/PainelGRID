@@ -1,9 +1,9 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, MaxLength, MinLength, Validate } from 'class-validator';
+import { ApiProperty } from "@nestjs/swagger";
+import { IsString, MaxLength, MinLength, Validate } from "class-validator";
 import {
   IsStrongPasswordConstraint,
   STRONG_PASSWORD_USER_MESSAGE,
-} from '../../../common/validators/is-strong-password.validator';
+} from "../../../common/validators/is-strong-password.validator";
 
 export class ChangePasswordDto {
   @ApiProperty({ minLength: 8, maxLength: 255 })

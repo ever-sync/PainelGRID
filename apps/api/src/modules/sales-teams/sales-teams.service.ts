@@ -3,13 +3,13 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { Role } from '../../common/types';
-import { PrismaService } from '../../config/prisma.service';
-import { AuthenticatedUser } from '../auth/auth.types';
-import { AddTeamMemberDto } from './dto/add-member.dto';
-import { CreateSalesTeamDto } from './dto/create-sales-team.dto';
-import { UpdateSalesTeamDto } from './dto/update-sales-team.dto';
+} from "@nestjs/common";
+import { Role } from "../../common/types";
+import { PrismaService } from "../../config/prisma.service";
+import { AuthenticatedUser } from "../auth/auth.types";
+import { AddTeamMemberDto } from "./dto/add-member.dto";
+import { CreateSalesTeamDto } from "./dto/create-sales-team.dto";
+import { UpdateSalesTeamDto } from "./dto/update-sales-team.dto";
 
 type EventTeamMetricsInput = {
   id: string;
@@ -30,9 +30,15 @@ type EventTeamMetricsInput = {
 export class SalesTeamsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private getEventParticipantClientIds(event: { participants: Array<{ client_id: string }> }) {
+  private getEventParticipantClientIds(event: {
+    participants: Array<{ client_id: string }>;
+  }) {
     return Array.from(
-      new Set(event.participants.map((participant) => participant.client_id).filter(Boolean)),
+      new Set(
+        event.participants
+          .map((participant) => participant.client_id)
+          .filter(Boolean),
+      ),
     );
   }
 
@@ -50,16 +56,21 @@ export class SalesTeamsService {
   }
 
   /** Resolve client_id para a ação — gestor informa via query, cliente usa o próprio. */
-  private resolveClientId(user: AuthenticatedUser, clientIdParam?: string): string {
+  private resolveClientId(
+    user: AuthenticatedUser,
+    clientIdParam?: string,
+  ): string {
     if (user.role === Role.GESTOR) {
-      if (!clientIdParam) throw new BadRequestException('client_id obrigatório para gestor');
+      if (!clientIdParam)
+        throw new BadRequestException("client_id obrigatório para gestor");
       return clientIdParam;
     }
     if (user.role === Role.CLIENTE) {
-      if (!user.client_id) throw new ForbiddenException('Usuário sem empresa vinculada');
+      if (!user.client_id)
+        throw new ForbiddenException("Usuário sem empresa vinculada");
       return user.client_id;
     }
-    throw new ForbiddenException('Sem permissão para gerenciar times');
+    throw new ForbiddenException("Sem permissão para gerenciar times");
   }
 
   /** Gestor é papel global: valida existência da empresa, não propriedade. */
@@ -67,7 +78,8 @@ export class SalesTeamsService {
     const client = await this.prisma.client.findFirst({
       where: { id: clientId },
     });
-    if (!client) throw new ForbiddenException('Empresa não encontrada ou sem permissão');
+    if (!client)
+      throw new ForbiddenException("Empresa não encontrada ou sem permissão");
   }
 
   /** Garante que o cliente pertence à empresa. */
@@ -75,19 +87,21 @@ export class SalesTeamsService {
     const user = await this.prisma.user.findFirst({
       where: { id: userId, client_id: clientId },
     });
-    if (!user) throw new ForbiddenException('Acesso negado a esta empresa');
+    if (!user) throw new ForbiddenException("Acesso negado a esta empresa");
   }
 
   private async assertAccess(user: AuthenticatedUser, clientId: string) {
-    if (user.role === Role.GESTOR) await this.assertGestorOwns(user.sub, clientId);
-    else if (user.role === Role.CLIENTE) await this.assertClientBelongs(user.sub, clientId);
-    else throw new ForbiddenException('Sem permissão');
+    if (user.role === Role.GESTOR)
+      await this.assertGestorOwns(user.sub, clientId);
+    else if (user.role === Role.CLIENTE)
+      await this.assertClientBelongs(user.sub, clientId);
+    else throw new ForbiddenException("Sem permissão");
   }
 
   private async getEventForAccess(
     user: AuthenticatedUser,
     eventId: string,
-    mode: 'read' | 'manage' = 'manage',
+    mode: "read" | "manage" = "manage",
   ) {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
@@ -99,34 +113,39 @@ export class SalesTeamsService {
         },
       },
     });
-    if (!event) throw new NotFoundException('Evento não encontrado');
-    if (mode === 'read') {
+    if (!event) throw new NotFoundException("Evento não encontrado");
+    if (mode === "read") {
       if (user.role === Role.GESTOR) {
         const participantIds = this.getEventParticipantClientIds(event);
         const owned = await this.prisma.client.count({
           where: { id: { in: participantIds } },
         });
         if (owned === 0) {
-          throw new ForbiddenException('Acesso negado a este evento');
+          throw new ForbiddenException("Acesso negado a este evento");
         }
       } else if (user.role === Role.CLIENTE) {
-        if (!user.client_id) throw new ForbiddenException('Usuário sem empresa vinculada');
-        if (!this.getEventParticipantClientIds(event).includes(user.client_id)) {
-          throw new ForbiddenException('Acesso negado a este evento');
+        if (!user.client_id)
+          throw new ForbiddenException("Usuário sem empresa vinculada");
+        if (
+          !this.getEventParticipantClientIds(event).includes(user.client_id)
+        ) {
+          throw new ForbiddenException("Acesso negado a este evento");
         }
       } else {
-        throw new ForbiddenException('Sem permissão');
+        throw new ForbiddenException("Sem permissão");
       }
     } else {
       if (user.role !== Role.GESTOR) {
-        throw new ForbiddenException('Sem permissão');
+        throw new ForbiddenException("Sem permissão");
       }
       const participantIds = this.getEventParticipantClientIds(event);
       const owned = await this.prisma.client.count({
         where: { id: { in: participantIds } },
       });
       if (owned !== participantIds.length) {
-        throw new ForbiddenException('Sem permissão para gerenciar este evento');
+        throw new ForbiddenException(
+          "Sem permissão para gerenciar este evento",
+        );
       }
     }
     return event;
@@ -137,7 +156,7 @@ export class SalesTeamsService {
       where: { id: teamId },
       select: { id: true, client_id: true, event_id: true },
     });
-    if (!team) throw new NotFoundException('Time não encontrado');
+    if (!team) throw new NotFoundException("Time não encontrado");
 
     if (team.event_id) {
       await this.getEventForAccess(user, team.event_id);
@@ -148,19 +167,24 @@ export class SalesTeamsService {
     return team;
   }
 
-  private async attachEventMetrics(eventId: string, teams: EventTeamMetricsInput[]) {
+  private async attachEventMetrics(
+    eventId: string,
+    teams: EventTeamMetricsInput[],
+  ) {
     if (teams.length === 0) {
       return teams;
     }
 
     const teamIds = teams.map((team) => team.id);
     const memberIds = Array.from(
-      new Set(teams.flatMap((team) => team.members.map((member) => member.user_id))),
+      new Set(
+        teams.flatMap((team) => team.members.map((member) => member.user_id)),
+      ),
     );
 
     const [assignedRows, scoreRows] = await Promise.all([
       this.prisma.lead.groupBy({
-        by: ['team_id', 'assigned_vendor_id'],
+        by: ["team_id", "assigned_vendor_id"],
         where: {
           deleted_at: null,
           event_interest_id: eventId,
@@ -188,14 +212,19 @@ export class SalesTeamsService {
     const teamVendorAssigned = new Map<string, Map<string, number>>();
     assignedRows.forEach((row) => {
       if (!row.assigned_vendor_id || !row.team_id) return;
-      const byVendor = teamVendorAssigned.get(row.team_id) ?? new Map<string, number>();
+      const byVendor =
+        teamVendorAssigned.get(row.team_id) ?? new Map<string, number>();
       byVendor.set(row.assigned_vendor_id, row._count._all);
       teamVendorAssigned.set(row.team_id, byVendor);
     });
 
-    const scoreByVendor = new Map<string, ReturnType<SalesTeamsService['emptyScoreBucket']>>();
+    const scoreByVendor = new Map<
+      string,
+      ReturnType<SalesTeamsService["emptyScoreBucket"]>
+    >();
     scoreRows.forEach((row) => {
-      const current = scoreByVendor.get(row.vendor_id) ?? this.emptyScoreBucket();
+      const current =
+        scoreByVendor.get(row.vendor_id) ?? this.emptyScoreBucket();
       current[row.kind].count += 1;
       current[row.kind].points += Number(row.points ?? 0);
       current.total_points += Number(row.points ?? 0);
@@ -207,8 +236,10 @@ export class SalesTeamsService {
     return teams.map((team) => {
       const teamScore = this.emptyScoreBucket();
       const vendorMetrics = team.members.map((member) => {
-        const vendorScore = scoreByVendor.get(member.user_id) ?? this.emptyScoreBucket();
-        const assigned = teamVendorAssigned.get(team.id)?.get(member.user_id) ?? 0;
+        const vendorScore =
+          scoreByVendor.get(member.user_id) ?? this.emptyScoreBucket();
+        const assigned =
+          teamVendorAssigned.get(team.id)?.get(member.user_id) ?? 0;
         const metrics = {
           vendor_id: member.user.id,
           vendor_name: member.user.name,
@@ -253,13 +284,17 @@ export class SalesTeamsService {
     });
   }
 
-  async findAll(user: AuthenticatedUser, eventIdParam?: string, clientIdParam?: string) {
+  async findAll(
+    user: AuthenticatedUser,
+    eventIdParam?: string,
+    clientIdParam?: string,
+  ) {
     if (eventIdParam) {
-      const event = await this.getEventForAccess(user, eventIdParam, 'read');
+      const event = await this.getEventForAccess(user, eventIdParam, "read");
 
       const teams = await this.prisma.salesTeam.findMany({
         where: { event_id: event.id },
-        orderBy: { created_at: 'asc' },
+        orderBy: { created_at: "asc" },
         include: {
           members: {
             include: {
@@ -275,7 +310,7 @@ export class SalesTeamsService {
                 },
               },
             },
-            orderBy: { added_at: 'asc' },
+            orderBy: { added_at: "asc" },
           },
         },
       });
@@ -288,7 +323,7 @@ export class SalesTeamsService {
 
     return this.prisma.salesTeam.findMany({
       where: { client_id: clientId },
-      orderBy: { created_at: 'asc' },
+      orderBy: { created_at: "asc" },
       include: {
         members: {
           include: {
@@ -304,7 +339,7 @@ export class SalesTeamsService {
               },
             },
           },
-          orderBy: { added_at: 'asc' },
+          orderBy: { added_at: "asc" },
         },
       },
     });
@@ -318,16 +353,19 @@ export class SalesTeamsService {
   ) {
     if (!eventIdParam) {
       if (clientIdParam) {
-        throw new BadRequestException('event_id obrigatório para criar time no evento');
+        throw new BadRequestException(
+          "event_id obrigatório para criar time no evento",
+        );
       }
-      throw new BadRequestException('event_id obrigatório para criar time');
+      throw new BadRequestException("event_id obrigatório para criar time");
     }
 
     const event = await this.getEventForAccess(user, eventIdParam);
 
     return this.prisma.salesTeam.create({
       data: {
-        client_id: this.getEventParticipantClientIds(event)[0] ?? event.client_id,
+        client_id:
+          this.getEventParticipantClientIds(event)[0] ?? event.client_id,
         event_id: event.id,
         name: dto.name.trim(),
       },
@@ -351,12 +389,17 @@ export class SalesTeamsService {
     });
   }
 
-  async update(user: AuthenticatedUser, teamId: string, dto: UpdateSalesTeamDto) {
+  async update(
+    user: AuthenticatedUser,
+    teamId: string,
+    dto: UpdateSalesTeamDto,
+  ) {
     await this.getTeamForAccess(user, teamId);
 
     const data: { name?: string; logo_url?: string | null } = {};
     if (dto.name !== undefined) data.name = dto.name.trim();
-    if (dto.logo_url !== undefined) data.logo_url = dto.logo_url?.trim() || null;
+    if (dto.logo_url !== undefined)
+      data.logo_url = dto.logo_url?.trim() || null;
 
     return this.prisma.salesTeam.update({
       where: { id: teamId },
@@ -376,7 +419,7 @@ export class SalesTeamsService {
               },
             },
           },
-          orderBy: { added_at: 'asc' },
+          orderBy: { added_at: "asc" },
         },
       },
     });
@@ -388,13 +431,21 @@ export class SalesTeamsService {
     return { deleted: true };
   }
 
-  async addMember(user: AuthenticatedUser, teamId: string, dto: AddTeamMemberDto) {
+  async addMember(
+    user: AuthenticatedUser,
+    teamId: string,
+    dto: AddTeamMemberDto,
+  ) {
     const team = await this.getTeamForAccess(user, teamId);
 
-    const member = await this.prisma.user.findUnique({ where: { id: dto.user_id } });
-    if (!member) throw new NotFoundException('Usuário não encontrado');
-    if (member.role !== 'vendedor') {
-      throw new BadRequestException('Apenas vendedores podem ser adicionados a um time');
+    const member = await this.prisma.user.findUnique({
+      where: { id: dto.user_id },
+    });
+    if (!member) throw new NotFoundException("Usuário não encontrado");
+    if (member.role !== "vendedor") {
+      throw new BadRequestException(
+        "Apenas vendedores podem ser adicionados a um time",
+      );
     }
     if (team.event_id && member.client_id) {
       const eventParticipant = await this.prisma.eventParticipant.findFirst({
@@ -405,7 +456,9 @@ export class SalesTeamsService {
         select: { id: true },
       });
       if (!eventParticipant) {
-        throw new BadRequestException('O cliente deste vendedor não participa deste evento');
+        throw new BadRequestException(
+          "O cliente deste vendedor não participa deste evento",
+        );
       }
     }
 
@@ -422,7 +475,9 @@ export class SalesTeamsService {
     });
 
     if (existingMembership && existingMembership.team_id !== teamId) {
-      throw new BadRequestException('Este vendedor já está em outro time deste evento');
+      throw new BadRequestException(
+        "Este vendedor já está em outro time deste evento",
+      );
     }
 
     await this.prisma.salesTeamMember.upsert({

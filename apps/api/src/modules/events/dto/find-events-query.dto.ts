@@ -1,5 +1,5 @@
-import { EventStatus } from '@prisma/client';
-import { IsEnum, IsOptional, IsUUID } from 'class-validator';
+import { EventStatus } from "@prisma/client";
+import { IsEnum, IsOptional, IsUUID } from "class-validator";
 
 export class FindEventsQueryDto {
   @IsOptional()

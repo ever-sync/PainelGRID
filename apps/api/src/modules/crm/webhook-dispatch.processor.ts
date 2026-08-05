@@ -1,11 +1,11 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
-import { Job } from 'bullmq';
-import { request as httpsRequest } from 'node:https';
-import type { LookupFunction } from 'node:net';
-import { resolveSafeWebhookDestination } from '../../common/outbound-url.util';
-import { PrismaService } from '../../config/prisma.service';
-import { WebhookDispatchService } from './webhook-dispatch.service';
+import { Processor, WorkerHost } from "@nestjs/bullmq";
+import { Logger } from "@nestjs/common";
+import { Job } from "bullmq";
+import { request as httpsRequest } from "node:https";
+import type { LookupFunction } from "node:net";
+import { resolveSafeWebhookDestination } from "../../common/outbound-url.util";
+import { PrismaService } from "../../config/prisma.service";
+import { WebhookDispatchService } from "./webhook-dispatch.service";
 
 type WebhookDispatchJob = {
   webhookEventId: string;
@@ -15,9 +15,15 @@ type IdempotencyCleanupJob = {
   olderThanHours: number;
 };
 
-const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000, 6 * 60 * 60_000];
+const RETRY_DELAYS_MS = [
+  60_000,
+  5 * 60_000,
+  15 * 60_000,
+  60 * 60_000,
+  6 * 60 * 60_000,
+];
 
-@Processor('webhook-dispatch')
+@Processor("webhook-dispatch")
 export class WebhookDispatchProcessor extends WorkerHost {
   private readonly logger = new Logger(WebhookDispatchProcessor.name);
 
@@ -28,11 +34,13 @@ export class WebhookDispatchProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<WebhookDispatchJob | IdempotencyCleanupJob, void, string>) {
+  async process(
+    job: Job<WebhookDispatchJob | IdempotencyCleanupJob, void, string>,
+  ) {
     switch (job.name) {
-      case 'dispatch':
+      case "dispatch":
         return this.handleDispatch(job as Job<WebhookDispatchJob>);
-      case 'cleanup-idempotency':
+      case "cleanup-idempotency":
         return this.handleCleanupIdempotency(job as Job<IdempotencyCleanupJob>);
       default:
         throw new Error(`Job de webhook desconhecido: ${job.name}`);
@@ -48,7 +56,7 @@ export class WebhookDispatchProcessor extends WorkerHost {
     }
 
     try {
-      if (webhookEvent.destination_url.startsWith('internal://')) {
+      if (webhookEvent.destination_url.startsWith("internal://")) {
         await this.prisma.webhookEvent.update({
           where: { id: webhookEvent.id },
           data: {
@@ -60,8 +68,13 @@ export class WebhookDispatchProcessor extends WorkerHost {
         return;
       }
 
-      const destination = await resolveSafeWebhookDestination(webhookEvent.destination_url);
-      const status = await this.postPinnedWebhook(destination, webhookEvent.payload);
+      const destination = await resolveSafeWebhookDestination(
+        webhookEvent.destination_url,
+      );
+      const status = await this.postPinnedWebhook(
+        destination,
+        webhookEvent.payload,
+      );
 
       await this.prisma.webhookEvent.update({
         where: { id: webhookEvent.id },
@@ -74,7 +87,10 @@ export class WebhookDispatchProcessor extends WorkerHost {
     } catch (error) {
       const nextRetries = webhookEvent.retries + 1;
       const canRetry = nextRetries <= webhookEvent.max_retries;
-      const delayMs = RETRY_DELAYS_MS[Math.min(webhookEvent.retries, RETRY_DELAYS_MS.length - 1)];
+      const delayMs =
+        RETRY_DELAYS_MS[
+          Math.min(webhookEvent.retries, RETRY_DELAYS_MS.length - 1)
+        ];
       const nextRetryAt = canRetry ? new Date(Date.now() + delayMs) : null;
 
       await this.prisma.webhookEvent.update({
@@ -90,7 +106,7 @@ export class WebhookDispatchProcessor extends WorkerHost {
         await this.webhookDispatchService.enqueue(webhookEvent.id, delayMs);
       } else {
         this.logger.error(
-          'Webhook excedeu limite de tentativas',
+          "Webhook excedeu limite de tentativas",
           error instanceof Error ? error.stack : undefined,
         );
       }
@@ -110,13 +126,13 @@ export class WebhookDispatchProcessor extends WorkerHost {
       const request = httpsRequest(
         destination.url,
         {
-          method: 'POST',
+          method: "POST",
           agent: false,
           lookup,
           servername: destination.url.hostname,
           headers: {
-            'content-type': 'application/json',
-            'content-length': Buffer.byteLength(body),
+            "content-type": "application/json",
+            "content-length": Buffer.byteLength(body),
           },
         },
         (response) => {
@@ -131,9 +147,9 @@ export class WebhookDispatchProcessor extends WorkerHost {
       );
 
       request.setTimeout(10_000, () => {
-        request.destroy(new Error('Timeout ao enviar webhook'));
+        request.destroy(new Error("Timeout ao enviar webhook"));
       });
-      request.on('error', reject);
+      request.on("error", reject);
       request.end(body);
     });
   }

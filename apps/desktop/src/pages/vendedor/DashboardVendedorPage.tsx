@@ -147,9 +147,7 @@ export function DashboardVendedorPage() {
   const myEventScheduledCount = myEventVendor?.scheduled ?? 0;
   const appointmentMetaPct = activeEventScheduledTarget
     ? Math.min(
-        Math.round(
-          (myEventScheduledCount / activeEventScheduledTarget) * 100,
-        ),
+        Math.round((myEventScheduledCount / activeEventScheduledTarget) * 100),
         100,
       )
     : 0;

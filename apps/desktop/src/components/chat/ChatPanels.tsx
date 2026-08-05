@@ -302,7 +302,9 @@ function MessageBubble({
   }
 
   return (
-    <div className={clsx("flex my-1", isVendor ? "justify-end" : "justify-start")}>
+    <div
+      className={clsx("flex my-1", isVendor ? "justify-end" : "justify-start")}
+    >
       <article
         className={clsx(
           "w-fit max-w-[85%] px-4 py-2.5 text-sm leading-relaxed shadow-sm sm:max-w-[75%] lg:max-w-[65%]",
@@ -315,7 +317,9 @@ function MessageBubble({
       >
         {((!message.media_url && !message.media_id) ||
           !isMediaPlaceholder(message.text)) && (
-          <p className="whitespace-pre-line break-words font-medium">{message.text}</p>
+          <p className="whitespace-pre-line break-words font-medium">
+            {message.text}
+          </p>
         )}
         {(message.media_url || message.media_id) && (
           <MediaAttachment message={message} token={token} dark={dark} />
@@ -415,7 +419,9 @@ export function ConversationSidebar({
       <div
         className={clsx(
           "flex items-center justify-between px-5 py-4 border-b",
-          dark ? "border-zinc-800/80 bg-[#15161b]" : "border-zinc-100 bg-zinc-50/60",
+          dark
+            ? "border-zinc-800/80 bg-[#15161b]"
+            : "border-zinc-100 bg-zinc-50/60",
         )}
       >
         <div className="flex items-center gap-2">
@@ -465,12 +471,19 @@ export function ConversationSidebar({
               )}
             >
               {allowAllClients ? (
-                <option value="" className={dark ? "bg-zinc-900 text-zinc-100" : ""}>
+                <option
+                  value=""
+                  className={dark ? "bg-zinc-900 text-zinc-100" : ""}
+                >
                   Todos os clientes
                 </option>
               ) : null}
               {clients.map((client) => (
-                <option key={client.id} value={client.id} className={dark ? "bg-zinc-900 text-zinc-100" : ""}>
+                <option
+                  key={client.id}
+                  value={client.id}
+                  className={dark ? "bg-zinc-900 text-zinc-100" : ""}
+                >
                   {client.company_name}
                 </option>
               ))}
@@ -597,14 +610,22 @@ export function ChatThread({
   }, [conversation]);
 
   const window24hStatus = useMemo(() => {
-    if (!lastLeadMessage) return { isOpen: false, text: "Janela 24h Expirada", hoursLeft: 0 };
+    if (!lastLeadMessage)
+      return { isOpen: false, text: "Janela 24h Expirada", hoursLeft: 0 };
     const leadTime = new Date(lastLeadMessage.timestamp).getTime();
     const now = Date.now();
     const diffMs = now - leadTime;
     const twentyFourHoursMs = 24 * 60 * 60 * 1000;
     if (diffMs < twentyFourHoursMs) {
-      const hoursLeft = Math.max(1, Math.floor((twentyFourHoursMs - diffMs) / (60 * 60 * 1000)));
-      return { isOpen: true, text: `Janela 24h Aberta (${hoursLeft}h)`, hoursLeft };
+      const hoursLeft = Math.max(
+        1,
+        Math.floor((twentyFourHoursMs - diffMs) / (60 * 60 * 1000)),
+      );
+      return {
+        isOpen: true,
+        text: `Janela 24h Aberta (${hoursLeft}h)`,
+        hoursLeft,
+      };
     }
     return { isOpen: false, text: "Janela 24h Expirada", hoursLeft: 0 };
   }, [lastLeadMessage]);
@@ -612,18 +633,33 @@ export function ChatThread({
   if (!conversation) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-        <div className={clsx(
-          "flex h-16 w-16 items-center justify-center rounded-3xl border shadow-sm",
-          dark ? "border-zinc-800 bg-zinc-900 text-zinc-400" : "border-zinc-200 bg-zinc-50 text-zinc-400"
-        )}>
+        <div
+          className={clsx(
+            "flex h-16 w-16 items-center justify-center rounded-3xl border shadow-sm",
+            dark
+              ? "border-zinc-800 bg-zinc-900 text-zinc-400"
+              : "border-zinc-200 bg-zinc-50 text-zinc-400",
+          )}
+        >
           <Sparkles size={28} className="text-[#FF0636]" />
         </div>
         <div>
-          <p className={clsx("text-base font-bold tracking-tight", dark ? "text-zinc-200" : "text-zinc-900")}>
+          <p
+            className={clsx(
+              "text-base font-bold tracking-tight",
+              dark ? "text-zinc-200" : "text-zinc-900",
+            )}
+          >
             Selecione uma conversa
           </p>
-          <p className={clsx("mt-1 text-xs", dark ? "text-zinc-400" : "text-zinc-500")}>
-            Escolha um lead na barra lateral para visualizar as mensagens e interagir.
+          <p
+            className={clsx(
+              "mt-1 text-xs",
+              dark ? "text-zinc-400" : "text-zinc-500",
+            )}
+          >
+            Escolha um lead na barra lateral para visualizar as mensagens e
+            interagir.
           </p>
         </div>
       </div>
@@ -635,7 +671,9 @@ export function ChatThread({
       <header
         className={clsx(
           "flex items-center justify-between gap-3 px-6 py-4 border-b",
-          dark ? "border-zinc-800/80 bg-[#15161b]" : "border-zinc-100 bg-white/90",
+          dark
+            ? "border-zinc-800/80 bg-[#15161b]"
+            : "border-zinc-100 bg-white/90",
         )}
       >
         <div className="flex min-w-0 items-center gap-3.5">
@@ -662,7 +700,10 @@ export function ChatThread({
                   {window24hStatus.text}
                 </span>
               ) : (
-                <span className="shrink-0 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2.5 py-0.5 text-[10px] font-extrabold flex items-center gap-1" title="Janela de 24h da Meta expirada. Requer envio de Template HSM para retomar contato.">
+                <span
+                  className="shrink-0 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2.5 py-0.5 text-[10px] font-extrabold flex items-center gap-1"
+                  title="Janela de 24h da Meta expirada. Requer envio de Template HSM para retomar contato."
+                >
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                   {window24hStatus.text}
                 </span>
@@ -696,7 +737,15 @@ export function ChatThread({
               >
                 <option value="">Sem Etapa CRM</option>
                 {pipelineStages.map((stage) => (
-                  <option key={stage.id} value={stage.id} className={dark ? "bg-zinc-900 text-zinc-100" : "bg-white text-zinc-900"}>
+                  <option
+                    key={stage.id}
+                    value={stage.id}
+                    className={
+                      dark
+                        ? "bg-zinc-900 text-zinc-100"
+                        : "bg-white text-zinc-900"
+                    }
+                  >
                     📍 {stage.name}
                   </option>
                 ))}

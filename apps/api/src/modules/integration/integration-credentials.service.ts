@@ -1,6 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { createHash, randomBytes } from 'node:crypto';
-import { PrismaService } from '../../config/prisma.service';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { createHash, randomBytes } from "node:crypto";
+import { PrismaService } from "../../config/prisma.service";
 
 @Injectable()
 export class IntegrationCredentialsService {
@@ -10,7 +14,7 @@ export class IntegrationCredentialsService {
     await this.assertOwnedClient(gestorId, clientId);
     const rows = await this.prisma.integrationCredential.findMany({
       where: { client_id: clientId },
-      orderBy: { created_at: 'desc' },
+      orderBy: { created_at: "desc" },
     });
     return rows.map((row) => this.serialize(row));
   }
@@ -41,7 +45,7 @@ export class IntegrationCredentialsService {
       where: { id: credentialId, client_id: clientId },
     });
     if (!current) {
-      throw new NotFoundException('Credencial de integracao nao encontrada');
+      throw new NotFoundException("Credencial de integracao nao encontrada");
     }
 
     const plaintext = this.generateKey();
@@ -69,7 +73,7 @@ export class IntegrationCredentialsService {
       where: { id: credentialId, client_id: clientId },
     });
     if (!credential) {
-      throw new NotFoundException('Credencial de integracao nao encontrada');
+      throw new NotFoundException("Credencial de integracao nao encontrada");
     }
     const row = await this.prisma.integrationCredential.update({
       where: { id: credential.id },
@@ -79,22 +83,25 @@ export class IntegrationCredentialsService {
   }
 
   /** Gestor e papel global: valida existencia da empresa, nao propriedade. */
-  private async assertOwnedClient(_gestorId: string, clientId: string): Promise<void> {
+  private async assertOwnedClient(
+    _gestorId: string,
+    clientId: string,
+  ): Promise<void> {
     const client = await this.prisma.client.findFirst({
       where: { id: clientId },
       select: { id: true },
     });
     if (!client) {
-      throw new NotFoundException('Cliente nao encontrado');
+      throw new NotFoundException("Cliente nao encontrado");
     }
   }
 
   private generateKey(): string {
-    return `lfi_${randomBytes(32).toString('base64url')}`;
+    return `lfi_${randomBytes(32).toString("base64url")}`;
   }
 
   private hashKey(value: string): string {
-    return createHash('sha256').update(value, 'utf8').digest('hex');
+    return createHash("sha256").update(value, "utf8").digest("hex");
   }
 
   private parseFutureExpiration(value?: string): Date | null {
@@ -103,7 +110,9 @@ export class IntegrationCredentialsService {
     }
     const date = new Date(value);
     if (date.getTime() <= Date.now()) {
-      throw new BadRequestException('A expiracao da credencial deve estar no futuro');
+      throw new BadRequestException(
+        "A expiracao da credencial deve estar no futuro",
+      );
     }
     return date;
   }

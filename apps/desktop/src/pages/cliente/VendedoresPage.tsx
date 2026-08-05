@@ -1060,7 +1060,11 @@ export function VendedoresPage() {
         size="lg"
         dark={darkShell}
         footer={
-          <Button variant="secondary" size="lg" onClick={() => setShowModal(false)}>
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={() => setShowModal(false)}
+          >
             Fechar
           </Button>
         }

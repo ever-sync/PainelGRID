@@ -7,49 +7,55 @@ import {
   Logger,
   NotFoundException,
   UnprocessableEntityException,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { AppointmentStatus, ConfirmationStatus, Lead, LeadSource, Prisma } from '@prisma/client';
-import { readSheet } from 'read-excel-file/node';
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import {
+  AppointmentStatus,
+  ConfirmationStatus,
+  Lead,
+  LeadSource,
+  Prisma,
+} from "@prisma/client";
+import { readSheet } from "read-excel-file/node";
 import {
   looksLikeJwtCompact,
   signCheckinVoucher,
   verifyCheckinVoucher,
-} from '../../common/checkin-voucher.util';
+} from "../../common/checkin-voucher.util";
 import {
   encryptCheckinToken,
   decryptCheckinToken,
   generateRawCheckinToken,
-} from '../../common/utils/crypto.util';
-import { normalizeBrazilianPhone, phoneDigits } from '../../common/phone.util';
-import { generateQrPngBuffer } from '../../common/qrcode.util';
-import { Role } from '../../common/types';
-import { PrismaService } from '../../config/prisma.service';
-import { AuthenticatedUser } from '../auth/auth.types';
-import { ClientsService } from '../clients/clients.service';
-import { ClientWebhookService } from '../crm/client-webhook.service';
-import { LeadTimelineService } from '../lead-timeline/lead-timeline.service';
-import type { MetaLeadWhatsappTemplateParameterKey } from '../meta/dto/upsert-meta-lead-routing.dto';
-import { MetaService } from '../meta/meta.service';
-import { resolveConfirmationStatusForStage } from '../clients/client-settings';
-import { clientIdToStageCode } from '../crm/default-crm-pipeline';
-import { RealtimeEventsService } from '../realtime/realtime-events.service';
-import { ScoreEventsService } from '../score-events/score-events.service';
-import { CreateLeadDto } from './dto/create-lead.dto';
-import { FacebookLeadPayloadDto } from './dto/facebook-lead-payload.dto';
-import { CloseAttendanceDto } from './dto/close-attendance.dto';
-import { FindLeadsQueryDto } from './dto/find-leads-query.dto';
-import { ImportLeadsDto } from './dto/import-leads.dto';
-import { IntegrationPatchLeadDto } from './dto/integration-patch-lead.dto';
-import { ReconcileLeadsDto } from './dto/reconcile-leads.dto';
-import { UpdateLeadDto } from './dto/update-lead.dto';
-import { RedisService } from '../../config/redis.service';
+} from "../../common/utils/crypto.util";
+import { normalizeBrazilianPhone, phoneDigits } from "../../common/phone.util";
+import { generateQrPngBuffer } from "../../common/qrcode.util";
+import { Role } from "../../common/types";
+import { PrismaService } from "../../config/prisma.service";
+import { AuthenticatedUser } from "../auth/auth.types";
+import { ClientsService } from "../clients/clients.service";
+import { ClientWebhookService } from "../crm/client-webhook.service";
+import { LeadTimelineService } from "../lead-timeline/lead-timeline.service";
+import type { MetaLeadWhatsappTemplateParameterKey } from "../meta/dto/upsert-meta-lead-routing.dto";
+import { MetaService } from "../meta/meta.service";
+import { resolveConfirmationStatusForStage } from "../clients/client-settings";
+import { clientIdToStageCode } from "../crm/default-crm-pipeline";
+import { RealtimeEventsService } from "../realtime/realtime-events.service";
+import { ScoreEventsService } from "../score-events/score-events.service";
+import { CreateLeadDto } from "./dto/create-lead.dto";
+import { FacebookLeadPayloadDto } from "./dto/facebook-lead-payload.dto";
+import { CloseAttendanceDto } from "./dto/close-attendance.dto";
+import { FindLeadsQueryDto } from "./dto/find-leads-query.dto";
+import { ImportLeadsDto } from "./dto/import-leads.dto";
+import { IntegrationPatchLeadDto } from "./dto/integration-patch-lead.dto";
+import { ReconcileLeadsDto } from "./dto/reconcile-leads.dto";
+import { UpdateLeadDto } from "./dto/update-lead.dto";
+import { RedisService } from "../../config/redis.service";
 import {
   buildLeadPhoneCandidates,
   isLeadEmailUniqueViolation,
   isLeadExternalRefUniqueViolation,
   isLeadPhoneUniqueViolation,
-} from './lead-identity.util';
+} from "./lead-identity.util";
 
 // Otimização: carregamos apenas o último appointment + somente os campos
 // realmente consumidos por `toResponse` (evita transferir colunas grandes
@@ -116,10 +122,10 @@ const leadSelect = {
       id: true,
     },
     take: 1,
-    orderBy: { last_message_at: 'desc' },
+    orderBy: { last_message_at: "desc" },
   },
   appointments: {
-    orderBy: { scheduled_at: 'desc' },
+    orderBy: { scheduled_at: "desc" },
     take: 1,
     select: {
       id: true,
@@ -175,7 +181,7 @@ type AutomaticFacebookRouting = {
 type AutomaticFacebookPreparedLead = {
   payload: FacebookLeadPayloadDto;
   routing: AutomaticFacebookRouting;
-  channel: 'ligacao' | 'whatsapp';
+  channel: "ligacao" | "whatsapp";
   targetStage: { id: string; code: string; name: string };
   mappedStatus: ConfirmationStatus | null;
   metadata: FacebookLeadMetadata;
@@ -192,13 +198,13 @@ type AutomaticFacebookTransactionItem = {
 };
 
 type AutomaticWhatsappDispatchResult = {
-  status: 'not_requested' | 'skipped' | 'sent' | 'failed';
+  status: "not_requested" | "skipped" | "sent" | "failed";
   reason?:
-    | 'channel_ligacao'
-    | 'duplicate_delivery'
-    | 'phone_missing'
-    | 'template_not_configured'
-    | 'provider_error';
+    | "channel_ligacao"
+    | "duplicate_delivery"
+    | "phone_missing"
+    | "template_not_configured"
+    | "provider_error";
   template_name?: string;
   template_language?: string;
   message_id?: string | null;
@@ -206,11 +212,11 @@ type AutomaticWhatsappDispatchResult = {
 };
 
 const AUTOMATIC_WHATSAPP_TEMPLATE_PARAMETER_KEYS = new Set<string>([
-  'lead_name',
-  'event_name',
-  'company_name',
-  'event_date',
-  'event_location',
+  "lead_name",
+  "event_name",
+  "company_name",
+  "event_date",
+  "event_location",
 ]);
 
 const CHECKIN_VOUCHER_TTL_SEC = 90 * 24 * 60 * 60;
@@ -234,14 +240,20 @@ export class LeadsService {
   ) {}
 
   private checkinVoucherSecret(): string {
-    const dedicated = this.config.get<string>('LEADFLOW_CHECKIN_VOUCHER_SECRET')?.trim();
+    const dedicated = this.config
+      .get<string>("LEADFLOW_CHECKIN_VOUCHER_SECRET")
+      ?.trim();
     if (dedicated) {
       return dedicated;
     }
-    return this.config.get<string>('JWT_SECRET', 'leadflow_access_secret');
+    return this.config.get<string>("JWT_SECRET", "leadflow_access_secret");
   }
 
-  private async findLeadByEmail(clientId: string, email?: string | null, excludeLeadId?: string) {
+  private async findLeadByEmail(
+    clientId: string,
+    email?: string | null,
+    excludeLeadId?: string,
+  ) {
     const normalized = email?.toLowerCase().trim();
     if (!normalized) {
       return null;
@@ -271,7 +283,10 @@ export class LeadsService {
       return null;
     }
     const eventScope: Prisma.LeadWhereInput = {
-      OR: [{ event_interest_id: eventId }, { appointments: { some: { event_id: eventId } } }],
+      OR: [
+        { event_interest_id: eventId },
+        { appointments: { some: { event_id: eventId } } },
+      ],
     };
     const exactPhoneScope: Prisma.LeadWhereInput = {
       OR: candidateSet.candidates.map((candidate) => ({ phone: candidate })),
@@ -316,7 +331,9 @@ export class LeadsService {
           client_id: clientId,
           deleted_at: null,
           ...(excludeLeadId ? { id: { not: excludeLeadId } } : {}),
-          ...(eventId ? { AND: [eventScope, suffixPhoneScope] } : suffixPhoneScope),
+          ...(eventId
+            ? { AND: [eventScope, suffixPhoneScope] }
+            : suffixPhoneScope),
         },
         select: leadSelect,
       });
@@ -386,7 +403,7 @@ export class LeadsService {
         select: { id: true, created_at: true },
       });
       if (!cursorRow) {
-        throw new NotFoundException('Cursor de paginacao invalido');
+        throw new NotFoundException("Cursor de paginacao invalido");
       }
     }
 
@@ -400,7 +417,7 @@ export class LeadsService {
             ],
           }
         : where,
-      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      orderBy: [{ created_at: "desc" }, { id: "desc" }],
       select: leadSelect,
       take: take + 1,
     });
@@ -443,7 +460,7 @@ export class LeadsService {
     if (stageByLeadId.size === 0) return result;
 
     const groups = await this.prisma.crmHistory.groupBy({
-      by: ['lead_id', 'to_stage_id'],
+      by: ["lead_id", "to_stage_id"],
       where: { lead_id: { in: Array.from(stageByLeadId.keys()) } },
       _max: { created_at: true },
     });
@@ -461,24 +478,24 @@ export class LeadsService {
     const where = await this.buildListWhere(user, query);
     const rows = await this.prisma.lead.findMany({
       where,
-      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      orderBy: [{ created_at: "desc" }, { id: "desc" }],
       select: leadSelect,
       take: 5_000,
     });
 
     const header = [
-      'id',
-      'client_id',
-      'name',
-      'email',
-      'phone',
-      'source',
-      'crm_stage_code',
-      'confirmation_status',
-      'tags',
-      'event_interest_name',
-      'notes',
-      'created_at',
+      "id",
+      "client_id",
+      "name",
+      "email",
+      "phone",
+      "source",
+      "crm_stage_code",
+      "confirmation_status",
+      "tags",
+      "event_interest_name",
+      "notes",
+      "created_at",
     ];
 
     const lines = rows.map((row) =>
@@ -486,46 +503,50 @@ export class LeadsService {
         row.id,
         row.client_id,
         row.name,
-        row.email ?? '',
-        row.phone ?? '',
+        row.email ?? "",
+        row.phone ?? "",
         row.source,
-        row.crm_stage?.code ?? '',
+        row.crm_stage?.code ?? "",
         row.confirmation_status,
-        (row.tags ?? []).join('|'),
-        row.event_interest?.name ?? '',
-        row.notes ?? '',
+        (row.tags ?? []).join("|"),
+        row.event_interest?.name ?? "",
+        row.notes ?? "",
         row.created_at.toISOString(),
       ]
         .map((value) => this.escapeCsv(value))
-        .join(','),
+        .join(","),
     );
 
-    return [header.join(','), ...lines].join('\n');
+    return [header.join(","), ...lines].join("\n");
   }
 
   async importCsv(
     user: AuthenticatedUser,
     dto: ImportLeadsDto,
-    file: { buffer: Buffer; originalname?: string; mimetype?: string } | undefined,
+    file:
+      { buffer: Buffer; originalname?: string; mimetype?: string } | undefined,
   ) {
     if (!file?.buffer?.length) {
-      throw new BadRequestException('Arquivo CSV ou XLSX obrigatorio.');
+      throw new BadRequestException("Arquivo CSV ou XLSX obrigatorio.");
     }
 
-    const targetClientId = await this.resolveImportClientId(user, dto.client_id);
+    const targetClientId = await this.resolveImportClientId(
+      user,
+      dto.client_id,
+    );
     const rows = await this.parseImportRows(file);
     if (rows.length === 0) {
-      throw new BadRequestException('Arquivo vazio.');
+      throw new BadRequestException("Arquivo vazio.");
     }
 
     const header = rows[0].map((h) => h.trim().toLowerCase());
     const indexes = {
-      name: header.indexOf('name'),
-      email: header.indexOf('email'),
-      phone: header.indexOf('phone'),
-      source: header.indexOf('source'),
-      tags: header.indexOf('tags'),
-      notes: header.indexOf('notes'),
+      name: header.indexOf("name"),
+      email: header.indexOf("email"),
+      phone: header.indexOf("phone"),
+      source: header.indexOf("source"),
+      tags: header.indexOf("tags"),
+      notes: header.indexOf("notes"),
     };
 
     if (indexes.name < 0) {
@@ -541,7 +562,7 @@ export class LeadsService {
         name: string;
         email: string | null;
         phone: string | null;
-        source: Lead['source'];
+        source: Lead["source"];
         tags: string[];
         notes: string | null;
       };
@@ -553,13 +574,13 @@ export class LeadsService {
     for (let i = 1; i < rows.length; i += 1) {
       const row = rows[i];
       const line = i + 1;
-      const name = (row[indexes.name] ?? '').trim();
+      const name = (row[indexes.name] ?? "").trim();
       if (!name) {
         skipped += 1;
         continue;
       }
 
-      const sourceRaw = (row[indexes.source] ?? 'manual').trim();
+      const sourceRaw = (row[indexes.source] ?? "manual").trim();
       const source = this.normalizeSource(sourceRaw);
       if (!source) {
         skipped += 1;
@@ -567,11 +588,12 @@ export class LeadsService {
         continue;
       }
 
-      const email = (row[indexes.email] ?? '').trim().toLowerCase() || null;
-      const phone = normalizeBrazilianPhone((row[indexes.phone] ?? '').trim()) || null;
-      const notes = (row[indexes.notes] ?? '').trim() || null;
-      const tags = (row[indexes.tags] ?? '')
-        .split('|')
+      const email = (row[indexes.email] ?? "").trim().toLowerCase() || null;
+      const phone =
+        normalizeBrazilianPhone((row[indexes.phone] ?? "").trim()) || null;
+      const notes = (row[indexes.notes] ?? "").trim() || null;
+      const tags = (row[indexes.tags] ?? "")
+        .split("|")
         .map((tag) => tag.trim())
         .filter(Boolean)
         .slice(0, 20);
@@ -591,7 +613,9 @@ export class LeadsService {
     }
 
     // Bulk phone dedup: uma query para todos os telefones de uma vez
-    const phonesToCheck = validRows.map((r) => r.data.phone).filter((p): p is string => !!p);
+    const phonesToCheck = validRows
+      .map((r) => r.data.phone)
+      .filter((p): p is string => !!p);
     const existingPhones = new Set<string>();
     if (phonesToCheck.length > 0) {
       const existing = await this.prisma.lead.findMany({
@@ -629,8 +653,8 @@ export class LeadsService {
     if (created > 0) {
       this.realtimeEvents.emitLeadUpdated(targetClientId, {
         client_id: targetClientId,
-        action: 'created',
-        source: 'import',
+        action: "created",
+        source: "import",
         imported: created,
         updated_at: new Date().toISOString(),
       });
@@ -650,7 +674,7 @@ export class LeadsService {
     });
 
     if (!lead) {
-      throw new NotFoundException('Lead nao encontrado');
+      throw new NotFoundException("Lead nao encontrado");
     }
 
     await this.assertLeadAccess(user, lead);
@@ -667,17 +691,24 @@ export class LeadsService {
     let clientId: string | null = null;
     if (user.role === Role.GESTOR) {
       if (!requestedClientId) {
-        throw new BadRequestException('Gestor deve informar client_id para validar telefone');
+        throw new BadRequestException(
+          "Gestor deve informar client_id para validar telefone",
+        );
       }
-      await this.clientsService.assertGestorOwnsClient(user.sub, requestedClientId);
+      await this.clientsService.assertGestorOwnsClient(
+        user.sub,
+        requestedClientId,
+      );
       clientId = requestedClientId;
     } else {
       clientId = user.client_id ?? null;
       if (!clientId) {
-        throw new BadRequestException('Telefone deve ser validado em um cliente específico');
+        throw new BadRequestException(
+          "Telefone deve ser validado em um cliente específico",
+        );
       }
       if (requestedClientId && requestedClientId !== clientId) {
-        throw new ForbiddenException('client_id invalido');
+        throw new ForbiddenException("client_id invalido");
       }
     }
 
@@ -685,7 +716,12 @@ export class LeadsService {
       await this.assertEventExistsForClient(clientId, eventId);
     }
 
-    const existing = await this.findLeadByPhone(clientId, normalized, undefined, eventId);
+    const existing = await this.findLeadByPhone(
+      clientId,
+      normalized,
+      undefined,
+      eventId,
+    );
     if (!existing) {
       return { exists: false };
     }
@@ -720,7 +756,9 @@ export class LeadsService {
     const targetClientId = vendorBinding?.clientId ?? dto.client_id;
 
     await this.assertCanWriteClient(user, targetClientId);
-    const normalizedPhone = dto.phone?.trim() ? normalizeBrazilianPhone(dto.phone.trim()) : null;
+    const normalizedPhone = dto.phone?.trim()
+      ? normalizeBrazilianPhone(dto.phone.trim())
+      : null;
 
     if (normalizedPhone) {
       const existingByPhone = await this.findLeadByPhone(
@@ -732,8 +770,8 @@ export class LeadsService {
       if (existingByPhone) {
         throw new BadRequestException(
           dto.event_interest_id
-            ? 'Telefone ja cadastrado neste evento'
-            : 'Telefone ja cadastrado para este cliente',
+            ? "Telefone ja cadastrado neste evento"
+            : "Telefone ja cadastrado para este cliente",
         );
       }
     }
@@ -748,7 +786,7 @@ export class LeadsService {
         },
       });
       if (existingByEmail) {
-        throw new BadRequestException('E-mail ja cadastrado para este cliente');
+        throw new BadRequestException("E-mail ja cadastrado para este cliente");
       }
     }
 
@@ -758,7 +796,7 @@ export class LeadsService {
       const presencaAgendada = await this.prisma.crmStage.findFirst({
         where: {
           client_id: targetClientId,
-          code: clientIdToStageCode(targetClientId, 'PRESENCA_AGENDADA'),
+          code: clientIdToStageCode(targetClientId, "PRESENCA_AGENDADA"),
         },
         select: { id: true, pipeline_id: true },
       });
@@ -774,7 +812,10 @@ export class LeadsService {
       await this.assertCrmStageExistsForClient(targetClientId, defaultStageId);
     }
     if (dto.event_interest_id) {
-      await this.assertEventExistsForClient(targetClientId, dto.event_interest_id);
+      await this.assertEventExistsForClient(
+        targetClientId,
+        dto.event_interest_id,
+      );
     }
 
     const resolvedStatus = await this.resolveStatusForStageAssignment(
@@ -784,7 +825,9 @@ export class LeadsService {
     );
     const confirmationStatus =
       resolvedStatus ??
-      (assignedVendorId ? ConfirmationStatus.scheduled : ConfirmationStatus.pending);
+      (assignedVendorId
+        ? ConfirmationStatus.scheduled
+        : ConfirmationStatus.pending);
 
     let lead: LeadWithRelations;
     try {
@@ -812,8 +855,8 @@ export class LeadsService {
       if (isLeadPhoneUniqueViolation(error)) {
         throw new BadRequestException(
           dto.event_interest_id
-            ? 'Telefone ja cadastrado neste evento'
-            : 'Telefone ja cadastrado para este cliente',
+            ? "Telefone ja cadastrado neste evento"
+            : "Telefone ja cadastrado para este cliente",
         );
       }
       throw error;
@@ -821,7 +864,7 @@ export class LeadsService {
 
     const response = this.toResponse(lead);
 
-    void this.clientWebhook.dispatch(lead.client_id, 'lead.created', {
+    void this.clientWebhook.dispatch(lead.client_id, "lead.created", {
       lead_id: lead.id,
       client_id: lead.client_id,
       name: lead.name,
@@ -836,14 +879,14 @@ export class LeadsService {
     this.realtimeEvents.emitLeadUpdated(lead.client_id, {
       client_id: lead.client_id,
       lead_id: lead.id,
-      action: 'created',
+      action: "created",
       updated_at: lead.updated_at.toISOString(),
     });
     void this.leadTimeline.record({
       clientId: lead.client_id,
       leadId: lead.id,
-      eventType: 'created',
-      origin: 'crm',
+      eventType: "created",
+      origin: "crm",
       actorId: user.sub,
       actorLabel: user.name ?? null,
     });
@@ -858,7 +901,7 @@ export class LeadsService {
     });
 
     if (!lead) {
-      throw new NotFoundException('Lead nao encontrado');
+      throw new NotFoundException("Lead nao encontrado");
     }
 
     await this.assertLeadAccess(user, lead);
@@ -869,16 +912,28 @@ export class LeadsService {
     const nextPhone = dto.phone !== undefined ? dto.phone?.trim() : undefined;
     if (nextPhone) {
       const normalizedPhone = normalizeBrazilianPhone(nextPhone);
-      const existingByPhone = await this.findLeadByPhone(targetClientId, normalizedPhone, lead.id);
+      const existingByPhone = await this.findLeadByPhone(
+        targetClientId,
+        normalizedPhone,
+        lead.id,
+      );
       if (existingByPhone) {
-        throw new BadRequestException('Telefone ja cadastrado para este cliente');
+        throw new BadRequestException(
+          "Telefone ja cadastrado para este cliente",
+        );
       }
     }
 
     const nextStageId = dto.crm_stage_id;
-    if (user.role === Role.VENDEDOR && nextStageId != null && nextStageId !== lead.crm_stage_id) {
+    if (
+      user.role === Role.VENDEDOR &&
+      nextStageId != null &&
+      nextStageId !== lead.crm_stage_id
+    ) {
       if (!lead.crm_pipeline_id) {
-        throw new BadRequestException('Lead sem pipeline CRM para trocar etapa');
+        throw new BadRequestException(
+          "Lead sem pipeline CRM para trocar etapa",
+        );
       }
 
       const targetStage = await this.prisma.crmStage.findFirst({
@@ -890,7 +945,7 @@ export class LeadsService {
       });
 
       if (!targetStage) {
-        throw new BadRequestException('Etapa invalida para este lead');
+        throw new BadRequestException("Etapa invalida para este lead");
       }
 
       this.assertVendedorPatch(dto);
@@ -899,46 +954,59 @@ export class LeadsService {
         where: { id: lead.client_id },
         select: { settings: true },
       });
-      const mappedStatus = resolveConfirmationStatusForStage(client?.settings, targetStage.id);
+      const mappedStatus = resolveConfirmationStatusForStage(
+        client?.settings,
+        targetStage.id,
+      );
       if (mappedStatus) {
         data.confirmation_status = mappedStatus;
       }
       const nextStatus =
-        (data.confirmation_status as ConfirmationStatus | undefined) ?? lead.confirmation_status;
+        (data.confirmation_status as ConfirmationStatus | undefined) ??
+        lead.confirmation_status;
       const confirming = this.isConfirmingTransitionToStatus(lead, nextStatus);
       this.mergeCheckinTokenIfConfirmingStatus(lead, nextStatus, data);
       const historyNotes =
         mappedStatus != null
           ? dto.notes?.trim()
             ? `${dto.notes.trim()}\nStatus automático atualizado pela etapa do CRM`
-            : 'Status automático atualizado pela etapa do CRM'
+            : "Status automático atualizado pela etapa do CRM"
           : dto.notes?.trim() || null;
 
-      const { response, updated } = await this.prisma.$transaction(async (tx) => {
-        const updatedRow = (await tx.lead.update({
-          where: { id },
-          data,
-          select: leadSelect,
-        })) as LeadWithRelations;
+      const { response, updated } = await this.prisma.$transaction(
+        async (tx) => {
+          const updatedRow = (await tx.lead.update({
+            where: { id },
+            data,
+            select: leadSelect,
+          })) as LeadWithRelations;
 
-        await tx.crmHistory.create({
-          data: {
-            lead_id: lead.id,
-            from_stage_id: lead.crm_stage_id,
-            to_stage_id: targetStage.id,
-            changed_by_user_id: user.sub,
-            notes: historyNotes,
-          },
-        });
+          await tx.crmHistory.create({
+            data: {
+              lead_id: lead.id,
+              from_stage_id: lead.crm_stage_id,
+              to_stage_id: targetStage.id,
+              changed_by_user_id: user.sub,
+              notes: historyNotes,
+            },
+          });
 
-        return { response: this.toResponse(updatedRow), updated: updatedRow };
-      });
+          return { response: this.toResponse(updatedRow), updated: updatedRow };
+        },
+      );
 
-      if (updated.vehicle_plate && updated.vehicle_plate !== lead.vehicle_plate) {
-        void this.triggerFipeLookup(updated.id, updated.vehicle_plate, updated.notes);
+      if (
+        updated.vehicle_plate &&
+        updated.vehicle_plate !== lead.vehicle_plate
+      ) {
+        void this.triggerFipeLookup(
+          updated.id,
+          updated.vehicle_plate,
+          updated.notes,
+        );
       }
 
-      void this.clientWebhook.dispatch(updated.client_id, 'lead.updated', {
+      void this.clientWebhook.dispatch(updated.client_id, "lead.updated", {
         lead_id: lead.id,
         client_id: updated.client_id,
         updated_fields: Object.keys(dto),
@@ -947,7 +1015,7 @@ export class LeadsService {
       this.realtimeEvents.emitLeadUpdated(updated.client_id, {
         client_id: updated.client_id,
         lead_id: lead.id,
-        action: 'updated',
+        action: "updated",
         updated_at: new Date().toISOString(),
       });
 
@@ -962,7 +1030,8 @@ export class LeadsService {
     if (user.role !== Role.VENDEDOR && user.role !== Role.RECEPCAO) {
       await this.syncLeadVendorBinding(lead, dto, data);
     }
-    const stageWasChanged = nextStageId != null && nextStageId !== lead.crm_stage_id;
+    const stageWasChanged =
+      nextStageId != null && nextStageId !== lead.crm_stage_id;
     let stageChangedWithAutoStatus = false;
     let targetStage: {
       id: string;
@@ -977,7 +1046,8 @@ export class LeadsService {
           client_id: targetClientId,
           ...(dto.crm_pipeline_id || lead.crm_pipeline_id
             ? {
-                pipeline_id: dto.crm_pipeline_id ?? lead.crm_pipeline_id ?? undefined,
+                pipeline_id:
+                  dto.crm_pipeline_id ?? lead.crm_pipeline_id ?? undefined,
               }
             : {}),
         },
@@ -985,14 +1055,17 @@ export class LeadsService {
       });
 
       if (!targetStage) {
-        throw new BadRequestException('Etapa invalida para este lead');
+        throw new BadRequestException("Etapa invalida para este lead");
       }
 
       const client = await this.prisma.client.findUnique({
         where: { id: targetClientId },
         select: { settings: true },
       });
-      const mappedStatus = resolveConfirmationStatusForStage(client?.settings, targetStage.id);
+      const mappedStatus = resolveConfirmationStatusForStage(
+        client?.settings,
+        targetStage.id,
+      );
       if (mappedStatus) {
         data.confirmation_status = mappedStatus;
         stageChangedWithAutoStatus = true;
@@ -1000,7 +1073,8 @@ export class LeadsService {
     }
 
     const nextStatus =
-      (data.confirmation_status as ConfirmationStatus | undefined) ?? lead.confirmation_status;
+      (data.confirmation_status as ConfirmationStatus | undefined) ??
+      lead.confirmation_status;
     const confirming = this.isConfirmingTransitionToStatus(lead, nextStatus);
     this.mergeCheckinTokenIfConfirmingStatus(lead, nextStatus, data);
 
@@ -1022,7 +1096,7 @@ export class LeadsService {
                 notes: stageChangedWithAutoStatus
                   ? dto.notes?.trim()
                     ? `${dto.notes.trim()}\nStatus automático atualizado pela etapa do CRM`
-                    : 'Status automático atualizado pela etapa do CRM'
+                    : "Status automático atualizado pela etapa do CRM"
                   : dto.notes?.trim() || null,
               },
             });
@@ -1036,12 +1110,16 @@ export class LeadsService {
           })) as LeadWithRelations);
 
     if (updated.vehicle_plate && updated.vehicle_plate !== lead.vehicle_plate) {
-      void this.triggerFipeLookup(updated.id, updated.vehicle_plate, updated.notes);
+      void this.triggerFipeLookup(
+        updated.id,
+        updated.vehicle_plate,
+        updated.notes,
+      );
     }
 
     const response = this.toResponse(updated);
 
-    void this.clientWebhook.dispatch(updated.client_id, 'lead.updated', {
+    void this.clientWebhook.dispatch(updated.client_id, "lead.updated", {
       lead_id: lead.id,
       client_id: updated.client_id,
       updated_fields: Object.keys(dto),
@@ -1050,15 +1128,15 @@ export class LeadsService {
     this.realtimeEvents.emitLeadUpdated(updated.client_id, {
       client_id: updated.client_id,
       lead_id: lead.id,
-      action: 'updated',
+      action: "updated",
       updated_at: new Date().toISOString(),
     });
     if (lead.confirmation_status !== updated.confirmation_status) {
       void this.leadTimeline.record({
         clientId: updated.client_id,
         leadId: lead.id,
-        eventType: 'status_changed',
-        origin: 'crm',
+        eventType: "status_changed",
+        origin: "crm",
         fromValue: lead.confirmation_status,
         toValue: updated.confirmation_status,
         actorId: user.sub,
@@ -1069,8 +1147,8 @@ export class LeadsService {
       void this.leadTimeline.record({
         clientId: updated.client_id,
         leadId: lead.id,
-        eventType: updated.assigned_vendor_id ? 'assigned' : 'unassigned',
-        origin: 'crm',
+        eventType: updated.assigned_vendor_id ? "assigned" : "unassigned",
+        origin: "crm",
         fromValue: lead.assigned_vendor_id,
         toValue: updated.assigned_vendor_id,
         actorId: user.sub,
@@ -1087,7 +1165,7 @@ export class LeadsService {
 
   async assignToMe(user: AuthenticatedUser, id: string) {
     if (user.role !== Role.VENDEDOR || !user.client_id) {
-      throw new ForbiddenException('Apenas vendedor pode assumir lead');
+      throw new ForbiddenException("Apenas vendedor pode assumir lead");
     }
 
     const lead = await this.prisma.lead.findFirst({
@@ -1100,7 +1178,7 @@ export class LeadsService {
     });
 
     if (!lead) {
-      throw new NotFoundException('Lead nao encontrado');
+      throw new NotFoundException("Lead nao encontrado");
     }
 
     if (lead.assigned_vendor_id === user.sub) {
@@ -1119,11 +1197,14 @@ export class LeadsService {
       throw new BadRequestException(
         owner?.name
           ? `Lead ja atribuido ao vendedor ${owner.name}`
-          : 'Lead ja atribuido a outro vendedor',
+          : "Lead ja atribuido a outro vendedor",
       );
     }
 
-    const vendorBinding = await this.resolveVendorBinding(user.sub, lead.event_interest_id);
+    const vendorBinding = await this.resolveVendorBinding(
+      user.sub,
+      lead.event_interest_id,
+    );
 
     const updated = await this.prisma.lead.update({
       where: { id: lead.id },
@@ -1137,14 +1218,14 @@ export class LeadsService {
     this.realtimeEvents.emitLeadUpdated(updated.client_id, {
       client_id: updated.client_id,
       lead_id: updated.id,
-      action: 'assigned_to_vendor',
+      action: "assigned_to_vendor",
       updated_at: updated.updated_at.toISOString(),
     });
     void this.leadTimeline.record({
       clientId: updated.client_id,
       leadId: updated.id,
-      eventType: 'assigned',
-      origin: 'vendor',
+      eventType: "assigned",
+      origin: "vendor",
       fromValue: lead.assigned_vendor_id,
       toValue: user.sub,
       actorId: user.sub,
@@ -1156,16 +1237,19 @@ export class LeadsService {
 
   async lookupByCpfOrPhone(user: AuthenticatedUser, queryStr: string) {
     if (!queryStr || queryStr.trim().length < 3) return [];
-    const cleanDigits = queryStr.replace(/\D/g, '');
+    const cleanDigits = queryStr.replace(/\D/g, "");
     const term = queryStr.trim();
 
     const where: Prisma.LeadWhereInput = {
       deleted_at: null,
       OR: [
-        { cpf: { contains: term, mode: 'insensitive' } },
-        { phone: { contains: term, mode: 'insensitive' } },
+        { cpf: { contains: term, mode: "insensitive" } },
+        { phone: { contains: term, mode: "insensitive" } },
         ...(cleanDigits.length >= 3
-          ? [{ cpf: { contains: cleanDigits } }, { phone: { contains: cleanDigits } }]
+          ? [
+              { cpf: { contains: cleanDigits } },
+              { phone: { contains: cleanDigits } },
+            ]
           : []),
       ],
     };
@@ -1180,20 +1264,24 @@ export class LeadsService {
       where,
       take: 10,
       select: leadSelect,
-      orderBy: { updated_at: 'desc' },
+      orderBy: { updated_at: "desc" },
     });
 
     return rows.map((row) => this.toResponse(row as LeadWithRelations));
   }
 
-  async closeAttendance(user: AuthenticatedUser, id: string, dto: CloseAttendanceDto) {
+  async closeAttendance(
+    user: AuthenticatedUser,
+    id: string,
+    dto: CloseAttendanceDto,
+  ) {
     const isVendor = user.role === Role.VENDEDOR;
     const wristbandNumber = dto?.wristband_number?.trim();
     const cpf = dto?.cpf?.trim();
     const phone = dto?.phone?.trim();
 
     if (!isVendor && !cpf) {
-      throw new BadRequestException('CPF é obrigatório.');
+      throw new BadRequestException("CPF é obrigatório.");
     }
 
     const where: Prisma.LeadWhereInput = {
@@ -1213,7 +1301,7 @@ export class LeadsService {
     });
 
     if (!lead) {
-      throw new NotFoundException('Lead nao encontrado ou sem permissao');
+      throw new NotFoundException("Lead nao encontrado ou sem permissao");
     }
 
     let requiresWristband = false;
@@ -1228,7 +1316,9 @@ export class LeadsService {
     }
 
     if (!isVendor && requiresWristband && !wristbandNumber) {
-      throw new BadRequestException('Número da pulseira é obrigatório para este evento.');
+      throw new BadRequestException(
+        "Número da pulseira é obrigatório para este evento.",
+      );
     }
 
     let pipelineId = lead.crm_pipeline_id;
@@ -1242,8 +1332,13 @@ export class LeadsService {
 
     let targetStageId = lead.crm_stage_id;
     if (pipelineId) {
-      const idBase = lead.client_id.replace(/-/g, '').toUpperCase().slice(0, 16);
-      const preferredCode = dto.sold ? `${idBase}_COMPRARAM` : `${idBase}_ATENDIMENTO_ENCERRADO`;
+      const idBase = lead.client_id
+        .replace(/-/g, "")
+        .toUpperCase()
+        .slice(0, 16);
+      const preferredCode = dto.sold
+        ? `${idBase}_COMPRARAM`
+        : `${idBase}_ATENDIMENTO_ENCERRADO`;
       const fallbackCodes = dto.sold
         ? [`${idBase}_VENDIDO`, `${idBase}_CONVERTIDO`]
         : [`${idBase}_ATENDIMENTO_FINALIZADO`, `${idBase}_ENCERRADO`];
@@ -1292,11 +1387,13 @@ export class LeadsService {
           to_stage_id: targetStageId,
           changed_by_user_id: user.sub,
           notes: `${
-            dto.sold ? 'Atendimento encerrado com venda' : 'Atendimento encerrado sem venda'
-          }${wristbandNumber ? `. Pulseira: ${wristbandNumber}` : ''}${cpf ? `, CPF: ${cpf}` : ''}${
+            dto.sold
+              ? "Atendimento encerrado com venda"
+              : "Atendimento encerrado sem venda"
+          }${wristbandNumber ? `. Pulseira: ${wristbandNumber}` : ""}${cpf ? `, CPF: ${cpf}` : ""}${
             dto.attendance_duration_seconds != null
               ? `. Duração do atendimento: ${Math.floor(dto.attendance_duration_seconds / 60)}m ${dto.attendance_duration_seconds % 60}s (${dto.attendance_duration_seconds}s)`
-              : ''
+              : ""
           }`,
         },
       });
@@ -1309,28 +1406,30 @@ export class LeadsService {
           client_id: lead.client_id,
           vendor_id: targetVendorId,
           lead_id: lead.id,
-          kind: 'sold',
+          kind: "sold",
           earned_at: new Date(),
         })
         .catch((err) => {
-          this.logger.warn(`Erro ao pontuar venda para o vendedor: ${(err as Error).message}`);
+          this.logger.warn(
+            `Erro ao pontuar venda para o vendedor: ${(err as Error).message}`,
+          );
         });
     }
 
     this.realtimeEvents.emitLeadUpdated(updated.client_id, {
       client_id: updated.client_id,
       lead_id: updated.id,
-      action: 'attendance_closed',
+      action: "attendance_closed",
       updated_at: updated.updated_at.toISOString(),
     });
 
     void this.leadTimeline.record({
       clientId: updated.client_id,
       leadId: updated.id,
-      eventType: 'status_changed',
-      origin: 'vendor',
+      eventType: "status_changed",
+      origin: "vendor",
       fromValue: lead.confirmation_status,
-      toValue: 'closed',
+      toValue: "closed",
       actorId: user.sub,
       actorLabel: user.name ?? null,
     });
@@ -1345,7 +1444,7 @@ export class LeadsService {
     });
 
     if (!lead) {
-      throw new NotFoundException('Lead nao encontrado');
+      throw new NotFoundException("Lead nao encontrado");
     }
 
     await this.assertLeadAccess(user, lead);
@@ -1357,7 +1456,7 @@ export class LeadsService {
     this.realtimeEvents.emitLeadUpdated(lead.client_id, {
       client_id: lead.client_id,
       lead_id: lead.id,
-      action: 'deleted',
+      action: "deleted",
       updated_at: new Date().toISOString(),
     });
 
@@ -1371,7 +1470,7 @@ export class LeadsService {
     });
 
     if (!lead) {
-      throw new NotFoundException('Lead nao encontrado');
+      throw new NotFoundException("Lead nao encontrado");
     }
 
     // O node HTTP do n8n pode enviar todos os parâmetros da ferramenta, inclusive
@@ -1379,21 +1478,21 @@ export class LeadsService {
     // válida e não podem apagar dados já coletados.
     const sanitizedDto = { ...dto } as Record<string, unknown>;
     for (const key of [
-      'name',
-      'email',
-      'phone',
-      'notes',
-      'vehicle_plate',
-      'vehicle_model',
-      'vehicle_year',
-      'companions',
-      'description',
-      'first_name',
-      'last_name',
-      'birth_date',
-      'store_visit_datetime',
+      "name",
+      "email",
+      "phone",
+      "notes",
+      "vehicle_plate",
+      "vehicle_model",
+      "vehicle_year",
+      "companions",
+      "description",
+      "first_name",
+      "last_name",
+      "birth_date",
+      "store_visit_datetime",
     ]) {
-      if (typeof sanitizedDto[key] === 'string' && !sanitizedDto[key].trim()) {
+      if (typeof sanitizedDto[key] === "string" && !sanitizedDto[key].trim()) {
         delete sanitizedDto[key];
       }
     }
@@ -1401,9 +1500,15 @@ export class LeadsService {
     const nextPhone = asUpdate.phone?.trim();
     if (nextPhone) {
       const normalizedPhone = normalizeBrazilianPhone(nextPhone);
-      const existingByPhone = await this.findLeadByPhone(lead.client_id, normalizedPhone, lead.id);
+      const existingByPhone = await this.findLeadByPhone(
+        lead.client_id,
+        normalizedPhone,
+        lead.id,
+      );
       if (existingByPhone) {
-        throw new BadRequestException('Telefone ja cadastrado para este cliente');
+        throw new BadRequestException(
+          "Telefone ja cadastrado para este cliente",
+        );
       }
     }
     const data = this.buildGestorUpdateData(asUpdate);
@@ -1425,16 +1530,17 @@ export class LeadsService {
       this.assertLeadReadyForConfirmation({
         ...lead,
         ...data,
-      } as unknown as Pick<LeadWithRelations,
-        | 'name'
-        | 'phone'
-        | 'event_interest_id'
-        | 'store_visit_datetime'
-        | 'companions'
-        | 'description'
-        | 'vehicle_plate'
-        | 'vehicle_model'
-        | 'vehicle_year'
+      } as unknown as Pick<
+        LeadWithRelations,
+        | "name"
+        | "phone"
+        | "event_interest_id"
+        | "store_visit_datetime"
+        | "companions"
+        | "description"
+        | "vehicle_plate"
+        | "vehicle_model"
+        | "vehicle_year"
       >);
     }
     this.mergeCheckinTokenIfConfirming(lead, asUpdate, data);
@@ -1446,7 +1552,11 @@ export class LeadsService {
     })) as LeadWithRelations;
 
     if (updated.vehicle_plate && updated.vehicle_plate !== lead.vehicle_plate) {
-      void this.triggerFipeLookup(updated.id, updated.vehicle_plate, updated.notes);
+      void this.triggerFipeLookup(
+        updated.id,
+        updated.vehicle_plate,
+        updated.notes,
+      );
     }
 
     const response = this.toResponse(updated);
@@ -1454,8 +1564,8 @@ export class LeadsService {
     this.realtimeEvents.emitLeadUpdated(updated.client_id, {
       client_id: updated.client_id,
       lead_id: lead.id,
-      action: 'updated',
-      source: 'integration',
+      action: "updated",
+      source: "integration",
       updated_at: new Date().toISOString(),
     });
 
@@ -1466,36 +1576,39 @@ export class LeadsService {
     return response;
   }
 
-  private assertLeadReadyForConfirmation(lead: Pick<LeadWithRelations,
-    | 'name'
-    | 'phone'
-    | 'event_interest_id'
-    | 'store_visit_datetime'
-    | 'companions'
-    | 'description'
-    | 'vehicle_plate'
-    | 'vehicle_model'
-    | 'vehicle_year'
-  >) {
+  private assertLeadReadyForConfirmation(
+    lead: Pick<
+      LeadWithRelations,
+      | "name"
+      | "phone"
+      | "event_interest_id"
+      | "store_visit_datetime"
+      | "companions"
+      | "description"
+      | "vehicle_plate"
+      | "vehicle_model"
+      | "vehicle_year"
+    >,
+  ) {
     const missing: string[] = [];
-    if (!lead.name?.trim()) missing.push('nome completo');
-    if (!lead.phone?.trim()) missing.push('telefone');
-    if (!lead.event_interest_id) missing.push('evento');
-    if (!lead.store_visit_datetime) missing.push('data da visita');
-    if (!lead.companions?.trim()) missing.push('acompanhantes');
+    if (!lead.name?.trim()) missing.push("nome completo");
+    if (!lead.phone?.trim()) missing.push("telefone");
+    if (!lead.event_interest_id) missing.push("evento");
+    if (!lead.store_visit_datetime) missing.push("data da visita");
+    if (!lead.companions?.trim()) missing.push("acompanhantes");
 
-    const description = lead.description?.trim().toLowerCase() ?? '';
-    if (!description.startsWith('carro na troca:')) {
-      missing.push('resposta sobre carro na troca');
-    } else if (description.includes('carro na troca: sim')) {
-      if (!lead.vehicle_plate?.trim()) missing.push('placa do veículo');
-      if (!lead.vehicle_model?.trim()) missing.push('modelo do veículo');
-      if (!lead.vehicle_year?.trim()) missing.push('ano do veículo');
+    const description = lead.description?.trim().toLowerCase() ?? "";
+    if (!description.startsWith("carro na troca:")) {
+      missing.push("resposta sobre carro na troca");
+    } else if (description.includes("carro na troca: sim")) {
+      if (!lead.vehicle_plate?.trim()) missing.push("placa do veículo");
+      if (!lead.vehicle_model?.trim()) missing.push("modelo do veículo");
+      if (!lead.vehicle_year?.trim()) missing.push("ano do veículo");
     }
 
     if (missing.length > 0) {
       throw new BadRequestException(
-        `Nao e possivel confirmar o lead. Campos obrigatorios pendentes: ${missing.join(', ')}`,
+        `Nao e possivel confirmar o lead. Campos obrigatorios pendentes: ${missing.join(", ")}`,
       );
     }
   }
@@ -1509,12 +1622,15 @@ export class LeadsService {
    */
   async reconcileLeadsForIntegration(dto: ReconcileLeadsDto) {
     const toKey = (raw: string | null | undefined): string => {
-      let digits = (raw ?? '').replace(/\D/g, '');
-      if (digits.startsWith('55') && digits.length > 11) digits = digits.slice(2);
+      let digits = (raw ?? "").replace(/\D/g, "");
+      if (digits.startsWith("55") && digits.length > 11)
+        digits = digits.slice(2);
       return digits.length >= 11 ? digits.slice(-11) : digits.slice(-10);
     };
 
-    const keep = new Set(dto.keep_phones.map(toKey).filter((key) => key.length >= 10));
+    const keep = new Set(
+      dto.keep_phones.map(toKey).filter((key) => key.length >= 10),
+    );
 
     const leads = await this.prisma.lead.findMany({
       where: { client_id: dto.client_id, deleted_at: null },
@@ -1523,7 +1639,7 @@ export class LeadsService {
 
     const orphanIds = leads
       .filter((lead) => {
-        if (lead.source === 'manual') return false;
+        if (lead.source === "manual") return false;
         const key = toKey(lead.phone);
         if (key.length < 10) return false; // sem telefone matchável → preserva
         return !keep.has(key);
@@ -1556,7 +1672,7 @@ export class LeadsService {
 
   async findAllForIntegration(query: FindLeadsQueryDto) {
     if (!query.client_id) {
-      throw new BadRequestException('client_id obrigatorio para integracao');
+      throw new BadRequestException("client_id obrigatorio para integracao");
     }
 
     const where: Prisma.LeadWhereInput = {
@@ -1566,49 +1682,54 @@ export class LeadsService {
     const take = Math.min(Math.max(query.take ?? 50, 1), 200);
 
     if (query.source) where.source = query.source;
-    if (query.confirmation_status) where.confirmation_status = query.confirmation_status;
+    if (query.confirmation_status)
+      where.confirmation_status = query.confirmation_status;
     if (query.event_id) where.event_interest_id = query.event_id;
     if (query.crm_stage_id) where.crm_stage_id = query.crm_stage_id;
     if (query.crm_stage_code || query.crm_stage_name) {
       where.crm_stage = {
         ...(query.crm_stage_code ? { code: query.crm_stage_code } : {}),
         ...(query.crm_stage_name
-          ? { name: { contains: query.crm_stage_name, mode: 'insensitive' } }
+          ? { name: { contains: query.crm_stage_name, mode: "insensitive" } }
           : {}),
       };
     }
     if (query.search?.trim()) {
       const term = query.search.trim();
       // Normaliza o termo se parecer um telefone (somente dígitos)
-      const normalizedPhone = /^\d+$/.test(term) ? normalizeBrazilianPhone(term) : null;
+      const normalizedPhone = /^\d+$/.test(term)
+        ? normalizeBrazilianPhone(term)
+        : null;
       // Extrai apenas os dígitos locais para busca parcial (ex.: "981092776")
       const digits = /^\d+$/.test(term) ? phoneDigits(term) : null;
 
       const phoneConditions: Prisma.LeadWhereInput[] = [
-        { phone: { contains: term, mode: 'insensitive' } },
+        { phone: { contains: term, mode: "insensitive" } },
         ...(normalizedPhone
           ? [
               {
                 phone: {
                   contains: normalizedPhone,
-                  mode: 'insensitive' as const,
+                  mode: "insensitive" as const,
                 },
               },
             ]
           : []),
         ...(digits && digits.length >= 8
-          ? [{ phone: { contains: digits, mode: 'insensitive' as const } }]
+          ? [{ phone: { contains: digits, mode: "insensitive" as const } }]
           : []),
       ];
 
       where.OR = [
-        { name: { contains: term, mode: 'insensitive' } },
-        { email: { contains: term, mode: 'insensitive' } },
+        { name: { contains: term, mode: "insensitive" } },
+        { email: { contains: term, mode: "insensitive" } },
         ...phoneConditions,
       ];
     }
-    if (query.created_after) where.created_at = { gte: new Date(query.created_after) };
-    if (query.updated_after) where.updated_at = { gte: new Date(query.updated_after) };
+    if (query.created_after)
+      where.created_at = { gte: new Date(query.created_after) };
+    if (query.updated_after)
+      where.updated_at = { gte: new Date(query.updated_after) };
 
     let cursorRow: { id: string; created_at: Date } | null = null;
     if (query.cursor) {
@@ -1616,7 +1737,8 @@ export class LeadsService {
         where: { ...where, id: query.cursor },
         select: { id: true, created_at: true },
       });
-      if (!cursorRow) throw new NotFoundException('Cursor de paginacao invalido');
+      if (!cursorRow)
+        throw new NotFoundException("Cursor de paginacao invalido");
     }
 
     const rows = await this.prisma.lead.findMany({
@@ -1629,7 +1751,7 @@ export class LeadsService {
             ],
           }
         : where,
-      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      orderBy: [{ created_at: "desc" }, { id: "desc" }],
       select: leadSelect,
       take: take + 1,
     });
@@ -1644,16 +1766,26 @@ export class LeadsService {
     };
   }
 
-  async createFacebookLeadsForIntegration(clientId: string, payloads: FacebookLeadPayloadDto[]) {
+  async createFacebookLeadsForIntegration(
+    clientId: string,
+    payloads: FacebookLeadPayloadDto[],
+  ) {
     if (payloads.length === 0) {
-      throw new BadRequestException('Envie ao menos um lead do Facebook');
+      throw new BadRequestException("Envie ao menos um lead do Facebook");
     }
     if (payloads.length > 100) {
-      throw new BadRequestException('Cada lote pode conter no maximo 100 leads');
+      throw new BadRequestException(
+        "Cada lote pode conter no maximo 100 leads",
+      );
     }
 
-    const validatedForms = await this.validateFacebookFormsForClient(clientId, payloads);
-    const items: Array<ReturnType<typeof this.toResponse> & { already_existed: boolean }> = [];
+    const validatedForms = await this.validateFacebookFormsForClient(
+      clientId,
+      payloads,
+    );
+    const items: Array<
+      ReturnType<typeof this.toResponse> & { already_existed: boolean }
+    > = [];
 
     for (const payload of payloads) {
       const metadata: FacebookLeadMetadata = {
@@ -1669,7 +1801,9 @@ export class LeadsService {
         facebookCreativeId: payload.criativo_id || null,
         preferredContactChannel: payload.preferencia_atendimento || null,
         sourceCreatedAt: payload.criado_em ? new Date(payload.criado_em) : null,
-        sourcePayload: JSON.parse(JSON.stringify(payload)) as Prisma.InputJsonValue,
+        sourcePayload: JSON.parse(
+          JSON.stringify(payload),
+        ) as Prisma.InputJsonValue,
       };
 
       const result = await this.createForIntegration(
@@ -1705,17 +1839,21 @@ export class LeadsService {
    */
   async createFacebookLeadsAutomatically(payloads: FacebookLeadPayloadDto[]) {
     if (payloads.length === 0) {
-      throw new BadRequestException('Envie ao menos um lead do Facebook');
+      throw new BadRequestException("Envie ao menos um lead do Facebook");
     }
     if (payloads.length > 100) {
-      throw new BadRequestException('Cada lote pode conter no maximo 100 leads');
+      throw new BadRequestException(
+        "Cada lote pode conter no maximo 100 leads",
+      );
     }
 
-    const formIds = [...new Set(payloads.map((payload) => payload.formulario_id.trim()))];
+    const formIds = [
+      ...new Set(payloads.map((payload) => payload.formulario_id.trim())),
+    ];
     const selectedForms = await this.prisma.metaAssetSelection.findMany({
       where: {
         form_id: { in: formIds },
-        meta_connection: { status: 'connected' },
+        meta_connection: { status: "connected" },
       },
       select: {
         form_id: true,
@@ -1737,7 +1875,11 @@ export class LeadsService {
     for (const selection of selectedForms) {
       if (!selection.form_id) continue;
       const entries = selectionsByForm.get(selection.form_id) ?? [];
-      if (!entries.some((entry) => entry.clientId === selection.meta_connection.client_id)) {
+      if (
+        !entries.some(
+          (entry) => entry.clientId === selection.meta_connection.client_id,
+        )
+      ) {
         entries.push({
           clientId: selection.meta_connection.client_id,
           formName: selection.form_name,
@@ -1747,10 +1889,12 @@ export class LeadsService {
       selectionsByForm.set(selection.form_id, entries);
     }
 
-    const unknownFormIds = formIds.filter((formId) => !selectionsByForm.has(formId));
+    const unknownFormIds = formIds.filter(
+      (formId) => !selectionsByForm.has(formId),
+    );
     if (unknownFormIds.length > 0) {
       throw new ForbiddenException(
-        `Formulario Meta nao vinculado a nenhum cliente ativo: ${unknownFormIds.join(', ')}`,
+        `Formulario Meta nao vinculado a nenhum cliente ativo: ${unknownFormIds.join(", ")}`,
       );
     }
 
@@ -1759,7 +1903,7 @@ export class LeadsService {
     );
     if (ambiguousFormIds.length > 0) {
       throw new ConflictException(
-        `Formulario Meta vinculado a mais de um cliente: ${ambiguousFormIds.join(', ')}`,
+        `Formulario Meta vinculado a mais de um cliente: ${ambiguousFormIds.join(", ")}`,
       );
     }
 
@@ -1818,15 +1962,21 @@ export class LeadsService {
         },
       },
     });
-    const routingRowByForm = new Map(routingRows.map((rule) => [rule.form_id, rule]));
-    const missingRoutingFormIds = formIds.filter((formId) => !routingRowByForm.has(formId));
+    const routingRowByForm = new Map(
+      routingRows.map((rule) => [rule.form_id, rule]),
+    );
+    const missingRoutingFormIds = formIds.filter(
+      (formId) => !routingRowByForm.has(formId),
+    );
     if (missingRoutingFormIds.length > 0) {
       throw new UnprocessableEntityException(
-        `Formulario Meta sem mapeamento de evento e etapas: ${missingRoutingFormIds.join(', ')}`,
+        `Formulario Meta sem mapeamento de evento e etapas: ${missingRoutingFormIds.join(", ")}`,
       );
     }
 
-    const selectionByForm = new Map(resolvedSelections.map((form) => [form.id, form]));
+    const selectionByForm = new Map(
+      resolvedSelections.map((form) => [form.id, form]),
+    );
     const routingByForm = new Map<string, AutomaticFacebookRouting>();
     for (const formId of formIds) {
       const selection = selectionByForm.get(formId)!;
@@ -1835,7 +1985,8 @@ export class LeadsService {
         (participant) => participant.client_id === rule.client_id,
       );
       const pipelineIsValid =
-        rule.crm_pipeline.is_active && rule.crm_pipeline.client_id === rule.client_id;
+        rule.crm_pipeline.is_active &&
+        rule.crm_pipeline.client_id === rule.client_id;
       const callStageIsValid =
         rule.call_stage_id === rule.call_stage.id &&
         rule.call_stage.client_id === rule.client_id &&
@@ -1852,7 +2003,9 @@ export class LeadsService {
         !callStageIsValid ||
         !whatsappStageIsValid
       ) {
-        throw new ConflictException(`Mapeamento Meta inconsistente para o formulario: ${formId}`);
+        throw new ConflictException(
+          `Mapeamento Meta inconsistente para o formulario: ${formId}`,
+        );
       }
 
       routingByForm.set(formId, {
@@ -1879,10 +2032,11 @@ export class LeadsService {
         },
         whatsappTemplateName: rule.whatsapp_template_name,
         whatsappTemplateLanguage: rule.whatsapp_template_language,
-        whatsappTemplateParameterKeys: rule.whatsapp_template_parameter_keys.filter(
-          (key): key is MetaLeadWhatsappTemplateParameterKey =>
-            AUTOMATIC_WHATSAPP_TEMPLATE_PARAMETER_KEYS.has(key),
-        ),
+        whatsappTemplateParameterKeys:
+          rule.whatsapp_template_parameter_keys.filter(
+            (key): key is MetaLeadWhatsappTemplateParameterKey =>
+              AUTOMATIC_WHATSAPP_TEMPLATE_PARAMETER_KEYS.has(key),
+          ),
         clientSettings: rule.client.settings,
       });
     }
@@ -1894,7 +2048,9 @@ export class LeadsService {
       ...new Set([...routingByForm.values()].map((r) => r.metaConnectionId)),
     ];
     const adIds = [
-      ...new Set(payloads.map((payload) => payload.anuncio_id?.trim()).filter(Boolean)),
+      ...new Set(
+        payloads.map((payload) => payload.anuncio_id?.trim()).filter(Boolean),
+      ),
     ] as string[];
     const knownAds =
       adIds.length > 0
@@ -1913,14 +2069,17 @@ export class LeadsService {
             },
           })
         : [];
-    const adKey = (connectionId: string, entityId: string) => `${connectionId}:${entityId}`;
+    const adKey = (connectionId: string, entityId: string) =>
+      `${connectionId}:${entityId}`;
     const knownAdById = new Map(
       knownAds.map((ad) => [adKey(ad.meta_connection_id, ad.meta_ad_id), ad]),
     );
     const adSetIds = [
       ...new Set([
         ...knownAds.map((ad) => ad.meta_ad_set_id).filter(Boolean),
-        ...payloads.map((payload) => payload.conjunto_id?.trim()).filter(Boolean),
+        ...payloads
+          .map((payload) => payload.conjunto_id?.trim())
+          .filter(Boolean),
       ]),
     ] as string[];
     const knownAdSets =
@@ -1939,13 +2098,18 @@ export class LeadsService {
           })
         : [];
     const knownAdSetById = new Map(
-      knownAdSets.map((adSet) => [adKey(adSet.meta_connection_id, adSet.meta_ad_set_id), adSet]),
+      knownAdSets.map((adSet) => [
+        adKey(adSet.meta_connection_id, adSet.meta_ad_set_id),
+        adSet,
+      ]),
     );
     const campaignIds = [
       ...new Set([
         ...knownAds.map((ad) => ad.meta_campaign_id).filter(Boolean),
         ...knownAdSets.map((adSet) => adSet.meta_campaign_id).filter(Boolean),
-        ...payloads.map((payload) => payload.campanha_id?.trim()).filter(Boolean),
+        ...payloads
+          .map((payload) => payload.campanha_id?.trim())
+          .filter(Boolean),
       ]),
     ] as string[];
     const knownCampaigns =
@@ -1973,23 +2137,36 @@ export class LeadsService {
     // item invalido nunca deixa os itens anteriores gravados parcialmente.
     const prepared = payloads.map((payload): AutomaticFacebookPreparedLead => {
       const routing = routingByForm.get(payload.formulario_id.trim())!;
-      const channel = this.normalizeFacebookContactChannel(payload.preferencia_atendimento);
-      const targetStage = channel === 'ligacao' ? routing.callStage : routing.whatsappStage;
+      const channel = this.normalizeFacebookContactChannel(
+        payload.preferencia_atendimento,
+      );
+      const targetStage =
+        channel === "ligacao" ? routing.callStage : routing.whatsappStage;
       const knownAd = payload.anuncio_id
         ? knownAdById.get(adKey(routing.metaConnectionId, payload.anuncio_id))
         : undefined;
-      const facebookAdSetId = payload.conjunto_id || knownAd?.meta_ad_set_id || null;
+      const facebookAdSetId =
+        payload.conjunto_id || knownAd?.meta_ad_set_id || null;
       const knownAdSet = facebookAdSetId
         ? knownAdSetById.get(adKey(routing.metaConnectionId, facebookAdSetId))
         : undefined;
       const facebookCampaignId =
-        payload.campanha_id || knownAd?.meta_campaign_id || knownAdSet?.meta_campaign_id || null;
+        payload.campanha_id ||
+        knownAd?.meta_campaign_id ||
+        knownAdSet?.meta_campaign_id ||
+        null;
       const knownCampaign = facebookCampaignId
-        ? knownCampaignById.get(adKey(routing.metaConnectionId, facebookCampaignId))
+        ? knownCampaignById.get(
+            adKey(routing.metaConnectionId, facebookCampaignId),
+          )
         : undefined;
-      const sourceCreatedAt = payload.criado_em ? new Date(payload.criado_em) : null;
+      const sourceCreatedAt = payload.criado_em
+        ? new Date(payload.criado_em)
+        : null;
       if (sourceCreatedAt && Number.isNaN(sourceCreatedAt.getTime())) {
-        throw new BadRequestException(`criado_em invalido para o lead Meta: ${payload.lead_id}`);
+        throw new BadRequestException(
+          `criado_em invalido para o lead Meta: ${payload.lead_id}`,
+        );
       }
 
       return {
@@ -1997,7 +2174,10 @@ export class LeadsService {
         routing,
         channel,
         targetStage,
-        mappedStatus: resolveConfirmationStatusForStage(routing.clientSettings, targetStage.id),
+        mappedStatus: resolveConfirmationStatusForStage(
+          routing.clientSettings,
+          targetStage.id,
+        ),
         metadata: {
           externalRef: payload.lead_id,
           facebookLeadId: payload.lead_id,
@@ -2008,20 +2188,23 @@ export class LeadsService {
           facebookAdSetName: payload.conjunto || knownAdSet?.name || null,
           facebookCampaignId,
           facebookCampaignName: payload.campanha || knownCampaign?.name || null,
-          facebookCreativeId: payload.criativo_id || knownAd?.meta_creative_id || null,
+          facebookCreativeId:
+            payload.criativo_id || knownAd?.meta_creative_id || null,
           preferredContactChannel: channel,
           sourceCreatedAt,
-          sourcePayload: JSON.parse(JSON.stringify(payload)) as Prisma.InputJsonValue,
+          sourcePayload: JSON.parse(
+            JSON.stringify(payload),
+          ) as Prisma.InputJsonValue,
         },
       };
     });
 
     const integrationActorId = this.config
-      .get<string>('LEADFLOW_INTEGRATION_ACTOR_USER_ID')
+      .get<string>("LEADFLOW_INTEGRATION_ACTOR_USER_ID")
       ?.trim();
     if (!integrationActorId) {
       throw new InternalServerErrorException(
-        'Integracao externa nao configurada (LEADFLOW_INTEGRATION_ACTOR_USER_ID)',
+        "Integracao externa nao configurada (LEADFLOW_INTEGRATION_ACTOR_USER_ID)",
       );
     }
     const integrationActor = await this.prisma.user.findUnique({
@@ -2029,7 +2212,9 @@ export class LeadsService {
       select: { id: true },
     });
     if (!integrationActor) {
-      throw new InternalServerErrorException('Usuario tecnico da integracao nao encontrado');
+      throw new InternalServerErrorException(
+        "Usuario tecnico da integracao nao encontrado",
+      );
     }
 
     const runTransaction = () =>
@@ -2037,7 +2222,11 @@ export class LeadsService {
         const transactionItems: AutomaticFacebookTransactionItem[] = [];
         for (const item of prepared) {
           transactionItems.push(
-            await this.upsertAutomaticFacebookLeadWithRouting(tx, item, integrationActor.id),
+            await this.upsertAutomaticFacebookLeadWithRouting(
+              tx,
+              item,
+              integrationActor.id,
+            ),
           );
         }
         return transactionItems;
@@ -2066,18 +2255,18 @@ export class LeadsService {
       this.realtimeEvents.emitLeadUpdated(lead.client_id, {
         client_id: lead.client_id,
         lead_id: lead.id,
-        action: item.alreadyExisted ? 'updated' : 'created',
-        source: 'facebook_lead_ads',
+        action: item.alreadyExisted ? "updated" : "created",
+        source: "facebook_lead_ads",
         updated_at: lead.updated_at.toISOString(),
       });
       if (!item.alreadyExisted) {
         void this.leadTimeline.record({
           clientId: lead.client_id,
           leadId: lead.id,
-          eventType: 'created',
-          origin: 'integration',
+          eventType: "created",
+          origin: "integration",
           actorId: integrationActor.id,
-          actorLabel: 'Integração Meta',
+          actorLabel: "Integração Meta",
           metadata: {
             form_id: preparedItem.routing.formId,
             event_id: preparedItem.routing.eventId,
@@ -2089,24 +2278,28 @@ export class LeadsService {
         void this.leadTimeline.record({
           clientId: lead.client_id,
           leadId: lead.id,
-          eventType: 'stage_moved',
-          origin: 'integration',
+          eventType: "stage_moved",
+          origin: "integration",
           fromStageId: item.fromStageId,
           toStageId: preparedItem.targetStage.id,
           fromValue: item.fromStageCode,
           toValue: preparedItem.targetStage.code,
           actorId: integrationActor.id,
-          actorLabel: 'Integração Meta',
-          notes: 'Roteamento automático pelo formulário Meta',
+          actorLabel: "Integração Meta",
+          notes: "Roteamento automático pelo formulário Meta",
         });
       }
     }
 
     const whatsappDispatches = await Promise.all(
-      transactionItems.map((item) => this.dispatchAutomaticWhatsappTemplate(item)),
+      transactionItems.map((item) =>
+        this.dispatchAutomaticWhatsappTemplate(item),
+      ),
     );
 
-    const created = transactionItems.filter((item) => !item.alreadyExisted).length;
+    const created = transactionItems.filter(
+      (item) => !item.alreadyExisted,
+    ).length;
     const alreadyExisted = transactionItems.length - created;
     const items = transactionItems.map((item, index) => ({
       ...this.toResponse(item.lead),
@@ -2129,7 +2322,7 @@ export class LeadsService {
       received: payloads.length,
       created,
       already_existed: alreadyExisted,
-      transaction: 'committed',
+      transaction: "committed",
       resolved_forms: resolvedSelections.map((form) => {
         const routing = routingByForm.get(form.id)!;
         return {
@@ -2150,18 +2343,20 @@ export class LeadsService {
 
   private normalizeFacebookContactChannel(
     value: string | null | undefined,
-  ): 'ligacao' | 'whatsapp' {
-    const normalized = String(value ?? '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
+  ): "ligacao" | "whatsapp" {
+    const normalized = String(value ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
       .trim()
       .toLowerCase();
 
-    if (normalized.includes('whatsapp')) return 'whatsapp';
-    if (normalized.includes('ligacao') || normalized.includes('telefone')) {
-      return 'ligacao';
+    if (normalized.includes("whatsapp")) return "whatsapp";
+    if (normalized.includes("ligacao") || normalized.includes("telefone")) {
+      return "ligacao";
     }
-    throw new BadRequestException(`Canal de atendimento invalido: ${normalized || 'vazio'}`);
+    throw new BadRequestException(
+      `Canal de atendimento invalido: ${normalized || "vazio"}`,
+    );
   }
 
   private async dispatchAutomaticWhatsappTemplate(
@@ -2170,17 +2365,17 @@ export class LeadsService {
     const { lead, prepared, shouldDispatchWhatsapp } = item;
     const { routing } = prepared;
 
-    if (prepared.channel !== 'whatsapp') {
-      return { status: 'not_requested', reason: 'channel_ligacao' };
+    if (prepared.channel !== "whatsapp") {
+      return { status: "not_requested", reason: "channel_ligacao" };
     }
     if (!shouldDispatchWhatsapp) {
-      return { status: 'skipped', reason: 'duplicate_delivery' };
+      return { status: "skipped", reason: "duplicate_delivery" };
     }
     if (!lead.phone) {
-      return { status: 'skipped', reason: 'phone_missing' };
+      return { status: "skipped", reason: "phone_missing" };
     }
     if (!routing.whatsappTemplateName || !routing.whatsappTemplateLanguage) {
-      return { status: 'skipped', reason: 'template_not_configured' };
+      return { status: "skipped", reason: "template_not_configured" };
     }
 
     const templateName = routing.whatsappTemplateName;
@@ -2196,18 +2391,21 @@ export class LeadsService {
         ),
       });
 
-      const chatRecorded = await this.recordAutomaticWhatsappMessage(item, messageId);
+      const chatRecorded = await this.recordAutomaticWhatsappMessage(
+        item,
+        messageId,
+      );
 
       await this.leadTimeline.record({
         clientId: lead.client_id,
         leadId: lead.id,
-        eventType: 'message',
-        origin: 'whatsapp',
-        actorLabel: 'Integração Meta',
+        eventType: "message",
+        origin: "whatsapp",
+        actorLabel: "Integração Meta",
         notes: `Template WhatsApp enviado: ${templateName}`,
         metadata: {
-          direction: 'outbound',
-          provider: 'meta',
+          direction: "outbound",
+          provider: "meta",
           template_name: templateName,
           template_language: templateLanguage,
           message_id: messageId,
@@ -2216,7 +2414,7 @@ export class LeadsService {
       });
 
       return {
-        status: 'sent',
+        status: "sent",
         template_name: templateName,
         template_language: templateLanguage,
         message_id: messageId,
@@ -2227,8 +2425,8 @@ export class LeadsService {
         `Falha ao enviar template WhatsApp do formulario ${routing.formId} para o lead ${lead.id}: ${this.errorMessage(error)}`,
       );
       return {
-        status: 'failed',
-        reason: 'provider_error',
+        status: "failed",
+        reason: "provider_error",
         template_name: templateName,
         template_language: templateLanguage,
         chat_recorded: false,
@@ -2255,23 +2453,30 @@ export class LeadsService {
           where: {
             client_id: lead.client_id,
             lead_id: lead.id,
-            channel: 'whatsapp',
+            channel: "whatsapp",
           },
-          orderBy: [{ last_message_at: 'desc' }, { created_at: 'desc' }],
+          orderBy: [{ last_message_at: "desc" }, { created_at: "desc" }],
         });
         if (!conversation) {
           conversation = await tx.conversation.create({
             data: {
               client_id: lead.client_id,
               lead_id: lead.id,
-              channel: 'whatsapp',
+              channel: "whatsapp",
             },
           });
         }
 
         const existingMessage = await tx.message.findUnique({
           where: { external_id: messageId },
-          select: { id: true, conversation_id: true, content: true, media_id: true, media_url: true, created_at: true },
+          select: {
+            id: true,
+            conversation_id: true,
+            content: true,
+            media_id: true,
+            media_url: true,
+            created_at: true,
+          },
         });
         if (existingMessage) {
           return { conversation, message: existingMessage, created: false };
@@ -2280,7 +2485,7 @@ export class LeadsService {
         const message = await tx.message.create({
           data: {
             conversation_id: conversation.id,
-            sender_type: 'user',
+            sender_type: "user",
             sender_id: null,
             content: `Template WhatsApp enviado: ${templateName}`,
             external_id: messageId,
@@ -2297,7 +2502,7 @@ export class LeadsService {
         this.realtimeEvents.emitNewMessage(lead.client_id, {
           conversation_id: result.conversation.id,
           message_id: result.message.id,
-          sender_type: 'user',
+          sender_type: "user",
           sender_id: null,
           content: result.message.content,
           media_id: null,
@@ -2320,23 +2525,23 @@ export class LeadsService {
   ): string {
     const { lead, prepared } = item;
     switch (key) {
-      case 'lead_name':
+      case "lead_name":
         return lead.name;
-      case 'event_name':
+      case "event_name":
         return prepared.routing.eventName;
-      case 'company_name':
+      case "company_name":
         return prepared.routing.clientName;
-      case 'event_date':
-        return new Intl.DateTimeFormat('pt-BR', {
-          timeZone: 'America/Sao_Paulo',
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
+      case "event_date":
+        return new Intl.DateTimeFormat("pt-BR", {
+          timeZone: "America/Sao_Paulo",
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
         }).format(prepared.routing.eventDate);
-      case 'event_location':
-        return prepared.routing.eventLocation?.trim() || '-';
+      case "event_location":
+        return prepared.routing.eventLocation?.trim() || "-";
     }
   }
 
@@ -2361,9 +2566,12 @@ export class LeadsService {
     if (exact) return exact as LeadWithRelations;
 
     const suffixes = new Set<string>();
-    if (candidates.digits.length >= 10) suffixes.add(candidates.digits.slice(-10));
-    if (candidates.digits.length >= 11) suffixes.add(candidates.digits.slice(-11));
-    if (candidates.digits.length >= 12) suffixes.add(candidates.digits.slice(-12));
+    if (candidates.digits.length >= 10)
+      suffixes.add(candidates.digits.slice(-10));
+    if (candidates.digits.length >= 11)
+      suffixes.add(candidates.digits.slice(-11));
+    if (candidates.digits.length >= 12)
+      suffixes.add(candidates.digits.slice(-12));
     if (suffixes.size === 0) return null;
 
     const bySuffix = await tx.lead.findFirst({
@@ -2411,7 +2619,11 @@ export class LeadsService {
       : null;
     const email = payload.email?.toLowerCase().trim() || null;
 
-    let existing = await this.findActiveLeadByPhoneForAutomaticImport(tx, routing.clientId, phone);
+    let existing = await this.findActiveLeadByPhoneForAutomaticImport(
+      tx,
+      routing.clientId,
+      phone,
+    );
     if (!existing) {
       existing = (await tx.lead.findFirst({
         where: {
@@ -2426,7 +2638,11 @@ export class LeadsService {
       })) as LeadWithRelations | null;
     }
     if (!existing) {
-      existing = await this.findActiveLeadByEmailForAutomaticImport(tx, routing.clientId, email);
+      existing = await this.findActiveLeadByEmailForAutomaticImport(
+        tx,
+        routing.clientId,
+        email,
+      );
     }
     if (!existing) {
       const archived = (await tx.lead.findFirst({
@@ -2469,7 +2685,9 @@ export class LeadsService {
           event_interest_id: routing.eventId,
           crm_pipeline_id: routing.pipelineId,
           crm_stage_id: targetStage.id,
-          ...(prepared.mappedStatus ? { confirmation_status: prepared.mappedStatus } : {}),
+          ...(prepared.mappedStatus
+            ? { confirmation_status: prepared.mappedStatus }
+            : {}),
           external_ref: metadata.externalRef,
           facebook_lead_id: metadata.facebookLeadId,
           facebook_form_id: metadata.facebookFormId,
@@ -2514,7 +2732,9 @@ export class LeadsService {
       existing.facebook_lead_id === metadata.facebookLeadId;
     const shouldReplaceRouting = Boolean(existing.deleted_at) || !sameDelivery;
     const routingIsIncomplete =
-      !existing.event_interest_id || !existing.crm_pipeline_id || !existing.crm_stage_id;
+      !existing.event_interest_id ||
+      !existing.crm_pipeline_id ||
+      !existing.crm_stage_id;
     const shouldApplyRouting = shouldReplaceRouting || routingIsIncomplete;
 
     if (existing.deleted_at) patch.deleted_at = null;
@@ -2641,13 +2861,15 @@ export class LeadsService {
     clientId: string,
     payloads: FacebookLeadPayloadDto[],
   ) {
-    const formIds = [...new Set(payloads.map((payload) => payload.formulario_id.trim()))];
+    const formIds = [
+      ...new Set(payloads.map((payload) => payload.formulario_id.trim())),
+    ];
     const selectedForms = await this.prisma.metaAssetSelection.findMany({
       where: {
         form_id: { in: formIds },
         meta_connection: {
           client_id: clientId,
-          status: 'connected',
+          status: "connected",
         },
       },
       select: {
@@ -2658,14 +2880,18 @@ export class LeadsService {
 
     const selectedById = new Map(
       selectedForms
-        .filter((form): form is typeof form & { form_id: string } => Boolean(form.form_id))
+        .filter((form): form is typeof form & { form_id: string } =>
+          Boolean(form.form_id),
+        )
         .map((form) => [form.form_id, form]),
     );
-    const unlinkedFormIds = formIds.filter((formId) => !selectedById.has(formId));
+    const unlinkedFormIds = formIds.filter(
+      (formId) => !selectedById.has(formId),
+    );
 
     if (unlinkedFormIds.length > 0) {
       throw new ForbiddenException(
-        `Formulario Meta nao vinculado ao cliente desta integracao: ${unlinkedFormIds.join(', ')}`,
+        `Formulario Meta nao vinculado ao cliente desta integracao: ${unlinkedFormIds.join(", ")}`,
       );
     }
 
@@ -2681,17 +2907,25 @@ export class LeadsService {
    * ou e-mail para o mesmo cliente, retorna o lead existente com
    * `already_existed: true` sem criar duplicata nem disparar webhook.
    */
-  async createForIntegration(dto: CreateLeadDto, facebookMetadata?: FacebookLeadMetadata) {
+  async createForIntegration(
+    dto: CreateLeadDto,
+    facebookMetadata?: FacebookLeadMetadata,
+  ) {
     this.assertPipelineStageConsistency(dto.crm_pipeline_id, dto.crm_stage_id);
 
     if (dto.crm_stage_id) {
       await this.assertCrmStageExistsForClient(dto.client_id, dto.crm_stage_id);
     }
     if (dto.event_interest_id) {
-      await this.assertEventExistsForClient(dto.client_id, dto.event_interest_id);
+      await this.assertEventExistsForClient(
+        dto.client_id,
+        dto.event_interest_id,
+      );
     }
     // Normaliza o telefone para formato padrão (XX) XXXXX-XXXX antes de salvar
-    const phone = dto.phone?.trim() ? normalizeBrazilianPhone(dto.phone.trim()) : null;
+    const phone = dto.phone?.trim()
+      ? normalizeBrazilianPhone(dto.phone.trim())
+      : null;
     const email = dto.email?.toLowerCase().trim() ?? null;
 
     // ── Deduplicação por telefone e/ou e-mail ────────────────────────────────
@@ -2700,13 +2934,17 @@ export class LeadsService {
     if (phone) {
       const existingByPhone = await this.findLeadByPhone(dto.client_id, phone);
       if (existingByPhone) {
-        return this.mergeExistingLeadOnIntegration(existingByPhone, dto, facebookMetadata);
+        return this.mergeExistingLeadOnIntegration(
+          existingByPhone,
+          dto,
+          facebookMetadata,
+        );
       }
       const digits = phoneDigits(phone);
       dedupeOr.push({ phone });
       if (digits.length >= 10) {
         dedupeOr.push({
-          phone: { contains: digits.slice(-10), mode: 'insensitive' },
+          phone: { contains: digits.slice(-10), mode: "insensitive" },
         });
       }
     }
@@ -2813,7 +3051,8 @@ export class LeadsService {
                 facebook_ad_set_name: facebookMetadata.facebookAdSetName,
                 facebook_campaign_id: facebookMetadata.facebookCampaignId,
                 facebook_campaign_name: facebookMetadata.facebookCampaignName,
-                preferred_contact_channel: facebookMetadata.preferredContactChannel,
+                preferred_contact_channel:
+                  facebookMetadata.preferredContactChannel,
                 source_created_at: facebookMetadata.sourceCreatedAt,
                 source_payload: facebookMetadata.sourcePayload,
               }
@@ -2839,18 +3078,32 @@ export class LeadsService {
         }
       }
       if (isLeadPhoneUniqueViolation(error)) {
-        const existingByPhone = phone ? await this.findLeadByPhone(dto.client_id, phone) : null;
+        const existingByPhone = phone
+          ? await this.findLeadByPhone(dto.client_id, phone)
+          : null;
         if (existingByPhone) {
-          return this.mergeExistingLeadOnIntegration(existingByPhone, dto, facebookMetadata);
+          return this.mergeExistingLeadOnIntegration(
+            existingByPhone,
+            dto,
+            facebookMetadata,
+          );
         }
-        throw new BadRequestException('Telefone ja cadastrado para este cliente');
+        throw new BadRequestException(
+          "Telefone ja cadastrado para este cliente",
+        );
       }
       if (isLeadEmailUniqueViolation(error)) {
-        const existingByEmail = email ? await this.findLeadByEmail(dto.client_id, email) : null;
+        const existingByEmail = email
+          ? await this.findLeadByEmail(dto.client_id, email)
+          : null;
         if (existingByEmail) {
-          return this.mergeExistingLeadOnIntegration(existingByEmail, dto, facebookMetadata);
+          return this.mergeExistingLeadOnIntegration(
+            existingByEmail,
+            dto,
+            facebookMetadata,
+          );
         }
-        throw new BadRequestException('E-mail ja cadastrado para este cliente');
+        throw new BadRequestException("E-mail ja cadastrado para este cliente");
       }
       throw error;
     }
@@ -2858,16 +3111,16 @@ export class LeadsService {
     this.realtimeEvents.emitLeadUpdated(lead.client_id, {
       client_id: lead.client_id,
       lead_id: lead.id,
-      action: 'created',
-      source: 'integration',
+      action: "created",
+      source: "integration",
       updated_at: lead.updated_at.toISOString(),
     });
     void this.leadTimeline.record({
       clientId: lead.client_id,
       leadId: lead.id,
-      eventType: 'created',
-      origin: 'integration',
-      actorLabel: 'Integração',
+      eventType: "created",
+      origin: "integration",
+      actorLabel: "Integração",
     });
 
     return { ...this.toResponse(lead), already_existed: false };
@@ -2892,7 +3145,11 @@ export class LeadsService {
         existing.id,
       );
       if (activeByPhone) {
-        return this.mergeExistingLeadOnIntegration(activeByPhone, dto, facebookMetadata);
+        return this.mergeExistingLeadOnIntegration(
+          activeByPhone,
+          dto,
+          facebookMetadata,
+        );
       }
 
       const activeByEmail = await this.findLeadByEmail(
@@ -2901,7 +3158,11 @@ export class LeadsService {
         existing.id,
       );
       if (activeByEmail) {
-        return this.mergeExistingLeadOnIntegration(activeByEmail, dto, facebookMetadata);
+        return this.mergeExistingLeadOnIntegration(
+          activeByEmail,
+          dto,
+          facebookMetadata,
+        );
       }
 
       patch.deleted_at = null;
@@ -2951,7 +3212,8 @@ export class LeadsService {
         patch.external_ref = facebookMetadata.externalRef;
       }
 
-      const incomingOccurredAt = facebookMetadata.sourceCreatedAt?.getTime() ?? null;
+      const incomingOccurredAt =
+        facebookMetadata.sourceCreatedAt?.getTime() ?? null;
       const currentOccurredAt = existing.source_created_at?.getTime() ?? null;
       const isLatestAttribution =
         incomingOccurredAt === null ||
@@ -2982,7 +3244,8 @@ export class LeadsService {
           patch.facebook_campaign_name = facebookMetadata.facebookCampaignName;
         }
         if (facebookMetadata.preferredContactChannel) {
-          patch.preferred_contact_channel = facebookMetadata.preferredContactChannel;
+          patch.preferred_contact_channel =
+            facebookMetadata.preferredContactChannel;
         }
         if (facebookMetadata.sourceCreatedAt) {
           patch.source_created_at = facebookMetadata.sourceCreatedAt;
@@ -3004,10 +3267,16 @@ export class LeadsService {
     return { ...this.toResponse(updated), already_existed: true };
   }
 
-  async getFipeDataPublic(plate: string, user?: AuthenticatedUser, eventId?: string) {
+  async getFipeDataPublic(
+    plate: string,
+    user?: AuthenticatedUser,
+    eventId?: string,
+  ) {
     if (user?.role === Role.VENDEDOR) {
       if (!user.client_id || !eventId) {
-        throw new ForbiddenException('Consulta FIPE não permitida para o vendedor neste evento.');
+        throw new ForbiddenException(
+          "Consulta FIPE não permitida para o vendedor neste evento.",
+        );
       }
       const allowedEvent = await this.prisma.event.findFirst({
         where: {
@@ -3018,14 +3287,16 @@ export class LeadsService {
         select: { id: true },
       });
       if (!allowedEvent) {
-        throw new ForbiddenException('Consulta FIPE não permitida para o vendedor neste evento.');
+        throw new ForbiddenException(
+          "Consulta FIPE não permitida para o vendedor neste evento.",
+        );
       }
     }
 
-    const normalized = plate.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    const normalized = plate.replace(/[^A-Z0-9]/gi, "").toUpperCase();
     if (!normalized || normalized.length < 7) {
       throw new BadRequestException(
-        'Informe uma placa válida com pelo menos 7 caracteres. Ex: ABC1D23',
+        "Informe uma placa válida com pelo menos 7 caracteres. Ex: ABC1D23",
       );
     }
 
@@ -3033,22 +3304,28 @@ export class LeadsService {
     const deviceId = process.env.APIBRASIL_DEVICE;
     if (!token || !deviceId) {
       throw new BadRequestException(
-        'A API de consulta de placas não está configurada no servidor. Adicione APIBRASIL_TOKEN e APIBRASIL_DEVICE no arquivo .env.',
+        "A API de consulta de placas não está configurada no servidor. Adicione APIBRASIL_TOKEN e APIBRASIL_DEVICE no arquivo .env.",
       );
     }
 
     const fipe = await this.fetchFipeDataByPlate(normalized);
     if (!fipe) {
-      throw new NotFoundException('Veículo não encontrado para esta placa ou erro na APIBrasil.');
+      throw new NotFoundException(
+        "Veículo não encontrado para esta placa ou erro na APIBrasil.",
+      );
     }
     return fipe;
   }
 
   async checkInByToken(user: AuthenticatedUser, token: string) {
-    const allowedRoles = [Role.RECEPCAO, Role.VENDEDOR, Role.GESTOR] as string[];
+    const allowedRoles = [
+      Role.RECEPCAO,
+      Role.VENDEDOR,
+      Role.GESTOR,
+    ] as string[];
     if (!allowedRoles.includes(user.role) || !user.client_id) {
       throw new ForbiddenException(
-        'Apenas recepção, vendedor ou gestor podem validar convite por token',
+        "Apenas recepção, vendedor ou gestor podem validar convite por token",
       );
     }
 
@@ -3057,19 +3334,27 @@ export class LeadsService {
     let voucherClientId: string | null = null;
 
     if (looksLikeJwtCompact(normalized)) {
-      const claims = verifyCheckinVoucher(this.checkinVoucherSecret(), normalized);
+      const claims = verifyCheckinVoucher(
+        this.checkinVoucherSecret(),
+        normalized,
+      );
       if (!claims) {
-        throw new NotFoundException('Convite invalido ou expirado');
+        throw new NotFoundException("Convite invalido ou expirado");
       }
       checkinToken = claims.t;
       voucherClientId = claims.cid;
     }
 
     if (voucherClientId && voucherClientId !== user.client_id) {
-      throw new NotFoundException('Convite invalido ou lead nao pertence a esta empresa');
+      throw new NotFoundException(
+        "Convite invalido ou lead nao pertence a esta empresa",
+      );
     }
 
-    const encryptedToken = encryptCheckinToken(checkinToken, this.checkinVoucherSecret());
+    const encryptedToken = encryptCheckinToken(
+      checkinToken,
+      this.checkinVoucherSecret(),
+    );
 
     const lead = await this.prisma.lead.findFirst({
       where: {
@@ -3081,11 +3366,14 @@ export class LeadsService {
     });
 
     if (!lead) {
-      throw new NotFoundException('Convite invalido ou lead nao pertence a esta empresa');
+      throw new NotFoundException(
+        "Convite invalido ou lead nao pertence a esta empresa",
+      );
     }
 
     if (user.role === Role.VENDEDOR) {
-      const eventId = lead.event_interest_id ?? lead.appointments[0]?.event_id ?? null;
+      const eventId =
+        lead.event_interest_id ?? lead.appointments[0]?.event_id ?? null;
       const allowedEvent = eventId
         ? await this.prisma.event.findFirst({
             where: {
@@ -3097,7 +3385,9 @@ export class LeadsService {
           })
         : null;
       if (!allowedEvent) {
-        throw new ForbiddenException('Check-in não permitido para o vendedor neste evento.');
+        throw new ForbiddenException(
+          "Check-in não permitido para o vendedor neste evento.",
+        );
       }
     }
 
@@ -3112,7 +3402,10 @@ export class LeadsService {
 
     let targetStageId: string | undefined = undefined;
     if (pipelineId) {
-      const idBase = lead.client_id.replace(/-/g, '').toUpperCase().slice(0, 16);
+      const idBase = lead.client_id
+        .replace(/-/g, "")
+        .toUpperCase()
+        .slice(0, 16);
       const codes = [`${idBase}_PRESENCA_CONFIRMADA`];
       const targetStage = await this.prisma.crmStage.findFirst({
         where: {
@@ -3148,7 +3441,7 @@ export class LeadsService {
           from_stage_id: lead.crm_stage_id,
           to_stage_id: targetStageId,
           changed_by_user_id: user.sub,
-          notes: 'Lead chegou à loja — check-in realizado por token/voucher',
+          notes: "Lead chegou à loja — check-in realizado por token/voucher",
         },
       });
     }
@@ -3161,7 +3454,7 @@ export class LeadsService {
           in: [AppointmentStatus.scheduled, AppointmentStatus.confirmed],
         },
       },
-      orderBy: { created_at: 'desc' },
+      orderBy: { created_at: "desc" },
     });
 
     if (appointment) {
@@ -3189,7 +3482,7 @@ export class LeadsService {
               vendor_id: vendor.id,
               lead_id: updatedAppointment.lead_id,
               appointment_id: updatedAppointment.id,
-              kind: 'checked_in',
+              kind: "checked_in",
               earned_at: completedAt,
             });
           }
@@ -3205,7 +3498,7 @@ export class LeadsService {
     this.realtimeEvents.emitLeadUpdated(updated.client_id, {
       client_id: updated.client_id,
       lead_id: updated.id,
-      action: 'checkin',
+      action: "checkin",
       updated_at: updated.updated_at.toISOString(),
     });
 
@@ -3218,13 +3511,13 @@ export class LeadsService {
     });
 
     if (!lead) {
-      throw new NotFoundException('Lead nao encontrado');
+      throw new NotFoundException("Lead nao encontrado");
     }
 
     await this.assertLeadAccess(user, lead);
 
     if (!lead.assigned_vendor_id) {
-      throw new BadRequestException('Lead nao tem vendedor vinculado');
+      throw new BadRequestException("Lead nao tem vendedor vinculado");
     }
 
     const vendor = await this.prisma.user.findFirst({
@@ -3243,7 +3536,7 @@ export class LeadsService {
       lead_id: lead.id,
       lead_name: lead.name,
       vendor_id: lead.assigned_vendor_id,
-      vendor_name: vendor?.name || 'Vendedor',
+      vendor_name: vendor?.name || "Vendedor",
       team_name: vendor?.sales_team_memberships?.[0]?.team?.name || null,
       timestamp: new Date().toISOString(),
     };
@@ -3252,11 +3545,13 @@ export class LeadsService {
       await this.redis.client.set(
         `vendor_call:${lead.client_id}:${lead.id}`,
         JSON.stringify(callPayload),
-        'EX',
+        "EX",
         120, // 2 minutos
       );
     } catch (err: unknown) {
-      this.logger.error(`Falha ao salvar chamada de vendedor no Redis: ${this.errorMessage(err)}`);
+      this.logger.error(
+        `Falha ao salvar chamada de vendedor no Redis: ${this.errorMessage(err)}`,
+      );
     }
 
     this.realtimeEvents.emitVendorCalled(lead.client_id, callPayload);
@@ -3265,7 +3560,8 @@ export class LeadsService {
   }
 
   private toResponse(lead: LeadWithRelations) {
-    const handoffRequired = lead.conversation_states?.some((cs) => cs.handoff_required) ?? false;
+    const handoffRequired =
+      lead.conversation_states?.some((cs) => cs.handoff_required) ?? false;
     const conversationId = lead.conversations?.[0]?.id ?? null;
     return {
       id: lead.id,
@@ -3326,7 +3622,10 @@ export class LeadsService {
             this.checkinVoucherSecret(),
             lead.id,
             lead.client_id,
-            decryptCheckinToken(lead.checkin_token, this.checkinVoucherSecret()),
+            decryptCheckinToken(
+              lead.checkin_token,
+              this.checkinVoucherSecret(),
+            ),
             CHECKIN_VOUCHER_TTL_SEC,
           )
         : null,
@@ -3349,7 +3648,7 @@ export class LeadsService {
   }
 
   private isConfirmingTransition(
-    lead: Pick<LeadWithRelations, 'confirmation_status'>,
+    lead: Pick<LeadWithRelations, "confirmation_status">,
     dto: UpdateLeadDto,
   ): boolean {
     const isTarget =
@@ -3360,17 +3659,18 @@ export class LeadsService {
   }
 
   private isConfirmingTransitionToStatus(
-    lead: Pick<LeadWithRelations, 'confirmation_status'>,
+    lead: Pick<LeadWithRelations, "confirmation_status">,
     nextStatus: ConfirmationStatus | null | undefined,
   ): boolean {
     const isTarget =
-      nextStatus === ConfirmationStatus.confirmed || nextStatus === ConfirmationStatus.scheduled;
+      nextStatus === ConfirmationStatus.confirmed ||
+      nextStatus === ConfirmationStatus.scheduled;
     const isDifferent = lead.confirmation_status !== nextStatus;
     return isTarget && isDifferent;
   }
 
   private mergeCheckinTokenIfConfirming(
-    lead: Pick<LeadWithRelations, 'checkin_token' | 'confirmation_status'>,
+    lead: Pick<LeadWithRelations, "checkin_token" | "confirmation_status">,
     dto: UpdateLeadDto,
     data: Prisma.LeadUncheckedUpdateInput,
   ) {
@@ -3382,11 +3682,14 @@ export class LeadsService {
   }
 
   private mergeCheckinTokenIfConfirmingStatus(
-    lead: Pick<LeadWithRelations, 'checkin_token' | 'confirmation_status'>,
+    lead: Pick<LeadWithRelations, "checkin_token" | "confirmation_status">,
     nextStatus: ConfirmationStatus | null | undefined,
     data: Prisma.LeadUncheckedUpdateInput,
   ) {
-    if (!this.isConfirmingTransitionToStatus(lead, nextStatus) || lead.checkin_token) {
+    if (
+      !this.isConfirmingTransitionToStatus(lead, nextStatus) ||
+      lead.checkin_token
+    ) {
       return;
     }
     const raw = generateRawCheckinToken();
@@ -3398,7 +3701,9 @@ export class LeadsService {
    * Chamado em "fire-and-forget" após o lead transicionar para `confirmed`.
    * Falhas não interrompem o fluxo principal — são apenas logadas.
    */
-  private async notifyCheckinViaWhatsapp(lead: LeadWithRelations): Promise<void> {
+  private async notifyCheckinViaWhatsapp(
+    lead: LeadWithRelations,
+  ): Promise<void> {
     if (!lead.phone || !lead.checkin_token) {
       return;
     }
@@ -3416,7 +3721,10 @@ export class LeadsService {
           })
         : null;
 
-      const decrypted = decryptCheckinToken(lead.checkin_token, this.checkinVoucherSecret());
+      const decrypted = decryptCheckinToken(
+        lead.checkin_token,
+        this.checkinVoucherSecret(),
+      );
 
       const voucher = signCheckinVoucher(
         this.checkinVoucherSecret(),
@@ -3429,7 +3737,7 @@ export class LeadsService {
       const qrPng = await generateQrPngBuffer(decrypted, {
         size: 720,
         margin: 4,
-        errorCorrectionLevel: 'M',
+        errorCorrectionLevel: "M",
       });
       const caption = this.buildCheckinWhatsappCaption(lead, event, voucher);
 
@@ -3438,11 +3746,11 @@ export class LeadsService {
         to: lead.phone,
         fileBuffer: qrPng,
         filename: `checkin-${lead.id}.png`,
-        mimeType: 'image/png',
+        mimeType: "image/png",
         caption,
       });
 
-      this.logger.log('Check-in QR enviado via WhatsApp');
+      this.logger.log("Check-in QR enviado via WhatsApp");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(
@@ -3461,13 +3769,13 @@ export class LeadsService {
     } | null,
     voucher?: string,
   ): string {
-    const firstName = lead.name?.trim().split(/\s+/)[0] ?? '';
-    const greeting = firstName ? `Olá, ${firstName}!` : 'Olá!';
+    const firstName = lead.name?.trim().split(/\s+/)[0] ?? "";
+    const greeting = firstName ? `Olá, ${firstName}!` : "Olá!";
 
     const lines: string[] = [];
     lines.push(greeting);
-    lines.push('Sua presença foi confirmada com sucesso.');
-    lines.push('');
+    lines.push("Sua presença foi confirmada com sucesso.");
+    lines.push("");
 
     if (event) {
       lines.push(`*${event.name}*`);
@@ -3475,27 +3783,27 @@ export class LeadsService {
       if (event.location?.trim()) {
         lines.push(`Local: ${event.location.trim()}`);
       }
-      lines.push('');
+      lines.push("");
     }
 
-    lines.push('Apresente este QR Code na recepção para fazer seu check-in.');
+    lines.push("Apresente este QR Code na recepção para fazer seu check-in.");
     const inviteUrl = voucher ? this.buildPublicInviteUrl(voucher) : null;
     if (inviteUrl) {
-      lines.push('Se preferir, abra seu convite por este link:');
+      lines.push("Se preferir, abra seu convite por este link:");
       lines.push(inviteUrl);
     }
-    lines.push('');
-    lines.push('Te esperamos!');
+    lines.push("");
+    lines.push("Te esperamos!");
 
-    return lines.join('\n');
+    return lines.join("\n");
   }
 
   private formatEventDateBR(date: Date): string {
     try {
-      return new Intl.DateTimeFormat('pt-BR', {
-        dateStyle: 'full',
-        timeStyle: 'short',
-        timeZone: 'America/Sao_Paulo',
+      return new Intl.DateTimeFormat("pt-BR", {
+        dateStyle: "full",
+        timeStyle: "short",
+        timeZone: "America/Sao_Paulo",
       }).format(date);
     } catch {
       return date.toISOString();
@@ -3503,13 +3811,13 @@ export class LeadsService {
   }
 
   private buildPublicInviteUrl(voucher: string): string | null {
-    const raw = this.config.get<string>('FRONTEND_URL')?.split(',')[0]?.trim();
+    const raw = this.config.get<string>("FRONTEND_URL")?.split(",")[0]?.trim();
     if (!raw) return null;
     try {
       const base = new URL(raw).origin;
       return `${base}/convite?v=${encodeURIComponent(voucher)}`;
     } catch {
-      const base = raw.replace(/\/+$/, '');
+      const base = raw.replace(/\/+$/, "");
       return `${base}/convite?v=${encodeURIComponent(voucher)}`;
     }
   }
@@ -3531,10 +3839,14 @@ export class LeadsService {
       where: { id: clientId },
       select: { settings: true },
     });
-    return resolveConfirmationStatusForStage(client?.settings, stageId) ?? undefined;
+    return (
+      resolveConfirmationStatusForStage(client?.settings, stageId) ?? undefined
+    );
   }
 
-  private buildGestorUpdateData(dto: UpdateLeadDto): Prisma.LeadUncheckedUpdateInput {
+  private buildGestorUpdateData(
+    dto: UpdateLeadDto,
+  ): Prisma.LeadUncheckedUpdateInput {
     const data: Prisma.LeadUncheckedUpdateInput = {};
     if (dto.name !== undefined) {
       data.name = dto.name.trim();
@@ -3543,7 +3855,9 @@ export class LeadsService {
       data.email = dto.email ? dto.email.toLowerCase().trim() : null;
     }
     if (dto.phone !== undefined) {
-      data.phone = dto.phone?.trim() ? normalizeBrazilianPhone(dto.phone.trim()) : null;
+      data.phone = dto.phone?.trim()
+        ? normalizeBrazilianPhone(dto.phone.trim())
+        : null;
     }
     if (dto.source !== undefined) {
       data.source = dto.source;
@@ -3609,37 +3923,40 @@ export class LeadsService {
 
     if (user.role === Role.GESTOR) {
       if (query.client_id) {
-        await this.clientsService.assertGestorOwnsClient(user.sub, query.client_id);
+        await this.clientsService.assertGestorOwnsClient(
+          user.sub,
+          query.client_id,
+        );
         where.client_id = query.client_id;
       }
       // Gestor e papel global: sem client_id na query, ve leads de todas as empresas.
     } else if (user.role === Role.CLIENTE) {
       if (!user.client_id) {
-        throw new ForbiddenException('Usuario sem empresa vinculada');
+        throw new ForbiddenException("Usuario sem empresa vinculada");
       }
       if (query.client_id && query.client_id !== user.client_id) {
-        throw new ForbiddenException('client_id invalido');
+        throw new ForbiddenException("client_id invalido");
       }
       where.client_id = user.client_id;
     } else if (user.role === Role.VENDEDOR) {
       if (!user.client_id) {
-        throw new ForbiddenException('Usuario sem empresa vinculada');
+        throw new ForbiddenException("Usuario sem empresa vinculada");
       }
       where.client_id = user.client_id;
       where.assigned_vendor_id = user.sub;
       if (query.client_id && query.client_id !== user.client_id) {
-        throw new ForbiddenException('client_id invalido');
+        throw new ForbiddenException("client_id invalido");
       }
     } else if (user.role === Role.RECEPCAO) {
       if (!user.client_id) {
-        throw new ForbiddenException('Usuario sem empresa vinculada');
+        throw new ForbiddenException("Usuario sem empresa vinculada");
       }
       if (query.client_id && query.client_id !== user.client_id) {
-        throw new ForbiddenException('client_id invalido');
+        throw new ForbiddenException("client_id invalido");
       }
       where.client_id = user.client_id;
     } else {
-      throw new ForbiddenException('Sem permissao');
+      throw new ForbiddenException("Sem permissao");
     }
 
     if (query.source) {
@@ -3666,7 +3983,7 @@ export class LeadsService {
       where.crm_stage = {
         ...(query.crm_stage_code ? { code: query.crm_stage_code } : {}),
         ...(query.crm_stage_name
-          ? { name: { contains: query.crm_stage_name, mode: 'insensitive' } }
+          ? { name: { contains: query.crm_stage_name, mode: "insensitive" } }
           : {}),
       };
     }
@@ -3674,9 +3991,9 @@ export class LeadsService {
     if (query.search?.trim()) {
       const term = query.search.trim();
       where.OR = [
-        { name: { contains: term, mode: 'insensitive' } },
-        { email: { contains: term, mode: 'insensitive' } },
-        { phone: { contains: term, mode: 'insensitive' } },
+        { name: { contains: term, mode: "insensitive" } },
+        { email: { contains: term, mode: "insensitive" } },
+        { phone: { contains: term, mode: "insensitive" } },
       ];
     }
 
@@ -3691,28 +4008,36 @@ export class LeadsService {
     return where;
   }
 
-  private async assertCanWriteClient(user: AuthenticatedUser, clientId: string) {
+  private async assertCanWriteClient(
+    user: AuthenticatedUser,
+    clientId: string,
+  ) {
     if (user.role === Role.GESTOR) {
       await this.clientsService.assertGestorOwnsClient(user.sub, clientId);
       return;
     }
 
     if (
-      (user.role === Role.CLIENTE || user.role === Role.VENDEDOR || user.role === Role.RECEPCAO) &&
+      (user.role === Role.CLIENTE ||
+        user.role === Role.VENDEDOR ||
+        user.role === Role.RECEPCAO) &&
       user.client_id === clientId
     ) {
       return;
     }
 
-    throw new ForbiddenException('Sem permissao para criar lead neste cliente');
+    throw new ForbiddenException("Sem permissao para criar lead neste cliente");
   }
 
   private async assertLeadAccess(
     user: AuthenticatedUser,
-    lead: Pick<LeadWithRelations, 'client_id' | 'assigned_vendor_id'>,
+    lead: Pick<LeadWithRelations, "client_id" | "assigned_vendor_id">,
   ) {
     if (user.role === Role.GESTOR) {
-      await this.clientsService.assertGestorOwnsClient(user.sub, lead.client_id);
+      await this.clientsService.assertGestorOwnsClient(
+        user.sub,
+        lead.client_id,
+      );
       return;
     }
 
@@ -3732,7 +4057,7 @@ export class LeadsService {
       return;
     }
 
-    throw new ForbiddenException('Sem permissao para este lead');
+    throw new ForbiddenException("Sem permissao para este lead");
   }
 
   private buildUpdateData(
@@ -3793,39 +4118,45 @@ export class LeadsService {
   }
 
   private assertRecepcaoPatch(dto: UpdateLeadDto) {
-    const allowed: (keyof UpdateLeadDto)[] = ['confirmation_status'];
+    const allowed: (keyof UpdateLeadDto)[] = ["confirmation_status"];
     const keys = Object.keys(dto) as (keyof UpdateLeadDto)[];
-    const bad = keys.filter((k) => dto[k] !== undefined && !allowed.includes(k));
+    const bad = keys.filter(
+      (k) => dto[k] !== undefined && !allowed.includes(k),
+    );
     if (bad.length > 0) {
-      throw new BadRequestException('Recepcao so pode atualizar confirmation_status');
+      throw new BadRequestException(
+        "Recepcao so pode atualizar confirmation_status",
+      );
     }
   }
 
   private assertVendedorPatch(dto: UpdateLeadDto) {
     const allowed: (keyof UpdateLeadDto)[] = [
-      'notes',
-      'store_visit_datetime',
-      'crm_stage_id',
-      'vehicle_plate',
-      'vehicle_model',
-      'vehicle_year',
-      'companions',
-      'description',
-      'first_name',
-      'last_name',
-      'birth_date',
+      "notes",
+      "store_visit_datetime",
+      "crm_stage_id",
+      "vehicle_plate",
+      "vehicle_model",
+      "vehicle_year",
+      "companions",
+      "description",
+      "first_name",
+      "last_name",
+      "birth_date",
     ];
     const keys = Object.keys(dto) as (keyof UpdateLeadDto)[];
-    const bad = keys.filter((k) => dto[k] !== undefined && !allowed.includes(k));
+    const bad = keys.filter(
+      (k) => dto[k] !== undefined && !allowed.includes(k),
+    );
     if (bad.length > 0) {
       throw new BadRequestException(
-        'Vendedor so pode atualizar notas, confirmacao, visita, etapa do CRM, placa, modelo, ano, acompanhantes, descricao, nome, sobrenome e data de nascimento',
+        "Vendedor so pode atualizar notas, confirmacao, visita, etapa do CRM, placa, modelo, ano, acompanhantes, descricao, nome, sobrenome e data de nascimento",
       );
     }
   }
 
   private escapeCsv(value: unknown) {
-    const text = String(value ?? '');
+    const text = String(value ?? "");
     if (/[",\n\r]/.test(text)) {
       return `"${text.replace(/"/g, '""')}"`;
     }
@@ -3835,7 +4166,7 @@ export class LeadsService {
   private parseCsv(text: string) {
     const rows: string[][] = [];
     let row: string[] = [];
-    let cell = '';
+    let cell = "";
     let inQuotes = false;
 
     for (let i = 0; i < text.length; i += 1) {
@@ -3860,19 +4191,19 @@ export class LeadsService {
         inQuotes = true;
         continue;
       }
-      if (ch === ',') {
+      if (ch === ",") {
         row.push(cell);
-        cell = '';
+        cell = "";
         continue;
       }
-      if (ch === '\n') {
+      if (ch === "\n") {
         row.push(cell);
         rows.push(row);
         row = [];
-        cell = '';
+        cell = "";
         continue;
       }
-      if (ch === '\r') {
+      if (ch === "\r") {
         continue;
       }
       cell += ch;
@@ -3891,12 +4222,12 @@ export class LeadsService {
     originalname?: string;
     mimetype?: string;
   }): Promise<string[][]> {
-    const lowerName = (file.originalname ?? '').toLowerCase();
-    const mime = (file.mimetype ?? '').toLowerCase();
+    const lowerName = (file.originalname ?? "").toLowerCase();
+    const mime = (file.mimetype ?? "").toLowerCase();
     const isXlsx =
-      lowerName.endsWith('.xlsx') ||
-      mime.includes('spreadsheetml') ||
-      mime.includes('application/vnd.ms-excel');
+      lowerName.endsWith(".xlsx") ||
+      mime.includes("spreadsheetml") ||
+      mime.includes("application/vnd.ms-excel");
 
     if (isXlsx) {
       if (
@@ -3906,11 +4237,13 @@ export class LeadsService {
         file.buffer[2] !== 0x03 ||
         file.buffer[3] !== 0x04
       ) {
-        throw new BadRequestException('Arquivo XLSX invalido.');
+        throw new BadRequestException("Arquivo XLSX invalido.");
       }
       const sheet = await readSheet(file.buffer);
       if (sheet.length > MAX_IMPORT_ROWS + 1) {
-        throw new BadRequestException(`A planilha excede o limite de ${MAX_IMPORT_ROWS} linhas.`);
+        throw new BadRequestException(
+          `A planilha excede o limite de ${MAX_IMPORT_ROWS} linhas.`,
+        );
       }
       if (sheet.some((row) => row.length > MAX_IMPORT_COLUMNS)) {
         throw new BadRequestException(
@@ -3918,29 +4251,35 @@ export class LeadsService {
         );
       }
       return sheet.map((row) =>
-        row.map((cell) => (cell instanceof Date ? cell.toISOString() : String(cell ?? ''))),
+        row.map((cell) =>
+          cell instanceof Date ? cell.toISOString() : String(cell ?? ""),
+        ),
       );
     }
 
-    const text = file.buffer.toString('utf8');
+    const text = file.buffer.toString("utf8");
     const rows = this.parseCsv(text);
     if (rows.length > MAX_IMPORT_ROWS + 1) {
-      throw new BadRequestException(`O CSV excede o limite de ${MAX_IMPORT_ROWS} linhas.`);
+      throw new BadRequestException(
+        `O CSV excede o limite de ${MAX_IMPORT_ROWS} linhas.`,
+      );
     }
     if (rows.some((row) => row.length > MAX_IMPORT_COLUMNS)) {
-      throw new BadRequestException(`O CSV excede o limite de ${MAX_IMPORT_COLUMNS} colunas.`);
+      throw new BadRequestException(
+        `O CSV excede o limite de ${MAX_IMPORT_COLUMNS} colunas.`,
+      );
     }
     return rows;
   }
 
-  private normalizeSource(value: string): Lead['source'] | null {
+  private normalizeSource(value: string): Lead["source"] | null {
     const normalized = value.trim().toLowerCase();
     if (
-      normalized === 'manual' ||
-      normalized === 'facebook_ads' ||
-      normalized === 'whatsapp' ||
-      normalized === 'form_page' ||
-      normalized === 'import_excel'
+      normalized === "manual" ||
+      normalized === "facebook_ads" ||
+      normalized === "whatsapp" ||
+      normalized === "form_page" ||
+      normalized === "import_excel"
     ) {
       return normalized;
     }
@@ -3955,18 +4294,21 @@ export class LeadsService {
     const hasStage = Boolean(stageId);
     if (hasPipeline !== hasStage) {
       throw new BadRequestException(
-        'crm_pipeline_id e crm_stage_id devem ser fornecidos juntos ou ambos omitidos',
+        "crm_pipeline_id e crm_stage_id devem ser fornecidos juntos ou ambos omitidos",
       );
     }
   }
 
-  private async assertCrmStageExistsForClient(clientId: string, stageId: string) {
+  private async assertCrmStageExistsForClient(
+    clientId: string,
+    stageId: string,
+  ) {
     const stage = await this.prisma.crmStage.findFirst({
       where: { id: stageId, client_id: clientId },
       select: { id: true },
     });
     if (!stage) {
-      throw new BadRequestException('Etapa de CRM invalida para este cliente');
+      throw new BadRequestException("Etapa de CRM invalida para este cliente");
     }
   }
 
@@ -3981,11 +4323,14 @@ export class LeadsService {
       select: { id: true },
     });
     if (!event) {
-      throw new BadRequestException('Evento nao encontrado para este cliente');
+      throw new BadRequestException("Evento nao encontrado para este cliente");
     }
   }
 
-  private async resolveVendorBinding(vendorId: string, eventId?: string | null) {
+  private async resolveVendorBinding(
+    vendorId: string,
+    eventId?: string | null,
+  ) {
     const vendor = await this.prisma.user.findFirst({
       where: {
         id: vendorId,
@@ -3999,7 +4344,9 @@ export class LeadsService {
     });
 
     if (!vendor?.client_id) {
-      throw new BadRequestException('Vendedor invalido ou sem empresa vinculada');
+      throw new BadRequestException(
+        "Vendedor invalido ou sem empresa vinculada",
+      );
     }
 
     if (!eventId) {
@@ -4019,26 +4366,40 @@ export class LeadsService {
     });
 
     if (!membership) {
-      throw new BadRequestException('Vendedor precisa estar vinculado a um time deste evento');
+      throw new BadRequestException(
+        "Vendedor precisa estar vinculado a um time deste evento",
+      );
     }
 
     return { clientId: vendor.client_id, teamId: membership.team_id };
   }
 
   private async syncLeadVendorBinding(
-    lead: Pick<LeadWithRelations, 'client_id' | 'event_interest_id' | 'assigned_vendor_id'>,
+    lead: Pick<
+      LeadWithRelations,
+      "client_id" | "event_interest_id" | "assigned_vendor_id"
+    >,
     dto: UpdateLeadDto,
     data: Prisma.LeadUncheckedUpdateInput,
   ) {
     const nextAssignedVendorId =
-      dto.assigned_vendor_id !== undefined ? dto.assigned_vendor_id : lead.assigned_vendor_id;
+      dto.assigned_vendor_id !== undefined
+        ? dto.assigned_vendor_id
+        : lead.assigned_vendor_id;
     const nextEventId =
-      dto.event_interest_id !== undefined ? dto.event_interest_id : lead.event_interest_id;
+      dto.event_interest_id !== undefined
+        ? dto.event_interest_id
+        : lead.event_interest_id;
 
     if (nextAssignedVendorId) {
-      const binding = await this.resolveVendorBinding(nextAssignedVendorId, nextEventId);
+      const binding = await this.resolveVendorBinding(
+        nextAssignedVendorId,
+        nextEventId,
+      );
       if (binding.clientId !== lead.client_id) {
-        throw new BadRequestException('Lead so pode ser atribuido a vendedor da mesma empresa');
+        throw new BadRequestException(
+          "Lead so pode ser atribuido a vendedor da mesma empresa",
+        );
       }
       if (nextEventId) {
         await this.assertEventExistsForClient(lead.client_id, nextEventId);
@@ -4051,23 +4412,31 @@ export class LeadsService {
       await this.assertEventExistsForClient(lead.client_id, nextEventId);
     }
 
-    if (dto.assigned_vendor_id === null || dto.event_interest_id !== undefined) {
+    if (
+      dto.assigned_vendor_id === null ||
+      dto.event_interest_id !== undefined
+    ) {
       data.team_id = null;
     }
   }
 
   private async resolveLeadTargetClientId(
-    lead: Pick<LeadWithRelations, 'client_id'>,
+    lead: Pick<LeadWithRelations, "client_id">,
     dto: UpdateLeadDto,
   ) {
     void dto;
     return lead.client_id;
   }
 
-  private async resolveImportClientId(user: AuthenticatedUser, clientId?: string) {
+  private async resolveImportClientId(
+    user: AuthenticatedUser,
+    clientId?: string,
+  ) {
     if (user.role === Role.GESTOR) {
       if (!clientId) {
-        throw new BadRequestException('Gestor deve informar client_id para importacao.');
+        throw new BadRequestException(
+          "Gestor deve informar client_id para importacao.",
+        );
       }
       await this.clientsService.assertGestorOwnsClient(user.sub, clientId);
       return clientId;
@@ -4075,15 +4444,15 @@ export class LeadsService {
 
     if (user.role === Role.CLIENTE || user.role === Role.VENDEDOR) {
       if (!user.client_id) {
-        throw new ForbiddenException('Usuario sem empresa vinculada');
+        throw new ForbiddenException("Usuario sem empresa vinculada");
       }
       if (clientId && clientId !== user.client_id) {
-        throw new ForbiddenException('client_id invalido');
+        throw new ForbiddenException("client_id invalido");
       }
       return user.client_id;
     }
 
-    throw new ForbiddenException('Sem permissao para importar leads');
+    throw new ForbiddenException("Sem permissao para importar leads");
   }
 
   private async fetchFipeDataByPlate(plate: string): Promise<{
@@ -4097,43 +4466,55 @@ export class LeadsService {
 
     if (token && deviceId) {
       try {
-        const response = await fetch(`https://placa.apibrasil.com.br/api/v1/placa/${plate}`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Device-Id': deviceId,
-            'Content-Type': 'application/json',
+        const response = await fetch(
+          `https://placa.apibrasil.com.br/api/v1/placa/${plate}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Device-Id": deviceId,
+              "Content-Type": "application/json",
+            },
           },
-        });
+        );
 
         if (response.ok) {
           const rawValuePayload: unknown = await response.json();
           const raw = this.toUnknownRecord(rawValuePayload);
           // Suporta tanto respostas no nível raiz quanto objetos aninhados (dados, veiculo, result, response, fipe)
           const data =
-            ['dados', 'veiculo', 'result', 'response', 'fipe']
+            ["dados", "veiculo", "result", "response", "fipe"]
               .map((key) => this.toUnknownRecord(raw[key]))
               .find((value) => Object.keys(value).length > 0) ?? raw;
 
           const brand =
-            this.firstDefined(data, ['brand', 'marca']) ??
-            this.firstDefined(raw, ['brand', 'marca']);
+            this.firstDefined(data, ["brand", "marca"]) ??
+            this.firstDefined(raw, ["brand", "marca"]);
           const model =
-            this.firstDefined(data, ['model', 'modelo']) ??
-            this.firstDefined(raw, ['model', 'modelo']);
+            this.firstDefined(data, ["model", "modelo"]) ??
+            this.firstDefined(raw, ["model", "modelo"]);
           const modelYear =
-            this.firstDefined(data, ['modelYear', 'anoModelo', 'ano_modelo', 'year', 'ano']) ??
-            this.firstDefined(raw, ['anoModelo', 'ano']);
+            this.firstDefined(data, [
+              "modelYear",
+              "anoModelo",
+              "ano_modelo",
+              "year",
+              "ano",
+            ]) ?? this.firstDefined(raw, ["anoModelo", "ano"]);
           const rawValue =
-            this.firstDefined(data, ['fipeValue', 'fipe_valor', 'valor', 'value']) ??
-            this.firstDefined(raw, ['fipeValue', 'valor']);
+            this.firstDefined(data, [
+              "fipeValue",
+              "fipe_valor",
+              "valor",
+              "value",
+            ]) ?? this.firstDefined(raw, ["fipeValue", "valor"]);
 
           if (brand && model) {
-            let formattedValue = 'N/A';
-            if (typeof rawValue === 'number') {
-              formattedValue = `R$ ${rawValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+            let formattedValue = "N/A";
+            if (typeof rawValue === "number") {
+              formattedValue = `R$ ${rawValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
             } else if (rawValue) {
-              formattedValue = String(rawValue).startsWith('R$')
+              formattedValue = String(rawValue).startsWith("R$")
                 ? String(rawValue)
                 : `R$ ${rawValue}`;
             }
@@ -4141,28 +4522,34 @@ export class LeadsService {
             return {
               brand: String(brand).toUpperCase(),
               model: String(model),
-              modelYear: modelYear ? String(modelYear) : 'N/A',
+              modelYear: modelYear ? String(modelYear) : "N/A",
               value: formattedValue,
             };
           } else {
-            this.logger.warn('APIBRASIL retornou resposta sem marca/modelo');
+            this.logger.warn("APIBRASIL retornou resposta sem marca/modelo");
           }
         } else {
           this.logger.error(`APIBRASIL falhou com HTTP ${response.status}`);
         }
       } catch (err: unknown) {
-        this.logger.error(`Erro ao consultar placa na APIBrasil: ${this.errorMessage(err)}`);
+        this.logger.error(
+          `Erro ao consultar placa na APIBrasil: ${this.errorMessage(err)}`,
+        );
       }
     } else {
-      this.logger.warn('APIBRASIL_TOKEN ou APIBRASIL_DEVICE ausentes');
+      this.logger.warn("APIBRASIL_TOKEN ou APIBRASIL_DEVICE ausentes");
     }
 
     return null;
   }
 
-  private async triggerFipeLookup(leadId: string, plate: string, currentNotes: string | null) {
+  private async triggerFipeLookup(
+    leadId: string,
+    plate: string,
+    currentNotes: string | null,
+  ) {
     try {
-      const normalized = plate.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      const normalized = plate.replace(/[^A-Z0-9]/gi, "").toUpperCase();
       if (!normalized || normalized.length < 7) return;
 
       const fipe = await this.fetchFipeDataByPlate(normalized);
@@ -4170,9 +4557,12 @@ export class LeadsService {
 
       const cleanNotes = currentNotes
         ? currentNotes
-            .replace(/\n\n--- 🚗 Avaliação FIPE [\s\S]*?-----------------------------------\n/g, '')
+            .replace(
+              /\n\n--- 🚗 Avaliação FIPE [\s\S]*?-----------------------------------\n/g,
+              "",
+            )
             .trim()
-        : '';
+        : "";
 
       const fipeBlock = `\n\n--- 🚗 Avaliação FIPE (Automática) ---\nModelo: ${fipe.brand} ${fipe.model}\nAno: ${fipe.modelYear}\nValor FIPE estimado: ${fipe.value}\nPlaca: ${normalized}\n-----------------------------------\n`;
       const updatedNotes = (cleanNotes + fipeBlock).trim();
@@ -4187,8 +4577,10 @@ export class LeadsService {
         data: {
           notes: updatedNotes,
           vehicle_model:
-            existing?.vehicle_model || `${fipe.brand} ${fipe.model}`.trim().slice(0, 100),
-          vehicle_year: existing?.vehicle_year || String(fipe.modelYear).slice(0, 50),
+            existing?.vehicle_model ||
+            `${fipe.brand} ${fipe.model}`.trim().slice(0, 100),
+          vehicle_year:
+            existing?.vehicle_year || String(fipe.modelYear).slice(0, 50),
         },
         select: leadSelect,
       });
@@ -4196,7 +4588,7 @@ export class LeadsService {
       this.realtimeEvents.emitLeadUpdated(updated.client_id, {
         client_id: updated.client_id,
         lead_id: leadId,
-        action: 'updated',
+        action: "updated",
         updated_at: new Date().toISOString(),
       });
     } catch (err: unknown) {
@@ -4207,15 +4599,18 @@ export class LeadsService {
   }
 
   private toUnknownRecord(value: unknown): Record<string, unknown> {
-    return value && typeof value === 'object' && !Array.isArray(value)
+    return value && typeof value === "object" && !Array.isArray(value)
       ? (value as Record<string, unknown>)
       : {};
   }
 
-  private firstDefined(record: Record<string, unknown>, keys: string[]): unknown {
+  private firstDefined(
+    record: Record<string, unknown>,
+    keys: string[],
+  ): unknown {
     for (const key of keys) {
       const value = record[key];
-      if (value !== undefined && value !== null && value !== '') {
+      if (value !== undefined && value !== null && value !== "") {
         return value;
       }
     }

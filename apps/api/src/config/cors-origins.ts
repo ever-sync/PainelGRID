@@ -13,14 +13,17 @@ export function normalizeWebOrigin(input: string): string {
   try {
     return new URL(trimmed).origin;
   } catch {
-    return trimmed.replace(/\/+$/, '');
+    return trimmed.replace(/\/+$/, "");
   }
 }
 
-export function parseAllowedOrigins(raw: string | undefined, fallback: string): string[] {
+export function parseAllowedOrigins(
+  raw: string | undefined,
+  fallback: string,
+): string[] {
   const value = raw?.trim() || fallback;
   return value
-    .split(',')
+    .split(",")
     .map((s) => s.trim())
     .filter(Boolean)
     .map(normalizeWebOrigin)
@@ -28,7 +31,10 @@ export function parseAllowedOrigins(raw: string | undefined, fallback: string): 
 }
 
 /** @deprecated Prefira createCorsOriginDelegate com credentials: true */
-export function resolveCorsOrigins(raw: string | undefined, fallback: string): string | string[] {
+export function resolveCorsOrigins(
+  raw: string | undefined,
+  fallback: string,
+): string | string[] {
   const parts = parseAllowedOrigins(raw, fallback);
   if (parts.length === 0) {
     return fallback;
@@ -43,7 +49,10 @@ export function resolveCorsOrigins(raw: string | undefined, fallback: string): s
 export function createCorsOriginDelegate(
   raw: string | undefined,
   fallback: string,
-): (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => void {
+): (
+  origin: string | undefined,
+  cb: (err: Error | null, allow?: boolean) => void,
+) => void {
   const allowed = new Set(parseAllowedOrigins(raw, fallback));
 
   return (origin, cb) => {

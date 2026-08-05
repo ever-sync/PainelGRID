@@ -1,22 +1,21 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   AppointmentActorType,
   AppointmentStatus,
   ConfirmationStatus,
   SaleType,
-} from '@prisma/client';
-import { BadRequestException } from '@nestjs/common';
-import { Role } from '../../common/types';
-import { SalesService } from './sales.service';
+} from "@prisma/client";
+import { BadRequestException } from "@nestjs/common";
+import { Role } from "../../common/types";
+import { SalesService } from "./sales.service";
 
-describe('SalesService', () => {
-  const clientId = '22222222-2222-4222-8222-222222222222';
-  const vendorId = '33333333-3333-4333-8333-333333333333';
-  const leadId = '44444444-4444-4444-8444-444444444444';
-  const appointmentId = '55555555-5555-4555-8555-555555555555';
-  const saleId = '66666666-6666-4666-8666-666666666666';
-  const teamId = '77777777-7777-4777-8777-777777777777';
-  const soldAt = new Date('2026-04-28T13:00:00.000Z');
+describe("SalesService", () => {
+  const clientId = "22222222-2222-4222-8222-222222222222";
+  const vendorId = "33333333-3333-4333-8333-333333333333";
+  const leadId = "44444444-4444-4444-8444-444444444444";
+  const appointmentId = "55555555-5555-4555-8555-555555555555";
+  const saleId = "66666666-6666-4666-8666-666666666666";
+  const teamId = "77777777-7777-4777-8777-777777777777";
+  const soldAt = new Date("2026-04-28T13:00:00.000Z");
 
   const user = {
     sub: vendorId,
@@ -50,8 +49,8 @@ describe('SalesService', () => {
     team_id: teamId,
     vendor_id: vendorId,
     type: SaleType.NOVO,
-    model: 'Onix',
-    value: { toFixed: () => '120000.00' },
+    model: "Onix",
+    value: { toFixed: () => "120000.00" },
     sold_at: soldAt,
     notes: null,
     created_at: soldAt,
@@ -83,13 +82,19 @@ describe('SalesService', () => {
       crmHistory: {
         create: jest.fn(),
       },
-      $transaction: jest.fn(async (callback: (tx: any) => Promise<unknown>) => callback(prisma)),
+      $transaction: jest.fn(async (callback: (tx: any) => Promise<unknown>) =>
+        callback(prisma),
+      ),
     };
     scoreEvents = { awardWithTx: jest.fn() };
-    service = new SalesService(prisma, scoreEvents as any, { emitLeadUpdated: jest.fn() } as any);
+    service = new SalesService(
+      prisma,
+      scoreEvents as any,
+      { emitLeadUpdated: jest.fn() } as any,
+    );
   });
 
-  it('permite venda sem check-in e soma compareceu mais vendeu', async () => {
+  it("permite venda sem check-in e soma compareceu mais vendeu", async () => {
     prisma.appointment.findUnique.mockResolvedValue(baseAppointment);
     prisma.salesTeamMember.findFirst.mockResolvedValue({
       team_id: teamId,
@@ -102,8 +107,8 @@ describe('SalesService', () => {
     const result = await service.create(user as any, {
       appointment_id: appointmentId,
       type: SaleType.NOVO,
-      product: 'Onix',
-      value: 'R$ 120.000,00',
+      product: "Onix",
+      value: "R$ 120.000,00",
       sold_at: soldAt.toISOString(),
     });
 
@@ -123,11 +128,15 @@ describe('SalesService', () => {
     });
     expect(scoreEvents.awardWithTx).toHaveBeenCalledWith(
       prisma,
-      expect.objectContaining({ kind: 'checked_in', earned_at: soldAt }),
+      expect.objectContaining({ kind: "checked_in", earned_at: soldAt }),
     );
     expect(scoreEvents.awardWithTx).toHaveBeenCalledWith(
       prisma,
-      expect.objectContaining({ kind: 'sold', sale_id: saleId, earned_at: soldAt }),
+      expect.objectContaining({
+        kind: "sold",
+        sale_id: saleId,
+        earned_at: soldAt,
+      }),
     );
     expect(prisma.sale.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -138,10 +147,12 @@ describe('SalesService', () => {
         }),
       }),
     );
-    expect(result).toEqual(expect.objectContaining({ id: saleId, value: '120000.00' }));
+    expect(result).toEqual(
+      expect.objectContaining({ id: saleId, value: "120000.00" }),
+    );
   });
 
-  it('bloqueia venda para status sem agendamento ativo', async () => {
+  it("bloqueia venda para status sem agendamento ativo", async () => {
     prisma.appointment.findUnique.mockResolvedValue({
       ...baseAppointment,
       status: AppointmentStatus.cancelled,
@@ -157,8 +168,8 @@ describe('SalesService', () => {
       service.create(user as any, {
         appointment_id: appointmentId,
         type: SaleType.NOVO,
-        product: 'Onix',
-        value: '120000',
+        product: "Onix",
+        value: "120000",
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });

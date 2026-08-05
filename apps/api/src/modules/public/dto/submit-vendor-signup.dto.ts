@@ -7,8 +7,8 @@ import {
   IsString,
   MaxLength,
   MinLength,
-} from 'class-validator';
-import { VendorCategory } from '../../../common/types';
+} from "class-validator";
+import { VendorCategory } from "../../../common/types";
 
 /**
  * Auto-cadastro publico de vendedor. Espelha o formulario da aba Equipe,

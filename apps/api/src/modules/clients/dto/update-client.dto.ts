@@ -1,5 +1,5 @@
-import { Type } from 'class-transformer';
-import { ConfirmationStatus } from '@prisma/client';
+import { Type } from "class-transformer";
+import { ConfirmationStatus } from "@prisma/client";
 import {
   IsArray,
   IsBoolean,
@@ -12,7 +12,7 @@ import {
   MaxLength,
   MinLength,
   ValidateNested,
-} from 'class-validator';
+} from "class-validator";
 
 class CrmStageStatusRuleDto {
   @IsEnum(ConfirmationStatus)
@@ -56,7 +56,7 @@ export class UpdateClientDto {
 
   @IsOptional()
   @IsString()
-  @IsUrl({ protocols: ['https'], require_protocol: true })
+  @IsUrl({ protocols: ["https"], require_protocol: true })
   @MaxLength(500)
   webhook_url_n8n?: string | null;
 

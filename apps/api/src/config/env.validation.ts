@@ -1,12 +1,12 @@
-import { getApiEnvFilePaths, mergeEnvFilesNestOrder } from './env-paths';
+import { getApiEnvFilePaths, mergeEnvFilesNestOrder } from "./env-paths";
 
 type EnvironmentVariables = Record<string, string | undefined>;
 
 const META_FILE_KEYS = [
-  'META_APP_ID',
-  'FACEBOOK_APP_ID',
-  'META_APP_SECRET',
-  'FACEBOOK_APP_SECRET',
+  "META_APP_ID",
+  "FACEBOOK_APP_ID",
+  "META_APP_SECRET",
+  "FACEBOOK_APP_SECRET",
 ] as const;
 
 /**
@@ -53,10 +53,10 @@ function validateUrl(value: string, key: string, protocols: string[]) {
 /** FRONTEND_URL aceita varias origens separadas por virgula, incluindo o scheme nativo do app iOS (Capacitor). */
 function validateOptionalHttpOriginList(value: string, key: string) {
   for (const part of value
-    .split(',')
+    .split(",")
     .map((s) => s.trim())
     .filter(Boolean)) {
-    validateUrl(part, key, ['http:', 'https:', 'capacitor:']);
+    validateUrl(part, key, ["http:", "https:", "capacitor:"]);
   }
 }
 
@@ -79,86 +79,86 @@ export function validateEnvironment(raw: EnvironmentVariables) {
   const databaseUrl =
     env.DATABASE_URL?.trim() ||
     env.POSTGRES_URL?.trim() ||
-    requireString(env, 'DATABASE_URL');
-  const isVercel = env.VERCEL === '1';
+    requireString(env, "DATABASE_URL");
+  const isVercel = env.VERCEL === "1";
   const redisUrlRaw = env.REDIS_URL?.trim();
   if (redisUrlRaw) {
-    validateUrl(redisUrlRaw, 'REDIS_URL', ['redis:', 'rediss:']);
+    validateUrl(redisUrlRaw, "REDIS_URL", ["redis:", "rediss:"]);
   } else if (!isVercel) {
-    requireString(env, 'REDIS_URL');
+    requireString(env, "REDIS_URL");
   }
-  const jwtSecret = requireString(env, 'JWT_SECRET');
-  const jwtExpiresIn = requireString(env, 'JWT_EXPIRES_IN');
-  const jwtRefreshSecret = requireString(env, 'JWT_REFRESH_SECRET');
-  const jwtRefreshExpiresIn = requireString(env, 'JWT_REFRESH_EXPIRES_IN');
-  const nodeEnv = env.NODE_ENV?.trim().toLowerCase() ?? 'development';
+  const jwtSecret = requireString(env, "JWT_SECRET");
+  const jwtExpiresIn = requireString(env, "JWT_EXPIRES_IN");
+  const jwtRefreshSecret = requireString(env, "JWT_REFRESH_SECRET");
+  const jwtRefreshExpiresIn = requireString(env, "JWT_REFRESH_EXPIRES_IN");
+  const nodeEnv = env.NODE_ENV?.trim().toLowerCase() ?? "development";
 
-  validateUrl(databaseUrl, 'DATABASE_URL', ['postgresql:', 'postgres:']);
-  validateDuration(jwtExpiresIn, 'JWT_EXPIRES_IN');
-  validateDuration(jwtRefreshExpiresIn, 'JWT_REFRESH_EXPIRES_IN');
-  validateMinLength(jwtSecret, 'JWT_SECRET', 32);
-  validateMinLength(jwtRefreshSecret, 'JWT_REFRESH_SECRET', 32);
+  validateUrl(databaseUrl, "DATABASE_URL", ["postgresql:", "postgres:"]);
+  validateDuration(jwtExpiresIn, "JWT_EXPIRES_IN");
+  validateDuration(jwtRefreshExpiresIn, "JWT_REFRESH_EXPIRES_IN");
+  validateMinLength(jwtSecret, "JWT_SECRET", 32);
+  validateMinLength(jwtRefreshSecret, "JWT_REFRESH_SECRET", 32);
 
   /** Valores de fallback do código (ConfigService) — nunca em produção com segredos assim. */
   const knownDevSecrets = [
-    'leadflow_access_secret',
-    'leadflow_refresh_secret',
+    "leadflow_access_secret",
+    "leadflow_refresh_secret",
   ] as const;
   const jwtSecretLc = jwtSecret.toLowerCase();
   const jwtRefreshLc = jwtRefreshSecret.toLowerCase();
 
-  if (nodeEnv === 'production') {
+  if (nodeEnv === "production") {
     if (
-      jwtSecret.includes('sua_chave') ||
-      jwtRefreshSecret.includes('sua_chave')
+      jwtSecret.includes("sua_chave") ||
+      jwtRefreshSecret.includes("sua_chave")
     ) {
       throw new Error(
-        'JWT_SECRET e JWT_REFRESH_SECRET devem ser substituidos por valores reais.',
+        "JWT_SECRET e JWT_REFRESH_SECRET devem ser substituidos por valores reais.",
       );
     }
     if (jwtSecret === jwtRefreshSecret) {
       throw new Error(
-        'Em producao JWT_SECRET e JWT_REFRESH_SECRET devem ser distintos (evita reutilizar o mesmo segredo para access e refresh).',
+        "Em producao JWT_SECRET e JWT_REFRESH_SECRET devem ser distintos (evita reutilizar o mesmo segredo para access e refresh).",
       );
     }
     for (const forbidden of knownDevSecrets) {
       if (jwtSecretLc === forbidden || jwtRefreshLc === forbidden) {
         throw new Error(
-          'JWT_SECRET e JWT_REFRESH_SECRET nao podem usar os valores padrao de desenvolvimento em producao.',
+          "JWT_SECRET e JWT_REFRESH_SECRET nao podem usar os valores padrao de desenvolvimento em producao.",
         );
       }
     }
-    if (jwtSecretLc.includes('changeme') || jwtRefreshLc.includes('changeme')) {
+    if (jwtSecretLc.includes("changeme") || jwtRefreshLc.includes("changeme")) {
       throw new Error(
         'Remova placeholders como "changeme" dos JWTs em producao.',
       );
     }
     const allowResetToken =
       env.ALLOW_PASSWORD_RESET_TOKEN_RESPONSE?.trim().toLowerCase();
-    if (allowResetToken === 'true' || allowResetToken === '1') {
+    if (allowResetToken === "true" || allowResetToken === "1") {
       throw new Error(
-        'ALLOW_PASSWORD_RESET_TOKEN_RESPONSE nao pode estar ativo em producao ' +
-          '(o token de reset seria exposto no JSON da API).',
+        "ALLOW_PASSWORD_RESET_TOKEN_RESPONSE nao pode estar ativo em producao " +
+          "(o token de reset seria exposto no JSON da API).",
       );
     }
   }
 
   const optionalHttpUrls = [
-    'META_REDIRECT_URI',
-    'FACEBOOK_REDIRECT_URI',
-    'META_WEBHOOK_CALLBACK_URL',
-    'META_WHATSAPP_WEBHOOK_CALLBACK_URL',
-    'FRONTEND_URL',
-    'SENTRY_DSN',
+    "META_REDIRECT_URI",
+    "FACEBOOK_REDIRECT_URI",
+    "META_WEBHOOK_CALLBACK_URL",
+    "META_WHATSAPP_WEBHOOK_CALLBACK_URL",
+    "FRONTEND_URL",
+    "SENTRY_DSN",
   ];
 
   for (const key of optionalHttpUrls) {
     const value = env[key]?.trim();
     if (value) {
-      if (key === 'FRONTEND_URL') {
+      if (key === "FRONTEND_URL") {
         validateOptionalHttpOriginList(value, key);
       } else {
-        validateUrl(value, key, ['http:', 'https:']);
+        validateUrl(value, key, ["http:", "https:"]);
       }
     }
   }
@@ -167,26 +167,23 @@ export function validateEnvironment(raw: EnvironmentVariables) {
   const metaIngestionKey = env.LEADFLOW_META_INGESTION_API_KEY?.trim();
   const integrationActor = env.LEADFLOW_INTEGRATION_ACTOR_USER_ID?.trim();
   const integrationClientId = env.LEADFLOW_INTEGRATION_CLIENT_ID?.trim();
-  const allowLegacyIntegrationKey = env.ALLOW_LEGACY_INTEGRATION_KEY?.trim().toLowerCase();
+  const allowLegacyIntegrationKey =
+    env.ALLOW_LEGACY_INTEGRATION_KEY?.trim().toLowerCase();
   if (
     allowLegacyIntegrationKey &&
-    !['true', 'false', '1', '0'].includes(allowLegacyIntegrationKey)
+    !["true", "false", "1", "0"].includes(allowLegacyIntegrationKey)
   ) {
-    throw new Error('ALLOW_LEGACY_INTEGRATION_KEY deve ser true ou false.');
+    throw new Error("ALLOW_LEGACY_INTEGRATION_KEY deve ser true ou false.");
   }
   if (integrationKey) {
-    validateMinLength(integrationKey, 'LEADFLOW_INTEGRATION_API_KEY', 32);
+    validateMinLength(integrationKey, "LEADFLOW_INTEGRATION_API_KEY", 32);
   }
   if (metaIngestionKey) {
-    validateMinLength(
-      metaIngestionKey,
-      'LEADFLOW_META_INGESTION_API_KEY',
-      32,
-    );
+    validateMinLength(metaIngestionKey, "LEADFLOW_META_INGESTION_API_KEY", 32);
   }
   if (integrationKey && metaIngestionKey === integrationKey) {
     throw new Error(
-      'LEADFLOW_META_INGESTION_API_KEY deve ser diferente da chave legada de integracao.',
+      "LEADFLOW_META_INGESTION_API_KEY deve ser diferente da chave legada de integracao.",
     );
   }
   if (
@@ -195,28 +192,28 @@ export function validateEnvironment(raw: EnvironmentVariables) {
       integrationClientId,
     )
   ) {
-    throw new Error('LEADFLOW_INTEGRATION_CLIENT_ID deve ser um UUID valido.');
+    throw new Error("LEADFLOW_INTEGRATION_CLIENT_ID deve ser um UUID valido.");
   }
-  if (nodeEnv === 'production' && integrationKey && !integrationClientId) {
+  if (nodeEnv === "production" && integrationKey && !integrationClientId) {
     throw new Error(
-      'LEADFLOW_INTEGRATION_CLIENT_ID e obrigatorio em producao quando a chave de integracao esta ativa.',
+      "LEADFLOW_INTEGRATION_CLIENT_ID e obrigatorio em producao quando a chave de integracao esta ativa.",
     );
   }
   if (
-    nodeEnv === 'production' &&
+    nodeEnv === "production" &&
     integrationKey &&
-    !['true', '1'].includes(allowLegacyIntegrationKey ?? '')
+    !["true", "1"].includes(allowLegacyIntegrationKey ?? "")
   ) {
     throw new Error(
-      'Chave global legada desativada em producao. Remova LEADFLOW_INTEGRATION_API_KEY ou defina ALLOW_LEGACY_INTEGRATION_KEY=true temporariamente durante a migracao.',
+      "Chave global legada desativada em producao. Remova LEADFLOW_INTEGRATION_API_KEY ou defina ALLOW_LEGACY_INTEGRATION_KEY=true temporariamente durante a migracao.",
     );
   }
   if (integrationKey && !integrationActor) {
     // Aviso apenas — o app funciona sem actor, mas o CRM nao move automaticamente.
     console.warn(
-      '[config] LEADFLOW_INTEGRATION_API_KEY definida sem LEADFLOW_INTEGRATION_ACTOR_USER_ID. ' +
-        'O CRM nao sera movido automaticamente em agendamentos. ' +
-        'Defina LEADFLOW_INTEGRATION_ACTOR_USER_ID com o UUID de um usuario GESTOR para ativar o recurso.',
+      "[config] LEADFLOW_INTEGRATION_API_KEY definida sem LEADFLOW_INTEGRATION_ACTOR_USER_ID. " +
+        "O CRM nao sera movido automaticamente em agendamentos. " +
+        "Defina LEADFLOW_INTEGRATION_ACTOR_USER_ID com o UUID de um usuario GESTOR para ativar o recurso.",
     );
   }
   if (
@@ -226,7 +223,7 @@ export function validateEnvironment(raw: EnvironmentVariables) {
     )
   ) {
     throw new Error(
-      'LEADFLOW_INTEGRATION_ACTOR_USER_ID deve ser um UUID valido.',
+      "LEADFLOW_INTEGRATION_ACTOR_USER_ID deve ser um UUID valido.",
     );
   }
 

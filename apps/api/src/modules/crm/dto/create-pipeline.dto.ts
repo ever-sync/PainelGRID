@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Type } from "class-transformer";
 import {
   ArrayMaxSize,
   IsArray,
@@ -12,7 +12,7 @@ import {
   MaxLength,
   Min,
   ValidateNested,
-} from 'class-validator';
+} from "class-validator";
 
 const CODE_PATTERN = /^[A-Z0-9_-]{4,40}$/;
 
@@ -23,7 +23,9 @@ export class CreatePipelineStageInputDto {
 
   @IsOptional()
   @IsString()
-  @Matches(CODE_PATTERN, { message: 'code deve conter apenas A-Z, 0-9, _ ou - (4-40 chars)' })
+  @Matches(CODE_PATTERN, {
+    message: "code deve conter apenas A-Z, 0-9, _ ou - (4-40 chars)",
+  })
   code?: string;
 
   @IsOptional()
@@ -57,7 +59,9 @@ export class CreatePipelineDto {
 
   @IsOptional()
   @IsString()
-  @Matches(CODE_PATTERN, { message: 'code deve conter apenas A-Z, 0-9, _ ou - (4-40 chars)' })
+  @Matches(CODE_PATTERN, {
+    message: "code deve conter apenas A-Z, 0-9, _ ou - (4-40 chars)",
+  })
   code?: string;
 
   @IsOptional()

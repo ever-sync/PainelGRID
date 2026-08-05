@@ -1,9 +1,9 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
-import { Role } from '../../common/types';
-import { PrismaService } from '../../config/prisma.service';
-import { AuthenticatedUser } from '../auth/auth.types';
-import { ClientsService } from '../clients/clients.service';
-import { FindCampaignsQueryDto } from './dto/find-campaigns-query.dto';
+import { ForbiddenException, Injectable } from "@nestjs/common";
+import { Role } from "../../common/types";
+import { PrismaService } from "../../config/prisma.service";
+import { AuthenticatedUser } from "../auth/auth.types";
+import { ClientsService } from "../clients/clients.service";
+import { FindCampaignsQueryDto } from "./dto/find-campaigns-query.dto";
 
 @Injectable()
 export class CampaignsService {
@@ -17,13 +17,17 @@ export class CampaignsService {
       await this.clientsService.assertGestorOwnsClient(user.sub, clientId);
       return;
     }
-    if (user.role === Role.CLIENTE || user.role === Role.VENDEDOR || user.role === Role.RECEPCAO) {
+    if (
+      user.role === Role.CLIENTE ||
+      user.role === Role.VENDEDOR ||
+      user.role === Role.RECEPCAO
+    ) {
       if (!user.client_id || user.client_id !== clientId) {
-        throw new ForbiddenException('Sem permissao');
+        throw new ForbiddenException("Sem permissao");
       }
       return;
     }
-    throw new ForbiddenException('Sem permissao');
+    throw new ForbiddenException("Sem permissao");
   }
 
   async findAll(user: AuthenticatedUser, query: FindCampaignsQueryDto) {
@@ -31,7 +35,7 @@ export class CampaignsService {
 
     const rows = await this.prisma.campaign.findMany({
       where: { client_id: query.client_id },
-      orderBy: { created_at: 'desc' },
+      orderBy: { created_at: "desc" },
       include: {
         _count: { select: { leads: true } },
         vendors: {

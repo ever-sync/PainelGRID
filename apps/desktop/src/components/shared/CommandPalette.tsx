@@ -172,9 +172,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     {
       id: "action-dark-mode",
       category: "Ações Rápidas",
-      title: isDarkMode ? "Alternar para Modo Claro" : "Alternar para Modo Escuro",
+      title: isDarkMode
+        ? "Alternar para Modo Claro"
+        : "Alternar para Modo Escuro",
       subtitle: "Mudar o tema visual de toda a aplicação",
-      icon: isDarkMode ? <Sun className="size-4 text-amber-400" /> : <Moon className="size-4 text-indigo-400" />,
+      icon: isDarkMode ? (
+        <Sun className="size-4 text-amber-400" />
+      ) : (
+        <Moon className="size-4 text-indigo-400" />
+      ),
       action: () => {
         onToggleDarkMode();
         onClose();
@@ -198,7 +204,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const filteredItems = items.filter(
     (item) =>
       item.title.toLowerCase().includes(query.toLowerCase()) ||
-      (item.subtitle && item.subtitle.toLowerCase().includes(query.toLowerCase())) ||
+      (item.subtitle &&
+        item.subtitle.toLowerCase().includes(query.toLowerCase())) ||
       item.category.toLowerCase().includes(query.toLowerCase()),
   );
 
@@ -209,10 +216,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setSelectedIndex((prev) => (prev + 1) % Math.max(1, filteredItems.length));
+      setSelectedIndex(
+        (prev) => (prev + 1) % Math.max(1, filteredItems.length),
+      );
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setSelectedIndex((prev) => (prev - 1 + filteredItems.length) % Math.max(1, filteredItems.length));
+      setSelectedIndex(
+        (prev) =>
+          (prev - 1 + filteredItems.length) % Math.max(1, filteredItems.length),
+      );
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (filteredItems[selectedIndex]) {
@@ -233,7 +245,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       <div
         className={clsx(
           "w-full max-w-2xl rounded-3xl border shadow-2xl overflow-hidden transition-all transform animate-scaleUp",
-          isDarkMode ? "bg-[#0c0d11] border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-900",
+          isDarkMode
+            ? "bg-[#0c0d11] border-zinc-800 text-zinc-100"
+            : "bg-white border-zinc-200 text-zinc-900",
         )}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
@@ -262,7 +276,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         <div className="max-h-[60vh] overflow-y-auto p-3 space-y-1 divide-y divide-zinc-100 dark:divide-zinc-800/50">
           {filteredItems.length === 0 ? (
             <div className="py-12 text-center text-xs text-zinc-400">
-              Nenhum comando ou página encontrada para "<span className="font-bold text-zinc-600 dark:text-zinc-300">{query}</span>"
+              Nenhum comando ou página encontrada para "
+              <span className="font-bold text-zinc-600 dark:text-zinc-300">
+                {query}
+              </span>
+              "
             </div>
           ) : (
             filteredItems.map((item, index) => {
@@ -285,14 +303,18 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                     <div
                       className={clsx(
                         "p-2.5 rounded-xl border shrink-0",
-                        isDarkMode ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200",
+                        isDarkMode
+                          ? "bg-zinc-900 border-zinc-800"
+                          : "bg-white border-zinc-200",
                       )}
                     >
                       {item.icon}
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs sm:text-sm font-bold truncate">{item.title}</span>
+                        <span className="text-xs sm:text-sm font-bold truncate">
+                          {item.title}
+                        </span>
                         {item.badge && (
                           <span className="px-2 py-0.5 rounded-md bg-[#FF0636]/10 text-[#FF0636] text-[10px] font-bold">
                             {item.badge}
@@ -300,7 +322,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                         )}
                       </div>
                       {item.subtitle && (
-                        <p className="text-[11px] text-zinc-400 truncate">{item.subtitle}</p>
+                        <p className="text-[11px] text-zinc-400 truncate">
+                          {item.subtitle}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -309,7 +333,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
                       {item.category}
                     </span>
-                    <ArrowRight className={clsx("size-4 transition-transform", isSelected ? "translate-x-1 text-[#FF0636]" : "opacity-0")} />
+                    <ArrowRight
+                      className={clsx(
+                        "size-4 transition-transform",
+                        isSelected
+                          ? "translate-x-1 text-[#FF0636]"
+                          : "opacity-0",
+                      )}
+                    />
                   </div>
                 </div>
               );
@@ -320,10 +351,28 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         {/* Rodapé Dicas de Atalho */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 text-[11px] text-zinc-400 font-mono">
           <div className="flex items-center gap-3">
-            <span><kbd className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">↑</kbd> <kbd className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">↓</kbd> Navegar</span>
-            <span><kbd className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">↵</kbd> Selecionar</span>
+            <span>
+              <kbd className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                ↑
+              </kbd>{" "}
+              <kbd className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                ↓
+              </kbd>{" "}
+              Navegar
+            </span>
+            <span>
+              <kbd className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                ↵
+              </kbd>{" "}
+              Selecionar
+            </span>
           </div>
-          <span><kbd className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">ESC</kbd> Fechar</span>
+          <span>
+            <kbd className="px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+              ESC
+            </kbd>{" "}
+            Fechar
+          </span>
         </div>
       </div>
     </div>

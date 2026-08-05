@@ -62,9 +62,11 @@ function renderCell(row: MetaCampaignReportRow, column: MetaColumn) {
 /** Cor por natureza da metrica, para a tabela nao virar um bloco cinza. */
 function cellTone(column: MetaColumn, muted?: boolean) {
   if (muted) return "text-gray-600 dark:text-zinc-400";
-  if (column.id === "spend") return "font-bold text-amber-600 dark:text-amber-400";
+  if (column.id === "spend")
+    return "font-bold text-amber-600 dark:text-amber-400";
   if (column.format === "currency") return "text-rose-600 dark:text-rose-400";
-  if (column.group === "Mensagens") return "font-bold text-blue-600 dark:text-blue-400";
+  if (column.group === "Mensagens")
+    return "font-bold text-blue-600 dark:text-blue-400";
   return "text-gray-700 dark:text-zinc-300";
 }
 
@@ -201,7 +203,9 @@ export function MetaCampaignTree({
         <table className="w-full text-left text-xs">
           <thead>
             <tr className="border-b border-gray-100 font-semibold uppercase tracking-wider text-gray-500 dark:border-zinc-800 dark:text-zinc-400">
-              <th className="px-3 pb-3">Nome (Campanha / Conjunto / Anúncio)</th>
+              <th className="px-3 pb-3">
+                Nome (Campanha / Conjunto / Anúncio)
+              </th>
               {columns.map((column) => {
                 const active = sort?.column === column.id;
                 return (

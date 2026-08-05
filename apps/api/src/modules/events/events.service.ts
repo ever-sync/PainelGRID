@@ -1,12 +1,16 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { AppointmentStatus, EventStatus, Prisma } from '@prisma/client';
-import { Role } from '../../common/types';
-import { PrismaService } from '../../config/prisma.service';
-import { AuthenticatedUser } from '../auth/auth.types';
-import { ClientsService } from '../clients/clients.service';
-import { CreateEventDto } from './dto/create-event.dto';
-import { FindEventsQueryDto } from './dto/find-events-query.dto';
-import { UpdateEventDto } from './dto/update-event.dto';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { AppointmentStatus, EventStatus, Prisma } from "@prisma/client";
+import { Role } from "../../common/types";
+import { PrismaService } from "../../config/prisma.service";
+import { AuthenticatedUser } from "../auth/auth.types";
+import { ClientsService } from "../clients/clients.service";
+import { CreateEventDto } from "./dto/create-event.dto";
+import { FindEventsQueryDto } from "./dto/find-events-query.dto";
+import { UpdateEventDto } from "./dto/update-event.dto";
 
 type EventRow = {
   id: string;
@@ -43,7 +47,7 @@ export function computeDynamicEventStatus(row: {
   event_date: Date | string;
   event_end_date?: Date | string | null;
 }): EventStatus {
-  if (row.status === EventStatus.cancelled || row.status === 'cancelled') {
+  if (row.status === EventStatus.cancelled || row.status === "cancelled") {
     return EventStatus.cancelled;
   }
 
@@ -81,16 +85,21 @@ export class EventsService {
   ) {}
 
   private normalizeParticipantIds(
-    dto: Pick<CreateEventDto | UpdateEventDto, 'participant_client_ids'>,
+    dto: Pick<CreateEventDto | UpdateEventDto, "participant_client_ids">,
   ) {
-    const ids = (dto.participant_client_ids ?? []).map((id) => id.trim()).filter(Boolean);
+    const ids = (dto.participant_client_ids ?? [])
+      .map((id) => id.trim())
+      .filter(Boolean);
 
     return Array.from(new Set(ids));
   }
 
-  private async assertParticipantAccess(user: AuthenticatedUser, participantIds: string[]) {
+  private async assertParticipantAccess(
+    user: AuthenticatedUser,
+    participantIds: string[],
+  ) {
     if (participantIds.length === 0) {
-      throw new ForbiddenException('Informe ao menos um cliente participante');
+      throw new ForbiddenException("Informe ao menos um cliente participante");
     }
 
     if (user.role === Role.GESTOR) {
@@ -102,14 +111,21 @@ export class EventsService {
       return;
     }
 
-    if (user.role === Role.CLIENTE || user.role === Role.VENDEDOR || user.role === Role.RECEPCAO) {
-      if (!user.client_id || participantIds.some((clientId) => clientId !== user.client_id)) {
-        throw new ForbiddenException('Sem permissao');
+    if (
+      user.role === Role.CLIENTE ||
+      user.role === Role.VENDEDOR ||
+      user.role === Role.RECEPCAO
+    ) {
+      if (
+        !user.client_id ||
+        participantIds.some((clientId) => clientId !== user.client_id)
+      ) {
+        throw new ForbiddenException("Sem permissao");
       }
       return;
     }
 
-    throw new ForbiddenException('Sem permissao');
+    throw new ForbiddenException("Sem permissao");
   }
 
   private eventHasParticipant(
@@ -119,9 +135,15 @@ export class EventsService {
     return this.getParticipantClientIds(event).includes(clientId);
   }
 
-  private getParticipantClientIds(event: { participants: Array<{ client_id: string }> }) {
+  private getParticipantClientIds(event: {
+    participants: Array<{ client_id: string }>;
+  }) {
     return Array.from(
-      new Set(event.participants.map((participant) => participant.client_id).filter(Boolean)),
+      new Set(
+        event.participants
+          .map((participant) => participant.client_id)
+          .filter(Boolean),
+      ),
     );
   }
 
@@ -135,20 +157,22 @@ export class EventsService {
         where: { id: { in: participantIds } },
       });
       if (owned === 0) {
-        throw new ForbiddenException('Sem permissao');
+        throw new ForbiddenException("Sem permissao");
       }
       return;
     }
 
     if (
-      (user.role === Role.CLIENTE || user.role === Role.VENDEDOR || user.role === Role.RECEPCAO) &&
+      (user.role === Role.CLIENTE ||
+        user.role === Role.VENDEDOR ||
+        user.role === Role.RECEPCAO) &&
       user.client_id &&
       this.eventHasParticipant(event, user.client_id)
     ) {
       return;
     }
 
-    throw new ForbiddenException('Sem permissao');
+    throw new ForbiddenException("Sem permissao");
   }
 
   private async resolveAccessibleEventClientIds(
@@ -157,14 +181,17 @@ export class EventsService {
   ) {
     if (query.client_id) {
       if (user.role === Role.GESTOR) {
-        await this.clientsService.assertGestorOwnsClient(user.sub, query.client_id);
+        await this.clientsService.assertGestorOwnsClient(
+          user.sub,
+          query.client_id,
+        );
       } else if (
         (user.role === Role.CLIENTE ||
           user.role === Role.VENDEDOR ||
           user.role === Role.RECEPCAO) &&
         user.client_id !== query.client_id
       ) {
-        throw new ForbiddenException('Sem permissao');
+        throw new ForbiddenException("Sem permissao");
       }
 
       return [query.client_id];
@@ -179,7 +206,7 @@ export class EventsService {
       return [user.client_id];
     }
 
-    throw new ForbiddenException('Sem permissao');
+    throw new ForbiddenException("Sem permissao");
   }
 
   private serializeEvent(row: EventRow) {
@@ -224,7 +251,9 @@ export class EventsService {
       total_investment:
         row.total_investment != null ? Number(row.total_investment) : null,
       paid_traffic_investment:
-        row.paid_traffic_investment != null ? Number(row.paid_traffic_investment) : null,
+        row.paid_traffic_investment != null
+          ? Number(row.paid_traffic_investment)
+          : null,
       status: dynamicStatus,
       cover_image_url: row.cover_image_url,
       image_urls: row.image_urls,
@@ -246,13 +275,15 @@ export class EventsService {
           some: { client_id: { in: clientIds } },
         },
       },
-      orderBy: { event_date: 'desc' },
+      orderBy: { event_date: "desc" },
       include: {
         participants: {
           select: { client_id: true },
-          orderBy: { created_at: 'asc' },
+          orderBy: { created_at: "asc" },
         },
-        _count: { select: { interested_leads: { where: { deleted_at: null } } } },
+        _count: {
+          select: { interested_leads: { where: { deleted_at: null } } },
+        },
         appointments: {
           select: { status: true },
         },
@@ -272,9 +303,11 @@ export class EventsService {
       include: {
         participants: {
           select: { client_id: true },
-          orderBy: { created_at: 'asc' },
+          orderBy: { created_at: "asc" },
         },
-        _count: { select: { interested_leads: { where: { deleted_at: null } } } },
+        _count: {
+          select: { interested_leads: { where: { deleted_at: null } } },
+        },
         appointments: {
           select: { status: true },
         },
@@ -282,7 +315,7 @@ export class EventsService {
     });
 
     if (!row) {
-      throw new NotFoundException('Evento nao encontrado');
+      throw new NotFoundException("Evento nao encontrado");
     }
 
     await this.assertEventRead(user, row);
@@ -301,9 +334,11 @@ export class EventsService {
       include: {
         participants: {
           select: { client_id: true },
-          orderBy: { created_at: 'asc' },
+          orderBy: { created_at: "asc" },
         },
-        _count: { select: { interested_leads: { where: { deleted_at: null } } } },
+        _count: {
+          select: { interested_leads: { where: { deleted_at: null } } },
+        },
         appointments: {
           select: { status: true },
         },
@@ -311,11 +346,11 @@ export class EventsService {
     });
 
     if (!row) {
-      throw new NotFoundException('Evento nao encontrado');
+      throw new NotFoundException("Evento nao encontrado");
     }
 
     if (clientId && !this.eventHasParticipant(row, clientId)) {
-      throw new NotFoundException('Evento nao encontrado para este cliente');
+      throw new NotFoundException("Evento nao encontrado para este cliente");
     }
 
     return this.serializeEvent(row);
@@ -346,13 +381,15 @@ export class EventsService {
             }
           : {}),
       },
-      orderBy: { event_date: 'asc' },
+      orderBy: { event_date: "asc" },
       include: {
         participants: {
           select: { client_id: true },
-          orderBy: { created_at: 'asc' },
+          orderBy: { created_at: "asc" },
         },
-        _count: { select: { interested_leads: { where: { deleted_at: null } } } },
+        _count: {
+          select: { interested_leads: { where: { deleted_at: null } } },
+        },
         appointments: {
           select: { status: true },
         },
@@ -375,8 +412,12 @@ export class EventsService {
         description: dto.description?.trim() || null,
         launch_date: dto.launch_date ? new Date(dto.launch_date) : null,
         event_date: new Date(dto.event_date),
-        event_end_date: dto.event_end_date ? new Date(dto.event_end_date) : null,
-        event_days: dto.event_days ? (dto.event_days as unknown as Prisma.InputJsonValue) : undefined,
+        event_end_date: dto.event_end_date
+          ? new Date(dto.event_end_date)
+          : null,
+        event_days: dto.event_days
+          ? (dto.event_days as unknown as Prisma.InputJsonValue)
+          : undefined,
         location: dto.location?.trim() || null,
         capacity: dto.capacity ?? null,
         sales_target: dto.sales_target ?? null,
@@ -396,9 +437,11 @@ export class EventsService {
       include: {
         participants: {
           select: { client_id: true },
-          orderBy: { created_at: 'asc' },
+          orderBy: { created_at: "asc" },
         },
-        _count: { select: { interested_leads: { where: { deleted_at: null } } } },
+        _count: {
+          select: { interested_leads: { where: { deleted_at: null } } },
+        },
         appointments: {
           select: { status: true },
         },
@@ -415,7 +458,7 @@ export class EventsService {
         dto.allow_vendor_fipe !== undefined)
     ) {
       throw new ForbiddenException(
-        'Apenas o gestor pode alterar permissões dos vendedores.',
+        "Apenas o gestor pode alterar permissões dos vendedores.",
       );
     }
 
@@ -424,9 +467,11 @@ export class EventsService {
       include: {
         participants: {
           select: { client_id: true },
-          orderBy: { created_at: 'asc' },
+          orderBy: { created_at: "asc" },
         },
-        _count: { select: { interested_leads: { where: { deleted_at: null } } } },
+        _count: {
+          select: { interested_leads: { where: { deleted_at: null } } },
+        },
         appointments: {
           select: { status: true },
         },
@@ -434,7 +479,7 @@ export class EventsService {
     });
 
     if (!existing) {
-      throw new NotFoundException('Evento nao encontrado');
+      throw new NotFoundException("Evento nao encontrado");
     }
 
     const participantIds =
@@ -451,7 +496,9 @@ export class EventsService {
         client_id: primaryClientId,
         name: dto.name?.trim(),
         event_type:
-          dto.event_type !== undefined ? dto.event_type?.trim() || null : undefined,
+          dto.event_type !== undefined
+            ? dto.event_type?.trim() || null
+            : undefined,
         description:
           dto.description !== undefined
             ? dto.description?.trim() || null
@@ -476,35 +523,52 @@ export class EventsService {
         location:
           dto.location !== undefined ? dto.location?.trim() || null : undefined,
         capacity: dto.capacity !== undefined ? dto.capacity : undefined,
-        sales_target: dto.sales_target !== undefined ? dto.sales_target : undefined,
-        scheduled_target: dto.scheduled_target !== undefined ? dto.scheduled_target : undefined,
-        require_wristband: dto.require_wristband !== undefined ? dto.require_wristband : undefined,
+        sales_target:
+          dto.sales_target !== undefined ? dto.sales_target : undefined,
+        scheduled_target:
+          dto.scheduled_target !== undefined ? dto.scheduled_target : undefined,
+        require_wristband:
+          dto.require_wristband !== undefined
+            ? dto.require_wristband
+            : undefined,
         allow_vendor_checkin:
-          dto.allow_vendor_checkin !== undefined ? dto.allow_vendor_checkin : undefined,
+          dto.allow_vendor_checkin !== undefined
+            ? dto.allow_vendor_checkin
+            : undefined,
         allow_vendor_fipe:
-          dto.allow_vendor_fipe !== undefined ? dto.allow_vendor_fipe : undefined,
+          dto.allow_vendor_fipe !== undefined
+            ? dto.allow_vendor_fipe
+            : undefined,
         total_investment:
           dto.total_investment !== undefined ? dto.total_investment : undefined,
         paid_traffic_investment:
-          dto.paid_traffic_investment !== undefined ? dto.paid_traffic_investment : undefined,
+          dto.paid_traffic_investment !== undefined
+            ? dto.paid_traffic_investment
+            : undefined,
         status: dto.status ?? undefined,
         cover_image_url:
-          dto.cover_image_url !== undefined ? dto.cover_image_url.trim() || null : undefined,
+          dto.cover_image_url !== undefined
+            ? dto.cover_image_url.trim() || null
+            : undefined,
         image_urls: dto.image_urls ?? undefined,
         participants:
           dto.participant_client_ids !== undefined
             ? {
                 deleteMany: {},
-                create: participantIds.map((clientId) => ({ client_id: clientId })),
+                create: participantIds.map((clientId) => ({
+                  client_id: clientId,
+                })),
               }
             : undefined,
       },
       include: {
         participants: {
           select: { client_id: true },
-          orderBy: { created_at: 'asc' },
+          orderBy: { created_at: "asc" },
         },
-        _count: { select: { interested_leads: { where: { deleted_at: null } } } },
+        _count: {
+          select: { interested_leads: { where: { deleted_at: null } } },
+        },
         appointments: {
           select: { status: true },
         },
@@ -520,19 +584,25 @@ export class EventsService {
       include: {
         participants: {
           select: { client_id: true },
-          orderBy: { created_at: 'asc' },
+          orderBy: { created_at: "asc" },
         },
         _count: {
-          select: { interested_leads: { where: { deleted_at: null } }, appointments: true },
+          select: {
+            interested_leads: { where: { deleted_at: null } },
+            appointments: true,
+          },
         },
       },
     });
 
     if (!existing) {
-      throw new NotFoundException('Evento nao encontrado');
+      throw new NotFoundException("Evento nao encontrado");
     }
 
-    await this.assertParticipantAccess(user, this.getParticipantClientIds(existing));
+    await this.assertParticipantAccess(
+      user,
+      this.getParticipantClientIds(existing),
+    );
 
     await this.prisma.$transaction(async (tx) => {
       await tx.appointment.deleteMany({

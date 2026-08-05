@@ -772,7 +772,10 @@ export function EventosPage() {
       setSelectedMemberIds([]);
     } catch (err) {
       setTeamsError(
-        getErrorMessage(err, "Não foi possível adicionar os vendedores ao time."),
+        getErrorMessage(
+          err,
+          "Não foi possível adicionar os vendedores ao time.",
+        ),
       );
     } finally {
       setMemberToggling(null);
@@ -1507,7 +1510,9 @@ export function EventosPage() {
                                           : team.id;
                                       setAddMemberTeamId(nextOpen);
                                       setSelectedMemberIds(
-                                        nextOpen ? available.map((v) => v.id) : [],
+                                        nextOpen
+                                          ? available.map((v) => v.id)
+                                          : [],
                                       );
                                     }}
                                     className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
@@ -1544,7 +1549,9 @@ export function EventosPage() {
                                   <span
                                     className={clsx(
                                       "text-xs font-semibold uppercase tracking-wider",
-                                      isDarkMode ? "text-zinc-400" : "text-zinc-500",
+                                      isDarkMode
+                                        ? "text-zinc-400"
+                                        : "text-zinc-500",
                                     )}
                                   >
                                     Selecione os vendedores para o time:
@@ -1553,15 +1560,21 @@ export function EventosPage() {
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        if (selectedMemberIds.length === available.length) {
+                                        if (
+                                          selectedMemberIds.length ===
+                                          available.length
+                                        ) {
                                           setSelectedMemberIds([]);
                                         } else {
-                                          setSelectedMemberIds(available.map((v) => v.id));
+                                          setSelectedMemberIds(
+                                            available.map((v) => v.id),
+                                          );
                                         }
                                       }}
                                       className="text-xs font-medium text-[#E51838] hover:underline"
                                     >
-                                      {selectedMemberIds.length === available.length
+                                      {selectedMemberIds.length ===
+                                      available.length
                                         ? "Desmarcar todos"
                                         : "Selecionar todos"}
                                     </button>
@@ -1577,9 +1590,11 @@ export function EventosPage() {
                                   )}
                                 >
                                   {available.map((vendor) => {
-                                    const isChecked = selectedMemberIds.includes(vendor.id);
+                                    const isChecked =
+                                      selectedMemberIds.includes(vendor.id);
                                     const companyName = clients.find(
-                                      (client) => client.id === vendor.client_id,
+                                      (client) =>
+                                        client.id === vendor.client_id,
                                     )?.company_name;
                                     return (
                                       <label
@@ -1606,16 +1621,23 @@ export function EventosPage() {
                                               ]);
                                             } else {
                                               setSelectedMemberIds((prev) =>
-                                                prev.filter((id) => id !== vendor.id),
+                                                prev.filter(
+                                                  (id) => id !== vendor.id,
+                                                ),
                                               );
                                             }
                                           }}
                                           className="h-4 w-4 rounded border-zinc-700 text-[#E51838] focus:ring-[#E51838]"
                                         />
                                         <div className="flex flex-col">
-                                          <span className="font-semibold">{vendor.name}</span>
+                                          <span className="font-semibold">
+                                            {vendor.name}
+                                          </span>
                                           <span className="text-[11px] text-zinc-400">
-                                            {vendor.email} {companyName ? `· ${companyName}` : ""}
+                                            {vendor.email}{" "}
+                                            {companyName
+                                              ? `· ${companyName}`
+                                              : ""}
                                           </span>
                                         </div>
                                       </label>
@@ -1639,7 +1661,10 @@ export function EventosPage() {
                                     isDisabled={selectedMemberIds.length === 0}
                                     loading={memberToggling === team.id}
                                     onClick={() =>
-                                      void handleAddMembers(team.id, selectedMemberIds)
+                                      void handleAddMembers(
+                                        team.id,
+                                        selectedMemberIds,
+                                      )
                                     }
                                   >
                                     {selectedMemberIds.length > 1

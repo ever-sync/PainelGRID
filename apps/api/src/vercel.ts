@@ -1,26 +1,26 @@
-import 'reflect-metadata';
-import { Logger, ValidationPipe } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { NestFactory } from '@nestjs/core';
-import { ExpressAdapter } from '@nestjs/platform-express';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import cookieParser from 'cookie-parser';
-import cors from 'cors';
-import express from 'express';
-import helmet from 'helmet';
-import type { Request, Response } from 'express';
-import { AppModule } from './app.module';
-import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
-import { createCorsOriginDelegate } from './config/cors-origins';
-import { initSentryFromEnv } from './config/sentry';
+import "reflect-metadata";
+import { Logger, ValidationPipe } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { NestFactory } from "@nestjs/core";
+import { ExpressAdapter } from "@nestjs/platform-express";
+import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import cookieParser from "cookie-parser";
+import cors from "cors";
+import express from "express";
+import helmet from "helmet";
+import type { Request, Response } from "express";
+import { AppModule } from "./app.module";
+import { GlobalExceptionFilter } from "./common/filters/http-exception.filter";
+import { createCorsOriginDelegate } from "./config/cors-origins";
+import { initSentryFromEnv } from "./config/sentry";
 
 let cachedApp: express.Express | undefined;
-const logger = new Logger('VercelHandler');
+const logger = new Logger("VercelHandler");
 
 async function bootstrap(): Promise<express.Express> {
   initSentryFromEnv();
   const server = express();
-  server.set('trust proxy', 1);
+  server.set("trust proxy", 1);
   /**
    * No Vercel (ExpressAdapter + função única), `app.enableCors()` não responde ao preflight OPTIONS
    * antes do roteador — o browser bloqueia o fetch cross-origin. Registrar `cors` no Express primeiro.
@@ -35,28 +35,28 @@ async function bootstrap(): Promise<express.Express> {
           baseUri: ["'self'"],
           objectSrc: ["'none'"],
           frameAncestors: ["'none'"],
-          imgSrc: ["'self'", 'data:', 'https:'],
+          imgSrc: ["'self'", "data:", "https:"],
           scriptSrc: ["'self'", "'unsafe-inline'"],
           styleSrc: ["'self'", "'unsafe-inline'"],
-          connectSrc: ["'self'", 'https:', 'wss:'],
+          connectSrc: ["'self'", "https:", "wss:"],
         },
       },
-      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      crossOriginResourcePolicy: { policy: "cross-origin" },
     }),
   );
   server.use(
     cors({
       origin: createCorsOriginDelegate(
         process.env.FRONTEND_URL,
-        'http://localhost:5173',
+        "http://localhost:5173",
       ),
       credentials: true,
-      methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowedHeaders: [
-        'Content-Type',
-        'Authorization',
-        'Accept',
-        'X-Requested-With',
+        "Content-Type",
+        "Authorization",
+        "Accept",
+        "X-Requested-With",
       ],
       optionsSuccessStatus: 204,
     }),
@@ -67,7 +67,7 @@ async function bootstrap(): Promise<express.Express> {
   });
 
   const configService = app.get(ConfigService);
-  const apiPrefix = configService.get<string>('API_PREFIX', 'api');
+  const apiPrefix = configService.get<string>("API_PREFIX", "api");
 
   app.setGlobalPrefix(apiPrefix);
   app.useGlobalPipes(
@@ -80,18 +80,18 @@ async function bootstrap(): Promise<express.Express> {
   );
   app.useGlobalFilters(new GlobalExceptionFilter());
   // Swagger pesa memória e pode falhar em serverless; em produção na Vercel não é necessário para o app.
-  if (process.env.VERCEL !== '1') {
+  if (process.env.VERCEL !== "1") {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle('PainelGRID API')
-      .setDescription('API de gestao de leads, eventos e vendas - EverSync')
-      .setVersion('0.1.0')
+      .setTitle("PainelGRID API")
+      .setDescription("API de gestao de leads, eventos e vendas - EverSync")
+      .setVersion("0.1.0")
       .addBearerAuth()
-      .addTag('auth', 'Autenticacao e autorizacao')
-      .addTag('users', 'Gestao de usuarios')
+      .addTag("auth", "Autenticacao e autorizacao")
+      .addTag("users", "Gestao de usuarios")
       .build();
 
     const document = SwaggerModule.createDocument(app, swaggerConfig);
-    SwaggerModule.setup('docs', app, document);
+    SwaggerModule.setup("docs", app, document);
   }
 
   await app.init();
@@ -108,19 +108,19 @@ export default async function handler(
     }
     cachedApp(req, res);
   } catch {
-    logger.error('[vercel] falha no handler/bootstrap');
+    logger.error("[vercel] falha no handler/bootstrap");
     if (res.headersSent) {
       return;
     }
     res
       .status(500)
-      .setHeader('Content-Type', 'application/json; charset=utf-8');
+      .setHeader("Content-Type", "application/json; charset=utf-8");
     res.end(
       JSON.stringify({
         statusCode: 500,
-        error: 'BootstrapError',
-        message: 'Falha ao inicializar o servico.',
-        hint: 'Confira variaveis na Vercel (DATABASE_URL, JWT_*, FRONTEND_URL) e os logs da funcao.',
+        error: "BootstrapError",
+        message: "Falha ao inicializar o servico.",
+        hint: "Confira variaveis na Vercel (DATABASE_URL, JWT_*, FRONTEND_URL) e os logs da funcao.",
       }),
     );
   }

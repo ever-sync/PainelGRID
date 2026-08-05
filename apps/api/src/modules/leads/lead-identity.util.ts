@@ -1,5 +1,5 @@
-import { Prisma } from '@prisma/client';
-import { normalizeBrazilianPhone, phoneDigits } from '../../common/phone.util';
+import { Prisma } from "@prisma/client";
+import { normalizeBrazilianPhone, phoneDigits } from "../../common/phone.util";
 
 export function buildLeadPhoneCandidates(raw?: string | null) {
   const trimmed = raw?.trim();
@@ -26,21 +26,21 @@ export function buildLeadPhoneCandidates(raw?: string | null) {
 
 function asPrismaKnownRequestError(
   error: unknown,
-): Pick<Prisma.PrismaClientKnownRequestError, 'code' | 'meta'> | null {
+): Pick<Prisma.PrismaClientKnownRequestError, "code" | "meta"> | null {
   if (error instanceof Prisma.PrismaClientKnownRequestError) return error;
-  if (!error || typeof error !== 'object') return null;
+  if (!error || typeof error !== "object") return null;
 
   const candidate = error as { code?: unknown; meta?: unknown };
-  if (typeof candidate.code !== 'string') return null;
+  if (typeof candidate.code !== "string") return null;
   return {
     code: candidate.code,
-    meta: candidate.meta as Prisma.PrismaClientKnownRequestError['meta'],
+    meta: candidate.meta as Prisma.PrismaClientKnownRequestError["meta"],
   };
 }
 
 function uniqueTargetEntries(error: unknown): string[] {
   const prismaError = asPrismaKnownRequestError(error);
-  if (!prismaError || prismaError.code !== 'P2002') return [];
+  if (!prismaError || prismaError.code !== "P2002") return [];
 
   const target = prismaError.meta?.target;
   return (Array.isArray(target) ? target : target ? [target] : []).map((item) =>
@@ -52,8 +52,8 @@ export function isLeadPhoneUniqueViolation(error: unknown): boolean {
   const targets = uniqueTargetEntries(error);
   return targets.some(
     (entry) =>
-      (entry.includes('client_id') && entry.includes('phone')) ||
-      entry.includes('leads_client_id_phone_active_unique'),
+      (entry.includes("client_id") && entry.includes("phone")) ||
+      entry.includes("leads_client_id_phone_active_unique"),
   );
 }
 
@@ -61,8 +61,8 @@ export function isLeadEmailUniqueViolation(error: unknown): boolean {
   const targets = uniqueTargetEntries(error);
   return targets.some(
     (entry) =>
-      (entry.includes('client_id') && entry.includes('email')) ||
-      entry.includes('leads_client_id_email_active_unique'),
+      (entry.includes("client_id") && entry.includes("email")) ||
+      entry.includes("leads_client_id_email_active_unique"),
   );
 }
 
@@ -70,7 +70,7 @@ export function isLeadExternalRefUniqueViolation(error: unknown): boolean {
   const targets = uniqueTargetEntries(error);
   return targets.some(
     (entry) =>
-      (entry.includes('client_id') && entry.includes('external_ref')) ||
-      entry.includes('lead_client_external_ref'),
+      (entry.includes("client_id") && entry.includes("external_ref")) ||
+      entry.includes("lead_client_external_ref"),
   );
 }

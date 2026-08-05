@@ -1,10 +1,10 @@
-import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from '../../config/prisma.service';
-import { ClientWebhookService } from '../crm/client-webhook.service';
-import { CreateAgentActionLogDto } from './dto/create-agent-action-log.dto';
-import { RequestConversationHandoffDto } from './dto/request-conversation-handoff.dto';
-import { ConversationStateService } from './conversation-state.service';
+import { Injectable } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { PrismaService } from "../../config/prisma.service";
+import { ClientWebhookService } from "../crm/client-webhook.service";
+import { CreateAgentActionLogDto } from "./dto/create-agent-action-log.dto";
+import { RequestConversationHandoffDto } from "./dto/request-conversation-handoff.dto";
+import { ConversationStateService } from "./conversation-state.service";
 
 @Injectable()
 export class AgentActionLogService {
@@ -16,7 +16,9 @@ export class AgentActionLogService {
 
   async createActionLog(conversationId: string, dto: CreateAgentActionLogDto) {
     const conversation =
-      await this.conversationStateService.getRequiredConversation(conversationId);
+      await this.conversationStateService.getRequiredConversation(
+        conversationId,
+      );
 
     const log = await this.prisma.agentActionLog.create({
       data: {
@@ -44,19 +46,25 @@ export class AgentActionLogService {
 
     const logs = await this.prisma.agentActionLog.findMany({
       where: { conversation_id: conversationId },
-      orderBy: { created_at: 'desc' },
+      orderBy: { created_at: "desc" },
       take: Math.min(Math.max(limit, 1), 20),
     });
 
     return logs.map((log) => this.mapLog(log));
   }
 
-  async requestHandoff(conversationId: string, dto: RequestConversationHandoffDto) {
-    const state = await this.conversationStateService.upsertForConversation(conversationId, {
-      last_agent_action: 'handoff_requested',
-      handoff_required: true,
-      handoff_reason: dto.reason,
-    });
+  async requestHandoff(
+    conversationId: string,
+    dto: RequestConversationHandoffDto,
+  ) {
+    const state = await this.conversationStateService.upsertForConversation(
+      conversationId,
+      {
+        last_agent_action: "handoff_requested",
+        handoff_required: true,
+        handoff_reason: dto.reason,
+      },
+    );
 
     const log = await this.prisma.agentActionLog.create({
       data: {
@@ -65,17 +73,17 @@ export class AgentActionLogService {
         lead_id: state.lead_id,
         provider: dto.provider ?? null,
         model: dto.model ?? null,
-        trigger_type: dto.trigger_type ?? 'handoff_request',
-        decision_type: 'handoff',
+        trigger_type: dto.trigger_type ?? "handoff_request",
+        decision_type: "handoff",
         confidence: dto.confidence ?? null,
         input_summary: dto.reason,
         output_summary: dto.note ?? dto.reason,
         action_payload: {
-          requested_by_type: dto.requested_by_type ?? 'agent',
+          requested_by_type: dto.requested_by_type ?? "agent",
           requested_by_id: dto.requested_by_id ?? null,
           note: dto.note ?? null,
         },
-        result_status: 'handoff_required',
+        result_status: "handoff_required",
         error_message: null,
       },
     });
@@ -89,13 +97,13 @@ export class AgentActionLogService {
       log: this.mapLog(log),
     };
 
-    void this.clientWebhook.dispatch(state.client_id, 'handoff.requested', {
+    void this.clientWebhook.dispatch(state.client_id, "handoff.requested", {
       conversation_id: state.conversation_id,
       lead_id: state.lead_id,
       client_id: state.client_id,
       reason: dto.reason,
       note: dto.note ?? null,
-      requested_by_type: dto.requested_by_type ?? 'agent',
+      requested_by_type: dto.requested_by_type ?? "agent",
       requested_by_id: dto.requested_by_id ?? null,
       requested_at: state.updated_at.toISOString(),
     });

@@ -287,7 +287,11 @@ export function RankingVendedorPage() {
         );
         setEvents(sorted);
         setSelectedEventId((prev) => {
-          if (prev === "all" || (prev && sorted.some((event) => event.id === prev))) return prev;
+          if (
+            prev === "all" ||
+            (prev && sorted.some((event) => event.id === prev))
+          )
+            return prev;
           const active = sorted.find((event) => event.status === "active");
           return active?.id ?? "all";
         });
@@ -334,23 +338,32 @@ export function RankingVendedorPage() {
           }));
 
           const totalSales = vendors.reduce((acc, v) => acc + v.sold, 0);
-          const totalScheduled = vendors.reduce((acc, v) => acc + v.scheduled, 0);
-          const totalCheckedIn = vendors.reduce((acc, v) => acc + v.checked_in, 0);
+          const totalScheduled = vendors.reduce(
+            (acc, v) => acc + v.scheduled,
+            0,
+          );
+          const totalCheckedIn = vendors.reduce(
+            (acc, v) => acc + v.checked_in,
+            0,
+          );
           const totalPoints = vendors.reduce((acc, v) => acc + v.points, 0);
 
-          const teams: TeamRow[] = vendors.length > 0 ? [
-            {
-              team_id: "geral",
-              team_name: "Equipe Geral de Vendas",
-              logo_url: null,
-              leads: vendors.reduce((acc, v) => acc + v.leads, 0),
-              scheduled: totalScheduled,
-              confirmed: totalCheckedIn,
-              checked_in: totalCheckedIn,
-              sold: totalSales,
-              points: totalPoints,
-            },
-          ] : [];
+          const teams: TeamRow[] =
+            vendors.length > 0
+              ? [
+                  {
+                    team_id: "geral",
+                    team_name: "Equipe Geral de Vendas",
+                    logo_url: null,
+                    leads: vendors.reduce((acc, v) => acc + v.leads, 0),
+                    scheduled: totalScheduled,
+                    confirmed: totalCheckedIn,
+                    checked_in: totalCheckedIn,
+                    sold: totalSales,
+                    points: totalPoints,
+                  },
+                ]
+              : [];
 
           setData({
             event: {

@@ -31,9 +31,7 @@ import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { Modal } from "../../components/ui/Modal";
 import type { AppOutletContext } from "../../layouts/AppLayout";
-import {
-  readDashboardDarkEnabled,
-} from "../../lib/dashboard-dark-mode";
+import { readDashboardDarkEnabled } from "../../lib/dashboard-dark-mode";
 
 export type StoreItem = {
   id: string;
@@ -52,7 +50,10 @@ export type StoreItem = {
   instagram?: string;
   status: "ativa" | "desativada";
   emailResp?: string;
-  businessHours?: Record<string, { open: string; close: string; active: boolean }>;
+  businessHours?: Record<
+    string,
+    { open: string; close: string; active: boolean }
+  >;
 };
 
 const INITIAL_STORES: StoreItem[] = [
@@ -285,7 +286,9 @@ export function LojasPage() {
   });
 
   // Modal de Horários
-  const [hoursModalStore, setHoursModalStore] = useState<StoreItem | null>(null);
+  const [hoursModalStore, setHoursModalStore] = useState<StoreItem | null>(
+    null,
+  );
   const [businessHoursState, setBusinessHoursState] = useState<
     Record<string, { open: string; close: string; active: boolean }>
   >({});
@@ -340,7 +343,9 @@ export function LojasPage() {
     if (!rawCnpj || rawCnpj.length !== 14) return;
     setCnpjLoading(true);
     try {
-      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${rawCnpj}`);
+      const res = await fetch(
+        `https://brasilapi.com.br/api/cnpj/v1/${rawCnpj}`,
+      );
       if (res.ok) {
         const data = await res.json();
         setFormData((prev) => ({
@@ -365,7 +370,11 @@ export function LojasPage() {
 
   const handleSaveStore = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.brand.trim() || !formData.city.trim()) {
+    if (
+      !formData.name.trim() ||
+      !formData.brand.trim() ||
+      !formData.city.trim()
+    ) {
       alert("Por favor, preencha a Marca, Nome da Loja e Cidade.");
       return;
     }
@@ -409,7 +418,10 @@ export function LojasPage() {
 
   const handleOpenHoursModal = (store: StoreItem) => {
     setHoursModalStore(store);
-    const defaultHours: Record<string, { open: string; close: string; active: boolean }> = {};
+    const defaultHours: Record<
+      string,
+      { open: string; close: string; active: boolean }
+    > = {};
     DAYS_OF_WEEK.forEach((d) => {
       defaultHours[d.key] = store.businessHours?.[d.key] || {
         open: "08:00",
@@ -521,17 +533,29 @@ export function LojasPage() {
           <form onSubmit={handleSaveStore} className="space-y-6">
             {/* 1º CNPJ PRIMEIRO NO TOPO */}
             <div className="space-y-1.5">
-              <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+              <label
+                className={clsx(
+                  "block text-xs font-bold uppercase tracking-wider",
+                  isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                )}
+              >
                 CNPJ da Loja (Preenchimento Automático)
               </label>
               <div className="relative flex items-center">
-                <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                <div
+                  className={clsx(
+                    "absolute left-3.5 flex items-center pointer-events-none",
+                    isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                  )}
+                >
                   <Building2 size={16} />
                 </div>
                 <input
                   type="text"
                   value={formData.cnpj || ""}
-                  onChange={(e) => setFormData({ ...formData, cnpj: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, cnpj: e.target.value })
+                  }
                   onBlur={handleAutofillByCnpj}
                   placeholder="Digite o CNPJ da Unidade"
                   className={clsx(
@@ -562,18 +586,30 @@ export function LojasPage() {
             {/* LINHA 1: MARCA & NOME DA LOJA */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                <label
+                  className={clsx(
+                    "block text-xs font-bold uppercase tracking-wider",
+                    isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                  )}
+                >
                   Marca da Concessionária
                 </label>
                 <div className="relative flex items-center">
-                  <div className={clsx("absolute left-3.5 flex items-center pointer-events-none z-10", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                  <div
+                    className={clsx(
+                      "absolute left-3.5 flex items-center pointer-events-none z-10",
+                      isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                    )}
+                  >
                     <Tag size={16} />
                   </div>
                   <input
                     list="brands-list"
                     type="text"
                     value={formData.brand}
-                    onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, brand: e.target.value })
+                    }
                     placeholder="Escolha ou digite (ex.: Volkswagen, BYD)"
                     className={clsx(
                       "w-full h-11 pl-10 pr-4 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
@@ -591,17 +627,29 @@ export function LojasPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                <label
+                  className={clsx(
+                    "block text-xs font-bold uppercase tracking-wider",
+                    isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                  )}
+                >
                   Nome da Loja / Unidade
                 </label>
                 <div className="relative flex items-center">
-                  <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                  <div
+                    className={clsx(
+                      "absolute left-3.5 flex items-center pointer-events-none",
+                      isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                    )}
+                  >
                     <Store size={16} />
                   </div>
                   <input
                     type="text"
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, name: e.target.value })
+                    }
                     placeholder="Ex.: Original Volkswagen Guarulhos"
                     className={clsx(
                       "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
@@ -616,23 +664,40 @@ export function LojasPage() {
 
             {/* ENDEREÇO DA LOJA */}
             <div className="space-y-3 pt-2">
-              <p className={clsx("text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-500")}>
+              <p
+                className={clsx(
+                  "text-xs font-bold uppercase tracking-wider",
+                  isDarkMode ? "text-zinc-400" : "text-zinc-500",
+                )}
+              >
                 📍 Endereço da Unidade
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="sm:col-span-2 space-y-1.5">
-                  <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                  <label
+                    className={clsx(
+                      "block text-[11px] font-bold uppercase",
+                      isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                    )}
+                  >
                     Logradouro
                   </label>
                   <div className="relative flex items-center">
-                    <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                    <div
+                      className={clsx(
+                        "absolute left-3.5 flex items-center pointer-events-none",
+                        isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                      )}
+                    >
                       <MapPin size={15} />
                     </div>
                     <input
                       type="text"
                       value={formData.street}
-                      onChange={(e) => setFormData({ ...formData, street: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, street: e.target.value })
+                      }
                       placeholder="Rua / Avenida"
                       className={clsx(
                         "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
@@ -645,17 +710,29 @@ export function LojasPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                  <label
+                    className={clsx(
+                      "block text-[11px] font-bold uppercase",
+                      isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                    )}
+                  >
                     Número
                   </label>
                   <div className="relative flex items-center">
-                    <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                    <div
+                      className={clsx(
+                        "absolute left-3.5 flex items-center pointer-events-none",
+                        isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                      )}
+                    >
                       <Hash size={15} />
                     </div>
                     <input
                       type="text"
                       value={formData.number}
-                      onChange={(e) => setFormData({ ...formData, number: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, number: e.target.value })
+                      }
                       placeholder="123"
                       className={clsx(
                         "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
@@ -670,17 +747,29 @@ export function LojasPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="space-y-1.5">
-                  <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                  <label
+                    className={clsx(
+                      "block text-[11px] font-bold uppercase",
+                      isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                    )}
+                  >
                     Complemento
                   </label>
                   <div className="relative flex items-center">
-                    <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                    <div
+                      className={clsx(
+                        "absolute left-3.5 flex items-center pointer-events-none",
+                        isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                      )}
+                    >
                       <Building size={15} />
                     </div>
                     <input
                       type="text"
                       value={formData.complement}
-                      onChange={(e) => setFormData({ ...formData, complement: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, complement: e.target.value })
+                      }
                       placeholder="Sala / Bloco"
                       className={clsx(
                         "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
@@ -693,17 +782,32 @@ export function LojasPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                  <label
+                    className={clsx(
+                      "block text-[11px] font-bold uppercase",
+                      isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                    )}
+                  >
                     Bairro
                   </label>
                   <div className="relative flex items-center">
-                    <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                    <div
+                      className={clsx(
+                        "absolute left-3.5 flex items-center pointer-events-none",
+                        isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                      )}
+                    >
                       <Home size={15} />
                     </div>
                     <input
                       type="text"
                       value={formData.neighborhood}
-                      onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          neighborhood: e.target.value,
+                        })
+                      }
                       placeholder="Bairro"
                       className={clsx(
                         "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
@@ -716,17 +820,29 @@ export function LojasPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                  <label
+                    className={clsx(
+                      "block text-[11px] font-bold uppercase",
+                      isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                    )}
+                  >
                     CEP
                   </label>
                   <div className="relative flex items-center">
-                    <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                    <div
+                      className={clsx(
+                        "absolute left-3.5 flex items-center pointer-events-none",
+                        isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                      )}
+                    >
                       <FileText size={15} />
                     </div>
                     <input
                       type="text"
                       value={formData.zipCode}
-                      onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, zipCode: e.target.value })
+                      }
                       placeholder="00000-000"
                       className={clsx(
                         "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
@@ -739,17 +855,29 @@ export function LojasPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className={clsx("block text-[11px] font-bold uppercase", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                  <label
+                    className={clsx(
+                      "block text-[11px] font-bold uppercase",
+                      isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                    )}
+                  >
                     Cidade
                   </label>
                   <div className="relative flex items-center">
-                    <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                    <div
+                      className={clsx(
+                        "absolute left-3.5 flex items-center pointer-events-none",
+                        isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                      )}
+                    >
                       <Globe size={15} />
                     </div>
                     <input
                       type="text"
                       value={formData.city}
-                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, city: e.target.value })
+                      }
                       placeholder="Cidade"
                       className={clsx(
                         "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
@@ -766,16 +894,28 @@ export function LojasPage() {
             {/* CONTATOS & REDES */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
               <div className="space-y-1.5">
-                <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                <label
+                  className={clsx(
+                    "block text-xs font-bold uppercase tracking-wider",
+                    isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                  )}
+                >
                   Estado (UF)
                 </label>
                 <div className="relative flex items-center">
-                  <div className={clsx("absolute left-3.5 flex items-center pointer-events-none z-10", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                  <div
+                    className={clsx(
+                      "absolute left-3.5 flex items-center pointer-events-none z-10",
+                      isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                    )}
+                  >
                     <Navigation size={15} />
                   </div>
                   <select
                     value={formData.state}
-                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, state: e.target.value })
+                    }
                     className={clsx(
                       "w-full h-11 pl-10 pr-4 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
                       isDarkMode
@@ -794,17 +934,29 @@ export function LojasPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                <label
+                  className={clsx(
+                    "block text-xs font-bold uppercase tracking-wider",
+                    isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                  )}
+                >
                   Telefone Geral
                 </label>
                 <div className="relative flex items-center">
-                  <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                  <div
+                    className={clsx(
+                      "absolute left-3.5 flex items-center pointer-events-none",
+                      isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                    )}
+                  >
                     <Phone size={15} />
                   </div>
                   <input
                     type="text"
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, phone: e.target.value })
+                    }
                     placeholder="(11) 99999-9999"
                     className={clsx(
                       "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
@@ -817,17 +969,29 @@ export function LojasPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className={clsx("block text-xs font-bold uppercase tracking-wider", isDarkMode ? "text-zinc-400" : "text-zinc-600")}>
+                <label
+                  className={clsx(
+                    "block text-xs font-bold uppercase tracking-wider",
+                    isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                  )}
+                >
                   Site Oficial
                 </label>
                 <div className="relative flex items-center">
-                  <div className={clsx("absolute left-3.5 flex items-center pointer-events-none", isDarkMode ? "text-zinc-500" : "text-zinc-400")}>
+                  <div
+                    className={clsx(
+                      "absolute left-3.5 flex items-center pointer-events-none",
+                      isDarkMode ? "text-zinc-500" : "text-zinc-400",
+                    )}
+                  >
                     <Globe size={15} />
                   </div>
                   <input
                     type="text"
                     value={formData.website}
-                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, website: e.target.value })
+                    }
                     placeholder="https://..."
                     className={clsx(
                       "w-full h-11 pl-10 pr-3 rounded-2xl border text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636]",
@@ -974,7 +1138,9 @@ export function LojasPage() {
                       key={store.id}
                       className={clsx(
                         "transition-colors",
-                        isDarkMode ? "hover:bg-zinc-900/50" : "hover:bg-zinc-50",
+                        isDarkMode
+                          ? "hover:bg-zinc-900/50"
+                          : "hover:bg-zinc-50",
                       )}
                     >
                       <td className="py-4 px-4 font-bold text-zinc-900 dark:text-zinc-100">
@@ -1003,7 +1169,9 @@ export function LojasPage() {
                       </td>
                       <td className="py-4 px-4 text-zinc-500 dark:text-zinc-400">
                         {store.emailResp ? (
-                          <span className="text-emerald-600 dark:text-emerald-400 font-bold">✓</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                            ✓
+                          </span>
                         ) : (
                           "—"
                         )}
@@ -1070,18 +1238,25 @@ export function LojasPage() {
       >
         <div className="space-y-4 pt-2">
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Configure os horários de abertura e fechamento para cada dia da semana.
+            Configure os horários de abertura e fechamento para cada dia da
+            semana.
           </p>
 
           <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
             {DAYS_OF_WEEK.map((day) => {
-              const item = businessHoursState[day.key] || { open: "08:00", close: "18:00", active: true };
+              const item = businessHoursState[day.key] || {
+                open: "08:00",
+                close: "18:00",
+                active: true,
+              };
               return (
                 <div
                   key={day.key}
                   className={clsx(
                     "flex items-center justify-between p-3 rounded-2xl border text-xs",
-                    isDarkMode ? "border-zinc-800 bg-zinc-900" : "border-zinc-200 bg-zinc-50",
+                    isDarkMode
+                      ? "border-zinc-800 bg-zinc-900"
+                      : "border-zinc-200 bg-zinc-50",
                   )}
                 >
                   <div className="flex items-center gap-2">
@@ -1112,7 +1287,9 @@ export function LojasPage() {
                         }
                         className={clsx(
                           "px-2 py-1 rounded-lg border text-xs font-mono",
-                          isDarkMode ? "bg-black border-zinc-700 text-white" : "bg-white border-zinc-300 text-zinc-900",
+                          isDarkMode
+                            ? "bg-black border-zinc-700 text-white"
+                            : "bg-white border-zinc-300 text-zinc-900",
                         )}
                       />
                       <span>às</span>
@@ -1127,7 +1304,9 @@ export function LojasPage() {
                         }
                         className={clsx(
                           "px-2 py-1 rounded-lg border text-xs font-mono",
-                          isDarkMode ? "bg-black border-zinc-700 text-white" : "bg-white border-zinc-300 text-zinc-900",
+                          isDarkMode
+                            ? "bg-black border-zinc-700 text-white"
+                            : "bg-white border-zinc-300 text-zinc-900",
                         )}
                       />
                     </div>
@@ -1167,7 +1346,8 @@ export function LojasPage() {
       >
         <div className="space-y-4 pt-2">
           <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-            Cole abaixo os dados das suas lojas no formato CSV (separado por vírgula ou ponto-e-vírgula):
+            Cole abaixo os dados das suas lojas no formato CSV (separado por
+            vírgula ou ponto-e-vírgula):
             <br />
             <code className="text-[10px] font-mono text-[#FF7A00] block mt-1">
               Marca, Nome da Loja, Cidade, UF, Logradouro, Número, Telefone

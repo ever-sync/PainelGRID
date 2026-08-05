@@ -1,7 +1,7 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
-import { Job } from 'bullmq';
-import { MetaService } from './meta.service';
+import { Processor, WorkerHost } from "@nestjs/bullmq";
+import { Logger } from "@nestjs/common";
+import { Job } from "bullmq";
+import { MetaService } from "./meta.service";
 
 type FullSyncJob = {
   metaConnectionId: string;
@@ -18,7 +18,7 @@ type TokenRefreshJob = {
   thresholdDays?: number;
 };
 
-@Processor('meta-sync')
+@Processor("meta-sync")
 export class MetaSyncProcessor extends WorkerHost {
   private readonly logger = new Logger(MetaSyncProcessor.name);
 
@@ -26,13 +26,15 @@ export class MetaSyncProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<FullSyncJob | HistoricalLeadsJob | TokenRefreshJob, void, string>) {
+  async process(
+    job: Job<FullSyncJob | HistoricalLeadsJob | TokenRefreshJob, void, string>,
+  ) {
     switch (job.name) {
-      case 'full-sync':
+      case "full-sync":
         return this.handleFullSync(job as Job<FullSyncJob>);
-      case 'historical-leads':
+      case "historical-leads":
         return this.handleHistoricalLeads(job as Job<HistoricalLeadsJob>);
-      case 'token-refresh':
+      case "token-refresh":
         return this.handleTokenRefresh(job as Job<TokenRefreshJob>);
       default:
         throw new Error(`Job Meta desconhecido: ${job.name}`);
@@ -41,17 +43,23 @@ export class MetaSyncProcessor extends WorkerHost {
 
   async handleFullSync(job: Job<FullSyncJob>) {
     const { metaConnectionId, jobId } = job.data;
-    this.logger.log('Full sync Meta iniciado');
+    this.logger.log("Full sync Meta iniciado");
     await this.metaService.runFullSyncForConnection(metaConnectionId, jobId);
   }
 
   async handleHistoricalLeads(job: Job<HistoricalLeadsJob>) {
     const { metaConnectionId, jobId, formIds } = job.data;
-    this.logger.log('Import historico de leads Meta iniciado');
-    await this.metaService.runHistoricalLeadImport(metaConnectionId, jobId, formIds ?? []);
+    this.logger.log("Import historico de leads Meta iniciado");
+    await this.metaService.runHistoricalLeadImport(
+      metaConnectionId,
+      jobId,
+      formIds ?? [],
+    );
   }
 
   async handleTokenRefresh(job: Job<TokenRefreshJob>) {
-    await this.metaService.refreshExpiringMetaTokens(job.data.thresholdDays ?? 7);
+    await this.metaService.refreshExpiringMetaTokens(
+      job.data.thresholdDays ?? 7,
+    );
   }
 }

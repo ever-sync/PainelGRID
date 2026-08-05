@@ -1,4 +1,4 @@
-import { ConfirmationStatus, LeadSource } from '@prisma/client';
+import { ConfirmationStatus, LeadSource } from "@prisma/client";
 import {
   ArrayMaxSize,
   IsArray,
@@ -9,7 +9,7 @@ import {
   IsString,
   IsUUID,
   MaxLength,
-} from 'class-validator';
+} from "class-validator";
 
 export class UpdateLeadDto {
   @IsOptional()

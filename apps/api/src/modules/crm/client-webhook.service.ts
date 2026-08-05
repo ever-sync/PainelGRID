@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from '../../config/prisma.service';
-import { WebhookDispatchService } from './webhook-dispatch.service';
+import { Injectable, Logger } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { PrismaService } from "../../config/prisma.service";
+import { WebhookDispatchService } from "./webhook-dispatch.service";
 
 /**
  * Serviço utilitário para disparar webhooks para a URL n8n configurada no cliente.
@@ -34,7 +34,8 @@ export class ClientWebhookService {
         select: { webhook_url_n8n: true },
       });
 
-      const destinationUrl = client?.webhook_url_n8n?.trim() || 'internal://n8n-not-configured';
+      const destinationUrl =
+        client?.webhook_url_n8n?.trim() || "internal://n8n-not-configured";
 
       const event = await this.prisma.webhookEvent.create({
         data: {

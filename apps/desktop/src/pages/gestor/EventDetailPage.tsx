@@ -363,10 +363,14 @@ export function EventDetailPage() {
       nextEvent.sales_target != null ? String(nextEvent.sales_target) : "",
     );
     setFormScheduledTarget(
-      nextEvent.scheduled_target != null ? String(nextEvent.scheduled_target) : "",
+      nextEvent.scheduled_target != null
+        ? String(nextEvent.scheduled_target)
+        : "",
     );
     setFormTotalInvestment(
-      nextEvent.total_investment != null ? String(nextEvent.total_investment) : "",
+      nextEvent.total_investment != null
+        ? String(nextEvent.total_investment)
+        : "",
     );
     setFormPaidTraffic(
       nextEvent.paid_traffic_investment != null
@@ -647,7 +651,10 @@ export function EventDetailPage() {
     0,
   );
   const leadConfirmationRate = event?.leads_count
-    ? Math.min(100, Math.round((event.confirmed_count / event.leads_count) * 100))
+    ? Math.min(
+        100,
+        Math.round((event.confirmed_count / event.leads_count) * 100),
+      )
     : 0;
   const checkinRate = event?.leads_count
     ? Math.min(100, Math.round((event.checkin_count / event.leads_count) * 100))
@@ -743,10 +750,9 @@ export function EventDetailPage() {
       try {
         const leadGroups = await Promise.all(
           nextParticipantIds.map((clientId) =>
-            fetchAllLeads(
-              { client_id: clientId },
-              session.accessToken,
-            ).catch(() => []),
+            fetchAllLeads({ client_id: clientId }, session.accessToken).catch(
+              () => [],
+            ),
           ),
         );
         setEventLeads(
@@ -1378,7 +1384,6 @@ export function EventDetailPage() {
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <CopyableId value={event.id} label="event_id" dark={isDarkMode} />
         </div>
-
 
         <div className="mt-5 flex flex-wrap gap-2 text-sm">
           <div
@@ -2261,10 +2266,14 @@ export function EventDetailPage() {
                             <button
                               type="button"
                               onClick={() => {
-                                if (selectedMemberIds.length === available.length) {
+                                if (
+                                  selectedMemberIds.length === available.length
+                                ) {
                                   setSelectedMemberIds([]);
                                 } else {
-                                  setSelectedMemberIds(available.map((v) => v.id));
+                                  setSelectedMemberIds(
+                                    available.map((v) => v.id),
+                                  );
                                 }
                               }}
                               className="text-xs font-medium text-[#E51838] hover:underline"
@@ -2285,7 +2294,9 @@ export function EventDetailPage() {
                           )}
                         >
                           {available.map((vendor) => {
-                            const isChecked = selectedMemberIds.includes(vendor.id);
+                            const isChecked = selectedMemberIds.includes(
+                              vendor.id,
+                            );
                             return (
                               <label
                                 key={vendor.id}
@@ -2318,7 +2329,9 @@ export function EventDetailPage() {
                                   className="h-4 w-4 rounded border-zinc-700 text-[#E51838] focus:ring-[#E51838]"
                                 />
                                 <div className="flex flex-col">
-                                  <span className="font-semibold">{vendor.name}</span>
+                                  <span className="font-semibold">
+                                    {vendor.name}
+                                  </span>
                                   <span className="text-[11px] text-zinc-400">
                                     {vendor.email}
                                   </span>
@@ -2441,7 +2454,10 @@ export function EventDetailPage() {
       )}
 
       {activeTab === "configuracoes" && (
-        <form onSubmit={(e) => void handleSaveSettings(e)} className="grid gap-6">
+        <form
+          onSubmit={(e) => void handleSaveSettings(e)}
+          className="grid gap-6"
+        >
           <Card
             className={clsx(
               "rounded-[28px] border",

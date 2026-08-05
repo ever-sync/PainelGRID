@@ -1,8 +1,8 @@
-import { Test } from '@nestjs/testing';
-import { PrismaService } from '../../config/prisma.service';
-import { PerformanceService } from './performance.service';
+import { Test } from "@nestjs/testing";
+import { PrismaService } from "../../config/prisma.service";
+import { PerformanceService } from "./performance.service";
 
-describe('PerformanceService', () => {
+describe("PerformanceService", () => {
   const prisma = {
     webVitalMetric: {
       upsert: jest.fn(),
@@ -41,41 +41,41 @@ describe('PerformanceService', () => {
     await service.onModuleDestroy();
   });
 
-  it('persiste Web Vital anônimo com caminho normalizado', async () => {
+  it("persiste Web Vital anônimo com caminho normalizado", async () => {
     await service.recordWebVital(
       {
-        name: 'LCP',
+        name: "LCP",
         value: 1_850,
-        rating: 'good',
+        rating: "good",
         delta: 1_850,
-        id: 'v4-123',
-        navigationType: 'navigate',
-        path: 'dashboard?tab=events',
+        id: "v4-123",
+        navigationType: "navigate",
+        path: "dashboard?tab=events",
         recordedAt: new Date().toISOString(),
-        sessionId: 'session-123',
-        viewport: 'desktop',
+        sessionId: "session-123",
+        viewport: "desktop",
       },
       {
-        get: jest.fn().mockReturnValue('Test Browser'),
+        get: jest.fn().mockReturnValue("Test Browser"),
       } as never,
     );
 
     expect(prisma.webVitalMetric.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
-          metric_name: 'LCP',
-          path: '/dashboard',
-          user_agent: 'Test Browser',
+          metric_name: "LCP",
+          path: "/dashboard",
+          user_agent: "Test Browser",
         }),
       }),
     );
   });
 
-  it('mantém todas as requisições lentas na amostragem', async () => {
+  it("mantém todas as requisições lentas na amostragem", async () => {
     service.enqueueApiRequest({
-      request_id: 'request-1',
-      method: 'GET',
-      path: '/api/events',
+      request_id: "request-1",
+      method: "GET",
+      path: "/api/events",
       status_code: 200,
       duration_ms: 900,
       database_duration_ms: 300,
@@ -89,17 +89,17 @@ describe('PerformanceService', () => {
     expect(prisma.apiRequestMetric.createMany).toHaveBeenCalledWith({
       data: [
         expect.objectContaining({
-          request_id: 'request-1',
+          request_id: "request-1",
           is_slow: true,
         }),
       ],
     });
   });
 
-  it('retorna resumo de Web Vitals com meta p75', async () => {
+  it("retorna resumo de Web Vitals com meta p75", async () => {
     prisma.$queryRaw.mockResolvedValueOnce([
       {
-        name: 'LCP',
+        name: "LCP",
         samples: 12,
         p75: 2_100,
         p95: 3_200,
@@ -113,10 +113,10 @@ describe('PerformanceService', () => {
     const summary = await service.getWebVitalsSummary({ hours: 24 });
 
     expect(summary.metrics[0]).toMatchObject({
-      name: 'LCP',
+      name: "LCP",
       p75: 2_100,
       target: 2_500,
-      status: 'good',
+      status: "good",
     });
   });
 });
