@@ -52,14 +52,30 @@ export default [
     },
     rules: {
       ...commonTypeScriptRules,
-      'no-console': 'error',
+      // `warn`/`error` sao telemetria legitima; `log`/`info`/`debug` quase
+      // sempre sao sobra de depuracao e nao deveriam chegar em producao.
+      'no-console': ['error', { allow: ['warn', 'error'] }],
       'prettier/prettier': 'error',
     },
   },
   {
-    files: ['apps/api/src/**/*.spec.ts', 'apps/api/test/**/*.spec.ts'],
+    // Scripts de linha de comando: a saida no console e o proprio resultado.
+    files: ['apps/api/src/scripts/**/*.ts', 'scripts/**/*.{ts,mjs,cjs}'],
     rules: {
-      '@typescript-eslint/no-explicit-any': 'error',
+      'no-console': 'off',
+    },
+  },
+  {
+    // Mock de teste com `any` e proposital: tipar o dublê inteiro do Prisma
+    // custa mais do que entrega. A regra segue valendo no codigo de producao.
+    files: [
+      'apps/api/src/**/*.spec.ts',
+      'apps/api/test/**/*.ts',
+      'apps/desktop/src/**/*.spec.{ts,tsx}',
+      'apps/desktop/src/**/*.test.{ts,tsx}',
+    ],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
   {
@@ -95,7 +111,9 @@ export default [
     },
     rules: {
       ...commonTypeScriptRules,
-      'no-console': 'error',
+      // `warn`/`error` sao telemetria legitima; `log`/`info`/`debug` quase
+      // sempre sao sobra de depuracao e nao deveriam chegar em producao.
+      'no-console': ['error', { allow: ['warn', 'error'] }],
       'prettier/prettier': 'error',
     },
   },
