@@ -1,6 +1,7 @@
 import tsParser from '@typescript-eslint/parser'
 import tsPlugin from '@typescript-eslint/eslint-plugin'
 import prettierPlugin from 'eslint-plugin-prettier'
+import reactHooksPlugin from 'eslint-plugin-react-hooks'
 
 const commonTypeScriptRules = {
   '@typescript-eslint/no-unused-vars': [
@@ -108,6 +109,7 @@ export default [
     plugins: {
       '@typescript-eslint': tsPlugin,
       prettier: prettierPlugin,
+      'react-hooks': reactHooksPlugin,
     },
     rules: {
       ...commonTypeScriptRules,
@@ -115,6 +117,13 @@ export default [
       // sempre sao sobra de depuracao e nao deveriam chegar em producao.
       'no-console': ['error', { allow: ['warn', 'error'] }],
       'prettier/prettier': 'error',
+      // Hook chamado dentro de condicao/loop quebra o React em runtime, e o
+      // erro aparece longe da causa. Vale como erro desde ja.
+      'react-hooks/rules-of-hooks': 'error',
+      // `exhaustive-deps` fica fora por enquanto: a base tem efeitos com deps
+      // propositalmente reduzidas e ligar agora inundaria o portao. Ligar
+      // depois, arquivo a arquivo.
+      'react-hooks/exhaustive-deps': 'off',
     },
   },
 ]

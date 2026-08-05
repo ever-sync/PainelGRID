@@ -23,7 +23,6 @@ type OutletContext = {
 export function CursosClientePage() {
   const { user } = useOutletContext<OutletContext>();
   const clientId = resolveClientId(user);
-  if (!clientId) return <MissingClientScope />;
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [enabledCourses, setEnabledCourses] = useState<Set<string>>(new Set());
@@ -67,6 +66,11 @@ export function CursosClientePage() {
     });
   }, [vendors]);
 
+  // A guarda vem depois dos hooks: se ela ficasse antes, um `clientId` que
+  // chega depois (contexto assincrono) mudaria a quantidade de hooks entre
+  // renders e o React derrubaria a tela.
+  const missingClientScope = !clientId;
+
   const toggleCourse = (courseId: string) => {
     setEnabledCourses((prev) => {
       const next = new Set(prev);
@@ -97,6 +101,8 @@ export function CursosClientePage() {
     .sort((a, b) => b.avgScore - a.avgScore);
 
   const medalColors = ["text-yellow-500", "text-gray-400", "text-orange-400"];
+
+  if (missingClientScope) return <MissingClientScope />;
 
   return (
     <div>

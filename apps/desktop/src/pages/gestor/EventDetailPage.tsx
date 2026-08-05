@@ -20,6 +20,7 @@ import {
   Filter,
   Phone,
   ChevronRight,
+  ChevronLeft,
   UserRound,
   Trash2,
   Users,
@@ -277,6 +278,8 @@ export function EventDetailPage() {
   const [leadVendorFilter, setLeadVendorFilter] = useState<"all" | string>(
     "all",
   );
+  const [eventLeadsPage, setEventLeadsPage] = useState(1);
+  const eventLeadsPageSize = 20;
   const [leadDrawerOpen, setLeadDrawerOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [leadDrawerTab, setLeadDrawerTab] =
@@ -604,6 +607,25 @@ export function EventDetailPage() {
     leadStatusFilter,
     leadVendorFilter,
   ]);
+
+  const eventLeadsPageCount = Math.max(
+    1,
+    Math.ceil(filteredEventLeads.length / eventLeadsPageSize),
+  );
+  const pagedEventLeads = useMemo(() => {
+    const start = (eventLeadsPage - 1) * eventLeadsPageSize;
+    return filteredEventLeads.slice(start, start + eventLeadsPageSize);
+  }, [eventLeadsPage, filteredEventLeads]);
+
+  useEffect(() => {
+    setEventLeadsPage(1);
+  }, [leadSearch, leadStatusFilter, leadSourceFilter, leadVendorFilter]);
+
+  useEffect(() => {
+    if (eventLeadsPage > eventLeadsPageCount) {
+      setEventLeadsPage(eventLeadsPageCount);
+    }
+  }, [eventLeadsPage, eventLeadsPageCount]);
 
   const availableParticipantOptions = useMemo(
     () =>
@@ -1780,8 +1802,9 @@ export function EventDetailPage() {
                   isDarkMode ? "text-zinc-400" : "text-zinc-500",
                 )}
               >
-                Mostrando {filteredEventLeads.length} de {eventLeads.length}{" "}
-                leads
+                {filteredEventLeads.length === 0
+                  ? "Nenhum lead encontrado"
+                  : `Mostrando ${(eventLeadsPage - 1) * eventLeadsPageSize + 1}–${Math.min(eventLeadsPage * eventLeadsPageSize, filteredEventLeads.length)} de ${filteredEventLeads.length} leads`}
               </p>
             </div>
             <Button
@@ -1907,7 +1930,7 @@ export function EventDetailPage() {
                         isDarkMode ? "divide-zinc-800" : "divide-zinc-100",
                       )}
                     >
-                      {filteredEventLeads.map((lead) => (
+                      {pagedEventLeads.map((lead) => (
                         <tr
                           key={lead.id}
                           className={clsx(
@@ -1976,6 +1999,48 @@ export function EventDetailPage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+              {filteredEventLeads.length > 0 && (
+                <div
+                  className={clsx(
+                    "mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-3 py-2",
+                    isDarkMode
+                      ? "border-zinc-800 bg-[#0b0b0b]"
+                      : "border-zinc-100 bg-zinc-50",
+                  )}
+                >
+                  <p className="text-xs text-zinc-500">
+                    Página {eventLeadsPage} de {eventLeadsPageCount}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      icon={<ChevronLeft size={15} />}
+                      isDisabled={eventLeadsPage <= 1}
+                      onClick={() =>
+                        setEventLeadsPage((page) => Math.max(1, page - 1))
+                      }
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      icon={<ChevronRight size={15} />}
+                      isDisabled={eventLeadsPage >= eventLeadsPageCount}
+                      onClick={() =>
+                        setEventLeadsPage((page) =>
+                          Math.min(eventLeadsPageCount, page + 1),
+                        )
+                      }
+                    >
+                      Próxima
+                    </Button>
+                  </div>
                 </div>
               )}
             </>
