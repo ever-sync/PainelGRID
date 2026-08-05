@@ -878,6 +878,9 @@ export class CrmService {
     const shouldDispatchWebhook = !suppressWebhook && this.shouldDispatchExternalWebhook(source);
     const destinationUrl = lead.client.webhook_url_n8n || 'internal://n8n-not-configured';
     const mappedStatus = resolveConfirmationStatusForStage(lead.client.settings, targetStage.id);
+    if (mappedStatus === ConfirmationStatus.scheduled || mappedStatus === ConfirmationStatus.confirmed) {
+      this.assertLeadReadyForConfirmation(lead);
+    }
     const historyNotes = this.appendAutoStatusNote(notes, mappedStatus);
     try {
       const result = await this.prisma.$transaction(async (tx) => {
@@ -1013,6 +1016,33 @@ export class CrmService {
       }
 
       throw error;
+    }
+  }
+
+  private assertLeadReadyForConfirmation(
+    lead: Pick<Lead, 'name' | 'phone' | 'event_interest_id' | 'store_visit_datetime' | 'companions' |
+      'description' | 'vehicle_plate' | 'vehicle_model' | 'vehicle_year'>,
+  ) {
+    const missing: string[] = [];
+    if (!lead.name?.trim()) missing.push('nome completo');
+    if (!lead.phone?.trim()) missing.push('telefone');
+    if (!lead.event_interest_id) missing.push('evento');
+    if (!lead.store_visit_datetime) missing.push('data da visita');
+    if (!lead.companions?.trim()) missing.push('acompanhantes');
+
+    const description = lead.description?.trim().toLowerCase() ?? '';
+    if (!description.startsWith('carro na troca:')) {
+      missing.push('resposta sobre carro na troca');
+    } else if (description.includes('carro na troca: sim')) {
+      if (!lead.vehicle_plate?.trim()) missing.push('placa do veículo');
+      if (!lead.vehicle_model?.trim()) missing.push('modelo do veículo');
+      if (!lead.vehicle_year?.trim()) missing.push('ano do veículo');
+    }
+
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Nao e possivel mover o lead para etapa confirmada. Campos obrigatorios pendentes: ${missing.join(', ')}`,
+      );
     }
   }
 

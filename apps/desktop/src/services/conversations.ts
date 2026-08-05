@@ -35,8 +35,9 @@ export type ApiMessage = {
 
 export type ApiAgentActionLog = AgentActionLog;
 
-export function listConversations(clientId: string, token: string) {
-  const qs = new URLSearchParams({ client_id: clientId });
+export function listConversations(clientId: string | undefined, token: string) {
+  const qs = new URLSearchParams();
+  if (clientId) qs.set("client_id", clientId);
   return httpRequest<ApiConversationRow[]>(`/conversations?${qs.toString()}`, {
     method: "GET",
     token,

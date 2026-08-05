@@ -73,12 +73,14 @@ describe('ConversationsService', () => {
       prisma.$queryRaw = jest.fn().mockResolvedValue([
         {
           history_id: 10,
+          client_id: clientId,
           lead_id: leadId,
           message_type: 'human',
           content: 'Oi',
         },
         {
           history_id: 11,
+          client_id: clientId,
           lead_id: leadId,
           message_type: 'ai',
           content: 'Ola!',
@@ -152,6 +154,40 @@ describe('ConversationsService', () => {
         handoff_required: true,
         handoff_reason: 'urgente',
       });
+    });
+
+    it('GESTOR: lista todas as empresas quando client_id nao e informado', async () => {
+      prisma.conversation.findMany.mockResolvedValue([baseRow]);
+
+      const result = await service.findAll(
+        { sub: 'g1', role: Role.GESTOR, email: 'g@x', name: 'G' } as any,
+        {} as any,
+      );
+
+      expect(clientsService.assertGestorOwnsClient).not.toHaveBeenCalled();
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: {} }),
+      );
+      expect(result).toHaveLength(1);
+    });
+
+    it('usa a empresa do token quando outro perfil omite client_id', async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+
+      await service.findAll(
+        {
+          sub: 'r1',
+          role: Role.RECEPCAO,
+          email: 'r@x',
+          name: 'R',
+          client_id: clientId,
+        } as any,
+        {} as any,
+      );
+
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { client_id: clientId } }),
+      );
     });
 
     it('VENDEDOR: passa quando client_id coincide', async () => {

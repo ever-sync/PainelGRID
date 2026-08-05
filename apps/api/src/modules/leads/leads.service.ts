@@ -1374,7 +1374,30 @@ export class LeadsService {
       throw new NotFoundException('Lead nao encontrado');
     }
 
-    const asUpdate = dto as unknown as UpdateLeadDto;
+    // O node HTTP do n8n pode enviar todos os parâmetros da ferramenta, inclusive
+    // os que o agente não preencheu. Strings vazias não representam uma correção
+    // válida e não podem apagar dados já coletados.
+    const sanitizedDto = { ...dto } as Record<string, unknown>;
+    for (const key of [
+      'name',
+      'email',
+      'phone',
+      'notes',
+      'vehicle_plate',
+      'vehicle_model',
+      'vehicle_year',
+      'companions',
+      'description',
+      'first_name',
+      'last_name',
+      'birth_date',
+      'store_visit_datetime',
+    ]) {
+      if (typeof sanitizedDto[key] === 'string' && !sanitizedDto[key].trim()) {
+        delete sanitizedDto[key];
+      }
+    }
+    const asUpdate = sanitizedDto as UpdateLeadDto;
     const nextPhone = asUpdate.phone?.trim();
     if (nextPhone) {
       const normalizedPhone = normalizeBrazilianPhone(nextPhone);
@@ -1398,6 +1421,22 @@ export class LeadsService {
     }
     await this.syncLeadVendorBinding(lead, asUpdate, data);
     const confirming = this.isConfirmingTransition(lead, asUpdate);
+    if (confirming) {
+      this.assertLeadReadyForConfirmation({
+        ...lead,
+        ...data,
+      } as unknown as Pick<LeadWithRelations,
+        | 'name'
+        | 'phone'
+        | 'event_interest_id'
+        | 'store_visit_datetime'
+        | 'companions'
+        | 'description'
+        | 'vehicle_plate'
+        | 'vehicle_model'
+        | 'vehicle_year'
+      >);
+    }
     this.mergeCheckinTokenIfConfirming(lead, asUpdate, data);
 
     const updated = (await this.prisma.lead.update({
@@ -1425,6 +1464,40 @@ export class LeadsService {
     }
 
     return response;
+  }
+
+  private assertLeadReadyForConfirmation(lead: Pick<LeadWithRelations,
+    | 'name'
+    | 'phone'
+    | 'event_interest_id'
+    | 'store_visit_datetime'
+    | 'companions'
+    | 'description'
+    | 'vehicle_plate'
+    | 'vehicle_model'
+    | 'vehicle_year'
+  >) {
+    const missing: string[] = [];
+    if (!lead.name?.trim()) missing.push('nome completo');
+    if (!lead.phone?.trim()) missing.push('telefone');
+    if (!lead.event_interest_id) missing.push('evento');
+    if (!lead.store_visit_datetime) missing.push('data da visita');
+    if (!lead.companions?.trim()) missing.push('acompanhantes');
+
+    const description = lead.description?.trim().toLowerCase() ?? '';
+    if (!description.startsWith('carro na troca:')) {
+      missing.push('resposta sobre carro na troca');
+    } else if (description.includes('carro na troca: sim')) {
+      if (!lead.vehicle_plate?.trim()) missing.push('placa do veículo');
+      if (!lead.vehicle_model?.trim()) missing.push('modelo do veículo');
+      if (!lead.vehicle_year?.trim()) missing.push('ano do veículo');
+    }
+
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Nao e possivel confirmar o lead. Campos obrigatorios pendentes: ${missing.join(', ')}`,
+      );
+    }
   }
 
   /** Lista leads sem exigir contexto JWT — autenticação já validada pelo IntegrationKeyGuard. */

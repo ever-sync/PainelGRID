@@ -1944,7 +1944,7 @@
     },
     {
       "parameters": {
-        "toolDescription": "Use para salvar Nome, Sobrenome, Placa do veículo, Acompanhantes e data da visita",
+        "toolDescription": "Use para salvar somente os dados informados ou corrigidos pelo lead: primeiro nome, sobrenome, acompanhantes, data/hora da visita, carro na troca, placa, modelo e ano. Nunca envie campos vazios. Quando o lead não tiver carro na troca, salve description como 'Carro na troca: não'. Quando tiver, salve description como 'Carro na troca: sim' e também placa, modelo e ano.",
         "method": "PATCH",
         "url": "=https://api.gpdevendas.app/api/integrations/v1/leads/{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}",
         "authentication": "genericCredentialType",
@@ -1977,12 +1977,16 @@
               "value": "={{ $fromAI(\n  'last_name',\n  'Todos os sobrenomes e nomes após o primeiro nome.',\n  'string'\n) }}"
             },
             {
+              "name": "description",
+              "value": "={{ $fromAI(\n  'description',\n  \"Resposta sobre carro na troca. Use exatamente 'Carro na troca: não' ou 'Carro na troca: sim'.\",\n  'string'\n) }}"
+            },
+            {
               "name": "vehicle_model",
-              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters5_Value', ``, 'string') }}"
+              "value": "={{ $fromAI(\n  'vehicle_model',\n  'Modelo do veículo na troca, somente quando o lead informou que possui carro.',\n  'string'\n) }}"
             },
             {
               "name": "vehicle_year",
-              "value": "={{ $fromAI('parameters6_Value', ``, 'string') }}"
+              "value": "={{ $fromAI(\n  'vehicle_year',\n  'Ano do veículo com quatro dígitos, somente quando o lead confirmou o ano.',\n  'string'\n) }}"
             }
           ]
         },
@@ -2005,7 +2009,7 @@
     },
     {
       "parameters": {
-        "toolDescription": "Atualiza o status do lead. Quando mudar para confirmed envia o QR Code de acesso automaticamente por WhatsApp. Valores: pending, scheduled, confirmed, cancelled.",
+        "toolDescription": "Atualiza o status do lead. Use scheduled somente após todos os dados obrigatórios serem salvos e o lead confirmar o resumo. A API gera o QR Code automaticamente ao entrar em scheduled ou confirmed; não repita o envio. Valores: pending, scheduled, confirmed, cancelled.",
         "method": "PATCH",
         "url": "=https://api.gpdevendas.app/api/integrations/v1/leads/{{ $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.items[0].id }}",
         "authentication": "genericCredentialType",
@@ -2165,7 +2169,7 @@
     },
     {
       "parameters": {
-        "description": "Use essa ferramenta para enviar o QRCODE",
+        "description": "Não utilizar no fluxo normal. Depois que atualizar_status_lead confirmar como scheduled ou confirmed, a API gera e envia o QR Code automaticamente. Só usar para reenvio manual explicitamente solicitado.",
         "workflowId": {
           "__rl": true,
           "value": "=MWIRTrZl44bVjTZW",

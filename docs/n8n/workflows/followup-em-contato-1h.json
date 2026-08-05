@@ -1,0 +1,202 @@
+{
+  "name": "Follow-up - Em contato parado 1h",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "f0e4c8b0-2c71-4a39-a9b0-fb96e7ed7f10",
+      "name": "A cada 2 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: {\n  client_id: 'PREENCHER_CLIENT_ID',\n  phone_number_id: 'PREENCHER_PHONE_NUMBER_ID',\n  min_age_minutes: 60,\n  followup_tag: 'followup_em_contato_1h',\n  message: 'Opa, está por aí? Vamos terminar sua credencial 😊',\n} }];"
+      },
+      "id": "a5bb33ee-1e1c-4a22-b53a-ecaf63b071a4",
+      "name": "Configuração do Follow-up",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.gpdevendas.app/api/integrations/v1/leads",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $json.client_id }}"
+            },
+            {
+              "name": "take",
+              "value": "200"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": []
+        },
+        "options": {}
+      },
+      "id": "1d7d4a67-41a5-4a74-bd40-c8f4eaaef6a6",
+      "name": "Listar Leads do Cliente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - Integration Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Configuração do Follow-up').first().json;\nconst leads = Array.isArray($json.items) ? $json.items : (Array.isArray($json) ? $json : []);\nconst cutoff = Date.now() - (Number(cfg.min_age_minutes) * 60 * 1000);\n\nreturn leads\n  .filter((lead) => {\n    const stage = `${lead.crm_stage_code ?? ''} ${lead.crm_stage_name ?? ''}`.toUpperCase();\n    const updatedAt = new Date(lead.updated_at ?? lead.created_at ?? 0).getTime();\n    const tags = Array.isArray(lead.tags) ? lead.tags : [];\n    return (stage.includes('EM_CONTATO') || stage.includes('EM CONTATO'))\n      && Boolean(lead.phone)\n      && updatedAt > 0\n      && updatedAt <= cutoff\n      && !tags.includes(cfg.followup_tag);\n  })\n  .map((lead) => ({\n    json: {\n      ...cfg,\n      lead_id: lead.id,\n      lead_name: lead.name ?? lead.first_name ?? '',\n      phone: lead.phone,\n      existing_tags: Array.isArray(lead.tags) ? lead.tags : [],\n      stage_code: lead.crm_stage_code ?? null,\n      last_updated_at: lead.updated_at ?? lead.created_at ?? null,\n    },\n  }));"
+      },
+      "id": "7bf9b3c8-8c19-4efc-9afd-eec0d8b03fa0",
+      "name": "Filtrar Parados há 1 Hora",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return items\n  .sort((a, b) => new Date(a.json.last_updated_at ?? 0).getTime() - new Date(b.json.last_updated_at ?? 0).getTime())\n  .slice(0, 1);"
+      },
+      "id": "d1f31821-1eaa-46be-a0b0-10b576c37bf7",
+      "name": "Selecionar Apenas Um Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v23.0/{{ $json.phone_number_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { messaging_product: 'whatsapp', to: $json.phone, type: 'text', text: { preview_url: false, body: $json.message } } }}",
+        "options": {}
+      },
+      "id": "cfe95b4e-64b0-4a33-8791-c64b785a2ce4",
+      "name": "Enviar Follow-up WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1180,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - WhatsApp Cloud API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.gpdevendas.app/api/integrations/v1/leads/{{ $('Filtrar Parados há 1 Hora').item.json.lead_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { tags: [...$('Filtrar Parados há 1 Hora').item.json.existing_tags, $('Filtrar Parados há 1 Hora').item.json.followup_tag] } }}",
+        "options": {}
+      },
+      "id": "1e4d2f5e-5fd4-4f28-a01f-95c13622f5f2",
+      "name": "Marcar Follow-up Enviado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1420,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - Integration Key"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "A cada 2 minutos": {
+      "main": [[{ "node": "Configuração do Follow-up", "type": "main", "index": 0 }]]
+    },
+    "Configuração do Follow-up": {
+      "main": [[{ "node": "Listar Leads do Cliente", "type": "main", "index": 0 }]]
+    },
+    "Listar Leads do Cliente": {
+      "main": [[{ "node": "Filtrar Parados há 1 Hora", "type": "main", "index": 0 }]]
+    },
+    "Filtrar Parados há 1 Hora": {
+      "main": [[{ "node": "Selecionar Apenas Um Lead", "type": "main", "index": 0 }]]
+    },
+    "Selecionar Apenas Um Lead": {
+      "main": [[{ "node": "Enviar Follow-up WhatsApp", "type": "main", "index": 0 }]]
+    },
+    "Enviar Follow-up WhatsApp": {
+      "main": [[{ "node": "Marcar Follow-up Enviado", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "meta": {
+    "isolated": true,
+    "production_ready": false,
+    "safety": "Only leads in EM_CONTATO older than 60 minutes and without followup tag are selected."
+  },
+  "tags": []
+}

@@ -14,6 +14,7 @@ import { FindConversationsQueryDto } from './dto/find-conversations-query.dto';
 
 type N8nHistoryRow = {
   history_id: number;
+  client_id: string;
   lead_id: string;
   message_type: 'human' | 'ai';
   content: string;
@@ -68,10 +69,21 @@ export class ConversationsService {
   }
 
   async findAll(user: AuthenticatedUser, query: FindConversationsQueryDto) {
-    await this.assertClientRead(user, query.client_id);
-    await this.syncN8nHistoryForClient(query.client_id);
+    const clientId =
+      query.client_id ??
+      (user.role === Role.GESTOR ? null : (user.client_id ?? null));
 
-    const where: Prisma.ConversationWhereInput = { client_id: query.client_id };
+    if (clientId) {
+      await this.assertClientRead(user, clientId);
+    } else if (user.role !== Role.GESTOR) {
+      throw new ForbiddenException('Usuario sem empresa vinculada');
+    }
+
+    await this.syncN8nHistoryForClient(clientId);
+
+    const where: Prisma.ConversationWhereInput = clientId
+      ? { client_id: clientId }
+      : {};
     if (user.role === Role.VENDEDOR) {
       where.lead = { assigned_vendor_id: user.sub, deleted_at: null };
     }
@@ -115,10 +127,11 @@ export class ConversationsService {
    * Copia apenas mensagens visiveis e usa o ID da memoria como chave
    * idempotente, permitindo rodar a cada consulta sem criar duplicatas.
    */
-  async syncN8nHistoryForClient(clientId: string): Promise<number> {
+  async syncN8nHistoryForClient(clientId: string | null): Promise<number> {
     if (typeof this.prisma.$queryRaw !== 'function') return 0;
 
-    const running = this.n8nHistorySyncs.get(clientId);
+    const syncKey = clientId ?? '__all_clients__';
+    const running = this.n8nHistorySyncs.get(syncKey);
     if (running) return running;
 
     const sync = this.importN8nHistoryForClient(clientId)
@@ -134,25 +147,31 @@ export class ConversationsService {
         }
         return 0;
       })
-      .finally(() => this.n8nHistorySyncs.delete(clientId));
+      .finally(() => this.n8nHistorySyncs.delete(syncKey));
 
-    this.n8nHistorySyncs.set(clientId, sync);
+    this.n8nHistorySyncs.set(syncKey, sync);
     return sync;
   }
 
-  private async importN8nHistoryForClient(clientId: string): Promise<number> {
+  private async importN8nHistoryForClient(
+    clientId: string | null,
+  ): Promise<number> {
+    const clientFilter = clientId
+      ? Prisma.sql`AND lead.client_id = ${clientId}::uuid`
+      : Prisma.empty;
     const rows = await this.prisma.$queryRaw<N8nHistoryRow[]>(Prisma.sql`
       SELECT
         history.id AS history_id,
+        matched_lead.client_id AS client_id,
         matched_lead.id AS lead_id,
         history.message->>'type' AS message_type,
         history.message->>'content' AS content
       FROM agent_chat_history history
       JOIN LATERAL (
-        SELECT lead.id
+        SELECT lead.id, lead.client_id
         FROM leads lead
-        WHERE lead.client_id = ${clientId}::uuid
-          AND lead.deleted_at IS NULL
+        WHERE lead.deleted_at IS NULL
+          ${clientFilter}
           AND length(regexp_replace(COALESCE(lead.phone, ''), '[^0-9]', '', 'g')) >= 10
           AND (
             regexp_replace(COALESCE(lead.phone, ''), '[^0-9]', '', 'g') =
@@ -194,20 +213,22 @@ export class ConversationsService {
     );
     const byLead = new Map<string, N8nHistoryRow[]>();
     for (const row of usableRows) {
-      const leadRows = byLead.get(row.lead_id) ?? [];
+      const leadKey = `${row.client_id}:${row.lead_id}`;
+      const leadRows = byLead.get(leadKey) ?? [];
       leadRows.push(row);
-      byLead.set(row.lead_id, leadRows);
+      byLead.set(leadKey, leadRows);
     }
 
     let imported = 0;
-    for (const [leadId, historyRows] of byLead) {
+    for (const historyRows of byLead.values()) {
+      const { client_id: rowClientId, lead_id: leadId } = historyRows[0];
       imported += await this.prisma.$transaction(async (tx) => {
-        const lockKey = `${clientId}:${leadId}:${ConversationChannel.whatsapp}`;
+        const lockKey = `${rowClientId}:${leadId}:${ConversationChannel.whatsapp}`;
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
         let conversation = await tx.conversation.findFirst({
           where: {
-            client_id: clientId,
+            client_id: rowClientId,
             lead_id: leadId,
             channel: ConversationChannel.whatsapp,
           },
@@ -216,7 +237,7 @@ export class ConversationsService {
         if (!conversation) {
           conversation = await tx.conversation.create({
             data: {
-              client_id: clientId,
+              client_id: rowClientId,
               lead_id: leadId,
               channel: ConversationChannel.whatsapp,
             },

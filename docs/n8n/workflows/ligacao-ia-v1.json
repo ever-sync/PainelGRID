@@ -1,0 +1,152 @@
+{
+  "name": "Ligacao IA - V1 (Isolado)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ligacao-ia-v1",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "7e638d5b-44f6-4b8a-97c4-4d1a0b9e2b01",
+      "name": "Webhook - Ligacao IA",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "7e638d5b-44f6-4b8a-97c4-4d1a0b9e2b01"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nconst call = body.call ?? body.data?.call ?? {};\nconst phone = String(body.phone ?? body.from ?? body.caller_phone ?? call.from_number ?? call.to_number ?? '').trim();\nconst callId = String(body.call_id ?? body.callId ?? body.id ?? call.call_id ?? '').trim();\nconst transcript = String(body.transcript ?? body.text ?? body.utterance ?? call.transcript ?? '').trim();\nconst eventType = String(body.event ?? body.event_type ?? body.type ?? '').trim() || null;\n\nif (!phone) {\n  return [{ json: { ok: false, error: 'phone_required', channel: 'ligacao_ia', provider: 'retell' } }];\n}\n\nreturn [{\n  json: {\n    ok: true,\n    channel: 'ligacao_ia',\n    provider: 'retell',\n    event_type: eventType,\n    call_id: callId || null,\n    phone,\n    transcript: transcript || null,\n    event_id: body.event_id ?? body.eventId ?? null,\n    provider_status: body.status ?? body.call_status ?? call.call_status ?? null,\n    received_at: new Date().toISOString(),\n    payload_original: body,\n  },\n}];"
+      },
+      "id": "d7c27be8-9010-4e7f-9a5e-9c3135c3ed11",
+      "name": "Normalizar Evento de Ligacao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1e9cbb2-f5e0-4da0-b6bd-9fd0b50d3ec7",
+      "name": "Validar Evento",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": true,\n  \"channel\": \"ligacao_ia\",\n  \"accepted\": true,\n  \"call_id\": $json.call_id\n}",
+        "options": {}
+      },
+      "id": "62dbebfb-50ad-4ceb-bb5b-7c5adfa9a3bd",
+      "name": "Responder Aceite",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        980,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"ok\": false,\n  \"accepted\": false,\n  \"error\": $json.error\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "e2fb0e75-639e-45ca-9184-93b0e86a44e0",
+      "name": "Responder Rejeicao",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        980,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook - Ligacao IA": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Evento de Ligacao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Evento de Ligacao": {
+      "main": [
+        [
+          {
+            "node": "Validar Evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Evento": {
+      "main": [
+        [
+          {
+            "node": "Responder Aceite",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder Rejeicao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7e638d5b-44f6-4b8a-97c4-4d1a0b9e2b01",
+  "meta": {
+    "channel": "ligacao_ia",
+    "isolated": true,
+    "production_ready": false
+  },
+  "tags": []
+}

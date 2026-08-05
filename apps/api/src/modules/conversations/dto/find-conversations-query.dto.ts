@@ -1,6 +1,7 @@
-import { IsUUID } from 'class-validator';
+import { IsOptional, IsUUID } from 'class-validator';
 
 export class FindConversationsQueryDto {
+  @IsOptional()
   @IsUUID()
-  client_id!: string;
+  client_id?: string;
 }

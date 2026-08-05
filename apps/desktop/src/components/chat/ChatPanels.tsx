@@ -380,6 +380,7 @@ export function ConversationSidebar({
   clients,
   selectedClientId,
   onSelectClientId,
+  allowAllClients = false,
   search,
   onSearchChange,
   viewFilter,
@@ -392,6 +393,7 @@ export function ConversationSidebar({
   clients: Client[];
   selectedClientId: string;
   onSelectClientId: (clientId: string) => void;
+  allowAllClients?: boolean;
   search: string;
   onSearchChange: (value: string) => void;
   viewFilter: ViewFilter;
@@ -462,6 +464,11 @@ export function ConversationSidebar({
                 dark ? "text-zinc-100" : "text-zinc-900",
               )}
             >
+              {allowAllClients ? (
+                <option value="" className={dark ? "bg-zinc-900 text-zinc-100" : ""}>
+                  Todos os clientes
+                </option>
+              ) : null}
               {clients.map((client) => (
                 <option key={client.id} value={client.id} className={dark ? "bg-zinc-900 text-zinc-100" : ""}>
                   {client.company_name}

@@ -114,169 +114,6 @@ const META_HSM_TEMPLATES = [
   },
 ];
 
-const DEMO_MOCK_CONVERSATIONS: Conversation[] = [
-  {
-    id: "demo-conv-1",
-    client_id: "demo-client-1",
-    lead_id: "demo-lead-1",
-    lead_name: "Edney Ulisses",
-    channel: "whatsapp",
-    unread_count: 2,
-    last_message: "Olá! Gostaria de confirmar o meu agendamento para o evento de hoje à tarde.",
-    last_message_time: new Date().toISOString(),
-    handoff_required: false,
-    handoff_reason: null,
-    last_agent_action: null,
-    handoff_updated_at: null,
-    agent_actions: [],
-    messages: [
-      {
-        id: "msg-1-1",
-        sender: "lead",
-        text: "Olá! Boa tarde! Recebi o convite do evento.",
-        timestamp: new Date(Date.now() - 3600000 * 3).toISOString(),
-      },
-      {
-        id: "msg-1-2",
-        sender: "vendor",
-        text: "Olá Edney! Que excelente. O seu agendamento está confirmado no nosso estande exclusivo.",
-        timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
-      },
-      {
-        id: "msg-1-3",
-        sender: "lead",
-        text: "Perfeito! Qual é o horário exato e onde posso fazer o check-in?",
-        timestamp: new Date(Date.now() - 3600000 * 1).toISOString(),
-      },
-      {
-        id: "msg-1-4",
-        sender: "lead",
-        text: "Olá! Gostaria de confirmar o meu agendamento para o evento de hoje à tarde.",
-        timestamp: new Date(Date.now() - 60000 * 5).toISOString(),
-      },
-    ],
-  },
-  {
-    id: "demo-conv-2",
-    client_id: "demo-client-1",
-    lead_id: "demo-lead-2",
-    lead_name: "Mariana Costa",
-    channel: "whatsapp",
-    unread_count: 0,
-    last_message: "Obrigada pelas informações! Nos vemos no estande.",
-    last_message_time: new Date(Date.now() - 3600000 * 5).toISOString(),
-    handoff_required: false,
-    handoff_reason: null,
-    last_agent_action: null,
-    handoff_updated_at: null,
-    agent_actions: [],
-    messages: [
-      {
-        id: "msg-2-1",
-        sender: "lead",
-        text: "Vocês possuem condições especiais de financiamento para o evento?",
-        timestamp: new Date(Date.now() - 3600000 * 6).toISOString(),
-      },
-      {
-        id: "msg-2-2",
-        sender: "vendor",
-        text: "Sim Mariana! Teremos taxas exclusivas de evento a partir de 0,99% a.m. com avaliação FIPE no seu usado.",
-        timestamp: new Date(Date.now() - 3600000 * 5.5).toISOString(),
-      },
-      {
-        id: "msg-2-3",
-        sender: "lead",
-        text: "Obrigada pelas informações! Nos vemos no estande.",
-        timestamp: new Date(Date.now() - 3600000 * 5).toISOString(),
-      },
-    ],
-  },
-  {
-    id: "demo-conv-3",
-    client_id: "demo-client-1",
-    lead_id: "demo-lead-3",
-    lead_name: "Carlos Eduardo Santos",
-    channel: "whatsapp",
-    unread_count: 1,
-    last_message: "Podem me enviar a localização exata no Waze?",
-    last_message_time: new Date(Date.now() - 3600000 * 8).toISOString(),
-    handoff_required: true,
-    handoff_reason: "Atendimento humano solicitado",
-    last_agent_action: null,
-    handoff_updated_at: new Date(Date.now() - 3600000 * 8).toISOString(),
-    agent_actions: [],
-    messages: [
-      {
-        id: "msg-3-1",
-        sender: "lead",
-        text: "Podem me enviar a localização exata no Waze?",
-        timestamp: new Date(Date.now() - 3600000 * 8).toISOString(),
-      },
-    ],
-  },
-];
-
-function makeDemoLead(
-  overrides: Pick<Lead, "id" | "name" | "phone" | "email" | "source"> &
-    Partial<Lead>,
-): Lead {
-  const now = new Date().toISOString();
-  return {
-    client_id: "demo-client-1",
-    crm_stage: "novo",
-    crm_stage_id: null,
-    crm_pipeline_id: null,
-    tags: [],
-    confirmation_status: "pending",
-    assigned_vendor_id: null,
-    registered_by_id: null,
-    registered_by_name: null,
-    event_interest: null,
-    event_id: null,
-    store_visit_datetime: null,
-    notes: "",
-    checkin_token: null,
-    checkin_voucher: null,
-    active_appointment: null,
-    created_at: now,
-    updated_at: now,
-    ...overrides,
-  };
-}
-
-const DEMO_MOCK_LEADS: Lead[] = [
-  makeDemoLead({
-    id: "demo-lead-1",
-    name: "Edney Ulisses",
-    phone: "(11) 98765-4321",
-    email: "edney.ulisses@email.com",
-    event_interest: "Mega Feirão de Seminovos",
-    crm_stage_id: "stage-confirmed",
-    confirmation_status: "confirmed",
-    source: "whatsapp",
-  }),
-  makeDemoLead({
-    id: "demo-lead-2",
-    name: "Mariana Costa",
-    phone: "(11) 99887-6655",
-    email: "mariana.costa@email.com",
-    event_interest: "VIP Test Drive Premium",
-    crm_stage_id: "stage-[#FF0636]",
-    confirmation_status: "scheduled",
-    source: "form_page",
-  }),
-  makeDemoLead({
-    id: "demo-lead-3",
-    name: "Carlos Eduardo Santos",
-    phone: "(11) 97112-3344",
-    email: "carlos.eduardo@email.com",
-    event_interest: "Mega Feirão de Seminovos",
-    crm_stage_id: "stage-new",
-    confirmation_status: "pending",
-    source: "facebook_ads",
-  }),
-];
-
 const QUICK_EMOJIS = [
   "😀",
   "😂",
@@ -593,6 +430,9 @@ export function ChatPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [chatClientId, setChatClientId] = useState(() =>
+    user.role === "gestor" ? "" : (user.client_id ?? ""),
+  );
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
@@ -631,7 +471,8 @@ export function ChatPage() {
   const [crmPipelines, setCrmPipelines] = useState<ApiCrmPipeline[]>([]);
   const [pipelineStages, setPipelineStages] = useState<ApiCrmStage[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
-  const selectedClientId = gestorClientId;
+  const selectedClientId =
+    user.role === "gestor" ? chatClientId : (user.client_id ?? "");
   const requestedClientId = searchParams.get("client_id") ?? "";
   const requestedLeadId = searchParams.get("lead_id") ?? "";
   const effectiveClientId =
@@ -709,10 +550,21 @@ export function ChatPage() {
 
   useEffect(() => {
     if (user.role !== "gestor") return;
-    if (requestedClientId && requestedClientId !== selectedClientId) {
+    if (requestedClientId && requestedClientId !== chatClientId) {
+      setChatClientId(requestedClientId);
       setGestorClientId(requestedClientId);
     }
-  }, [requestedClientId, selectedClientId, setGestorClientId, user.role]);
+  }, [chatClientId, requestedClientId, setGestorClientId, user.role]);
+
+  const handleSelectChatClient = useCallback(
+    (clientId: string) => {
+      setChatClientId(clientId);
+      if (clientId) {
+        setGestorClientId(clientId);
+      }
+    },
+    [setGestorClientId],
+  );
 
   useEffect(() => {
     tokenRef.current = token;
@@ -752,9 +604,9 @@ export function ChatPage() {
   const refreshConversations = useCallback(() => {
     const currentClientId = selectedClientIdRef.current;
     const currentToken = tokenRef.current;
-    if (!currentClientId || !currentToken) return;
+    if (!currentToken) return;
 
-    void listConversations(currentClientId, currentToken)
+    void listConversations(currentClientId || undefined, currentToken)
       .then((convRows) => {
         const mapped = convRows.map(conversationFromListRow);
         setConversations((prev) => {
@@ -855,15 +707,15 @@ export function ChatPage() {
       .then((rows) => {
         const mapped = rows.map(mapApiClientToClient);
         setClients(mapped);
-        const selectedClientStillAvailable = selectedClientId
-          ? mapped.some((client) => client.id === selectedClientId)
+        const selectedClientStillAvailable = gestorClientId
+          ? mapped.some((client) => client.id === gestorClientId)
           : false;
         if (!selectedClientStillAvailable && mapped[0]?.id) {
           setGestorClientId(mapped[0].id);
         }
       })
       .catch(() => setClients([]));
-  }, [token, selectedClientId, setGestorClientId]);
+  }, [gestorClientId, token, setGestorClientId]);
 
   useEffect(() => {
     if (!token || !effectiveClientId) {
@@ -954,8 +806,11 @@ export function ChatPage() {
   );
 
   const refreshLeads = useCallback(() => {
-    if (!token || !effectiveClientId) return;
-    void listLeads({ client_id: effectiveClientId }, token)
+    if (!token) return;
+    void listLeads(
+      effectiveClientId ? { client_id: effectiveClientId } : {},
+      token,
+    )
       .then((leadRows) => setLeads(leadRows.map(mapApiLeadToLead)))
       .catch(() => setLeads([]));
   }, [effectiveClientId, token]);
@@ -966,29 +821,34 @@ export function ChatPage() {
   }, [refreshConversations, refreshLeads]);
 
   useEffect(() => {
-    if (!token || !effectiveClientId) return;
+    if (!token) return;
     void Promise.all([
-      listConversations(effectiveClientId, token),
-      listLeads({ client_id: effectiveClientId }, token),
+      listConversations(effectiveClientId || undefined, token),
+      listLeads(
+        effectiveClientId ? { client_id: effectiveClientId } : {},
+        token,
+      ),
     ])
       .then(([convRows, leadRows]) => {
         const mapped = convRows.map(conversationFromListRow);
-        const finalConvs = mapped.length > 0 ? mapped : DEMO_MOCK_CONVERSATIONS;
         const mappedLeads = leadRows.map(mapApiLeadToLead);
-        const finalLeads = mappedLeads.length > 0 ? mappedLeads : DEMO_MOCK_LEADS;
 
-        setConversations(finalConvs);
-        setLeads(finalLeads);
-        if (finalConvs[0]?.id) {
-          openConversation(finalConvs[0].id);
+        setConversations(mapped);
+        setLeads(mappedLeads);
+        if (mapped[0]?.id) {
+          openConversation(mapped[0].id);
         } else {
           setSelectedId("");
         }
       })
       .catch(() => {
-        setConversations(DEMO_MOCK_CONVERSATIONS);
-        setLeads(DEMO_MOCK_LEADS);
-        openConversation(DEMO_MOCK_CONVERSATIONS[0].id);
+        setConversations([]);
+        setLeads([]);
+        setSelectedId("");
+        pushToast({
+          message: "Não foi possível carregar as conversas.",
+          type: "error",
+        });
       });
   }, [effectiveClientId, openConversation, token]);
 
@@ -997,13 +857,23 @@ export function ChatPage() {
     loadThread(selectedId, true);
   }, [selectedId, loadThread]);
 
+  const realtimeClientIds = useMemo(
+    () =>
+      effectiveClientId
+        ? [effectiveClientId]
+        : clients.map((client) => client.id),
+    [clients, effectiveClientId],
+  );
+
   useEffect(() => {
-    if (!effectiveClientId || !token) {
+    if (realtimeClientIds.length === 0 || !token) {
       return;
     }
 
-    let socket: Socket | null = connectRealtime(effectiveClientId);
-    socket.emit("join_client", { client_id: effectiveClientId });
+    let socket: Socket | null = connectRealtime(realtimeClientIds[0]);
+    for (const clientId of realtimeClientIds) {
+      socket.emit("join_client", { client_id: clientId });
+    }
     socket.on("new_message", applyIncomingMessage);
     socket.on("lead_updated", handleLeadMutation);
 
@@ -1013,14 +883,14 @@ export function ChatPage() {
       socket?.disconnect();
       socket = null;
     };
-  }, [applyIncomingMessage, effectiveClientId, handleLeadMutation, token]);
+  }, [applyIncomingMessage, handleLeadMutation, realtimeClientIds, token]);
 
   // Polling de segurança: garante que mensagens cheguem mesmo quando o
   // WebSocket falha (ex.: deploy serverless no Vercel não mantém conexões
   // persistentes; rede instável; bloqueio por proxy corporativo).
   // Intervalo conservador (30s) para não sobrecarregar a API.
   useEffect(() => {
-    if (!effectiveClientId || !token) return;
+    if (!token) return;
 
     const POLL_MS = 30_000;
     const interval = window.setInterval(() => {
@@ -1080,11 +950,6 @@ export function ChatPage() {
   const selected = useMemo(
     () => conversationsById.get(selectedId) ?? conversations[0],
     [conversations, conversationsById, selectedId],
-  );
-
-  const selectedClient = useMemo(
-    () => clientsById.get(selectedClientId) ?? clients[0],
-    [clients, clientsById, selectedClientId],
   );
 
   const selectedLead = useMemo(() => {
@@ -1775,7 +1640,8 @@ export function ChatPage() {
         <ConversationSidebar
           clients={clients}
           selectedClientId={selectedClientId}
-          onSelectClientId={setGestorClientId}
+          onSelectClientId={handleSelectChatClient}
+          allowAllClients={user.role === "gestor"}
           search={search}
           onSearchChange={setSearch}
           viewFilter={viewFilter}

@@ -1,0 +1,43 @@
+{
+  "tools": [
+    {
+      "name": "consultar_lead_por_telefone",
+      "method": "GET",
+      "path": "/api/integrations/v1/leads",
+      "purpose": "Somente leitura; localizar lead pelo telefone e cliente."
+    },
+    {
+      "name": "atualizar_dados_lead",
+      "method": "PATCH",
+      "path": "/api/integrations/v1/leads/{lead_id}",
+      "fields": [
+        "first_name",
+        "last_name",
+        "companions",
+        "store_visit_datetime",
+        "description",
+        "vehicle_plate",
+        "vehicle_model",
+        "vehicle_year"
+      ],
+      "purpose": "Salvar apenas os dados informados ou corrigidos."
+    },
+    {
+      "name": "mover_lead_crm",
+      "method": "POST",
+      "path": "/api/integrations/v1/leads/{lead_id}/crm/move-by-suffix",
+      "allowed_stage_suffixes": [
+        "EM_CONTATO",
+        "PRESENCA_AGENDADA",
+        "PRESENCA_REAGENDADA",
+        "PRESENCA_CANCELADA"
+      ]
+    },
+    {
+      "name": "atualizar_status_lead",
+      "method": "PATCH",
+      "path": "/api/integrations/v1/leads/{lead_id}",
+      "allowed_statuses": ["pending", "scheduled", "cancelled"]
+    }
+  ]
+}
