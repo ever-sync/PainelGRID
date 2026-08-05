@@ -1,28 +1,9 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import clsx from "clsx";
-import {
-  Search,
-  Plus,
-  Download,
-  FileSpreadsheet,
-  ArrowLeft,
-  MessageSquare,
-  ExternalLink,
-  Copy,
-  Mail,
-  CheckCircle2,
-  Calendar,
-  ChevronRight,
-  Phone,
-  HelpCircle,
-  X,
-} from "lucide-react";
+import { Search, ArrowLeft, Copy, Mail, Phone } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
-import { Button } from "../../components/ui/Button";
 import type { Lead, User } from "../../types";
-import { resolveClientId } from "../../utils/userContext";
-import { readStoredSession } from "../../services/auth";
 import { readDashboardDarkEnabled } from "../../lib/dashboard-dark-mode";
 
 type OutletContext = {
@@ -203,10 +184,9 @@ const INITIAL_MOCK_LEADS: Lead[] = [
 
 export function LeadsPage() {
   const { user } = useOutletContext<OutletContext>();
-  const clientId = resolveClientId(user);
   const isDarkMode = readDashboardDarkEnabled(user.id);
 
-  const [leads, setLeads] = useState<Lead[]>(INITIAL_MOCK_LEADS);
+  const [leads] = useState<Lead[]>(INITIAL_MOCK_LEADS);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
   // Filtros Avançados (Conforme Imagem 1)

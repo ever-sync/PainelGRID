@@ -24,13 +24,10 @@ import {
   LayoutDashboard,
   Megaphone,
   GitCompare,
-  Layers,
   Award,
-  Ticket,
   UserCheck,
   Trophy,
   Shield,
-  Tv,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { StatsCard } from "../../components/shared/StatsCard";
@@ -40,6 +37,7 @@ import { Tabs } from "../../components/ui/Tabs";
 import { readStoredSession } from "../../services/auth";
 import { listClients, mapApiClientToClient } from "../../services/clients";
 import { listEvents, getEventDashboardTv } from "../../services/events";
+import type { EventDashboardTvResponse } from "../../services/events";
 import { listLeads, mapApiLeadToLead } from "../../services/leads";
 import { listCrmPipelines, type ApiCrmStage } from "../../services/crm";
 import type { AppOutletContext } from "../../layouts/AppLayout";
@@ -122,15 +120,17 @@ export function RelatorioGestorPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [crmStages, setCrmStages] = useState<ApiCrmStage[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [, setIsLoading] = useState(true);
 
   // Filtros seletores superiores do lado direito
   const [selectedClientId, setSelectedClientId] = useState<string>("all");
   const [selectedEventId, setSelectedEventId] = useState<string>("all");
 
   // Estado de sincronia com a API do Modo TV do Evento (/events/:id/dashboard-tv)
-  const [tvVendors, setTvVendors] = useState<any[]>([]);
-  const [tvTeams, setTvTeams] = useState<any[]>([]);
+  const [tvVendors, setTvVendors] = useState<
+    EventDashboardTvResponse["vendors"]
+  >([]);
+  const [tvTeams, setTvTeams] = useState<EventDashboardTvResponse["teams"]>([]);
 
   useEffect(() => {
     const session = readStoredSession();
@@ -409,7 +409,7 @@ export function RelatorioGestorPage() {
             name: e.name,
             client_id: e.client_id,
             participant_client_ids: e.participant_client_ids ?? [e.client_id],
-            event_type: (e.event_type ?? "feirao") as any,
+            event_type: e.event_type ?? "feirao",
             description: e.description ?? "",
             launch_date: e.launch_date ?? e.created_at,
             event_date: e.event_date,

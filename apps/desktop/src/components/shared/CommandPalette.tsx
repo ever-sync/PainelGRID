@@ -6,7 +6,6 @@ import {
   Store,
   Calendar,
   CarFront,
-  UserPlus,
   MessageSquare,
   Sparkles,
   Settings,
@@ -15,8 +14,6 @@ import {
   Sun,
   KanbanSquare,
   Building2,
-  RefreshCcw,
-  CheckCircle2,
   X,
   ArrowRight,
 } from "lucide-react";

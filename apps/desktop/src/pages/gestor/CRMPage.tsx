@@ -41,7 +41,6 @@ import {
   Square,
   Tag,
   Target,
-  TrendingDown,
   TrendingUp,
   User as UserIcon,
   UserCheck,
@@ -56,7 +55,6 @@ import {
   FileText,
 } from "lucide-react";
 import { Card } from "../../components/ui/Card";
-import { CopyableId } from "../../components/ui/CopyableId";
 import {
   ConfirmationBadge,
   SourceBadge,
@@ -88,7 +86,6 @@ import {
   apiStagesToColumns,
   clientIdToPipelineCode,
   defaultKanbanStages,
-  distributeLeadsByStageCode,
   distributeLeadsByStageId,
   emptyBoardForStages,
   pickDefaultPipeline,
@@ -2926,7 +2923,9 @@ export function CRMPage() {
     return () => {
       active = false;
     };
-  }, [selectedClient]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Deps propositalmente limitadas a selectedClient: o efeito so precisa
+    // refazer a carga quando o cliente muda.
+  }, [selectedClient]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(String(event.active.id));

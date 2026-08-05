@@ -2,13 +2,10 @@ import { useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import clsx from "clsx";
 import {
-  HelpCircle,
   MessageSquare,
-  BookOpen,
   Video,
   FileQuestion,
   ChevronDown,
-  Phone,
   Mail,
   ExternalLink,
 } from "lucide-react";

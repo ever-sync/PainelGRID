@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import clsx from "clsx";
 import { CalendarDays, Mail, Phone, Target } from "lucide-react";
 import { Drawer } from "../ui/Modal";

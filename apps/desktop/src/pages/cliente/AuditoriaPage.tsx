@@ -1,16 +1,7 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import clsx from "clsx";
-import {
-  FileText,
-  Search,
-  Clock,
-  User,
-  ShieldCheck,
-  Filter,
-  Download,
-  CheckCircle,
-} from "lucide-react";
+import { Search, Download } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import type { AppOutletContext } from "../../layouts/AppLayout";
 import { readDashboardDarkEnabled } from "../../lib/dashboard-dark-mode";

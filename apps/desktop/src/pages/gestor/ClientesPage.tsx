@@ -352,17 +352,6 @@ export function ClientesPage() {
     statusFilter !== "active" ||
     facebookFilter !== "all" ||
     planFilter !== "all";
-  const modalInputClass = clsx(
-    "w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-[#FF0636]",
-    isDarkMode
-      ? "border-zinc-700 bg-[#111111] text-zinc-100 placeholder:text-zinc-500"
-      : "border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400",
-  );
-  const modalLabelClass = clsx(
-    "mb-1 block text-xs font-semibold uppercase tracking-[0.14em]",
-    isDarkMode ? "text-zinc-400" : "text-zinc-500",
-  );
-
   return (
     <div className={clsx("space-y-6", isDarkMode && "dashboard-dark bg-black")}>
       <PageHeader title="Clientes" dark={isDarkMode} />

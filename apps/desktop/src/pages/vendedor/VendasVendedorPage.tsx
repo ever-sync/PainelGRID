@@ -6,8 +6,6 @@ import {
   ShoppingBag,
   TrendingUp,
   Search,
-  Calendar,
-  Tag,
 } from "lucide-react";
 import clsx from "clsx";
 import { PageHeader } from "../../components/shared/PageHeader";

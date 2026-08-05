@@ -5,23 +5,16 @@ import clsx from "clsx";
 import type { Socket } from "socket.io-client";
 import {
   CalendarDays,
-  CheckCheck,
   Contact,
-  ChevronDown,
-  Clock3,
   Folder,
   Images,
   ListOrdered,
   Mic,
   Paperclip,
-  Phone,
-  Search,
   SendHorizontal,
   SmilePlus,
   Sparkles,
-  SquarePen,
   Square,
-  UserRound,
   X,
 } from "lucide-react";
 import {
@@ -40,7 +33,6 @@ import {
   type ApiMessage,
   conversationFromListRow,
   ensureConversation,
-  fetchConversationMessageMedia,
   listConversations,
   listMessages,
   mapApiMessagesToMessages,
@@ -133,28 +125,6 @@ const QUICK_EMOJIS = [
   "⭐",
 ];
 
-function formatTime(date: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(date));
-}
-
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
-
-function formatLastSeen(date: string | null | undefined) {
-  if (!date) return "visto recentemente";
-  return `visto por ultimo hoje as ${formatTime(date)}`;
-}
-
 /** Evita mensagem duplicada quando o WebSocket confirma antes do POST responder. */
 function stripFirstMatchingPendingOutbound(
   messages: Message[],
@@ -169,154 +139,6 @@ function stripFirstMatchingPendingOutbound(
   );
   if (pendingIdx === -1) return messages;
   return messages.filter((_, idx) => idx !== pendingIdx);
-}
-
-function isImageMessage(message: Message) {
-  if (!message.media_url && !message.media_id) return false;
-  const lowerText = message.text.trim().toLowerCase();
-  if (lowerText === "[imagem]") return true;
-  return /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(
-    message.media_url ?? "",
-  );
-}
-
-function isMediaPlaceholder(text: string) {
-  return [
-    "[imagem]",
-    "[audio]",
-    "[video]",
-    "[documento]",
-    "[sticker]",
-  ].includes(text.trim().toLowerCase());
-}
-
-function MediaAttachment({
-  message,
-  token,
-  dark = false,
-}: {
-  message: Message;
-  token: string;
-  dark?: boolean;
-}) {
-  const [objectUrl, setObjectUrl] = useState<string | null>(null);
-  const [contentType, setContentType] = useState("");
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    if (!message.media_url && !message.media_id) return;
-
-    let active = true;
-    let currentObjectUrl: string | null = null;
-
-    void fetchConversationMessageMedia(message.id, token)
-      .then((blob) => {
-        if (!active) return;
-        currentObjectUrl = URL.createObjectURL(blob);
-        setObjectUrl(currentObjectUrl);
-        setContentType(blob.type);
-        setFailed(false);
-      })
-      .catch(() => {
-        if (active) setFailed(true);
-      });
-
-    return () => {
-      active = false;
-      if (currentObjectUrl) {
-        URL.revokeObjectURL(currentObjectUrl);
-      }
-    };
-  }, [message.id, message.media_id, message.media_url, token]);
-
-  if (!message.media_url && !message.media_id) return null;
-
-  if (failed) {
-    return (
-      <div
-        className={clsx(
-          "mt-2 rounded-md px-3 py-2 text-[13px]",
-          dark ? "bg-[#151515] text-[#a6a6a6]" : "bg-black/5 text-[#54656f]",
-        )}
-      >
-        Midia indisponivel. Tente reenviar ou aguarde a proxima mensagem.
-      </div>
-    );
-  }
-
-  if (!objectUrl) {
-    return (
-      <div
-        className={clsx(
-          "mt-2 h-24 animate-pulse rounded-md",
-          dark ? "bg-[#151515]" : "bg-black/10",
-        )}
-      />
-    );
-  }
-
-  const label = message.text.trim().toLowerCase();
-  const isImage =
-    contentType.startsWith("image/") ||
-    label === "[imagem]" ||
-    isImageMessage(message);
-  const isAudio = contentType.startsWith("audio/") || label === "[audio]";
-  const isVideo = contentType.startsWith("video/") || label === "[video]";
-
-  if (isImage) {
-    return (
-      <a
-        href={objectUrl}
-        target="_blank"
-        rel="noreferrer"
-        className={clsx(
-          "mt-2 block overflow-hidden rounded-md border",
-          dark ? "border-white/10" : "border-black/10",
-        )}
-      >
-        <img
-          src={objectUrl}
-          alt="Imagem enviada no WhatsApp"
-          loading="lazy"
-          className="max-h-72 w-full object-cover"
-        />
-      </a>
-    );
-  }
-
-  if (isAudio) {
-    return (
-      <audio
-        controls
-        src={objectUrl}
-        className="mt-2 block w-[260px] max-w-full"
-      />
-    );
-  }
-
-  if (isVideo) {
-    return (
-      <video
-        controls
-        src={objectUrl}
-        className="mt-2 block max-h-72 w-[320px] max-w-full rounded-md bg-black"
-      />
-    );
-  }
-
-  return (
-    <a
-      href={objectUrl}
-      target="_blank"
-      rel="noreferrer"
-      className={clsx(
-        "mt-2 block rounded-md px-3 py-2 text-[13px] font-medium underline",
-        dark ? "bg-[#151515] text-[#d7d7d7]" : "bg-black/5 text-[#005c4b]",
-      )}
-    >
-      Abrir arquivo
-    </a>
-  );
 }
 
 function stubLead(conv: Conversation, clientId: string): Lead {
@@ -344,81 +166,6 @@ function stubLead(conv: Conversation, clientId: string): Lead {
     created_at: "",
     updated_at: "",
   };
-}
-
-function ConversationRow({
-  conversation,
-  selected,
-  dark,
-  onClick,
-}: {
-  conversation: Conversation;
-  selected: boolean;
-  dark: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={clsx(
-        "group flex w-full items-center gap-3 px-3 py-3 text-left transition-colors",
-        dark
-          ? selected
-            ? "bg-[#1f1f1f]"
-            : "bg-[#0f0f0f] hover:bg-[#171717]"
-          : selected
-            ? "bg-[#f0f2f5]"
-            : "bg-white hover:bg-[#f5f6f6]",
-      )}
-    >
-      <div
-        className={clsx(
-          "flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold",
-          dark ? "bg-[#1d1d1d] text-[#d7d7d7]" : "bg-[#dfe5e7] text-[#3b4a54]",
-        )}
-      >
-        {getInitials(conversation.lead_name)}
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <p
-            className={clsx(
-              "truncate text-[16px] font-medium leading-none",
-              dark ? "text-[#f1f1f1]" : "text-[#111b21]",
-            )}
-          >
-            {conversation.lead_name}
-          </p>
-          <span
-            className={clsx(
-              "text-xs",
-              dark ? "text-[#9a9a9a]" : "text-[#667781]",
-            )}
-          >
-            {formatTime(conversation.last_message_time)}
-          </span>
-        </div>
-
-        <div className="mt-1 flex items-center gap-2">
-          {conversation.unread_count > 0 && (
-            <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#25d366] px-1.5 text-[11px] font-semibold text-[#0b141a]">
-              {conversation.unread_count}
-            </span>
-          )}
-          <p
-            className={clsx(
-              "truncate text-[15px]",
-              dark ? "text-[#9a9a9a]" : "text-[#667781]",
-            )}
-          >
-            {conversation.last_message}
-          </p>
-        </div>
-      </div>
-    </button>
-  );
 }
 
 export function ChatPage() {

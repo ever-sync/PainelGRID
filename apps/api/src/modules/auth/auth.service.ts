@@ -554,7 +554,7 @@ export class AuthService {
     let attemptsRaw: string | null;
     try {
       attemptsRaw = await this.redisService.client.get(key);
-    } catch (err) {
+    } catch {
       this.logger.warn(
         "Redis indisponivel ao checar tentativas de login; " +
           `limite temporariamente DESATIVADO ate o Redis normalizar.`,

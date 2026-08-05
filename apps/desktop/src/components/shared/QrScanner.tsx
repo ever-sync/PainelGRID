@@ -32,7 +32,7 @@ function playBeep() {
   }
 }
 
-export function QrScanner({ onScan, onClose, dark = false }: QrScannerProps) {
+export function QrScanner({ onScan, onClose }: QrScannerProps) {
   const qrRef = useRef<Html5Qrcode | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);

@@ -20,7 +20,6 @@ import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { EventStatusBadge } from "../../components/ui/Badge";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
-import { Select } from "../../components/ui/Select";
 import { Drawer, Modal } from "../../components/ui/Modal";
 import { Notice } from "../../components/ui/Notice";
 import { Tabs } from "../../components/ui/Tabs";
@@ -140,7 +139,7 @@ export function EventosPage() {
   const [teamAction, setTeamAction] = useState<TeamAction | null>(null);
   const [teamActionLoading, setTeamActionLoading] = useState(false);
   const [addMemberTeamId, setAddMemberTeamId] = useState<string | null>(null);
-  const [addMemberSelectionId, setAddMemberSelectionId] = useState<string>("");
+  const [, setAddMemberSelectionId] = useState<string>("");
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [memberToggling, setMemberToggling] = useState<string | null>(null);
   const [availableVendors, setAvailableVendors] = useState<StaffUser[]>([]);

@@ -11,7 +11,6 @@ import {
   CheckCheck,
   ChevronDown,
   Clock3,
-  Phone,
   Search,
   UserRound,
   Sparkles,

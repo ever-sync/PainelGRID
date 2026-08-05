@@ -99,6 +99,8 @@ function publishMetric(metric: Metric) {
   );
 
   if (debugMetrics) {
+    // Saida de depuracao pedida explicitamente pela flag `debugMetrics`.
+    // eslint-disable-next-line no-console
     console.info("[Performance]", payload);
   }
 

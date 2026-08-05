@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Crown, Trophy } from "lucide-react";
+import { Crown } from "lucide-react";
 import clsx from "clsx";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Select } from "../../components/ui/Select";

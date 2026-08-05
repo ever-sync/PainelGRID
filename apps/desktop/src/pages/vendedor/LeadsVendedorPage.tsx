@@ -104,6 +104,8 @@ function triggerVibration() {
   triggerHapticFeedback([100, 50, 100]);
 }
 
+type StageTab = "all" | "new" | "scheduled" | "checkin" | "done";
+
 export function LeadsVendedorPage() {
   const navigate = useNavigate();
   const { user } = useOutletContext<OutletContext>();
@@ -155,9 +157,7 @@ export function LeadsVendedorPage() {
   } | null>(null);
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedStageTab, setSelectedStageTab] = useState<
-    "all" | "new" | "scheduled" | "checkin" | "done"
-  >("all");
+  const [selectedStageTab, setSelectedStageTab] = useState<StageTab>("all");
 
   const isLeadNew = useCallback((l: Lead) => {
     const stage = (l.crm_stage || "").toLowerCase();
@@ -944,7 +944,7 @@ export function LeadsVendedorPage() {
           />
           <select
             value={selectedStageTab}
-            onChange={(e) => setSelectedStageTab(e.target.value as any)}
+            onChange={(e) => setSelectedStageTab(e.target.value as StageTab)}
             className="w-full appearance-none rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-3 pl-10 pr-10 text-xs font-bold text-zinc-900 dark:text-zinc-100 shadow-sm outline-none focus:border-[#FF0636]"
           >
             <option value="all">Todos os Leads ({leads.length})</option>
@@ -972,7 +972,7 @@ export function LeadsVendedorPage() {
           <button
             key={key}
             type="button"
-            onClick={() => setSelectedStageTab(key as any)}
+            onClick={() => setSelectedStageTab(key as StageTab)}
             className={clsx(
               "rounded-full px-4 py-2 text-xs font-bold transition-all shrink-0 border",
               selectedStageTab === key

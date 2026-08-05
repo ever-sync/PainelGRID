@@ -326,8 +326,7 @@ export function EventDetailPage() {
   const [formPaidTraffic, setFormPaidTraffic] = useState("");
   const [formStatus, setFormStatus] = useState<Event["status"]>("draft");
   const [formRequireWristband, setFormRequireWristband] = useState(false);
-  const [formExtraClientIds, setFormExtraClientIds] = useState<string[]>([]);
-
+  const [, setFormExtraClientIds] = useState<string[]>([]);
   useEffect(() => {
     setIsDarkMode(readDashboardDarkEnabled(user.id));
   }, [user.id]);
@@ -485,7 +484,8 @@ export function EventDetailPage() {
 
   useEffect(() => {
     void loadPage();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Deps propositalmente reduzidas para o efeito nao reexecutar a cada
+    // render das dependencias derivadas.
   }, [eventId]);
 
   const staff = useMemo(
@@ -605,15 +605,6 @@ export function EventDetailPage() {
     leadVendorFilter,
   ]);
 
-  const eventOperationsClients = useMemo(() => {
-    const items: Client[] = [];
-    participantClients.forEach((clientItem) => {
-      if (!items.some((existing) => existing.id === clientItem.id)) {
-        items.push(clientItem);
-      }
-    });
-    return items;
-  }, [participantClients]);
   const availableParticipantOptions = useMemo(
     () =>
       allClients.filter(

@@ -12,7 +12,6 @@ import {
   User,
   CalendarDays,
   QrCode,
-  Camera,
   ShoppingBag,
   CheckSquare,
   RefreshCw,
@@ -32,7 +31,6 @@ import { resolveClientId } from "../../utils/userContext";
 import { createAudioContext } from "../../utils/audioContext";
 import { MissingClientScope } from "../../components/shared/MissingClientScope";
 import { readStoredSession } from "../../services/auth";
-import { checkInAppointment } from "../../services/appointments";
 import { listEvents, mapApiEventToEvent } from "../../services/events";
 import {
   checkLeadPhone,
@@ -138,15 +136,15 @@ export function CheckinPage() {
   const [leadEmail, setLeadEmail] = useState("");
   const [createError, setCreateError] = useState("");
   const [createBusy, setCreateBusy] = useState(false);
-  const [inviteToken, setInviteToken] = useState("");
-  const [tokenHint, setTokenHint] = useState("");
-  const [tokenBusy, setTokenBusy] = useState(false);
+  const [, setInviteToken] = useState("");
+  const [, setTokenHint] = useState("");
+  const [, setTokenBusy] = useState(false);
   const [scannedToken, setScannedToken] = useState("");
   const [activeTab, setActiveTab] = useState<
     "all" | "expected" | "arrived" | "absent"
   >("all");
   const [showScannerModal, setShowScannerModal] = useState(false);
-  const [scannerTab, setScannerTab] = useState<"qr" | "manual">("qr");
+  const [, setScannerTab] = useState<"qr" | "manual">("qr");
   const [onlineVendorIds, setOnlineVendorIds] = useState<string[]>([]);
   const [vendorStatuses, setVendorStatuses] = useState<
     Record<string, "online" | "away" | "offline">
@@ -751,47 +749,12 @@ export function CheckinPage() {
     }
   };
 
-  const handleCheckInByToken = async () => {
-    await handleCheckInByTokenValue(inviteToken);
-  };
-
   const openScanner = () => {
     setTokenHint("");
     setInviteToken("");
     setScannerTab("qr");
     setScannerKey((k) => k + 1); // force remount QrScanner
     setShowScannerModal(true);
-  };
-
-  const handleCheckin = async (lead: Lead) => {
-    const t = readStoredSession()?.accessToken;
-    if (!t) return;
-    if (!lead.active_appointment?.id) {
-      setTokenHint("Este lead nao possui agendamento ativo para check-in.");
-      return;
-    }
-    try {
-      await checkInAppointment(t, lead.active_appointment.id);
-      setLeadsState((prev) =>
-        prev.map((l) =>
-          l.id === lead.id
-            ? {
-                ...l,
-                confirmation_status: "checked_in" as ConfirmationStatus,
-                active_appointment: l.active_appointment
-                  ? {
-                      ...l.active_appointment,
-                      status: "completed",
-                      completed_at: new Date().toISOString(),
-                    }
-                  : l.active_appointment,
-              }
-            : l,
-        ),
-      );
-    } catch {
-      setTokenHint("Não foi possível confirmar chegada deste agendamento.");
-    }
   };
 
   const handleCallVendor = async (leadId: string) => {

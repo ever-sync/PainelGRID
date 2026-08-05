@@ -8,7 +8,6 @@ import {
   MessageSquare,
   BarChart3,
   UserCheck,
-  Megaphone,
   DollarSign,
   CarFront,
   CalendarPlus,
@@ -766,8 +765,6 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
             },
           ]
         : navItems;
-  const isSettingsRoute = location.pathname.startsWith(settingsPath);
-
   const handleLogout = () => {
     onLogout();
     navigate("/login");

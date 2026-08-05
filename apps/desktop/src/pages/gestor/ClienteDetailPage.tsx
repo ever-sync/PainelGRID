@@ -15,7 +15,6 @@ import {
   Building2,
   Check,
   CheckCircle2,
-  CircleDashed,
   Copy,
   Database,
   Eye,
@@ -125,7 +124,6 @@ import {
 } from "../../services/conversations";
 import { useLeadRealtimeSync } from "../../hooks/useLeadRealtimeSync";
 import {
-  disconnectMeta,
   importMetaLeads,
   getMetaGestorStatus,
   getMetaSummary,
@@ -160,7 +158,7 @@ import {
   type Vehicle,
   type VehicleOption,
 } from "../../services/vehicles";
-import { Car, Tag, Upload, Image as ImageIcon } from "lucide-react";
+import { Car, Tag, Upload } from "lucide-react";
 import { resizeImageToDataUrl } from "../../utils/image";
 
 import type { ConfirmationStatus, LeadSource } from "../../types";
@@ -543,27 +541,6 @@ function MetaStatCard({
         {helper}
       </p>
     </div>
-  );
-}
-
-function AssetChip({
-  children,
-  dark,
-}: {
-  children: ReactNode;
-  dark?: boolean;
-}) {
-  return (
-    <span
-      className={clsx(
-        "inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold",
-        dark
-          ? "border-zinc-700 bg-[#1b1b1f] text-zinc-300"
-          : "border-[#eadfce] bg-[#fffaf2] text-zinc-700",
-      )}
-    >
-      {children}
-    </span>
   );
 }
 
@@ -955,7 +932,7 @@ export function ClienteDetailPage() {
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
   const [vehicleBrand, setVehicleBrand] = useState("");
   const [vehicleModel, setVehicleModel] = useState("");
-  const [vehicleYearOrKm, setVehicleYearOrKm] = useState("");
+  const [, setVehicleYearOrKm] = useState("");
   const [vehiclePrice, setVehiclePrice] = useState("");
   const [vehicleStores, setVehicleStores] = useState("");
   const [vehicleStatus, setVehicleStatus] = useState(true);
@@ -1027,7 +1004,6 @@ export function ClienteDetailPage() {
     string[]
   >([]);
   const [metaImportPage, setMetaImportPage] = useState(1);
-  const [isDisconnectingMeta, setIsDisconnectingMeta] = useState(false);
   const [metaStatusLoading, setMetaStatusLoading] = useState(false);
   const [metaBusinessesLoading, setMetaBusinessesLoading] = useState(false);
   const [metaStatusMessage, setMetaStatusMessage] = useState("");
@@ -2323,14 +2299,6 @@ export function ClienteDetailPage() {
     clientLeads.length > 0 &&
     clientLeads.every((lead) => selectedLeadIds.includes(lead.id));
 
-  const remainingDailyBudget = metaConnection
-    ? Math.max(
-        metaConnection.sync_summary.daily_budget -
-          metaConnection.sync_summary.spend_today,
-        0,
-      )
-    : 0;
-
   function primeDraftState(business: MetaBusinessOption) {
     setDraftBusinessId(business.id);
     setDraftAdAccountIds(
@@ -3224,36 +3192,6 @@ export function ClienteDetailPage() {
 
   function openLeadChat(lead: Lead) {
     navigate(`/gestor/chat?client_id=${lead.client_id}&lead_id=${lead.id}`);
-  }
-
-  async function handleDisconnectMeta() {
-    const clientId = id ?? "";
-    const session = readStoredSession();
-    const accessToken = session?.accessToken ?? "";
-    if (clientId && isUuid(clientId) && accessToken) {
-      setIsDisconnectingMeta(true);
-      try {
-        const response = await disconnectMeta(clientId, accessToken);
-        if (response.disconnected) {
-          setMetaConnection(null);
-          setApiBusinesses([]);
-          setMetaStatusMessage("Conexão Meta removida deste cliente.");
-        } else {
-          setMetaStatusMessage(
-            response.message ?? "Nenhuma conexão ativa para desconectar.",
-          );
-        }
-      } catch {
-        setMetaStatusMessage(
-          "Falha ao desconectar a integração Meta deste cliente.",
-        );
-      } finally {
-        setIsDisconnectingMeta(false);
-      }
-      return;
-    }
-
-    setMetaConnection(null);
   }
 
   async function handleCreatePrincipalAccess() {

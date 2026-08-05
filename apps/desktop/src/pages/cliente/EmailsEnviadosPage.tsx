@@ -1,16 +1,7 @@
 import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import clsx from "clsx";
-import {
-  Mail,
-  Filter,
-  Calendar as CalendarIcon,
-  Search,
-  CheckCircle,
-  AlertTriangle,
-  X,
-  ExternalLink,
-} from "lucide-react";
+import { Calendar as CalendarIcon } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Modal } from "../../components/ui/Modal";
 import type { User } from "../../types";
@@ -122,7 +113,7 @@ export function EmailsEnviadosPage() {
   const { user } = useOutletContext<OutletContext>();
   const isDarkMode = readDashboardDarkEnabled(user.id);
 
-  const [logs, setLogs] = useState<SentEmailLog[]>(INITIAL_EMAILS_LOGS);
+  const [logs] = useState<SentEmailLog[]>(INITIAL_EMAILS_LOGS);
   const [filterOrigin, setFilterOrigin] = useState("todas");
   const [filterStatus, setFilterStatus] = useState("todos");
   const [dateFrom, setDateFrom] = useState("");

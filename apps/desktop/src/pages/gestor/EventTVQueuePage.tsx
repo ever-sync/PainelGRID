@@ -8,8 +8,6 @@ import {
   ArrowRight,
   Volume2,
   VolumeX,
-  BellRing,
-  Megaphone,
 } from "lucide-react";
 import {
   getEventDashboardTv,
@@ -60,19 +58,6 @@ function formatWaitingTime(checkedInTime: Date) {
 }
 
 // Retorna uma classe de gradiente única com base na primeira letra para avatares vibrantes
-function getAvatarGradient(name: string) {
-  const charCode = name.charCodeAt(0) || 0;
-  const gradients = [
-    "from-red-500 to-rose-600 shadow-rose-500/20",
-    "from-orange-400 to-amber-600 shadow-amber-500/20",
-    "from-emerald-400 to-teal-600 shadow-teal-500/20",
-    "from-blue-500 to-indigo-600 shadow-indigo-500/20",
-    "from-purple-500 to-fuchsia-600 shadow-fuchsia-500/20",
-    "from-cyan-400 to-sky-600 shadow-sky-500/20",
-  ];
-  return gradients[charCode % gradients.length];
-}
-
 // Estilo de medalha para posições da fila
 function getPositionStyle(index: number) {
   if (index === 0) {
@@ -100,7 +85,7 @@ export function EventTVQueuePage() {
   const [consecutiveErrors, setConsecutiveErrors] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(false);
-  const [onlineVendorIds, setOnlineVendorIds] = useState<string[]>([]);
+  const [, setOnlineVendorIds] = useState<string[]>([]);
 
   const announcedRef = useRef<Set<string>>(new Set());
   const abortRef = useRef<AbortController | null>(null);
@@ -220,7 +205,7 @@ export function EventTVQueuePage() {
         osc2.frequency.setValueAtTime(880, context.currentTime + 0.15); // A5
         osc2.start(context.currentTime + 0.15);
         osc2.stop(context.currentTime + 0.4);
-      } catch (e) {
+      } catch {
         // AudioContext blocks sometimes, ignore
       }
 

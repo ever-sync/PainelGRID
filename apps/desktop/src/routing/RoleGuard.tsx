@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useOutletContext } from "react-router-dom";
-import type { User, UserRole } from "../types";
+import type { UserRole } from "../types";
 import type { AppOutletContext } from "../layouts/AppLayout";
 
 const ROLE_HOME: Record<UserRole, string> = {

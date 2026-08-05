@@ -259,7 +259,7 @@ function RouteLoadingFallback() {
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const [, setSession] = useState<AuthSession | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
   useNativeShell(!loadingAuth);

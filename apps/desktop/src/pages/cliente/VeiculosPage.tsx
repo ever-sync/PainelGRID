@@ -3,7 +3,6 @@ import { useOutletContext } from "react-router-dom";
 import clsx from "clsx";
 import {
   Car,
-  CarFront,
   Pencil,
   Plus,
   Search,
@@ -11,13 +10,6 @@ import {
   Trash2,
   X,
   Upload,
-  Image as ImageIcon,
-  Calendar,
-  DollarSign,
-  Gauge,
-  Palette,
-  FileText,
-  Hash,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Card } from "../../components/ui/Card";
@@ -81,7 +73,7 @@ export function VeiculosPage() {
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
   const [vehicleBrand, setVehicleBrand] = useState("");
   const [vehicleModel, setVehicleModel] = useState("");
-  const [vehicleYearOrKm, setVehicleYearOrKm] = useState("");
+  const [, setVehicleYearOrKm] = useState("");
   const [vehiclePrice, setVehiclePrice] = useState("");
   const [vehicleStores, setVehicleStores] = useState("");
   const [vehicleStatus, setVehicleStatus] = useState(true);

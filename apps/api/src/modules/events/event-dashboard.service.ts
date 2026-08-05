@@ -397,7 +397,7 @@ export class EventDashboardService {
     const activeCalls: unknown[] = [];
     for (const clientId of participantClientIds) {
       try {
-        const [_, keys] = await this.redis.client.scan(
+        const [, keys] = await this.redis.client.scan(
           "0",
           "MATCH",
           `vendor_call:${clientId}:*`,

@@ -321,7 +321,7 @@ export async function provisionDefaultCrmPipeline(
       try {
         await prisma.crmStage.delete({ where: { id: oldStage.id } });
         continue;
-      } catch (deleteError) {
+      } catch {
         // Se houver referências históricas (ex: crm_history), mantemos a etapa mas mudamos a ordem para ocultar
       }
     }

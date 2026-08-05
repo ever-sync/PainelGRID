@@ -2,29 +2,21 @@ import { useEffect, useState, useMemo } from "react";
 import {
   Sparkles,
   Bot,
-  MessageSquare,
-  TrendingUp,
   Settings,
   Calendar,
   Save,
-  Clock,
-  Volume2,
-  FileText,
   Activity,
-  UserCheck,
   CheckCircle,
   Plus,
   Trash2,
   ArrowLeft,
   BookOpen,
   HelpCircle,
-  Edit2,
   Trash,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Tabs } from "../../components/ui/Tabs";
 import { Card } from "../../components/ui/Card";
-import { StatsCard } from "../../components/shared/StatsCard";
 import { readStoredSession } from "../../services/auth";
 import { listLeads, mapApiLeadToLead } from "../../services/leads";
 import { useGestorClient } from "../../hooks/useGestorClient";
@@ -40,8 +32,6 @@ import {
   addRubinhoDocument,
   deleteRubinhoDocument,
   RubinhoAgent as RubinhoAgentType,
-  RubinhoFaq,
-  RubinhoDocument,
 } from "../../services/rubinho";
 import type { Lead, Event } from "../../types";
 
@@ -63,7 +53,7 @@ export function RubinhoPage() {
   const [selectedAgent, setSelectedAgent] = useState<RubinhoAgentType | null>(
     null,
   );
-  const [isEditing, setIsEditing] = useState(false);
+  const [, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
