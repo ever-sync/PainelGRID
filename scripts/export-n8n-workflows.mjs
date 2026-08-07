@@ -20,6 +20,7 @@ const workflows = [
     file: "meta-leads-verificacao-get.json",
   },
   { id: "MWIRTrZl44bVjTZW", file: "rubinho-v1.json" },
+  { id: "rQ92Kohukkw7X7ex", file: "rubinho-v2.json" },
 ];
 
 const secretPatterns = [
