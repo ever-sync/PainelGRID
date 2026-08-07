@@ -1,6 +1,6 @@
 {
   "sourceWorkflowId": "rQ92Kohukkw7X7ex",
-  "sourceUpdatedAt": "2026-08-07T04:27:06.616Z",
+  "sourceUpdatedAt": "2026-08-07T04:28:04.037Z",
   "name": "Rubinho v2",
   "active": true,
   "nodes": [
@@ -2212,7 +2212,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const result = { ...$('V2 - CALCULAR ESTADO POS TURNO').item.json };\nconst normalized = $('V2 - NORMALIZAR ENTRADA').item.json.v2_context ?? {};\nconst lead = $('VALIDADOR - ANALISAR').item.json ?? {};\nconst incoming = String(normalized.message_text ?? '').trim();\nconst isOpeningTrigger = /^(finalizar credenciamento|oi|olá|ola|bom dia|boa tarde|boa noite)[!. ]*$/i.test(incoming);\nconst isNewLead = !String(lead.first_name ?? '').trim() && (!String(lead.name ?? '').trim() || /^Lead WhatsApp$/i.test(String(lead.name)));\n\nif (isOpeningTrigger && isNewLead) {\n  const profileFirstName = String(normalized.lead_profile_name ?? '').trim().split(/\\s+/)[0];\n  const eventName = String($('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.name ?? 'evento').trim();\n  const greetingName = profileFirstName ? \", ${profileFirstName}\" : '';\n  result.output = `Falaa${greetingName}! Tudo certo? Meu nome é Rubinho, sou assistente virtual do ${eventName} e vou dar continuidade ao seu atendimento. Me informa seu nome completo?`;\n}\n\nreturn [{ json: result }];"
+        "jsCode": "const result = { ...$('V2 - CALCULAR ESTADO POS TURNO').item.json };\nconst normalized = $('V2 - NORMALIZAR ENTRADA').item.json.v2_context ?? {};\nconst lead = $('VALIDADOR - ANALISAR').item.json ?? {};\nconst incoming = String(normalized.message_text ?? '').trim();\nconst isOpeningTrigger = /^(finalizar credenciamento|oi|olá|ola|bom dia|boa tarde|boa noite)[!. ]*$/i.test(incoming);\nconst isWaitingForFullName = !String(lead.first_name ?? '').trim() || !String(lead.last_name ?? '').trim();\n\nif (isOpeningTrigger && isWaitingForFullName) {\n  const profileFirstName = String(normalized.lead_profile_name ?? '').trim().split(/\\s+/)[0];\n  const eventName = String($('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.name ?? 'evento').trim();\n  const greetingName = profileFirstName ? \", ${profileFirstName}\" : '';\n  result.output = `Falaa${greetingName}! Tudo certo? Meu nome é Rubinho, sou assistente virtual do ${eventName} e vou dar continuidade ao seu atendimento. Me informa seu nome completo?`;\n}\n\nreturn [{ json: result }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
