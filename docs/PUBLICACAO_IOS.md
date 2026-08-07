@@ -1,17 +1,17 @@
 # Publicação do PainelGRID na App Store
 
 App Capacitor 6.2.1 (`apps/desktop`), bundle ID `space.eversync.painelgrid`,
-target iOS 13.0, Xcode 26.6.
+target iOS 13.0, **somente iPhone**, Xcode 26.6.
 
 ## 1. Pré-requisitos (fora do repo)
 
 | Item | Status | Observação |
 | --- | --- | --- |
-| Conta Apple Developer Program | **você precisa confirmar** | US$ 99/ano. Sem ela não dá para assinar nem enviar. Se for conta de organização, a validação D-U-N-S leva dias. |
+| Conta Apple Developer Program | ✅ | |
 | Xcode 26.6 | ✅ instalado | SDK iOS 26.5 |
 | CocoaPods | ❌ **ausente** | Bloqueia o build. Ver passo 2. |
-| Política de privacidade publicada | **você precisa confirmar** | URL obrigatória no App Store Connect. |
-| Conta demo para a revisão | **você precisa confirmar** | O app abre em tela de login; a Apple rejeita se não conseguir entrar. |
+| Política de privacidade publicada | **pendente** | URL obrigatória no App Store Connect. |
+| Conta demo para a revisão | **pendente** | O app abre em tela de login; a Apple rejeita se não conseguir entrar. |
 
 ## 2. Instalar CocoaPods (bloqueio atual)
 
@@ -75,10 +75,9 @@ App* → *App Store Connect* → *Upload*.
 ## 7. App Store Connect
 
 1. Criar o app (bundle ID `space.eversync.painelgrid`).
-2. Preencher: nome, subtítulo, descrição, palavras-chave, categoria, screenshots
-   (obrigatório 6,9" e 6,5"; iPad se o app declarar suporte — hoje
-   `TARGETED_DEVICE_FAMILY = "1,2"`, ou seja **iPhone + iPad**, então a Apple
-   vai exigir screenshots de iPad também).
+2. Preencher: nome, subtítulo, descrição, palavras-chave, categoria e
+   screenshots. O app é **iPhone-only** (`TARGETED_DEVICE_FAMILY = "1"`), então
+   só são exigidos os tamanhos de iPhone (6,9" e 6,5") — nada de iPad.
 3. **App Privacy**: as respostas precisam bater com o
    `ios/App/App/PrivacyInfo.xcprivacy` deste repo (e-mail, nome, telefone,
    fotos/vídeos, conteúdo do usuário — todos vinculados ao usuário, sem
@@ -90,9 +89,17 @@ App* → *App Store Connect* → *Upload*.
 
 ## 8. Pontos que costumam gerar rejeição aqui
 
-- **Exclusão de conta (5.1.1(v))** — se dá para criar conta pelo app, tem que
-  dar para excluir pelo app. Se as contas são provisionadas só pela EverSync,
-  explicar isso nas notas da revisão.
+- **Exclusão de conta (5.1.1(v))** — hoje **não há cadastro pelo app**: as contas
+  são provisionadas pela EverSync. Escrever isso nas notas da revisão, com
+  estas palavras ou equivalentes:
+
+  > Não há criação de conta no aplicativo. As credenciais são provisionadas pela
+  > EverSync para funcionários da concessionária cliente. Segue abaixo um acesso
+  > de demonstração.
+
+  **Quando o cadastro aberto for lançado, a diretriz passa a valer** e o app
+  precisará de exclusão de conta pela própria interface, senão a atualização é
+  rejeitada.
 - **Notificações**: o código usa a Web Notification API, que **não existe** no
   WKWebView. No iOS não há banner nativo — só o sino dentro do app. Para
   notificação de verdade seria preciso `@capacitor/local-notifications` e/ou
@@ -100,9 +107,8 @@ App* → *App Store Connect* → *Upload*.
 - **"Web wrapper" (4.2)** — apps que são só um site embrulhado são rejeitados.
   Ajuda ter câmera/QR, haptics, share e armazenamento seguro nativos, que o app
   já usa.
-- **iPad** — como o app declara suporte, ele *é testado em iPad*. Se o layout
-  quebrar lá, vira rejeição. Considerar `TARGETED_DEVICE_FAMILY = "1"` se o
-  alvo for só iPhone.
+- **iPad** — resolvido: o target é iPhone-only, então a Apple não testa em iPad
+  nem cobra screenshots de iPad.
 
 ## 9. Opcional
 
