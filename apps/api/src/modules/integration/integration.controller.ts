@@ -200,8 +200,15 @@ export class IntegrationController {
     status: 400,
     description: "Dados inválidos ou evento/pipeline não pertencem ao cliente",
   })
-  createLead(@Body() dto: CreateLeadDto) {
-    return this.leadsService.createForIntegration(dto);
+  async createLead(@Body() dto: CreateLeadDto) {
+    const lead = await this.leadsService.createForIntegration(dto);
+    if (dto.source === "whatsapp") {
+      await this.conversationsService.ensureWhatsappConversationForIntegration(
+        dto.client_id,
+        lead.id,
+      );
+    }
+    return lead;
   }
 
   @Post("leads/facebook")

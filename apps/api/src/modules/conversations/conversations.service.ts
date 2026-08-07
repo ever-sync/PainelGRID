@@ -380,6 +380,40 @@ export class ConversationsService {
     };
   }
 
+  /**
+   * Garante a conversa para chamadas que ja passaram pelo
+   * IntegrationKeyGuard. Diferente de `ensureConversation`, este caminho nao
+   * depende de um usuario JWT e nunca deve ser exposto fora de uma rota de
+   * integracao autenticada.
+   */
+  async ensureWhatsappConversationForIntegration(
+    clientId: string,
+    leadId: string,
+  ) {
+    const lead = await this.prisma.lead.findFirst({
+      where: { id: leadId, client_id: clientId, deleted_at: null },
+      select: { id: true },
+    });
+    if (!lead) {
+      throw new NotFoundException("Lead nao encontrado para este cliente");
+    }
+
+    const existing = await this.prisma.conversation.findFirst({
+      where: { client_id: clientId, lead_id: leadId, channel: "whatsapp" },
+      orderBy: { created_at: "desc" },
+    });
+    if (existing) return existing;
+
+    return this.prisma.conversation.create({
+      data: {
+        client_id: clientId,
+        lead_id: leadId,
+        channel: "whatsapp",
+        last_message_at: new Date(),
+      },
+    });
+  }
+
   async findMessages(user: AuthenticatedUser, conversationId: string) {
     const conv = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
