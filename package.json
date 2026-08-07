@@ -41,7 +41,8 @@
     "test:e2e:ui": "playwright test -c e2e/playwright.config.ts",
     "lighthouse:ci": "npx --yes @lhci/cli@0.15.1 autorun --config=lighthouserc.cjs",
     "n8n:export": "node scripts/export-n8n-workflows.mjs",
-    "n8n:refactor:form-evento": "node scripts/refactor-n8n-form-evento.mjs"
+    "n8n:refactor:form-evento": "node scripts/refactor-n8n-form-evento.mjs",
+    "n8n:create:multitenant-dispatches": "node scripts/create-n8n-multitenant-dispatches.mjs"
   },
   "overrides": {
     "rxjs": "^7.8.2"
