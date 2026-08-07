@@ -237,8 +237,10 @@ model Lead {
   registered_by_id            String?                    @db.Uuid
   external_ref                String?                    @db.VarChar(120)
   vehicle_plate               String?                    @db.VarChar(20)
+  vehicle_brand               String?                    @db.VarChar(100)
   vehicle_model               String?                    @db.VarChar(100)
   vehicle_year                String?                    @db.VarChar(50)
+  vehicle_fipe_value          String?                    @db.VarChar(50)
   companions                  String?
   description                 String?
   first_name                  String?                    @db.VarChar(100)

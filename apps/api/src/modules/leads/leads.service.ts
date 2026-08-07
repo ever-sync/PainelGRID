@@ -83,8 +83,10 @@ const leadSelect = {
   campaign_id: true,
   notes: true,
   vehicle_plate: true,
+  vehicle_brand: true,
   vehicle_model: true,
   vehicle_year: true,
+  vehicle_fipe_value: true,
   companions: true,
   description: true,
   first_name: true,
@@ -1618,18 +1620,23 @@ export class LeadsService {
     }
     this.mergeCheckinTokenIfConfirming(lead, asUpdate, data);
 
-    const updated = (await this.prisma.lead.update({
+    let updated = (await this.prisma.lead.update({
       where: { id: leadId },
       data,
       select: leadSelect,
     })) as LeadWithRelations;
 
     if (updated.vehicle_plate && updated.vehicle_plate !== lead.vehicle_plate) {
-      void this.triggerFipeLookup(
+      await this.triggerFipeLookup(
         updated.id,
         updated.vehicle_plate,
         updated.notes,
       );
+      const enriched = await this.prisma.lead.findUnique({
+        where: { id: updated.id },
+        select: leadSelect,
+      });
+      if (enriched) updated = enriched as LeadWithRelations;
     }
 
     const response = this.toResponse(updated);
@@ -3664,8 +3671,10 @@ export class LeadsService {
       sold_by_vendor_id: lead.sold_by_vendor_id,
       notes: lead.notes,
       vehicle_plate: lead.vehicle_plate,
+      vehicle_brand: lead.vehicle_brand,
       vehicle_model: lead.vehicle_model,
       vehicle_year: lead.vehicle_year,
+      vehicle_fipe_value: lead.vehicle_fipe_value,
       companions: lead.companions,
       description: lead.description,
       first_name: lead.first_name,
@@ -4642,18 +4651,26 @@ export class LeadsService {
 
       const existing = await this.prisma.lead.findUnique({
         where: { id: leadId },
-        select: { vehicle_model: true, vehicle_year: true },
+        select: {
+          vehicle_brand: true,
+          vehicle_model: true,
+          vehicle_year: true,
+          vehicle_fipe_value: true,
+        },
       });
 
       const updated = await this.prisma.lead.update({
         where: { id: leadId },
         data: {
           notes: updatedNotes,
+          vehicle_brand:
+            existing?.vehicle_brand || String(fipe.brand).slice(0, 100),
           vehicle_model:
-            existing?.vehicle_model ||
-            `${fipe.brand} ${fipe.model}`.trim().slice(0, 100),
+            existing?.vehicle_model || String(fipe.model).slice(0, 100),
           vehicle_year:
             existing?.vehicle_year || String(fipe.modelYear).slice(0, 50),
+          vehicle_fipe_value:
+            existing?.vehicle_fipe_value || String(fipe.value).slice(0, 50),
         },
         select: leadSelect,
       });

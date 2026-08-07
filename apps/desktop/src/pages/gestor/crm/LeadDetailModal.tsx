@@ -262,6 +262,10 @@ export function LeadDetailModal({
     { label: "Nome", value: lead.first_name || null, icon: UserIcon },
     { label: "Sobrenome", value: lead.last_name || null, icon: UserIcon },
     { label: "Placa do veículo", value: lead.vehicle_plate || null, icon: Car },
+    { label: "Marca do veículo", value: lead.vehicle_brand || null, icon: Car },
+    { label: "Modelo do veículo", value: lead.vehicle_model || null, icon: Car },
+    { label: "Ano do veículo", value: lead.vehicle_year || null, icon: Car },
+    { label: "Valor FIPE", value: lead.vehicle_fipe_value || null, icon: Car },
     { label: "Acompanhantes", value: lead.companions || null, icon: Users },
     { label: "Descrição", value: lead.description || null, icon: FileText },
   ];

@@ -101,6 +101,10 @@ export interface Lead {
   cpf?: string | null;
   wristband_number?: string | null;
   vehicle_plate?: string | null;
+  vehicle_brand?: string | null;
+  vehicle_model?: string | null;
+  vehicle_year?: string | null;
+  vehicle_fipe_value?: string | null;
   companions?: string | null;
   description?: string | null;
   first_name?: string | null;
