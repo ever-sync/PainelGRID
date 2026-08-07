@@ -1973,6 +1973,16 @@ export class LeadsService {
       (formId) => !selectionsByForm.has(formId),
     );
     if (unknownFormIds.length > 0) {
+      for (const formId of unknownFormIds) {
+        await this.recordOperationalIssue({
+          type: "UNKNOWN_FORM",
+          severity: "critical",
+          title: "Formulário Meta desconhecido",
+          message: `O formulário ${formId} não está vinculado a nenhum cliente ativo.`,
+          fingerprint: `unknown-form:${formId}`,
+          metadata: { form_id: formId },
+        });
+      }
       throw new ForbiddenException(
         `Formulario Meta nao vinculado a nenhum cliente ativo: ${unknownFormIds.join(", ")}`,
       );
@@ -2455,6 +2465,16 @@ export class LeadsService {
       return { status: "skipped", reason: "phone_missing" };
     }
     if (!routing.whatsappTemplateName || !routing.whatsappTemplateLanguage) {
+      await this.recordOperationalIssue({
+        type: "TEMPLATE_FAILED",
+        severity: "warning",
+        title: "Template WhatsApp não configurado",
+        message: `O formulário ${routing.formId} recebeu um lead, mas não possui template configurado.`,
+        fingerprint: `template-config:${routing.formId}`,
+        clientId: routing.clientId,
+        leadId: lead.id,
+        metadata: { form_id: routing.formId },
+      });
       return { status: "skipped", reason: "template_not_configured" };
     }
 
@@ -2501,9 +2521,20 @@ export class LeadsService {
         chat_recorded: chatRecorded,
       };
     } catch (error) {
+      const errorMessage = this.errorMessage(error);
       this.logger.warn(
-        `Falha ao enviar template WhatsApp do formulario ${routing.formId} para o lead ${lead.id}: ${this.errorMessage(error)}`,
+        `Falha ao enviar template WhatsApp do formulario ${routing.formId} para o lead ${lead.id}: ${errorMessage}`,
       );
+      await this.recordOperationalIssue({
+        type: "TEMPLATE_FAILED",
+        severity: "critical",
+        title: "Falha no envio do template WhatsApp",
+        message: errorMessage,
+        fingerprint: `template-send:${lead.id}:${templateName}`,
+        clientId: routing.clientId,
+        leadId: lead.id,
+        metadata: { form_id: routing.formId, template_name: templateName },
+      });
       return {
         status: "failed",
         reason: "provider_error",
@@ -3838,6 +3869,16 @@ export class LeadsService {
       this.logger.warn(
         `Falha ao enviar QR Code de check-in via WhatsApp lead=${lead.id} client=${lead.client_id}: ${message}`,
       );
+      await this.recordOperationalIssue({
+        type: "QR_NOT_DELIVERED",
+        severity: "critical",
+        title: "QR Code não entregue",
+        message,
+        fingerprint: `qrcode:${lead.id}`,
+        clientId: lead.client_id,
+        leadId: lead.id,
+        eventId: lead.event_interest_id,
+      });
     }
   }
 
@@ -4405,7 +4446,62 @@ export class LeadsService {
       select: { id: true },
     });
     if (!event) {
+      await this.recordOperationalIssue({
+        type: "EVENT_NOT_FOUND",
+        severity: "critical",
+        title: "Evento não encontrado",
+        message: `O evento ${eventId} não existe ou não está vinculado ao cliente.`,
+        fingerprint: `event:${clientId}:${eventId}`,
+        clientId,
+        eventId,
+      });
       throw new BadRequestException("Evento nao encontrado para este cliente");
+    }
+  }
+
+  private async recordOperationalIssue(input: {
+    type: string;
+    severity: "info" | "warning" | "critical";
+    title: string;
+    message: string;
+    fingerprint: string;
+    clientId?: string | null;
+    leadId?: string | null;
+    conversationId?: string | null;
+    eventId?: string | null;
+    metadata?: Record<string, unknown>;
+  }): Promise<void> {
+    try {
+      await this.prisma.operationalIssue.upsert({
+        where: { fingerprint: input.fingerprint },
+        create: {
+          type: input.type,
+          severity: input.severity,
+          title: input.title,
+          message: input.message,
+          source: "api",
+          fingerprint: input.fingerprint,
+          client_id: input.clientId ?? null,
+          lead_id: input.leadId ?? null,
+          conversation_id: input.conversationId ?? null,
+          event_id: input.eventId ?? null,
+          metadata: (input.metadata ?? {}) as Prisma.InputJsonValue,
+        },
+        update: {
+          status: "open",
+          severity: input.severity,
+          message: input.message,
+          metadata: (input.metadata ?? {}) as Prisma.InputJsonValue,
+          last_seen_at: new Date(),
+          resolved_at: null,
+          resolved_by: null,
+          occurrence_count: { increment: 1 },
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Falha ao registrar exceção operacional: ${this.errorMessage(error)}`,
+      );
     }
   }
 
@@ -4635,7 +4731,23 @@ export class LeadsService {
       if (!normalized || normalized.length < 7) return;
 
       const fipe = await this.fetchFipeDataByPlate(normalized);
-      if (!fipe) return;
+      if (!fipe) {
+        const lead = await this.prisma.lead.findUnique({
+          where: { id: leadId },
+          select: { client_id: true },
+        });
+        await this.recordOperationalIssue({
+          type: "FIPE_FAILED",
+          severity: "warning",
+          title: "Falha na consulta FIPE",
+          message: `A placa ${normalized} não retornou dados pela APIBrasil.`,
+          fingerprint: `fipe:${leadId}:${normalized}`,
+          clientId: lead?.client_id,
+          leadId,
+          metadata: { plate: normalized },
+        });
+        return;
+      }
 
       const cleanNotes = currentNotes
         ? currentNotes

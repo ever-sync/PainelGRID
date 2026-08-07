@@ -38,6 +38,7 @@ import { VehiclesModule } from "./modules/vehicles/vehicles.module";
 import { PerformanceModule } from "./modules/performance/performance.module";
 import { RequestPerformanceMiddleware } from "./modules/performance/request-performance.middleware";
 import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
+import { OperationsModule } from "./modules/operations/operations.module";
 
 const envFilePaths = getApiEnvFilePaths();
 
@@ -135,6 +136,7 @@ const envFilePaths = getApiEnvFilePaths();
     RubinhoModule,
     VehiclesModule,
     PerformanceModule,
+    OperationsModule,
   ],
   providers: [
     {

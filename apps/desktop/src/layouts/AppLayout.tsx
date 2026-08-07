@@ -37,6 +37,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Bell,
+  ShieldAlert,
 } from "lucide-react";
 import clsx from "clsx";
 import type { User } from "../types";
@@ -152,6 +153,11 @@ function getNavItems(user: User): NavItem[] {
           href: "/gestor/rubinho",
           icon: <Sparkles size={18} />,
           label: "Rubinho",
+        },
+        {
+          href: "/gestor/operacoes",
+          icon: <ShieldAlert size={18} />,
+          label: "Operações",
         },
         {
           href: "/gestor/relatorio",

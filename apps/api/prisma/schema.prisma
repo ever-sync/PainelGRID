@@ -1083,6 +1083,14 @@ model AgentActionLog {
   action_payload  Json         @default("{}")
   result_status   String       @db.VarChar(80)
   error_message   String?
+  previous_state  Json?
+  received_message String?
+  next_stage      String?      @db.VarChar(120)
+  tool_name       String?      @db.VarChar(120)
+  tool_input      Json?
+  api_response    Json?
+  resulting_state Json?
+  block_reason    String?
   created_at      DateTime     @default(now())
   client          Client       @relation(fields: [client_id], references: [id])
   conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
@@ -1095,6 +1103,53 @@ model AgentActionLog {
   @@index([result_status])
   @@index([created_at])
   @@map("agent_action_logs")
+}
+
+/// Fila operacional unificada. `fingerprint` evita criar várias ocorrências
+/// para o mesmo problema enquanto occurrence_count/last_seen_at preservam a recorrência.
+model OperationalIssue {
+  id               String   @id @default(uuid()) @db.Uuid
+  client_id        String?  @db.Uuid
+  lead_id          String?  @db.Uuid
+  conversation_id  String?  @db.Uuid
+  event_id         String?  @db.Uuid
+  type              String   @db.VarChar(80)
+  severity          String   @default("warning") @db.VarChar(20)
+  status            String   @default("open") @db.VarChar(20)
+  title             String   @db.VarChar(255)
+  message           String
+  source            String   @db.VarChar(80)
+  fingerprint       String   @unique @db.VarChar(255)
+  metadata          Json     @default("{}")
+  occurrence_count Int      @default(1)
+  first_seen_at     DateTime @default(now())
+  last_seen_at      DateTime @default(now())
+  resolved_at       DateTime?
+  resolved_by       String?  @db.Uuid
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@index([status, last_seen_at(sort: Desc)])
+  @@index([type, status])
+  @@index([client_id, status])
+  @@index([lead_id])
+  @@index([conversation_id])
+  @@map("operational_issues")
+}
+
+model OperationalHeartbeat {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @unique @db.VarChar(120)
+  client_id    String?  @db.Uuid
+  status       String   @default("healthy") @db.VarChar(20)
+  metadata     Json     @default("{}")
+  last_seen_at DateTime @default(now())
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@index([status, last_seen_at])
+  @@index([client_id])
+  @@map("operational_heartbeats")
 }
 
 model ApiIdempotencyRequest {

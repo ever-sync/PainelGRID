@@ -35,6 +35,15 @@ export class AgentActionLogService {
         action_payload: (dto.action_payload ?? {}) as Prisma.InputJsonValue,
         result_status: dto.result_status,
         error_message: dto.error_message ?? null,
+        previous_state: dto.previous_state as Prisma.InputJsonValue | undefined,
+        received_message: dto.received_message ?? null,
+        next_stage: dto.next_stage ?? null,
+        tool_name: dto.tool_name ?? null,
+        tool_input: dto.tool_input as Prisma.InputJsonValue | undefined,
+        api_response: dto.api_response as Prisma.InputJsonValue | undefined,
+        resulting_state: dto.resulting_state as
+          Prisma.InputJsonValue | undefined,
+        block_reason: dto.block_reason ?? null,
       },
     });
 
@@ -127,6 +136,14 @@ export class AgentActionLogService {
     result_status: string;
     error_message: string | null;
     created_at: Date;
+    previous_state?: Prisma.JsonValue | null;
+    received_message?: string | null;
+    next_stage?: string | null;
+    tool_name?: string | null;
+    tool_input?: Prisma.JsonValue | null;
+    api_response?: Prisma.JsonValue | null;
+    resulting_state?: Prisma.JsonValue | null;
+    block_reason?: string | null;
   }) {
     return {
       id: log.id,
@@ -143,6 +160,14 @@ export class AgentActionLogService {
       action_payload: log.action_payload,
       result_status: log.result_status,
       error_message: log.error_message,
+      previous_state: log.previous_state ?? null,
+      received_message: log.received_message ?? null,
+      next_stage: log.next_stage ?? null,
+      tool_name: log.tool_name ?? null,
+      tool_input: log.tool_input ?? null,
+      api_response: log.api_response ?? null,
+      resulting_state: log.resulting_state ?? null,
+      block_reason: log.block_reason ?? null,
       created_at: log.created_at.toISOString(),
     };
   }

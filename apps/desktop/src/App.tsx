@@ -83,6 +83,11 @@ const RubinhoPage = lazy(() =>
     default: module.RubinhoPage,
   })),
 );
+const OperationsPage = lazy(() =>
+  import("./pages/gestor/OperationsPage").then((module) => ({
+    default: module.OperationsPage,
+  })),
+);
 const EventosPage = lazy(() =>
   import("./pages/gestor/EventosPage").then((module) => ({
     default: module.EventosPage,
@@ -463,6 +468,7 @@ export default function App() {
               <Route path="/gestor/eventos" element={<EventosPage />} />
               <Route path="/gestor/eventos/:id" element={<EventDetailPage />} />
               <Route path="/gestor/rubinho" element={<RubinhoPage />} />
+              <Route path="/gestor/operacoes" element={<OperationsPage />} />
               <Route
                 path="/gestor/eventos/:eventId/operacao/:clientId"
                 element={<ClienteEventosPage />}

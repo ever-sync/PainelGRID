@@ -38,4 +38,32 @@ export class CreateAgentActionLogDto {
   @IsOptional()
   @IsString()
   error_message?: string;
+
+  @IsOptional()
+  previous_state?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  received_message?: string;
+
+  @IsOptional()
+  @IsString()
+  next_stage?: string;
+
+  @IsOptional()
+  @IsString()
+  tool_name?: string;
+
+  @IsOptional()
+  tool_input?: Record<string, unknown>;
+
+  @IsOptional()
+  api_response?: Record<string, unknown>;
+
+  @IsOptional()
+  resulting_state?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsString()
+  block_reason?: string;
 }
