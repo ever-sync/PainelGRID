@@ -235,6 +235,10 @@ describe("LeadsService", () => {
     );
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it("exporta CSV com cabeçalho e linha de lead", async () => {
     prisma.lead.findMany.mockResolvedValue([
       {
@@ -1802,5 +1806,54 @@ describe("LeadsService", () => {
         eventId,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("consulta placa no Gateway V2 usando somente Bearer Token", async () => {
+    const previousToken = process.env.APIBRASIL_TOKEN;
+    process.env.APIBRASIL_TOKEN = "token-de-teste";
+    const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        error: false,
+        data: {
+          marca: "FORD",
+          modelo: "FORD/FIESTA FLEX",
+          anoModelo: "2014",
+          valor_fipe: "35.500,00",
+        },
+      }),
+    } as Response);
+
+    try {
+      const result = await service.getFipeDataPublic("OQH3A65", {
+        sub: gestorId,
+        role: Role.GESTOR,
+        name: "Gestor",
+        email: "gestor@example.com",
+        client_id: null,
+      });
+
+      expect(result).toEqual({
+        brand: "FORD",
+        model: "FORD/FIESTA FLEX",
+        modelYear: "2014",
+        value: "R$ 35.500,00",
+      });
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://gateway.apibrasil.io/api/v2/vehicles/dados",
+        expect.objectContaining({
+          method: "POST",
+          headers: {
+            Authorization: "Bearer token-de-teste",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ placa: "OQH3A65" }),
+        }),
+      );
+    } finally {
+      if (previousToken === undefined) delete process.env.APIBRASIL_TOKEN;
+      else process.env.APIBRASIL_TOKEN = previousToken;
+    }
   });
 });

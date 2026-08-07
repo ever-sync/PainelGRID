@@ -3412,10 +3412,9 @@ export class LeadsService {
     }
 
     const token = process.env.APIBRASIL_TOKEN;
-    const deviceId = process.env.APIBRASIL_DEVICE;
-    if (!token || !deviceId) {
+    if (!token) {
       throw new BadRequestException(
-        "A API de consulta de placas não está configurada no servidor. Adicione APIBRASIL_TOKEN e APIBRASIL_DEVICE no arquivo .env.",
+        "A API de consulta de placas não está configurada no servidor. Adicione APIBRASIL_TOKEN no ambiente da API.",
       );
     }
 
@@ -4640,28 +4639,29 @@ export class LeadsService {
     value: string;
   } | null> {
     const token = process.env.APIBRASIL_TOKEN;
-    const deviceId = process.env.APIBRASIL_DEVICE;
 
-    if (token && deviceId) {
+    if (token) {
       try {
         const response = await fetch(
-          `https://placa.apibrasil.com.br/api/v1/placa/${plate}`,
+          "https://gateway.apibrasil.io/api/v2/vehicles/dados",
           {
-            method: "GET",
+            method: "POST",
             headers: {
               Authorization: `Bearer ${token}`,
-              "Device-Id": deviceId,
               "Content-Type": "application/json",
             },
+            body: JSON.stringify({ placa: plate }),
+            signal: AbortSignal.timeout(15_000),
           },
         );
 
         if (response.ok) {
           const rawValuePayload: unknown = await response.json();
           const raw = this.toUnknownRecord(rawValuePayload);
-          // Suporta tanto respostas no nível raiz quanto objetos aninhados (dados, veiculo, result, response, fipe)
+          // Suporta tanto respostas no nível raiz quanto objetos aninhados usados
+          // pelas versões atuais e legadas da APIBrasil.
           const data =
-            ["dados", "veiculo", "result", "response", "fipe"]
+            ["data", "dados", "veiculo", "result", "response", "fipe"]
               .map((key) => this.toUnknownRecord(raw[key]))
               .find((value) => Object.keys(value).length > 0) ?? raw;
 
@@ -4683,9 +4683,18 @@ export class LeadsService {
             this.firstDefined(data, [
               "fipeValue",
               "fipe_valor",
+              "valorFipe",
+              "valor_fipe",
               "valor",
               "value",
-            ]) ?? this.firstDefined(raw, ["fipeValue", "valor"]);
+            ]) ??
+            this.firstDefined(raw, [
+              "fipeValue",
+              "fipe_valor",
+              "valorFipe",
+              "valor_fipe",
+              "valor",
+            ]);
 
           if (brand && model) {
             let formattedValue = "N/A";
@@ -4707,7 +4716,10 @@ export class LeadsService {
             this.logger.warn("APIBRASIL retornou resposta sem marca/modelo");
           }
         } else {
-          this.logger.error(`APIBRASIL falhou com HTTP ${response.status}`);
+          const details = await response.text().catch(() => "");
+          this.logger.error(
+            `APIBRASIL falhou com HTTP ${response.status}: ${details.slice(0, 300)}`,
+          );
         }
       } catch (err: unknown) {
         this.logger.error(
@@ -4715,7 +4727,7 @@ export class LeadsService {
         );
       }
     } else {
-      this.logger.warn("APIBRASIL_TOKEN ou APIBRASIL_DEVICE ausentes");
+      this.logger.warn("APIBRASIL_TOKEN ausente");
     }
 
     return null;
@@ -4810,8 +4822,11 @@ export class LeadsService {
     record: Record<string, unknown>,
     keys: string[],
   ): unknown {
+    const entriesByLowerCase = new Map(
+      Object.entries(record).map(([key, value]) => [key.toLowerCase(), value]),
+    );
     for (const key of keys) {
-      const value = record[key];
+      const value = record[key] ?? entriesByLowerCase.get(key.toLowerCase());
       if (value !== undefined && value !== null && value !== "") {
         return value;
       }
