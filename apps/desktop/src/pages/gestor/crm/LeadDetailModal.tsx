@@ -266,6 +266,27 @@ export function LeadDetailModal({
     { label: "Modelo do veículo", value: lead.vehicle_model || null, icon: Car },
     { label: "Ano do veículo", value: lead.vehicle_year || null, icon: Car },
     { label: "Valor FIPE", value: lead.vehicle_fipe_value || null, icon: Car },
+    { label: "ID do lead Meta", value: lead.facebook_lead_id || null, icon: FileText },
+    { label: "ID do formulário", value: lead.facebook_form_id || null, icon: FileText },
+    { label: "Campanha", value: lead.facebook_campaign_name || null, icon: FileText },
+    { label: "ID da campanha", value: lead.facebook_campaign_id || null, icon: FileText },
+    { label: "Conjunto de anúncios", value: lead.facebook_ad_set_name || null, icon: FileText },
+    { label: "ID do conjunto", value: lead.facebook_ad_set_id || null, icon: FileText },
+    { label: "Anúncio", value: lead.facebook_ad_name || null, icon: FileText },
+    { label: "ID do anúncio", value: lead.facebook_ad_id || null, icon: FileText },
+    { label: "Canal preferido", value: lead.preferred_contact_channel || null, icon: FileText },
+    {
+      label: "Criado na Meta",
+      value: lead.source_created_at ? formatDateShort(lead.source_created_at) : null,
+      icon: Clock,
+    },
+    {
+      label: "Respostas do formulário",
+      value: lead.source_payload?.todos_os_campos
+        ? JSON.stringify(lead.source_payload.todos_os_campos, null, 2)
+        : null,
+      icon: FileText,
+    },
     { label: "Acompanhantes", value: lead.companions || null, icon: Users },
     { label: "Descrição", value: lead.description || null, icon: FileText },
   ];
