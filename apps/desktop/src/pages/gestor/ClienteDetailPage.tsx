@@ -6456,6 +6456,22 @@ export function ClienteDetailPage() {
                   {leadProfileOpen.vehicle_plate || "—"}
                 </p>
               </div>
+              <div className="space-y-1.5 rounded-xl border border-gray-200 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Marca do veículo</p>
+                <p className="text-sm font-medium text-gray-900">{leadProfileOpen.vehicle_brand || "—"}</p>
+              </div>
+              <div className="space-y-1.5 rounded-xl border border-gray-200 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Modelo do veículo</p>
+                <p className="text-sm font-medium text-gray-900">{leadProfileOpen.vehicle_model || "—"}</p>
+              </div>
+              <div className="space-y-1.5 rounded-xl border border-gray-200 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Ano do veículo</p>
+                <p className="text-sm font-medium text-gray-900">{leadProfileOpen.vehicle_year || "—"}</p>
+              </div>
+              <div className="space-y-1.5 rounded-xl border border-gray-200 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Valor FIPE</p>
+                <p className="text-sm font-medium text-gray-900">{leadProfileOpen.vehicle_fipe_value || "—"}</p>
+              </div>
               <div className="space-y-1.5 rounded-xl border border-gray-200 p-4 sm:col-span-2 lg:col-span-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
                   Acompanhantes

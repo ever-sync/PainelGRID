@@ -32,6 +32,10 @@ export type ApiLead = {
   campaign_id: string | null;
   notes: string | null;
   vehicle_plate?: string | null;
+  vehicle_brand?: string | null;
+  vehicle_model?: string | null;
+  vehicle_year?: string | null;
+  vehicle_fipe_value?: string | null;
   cpf?: string | null;
   wristband_number?: string | null;
   companions?: string | null;
@@ -133,6 +137,10 @@ export function mapApiLeadToLead(row: ApiLead): Lead {
       : null,
     notes: row.notes ?? "",
     vehicle_plate: row.vehicle_plate ?? "",
+    vehicle_brand: row.vehicle_brand ?? null,
+    vehicle_model: row.vehicle_model ?? null,
+    vehicle_year: row.vehicle_year ?? null,
+    vehicle_fipe_value: row.vehicle_fipe_value ?? null,
     cpf: row.cpf ?? null,
     wristband_number: row.wristband_number ?? null,
     companions: row.companions ?? "",
