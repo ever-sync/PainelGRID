@@ -1,6 +1,6 @@
 {
   "sourceWorkflowId": "rQ92Kohukkw7X7ex",
-  "sourceUpdatedAt": "2026-08-07T04:21:48.402Z",
+  "sourceUpdatedAt": "2026-08-07T04:27:06.616Z",
   "name": "Rubinho v2",
   "active": true,
   "nodes": [
@@ -2166,7 +2166,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const validated = $json;\nconst lead = $('VALIDADOR - ANALISAR').item.json;\nconst trade = String(lead.description ?? '').trim().toLowerCase();\nconst companionsText=String(lead.companions??'').trim(), companionCount=Number(companionsText.match(/^(\\d+)/)?.[1]??0), noCompanions=/sem acompanhantes?/i.test(companionsText), companionNamesPending=companionCount>0&&(!companionsText.includes(':')||/nomes? (ainda )?n[aã]o informado/i.test(companionsText));\nconst hasFullName=Boolean(lead.first_name?.trim()&&lead.last_name?.trim()), hasCompanions=Boolean(companionsText), hasDate=Boolean(lead.store_visit_datetime), hasTrade=trade.startsWith('carro na troca:'), tradeYes=trade.includes('carro na troca: sim'), hasPlate=Boolean(lead.vehicle_plate?.trim()), hasVehicle=Boolean(lead.vehicle_model?.trim()&&lead.vehicle_year?.trim());\nlet step;\nif (lead.confirmation_status==='cancelled') step='CANCELLED';\nelse if (['scheduled','confirmed','checked_in','closed'].includes(lead.confirmation_status)&&Boolean(lead.active_appointment?.id)) step='COMPLETED';\nelse if(!hasFullName) step='WAITING_FULL_NAME'; else if(!hasCompanions) step='WAITING_COMPANIONS'; else if(!noCompanions&&companionNamesPending) step='WAITING_COMPANION_NAMES'; else if(!hasDate) step='WAITING_EVENT_DATE'; else if(!hasTrade) step='WAITING_TRADE_IN'; else if(tradeYes&&!hasPlate) step='WAITING_VEHICLE_PLATE'; else if(tradeYes&&!hasVehicle) step='WAITING_VEHICLE_DETAILS'; else step='WAITING_FINAL_CONFIRMATION';\nconst q={WAITING_FULL_NAME:'Qual é o seu nome completo?',WAITING_COMPANIONS:'Você vai levar algum acompanhante? Se sim, quantos?',WAITING_COMPANION_NAMES:'Qual é o nome completo de cada acompanhante?',WAITING_EVENT_DATE:'Qual dia do evento você prefere?',WAITING_TRADE_IN:'Você pretende dar algum carro na troca?',WAITING_VEHICLE_PLATE:'Qual é a placa do veículo?',WAITING_VEHICLE_DETAILS:'Qual é o modelo e o ano do veículo?',WAITING_FINAL_CONFIRMATION:'Está tudo correto?',COMPLETED:null,CANCELLED:null};\nconst pre=$('V2 - ESTADO PRONTO').item.json.v2_state??{};\nconst payload={version:2,current_step:step,pending_question:q[step],collected_fields:{full_name:hasFullName,companions:hasCompanions,companion_names:hasCompanions&&!companionNamesPending,event_date:hasDate,trade_in_answer:hasTrade,vehicle_plate:hasPlate,vehicle_details:hasVehicle},missing_fields:[...(lead.validator_missing??[]),...(companionNamesPending?['companion_names']:[])],last_customer_intent:pre.last_customer_intent??null,last_agent_action:validated.v2_qr_delivery?.status==='sent'?'checkin_notification_sent':validated.v2_qr_delivery?.status==='failed'?'checkin_notification_failed':lead.validator_claims_final?'final_confirmation':step,last_tool_result:validated.v2_qr_delivery?.status??(lead.validator_blocked?'blocked':'success'),conversation_status:step,retry_count:(lead.validator_blocked||validated.v2_qr_delivery?.status==='failed')?Number(pre.retry_count??0)+1:0,last_message_id:$('V2 - NORMALIZAR ENTRADA').item.json.v2_context.message_id,updated_by:'rubinho_v2_post_turn'};\nreturn [{json:{...validated,v2_post_state_update:{current_intent:'credentialing',awaiting_confirmation:step==='WAITING_FINAL_CONFIRMATION',last_offered_event_id:lead.event_id??lead.event_interest_id??null,last_offered_slot:lead.store_visit_datetime??null,last_agent_action:payload.last_agent_action,handoff_required:false,state_payload:payload}}}];"
+        "jsCode": "const validated = $json;\nconst lead = $('VALIDADOR - ANALISAR').item.json;\nconst trade = String(lead.description ?? '').trim().toLowerCase();\nconst companionsText=String(lead.companions??'').trim(), companionCount=Number(companionsText.match(/^(\\d+)/)?.[1]??0), noCompanions=/sem acompanhantes?/i.test(companionsText), companionNamesPending=companionCount>0&&(!companionsText.includes(':')||/nomes? (ainda )?n[aã]o informado/i.test(companionsText));\nconst hasFullName=Boolean(lead.first_name?.trim()&&lead.last_name?.trim()), hasCompanions=Boolean(companionsText), hasDate=Boolean(lead.store_visit_datetime), hasTrade=trade.startsWith('carro na troca:'), tradeYes=trade.includes('carro na troca: sim'), hasPlate=Boolean(lead.vehicle_plate?.trim()), hasVehicle=Boolean(lead.vehicle_model?.trim()&&lead.vehicle_year?.trim());\nlet step;\nif (lead.confirmation_status==='cancelled') step='CANCELLED';\nelse if (['scheduled','confirmed','checked_in','closed'].includes(lead.confirmation_status)&&Boolean(lead.active_appointment?.id)) step='COMPLETED';\nelse if(!hasFullName) step='WAITING_FULL_NAME'; else if(!hasCompanions) step='WAITING_COMPANIONS'; else if(!noCompanions&&companionNamesPending) step='WAITING_COMPANION_NAMES'; else if(!hasDate) step='WAITING_EVENT_DATE'; else if(!hasTrade) step='WAITING_TRADE_IN'; else if(tradeYes&&!hasPlate) step='WAITING_VEHICLE_PLATE'; else step='WAITING_FINAL_CONFIRMATION';\nconst q={WAITING_FULL_NAME:'Qual é o seu nome completo?',WAITING_COMPANIONS:'Você vai levar algum acompanhante? Se sim, quantos?',WAITING_COMPANION_NAMES:'Qual é o nome completo de cada acompanhante?',WAITING_EVENT_DATE:'Qual dia do evento você prefere?',WAITING_TRADE_IN:'Você pretende dar algum carro na troca?',WAITING_VEHICLE_PLATE:'Qual é a placa do veículo?',WAITING_VEHICLE_DETAILS:'Qual é o modelo e o ano do veículo?',WAITING_FINAL_CONFIRMATION:'Está tudo correto?',COMPLETED:null,CANCELLED:null};\nconst pre=$('V2 - ESTADO PRONTO').item.json.v2_state??{};\nconst payload={version:2,current_step:step,pending_question:q[step],collected_fields:{full_name:hasFullName,companions:hasCompanions,companion_names:hasCompanions&&!companionNamesPending,event_date:hasDate,trade_in_answer:hasTrade,vehicle_plate:hasPlate,vehicle_details:!tradeYes||hasPlate},missing_fields:[...(lead.validator_missing??[]),...(companionNamesPending?['companion_names']:[])],last_customer_intent:pre.last_customer_intent??null,last_agent_action:validated.v2_qr_delivery?.status==='sent'?'checkin_notification_sent':validated.v2_qr_delivery?.status==='failed'?'checkin_notification_failed':lead.validator_claims_final?'final_confirmation':step,last_tool_result:validated.v2_qr_delivery?.status??(lead.validator_blocked?'blocked':'success'),conversation_status:step,retry_count:(lead.validator_blocked||validated.v2_qr_delivery?.status==='failed')?Number(pre.retry_count??0)+1:0,last_message_id:$('V2 - NORMALIZAR ENTRADA').item.json.v2_context.message_id,updated_by:'rubinho_v2_post_turn'};\nreturn [{json:{...validated,v2_post_state_update:{current_intent:'credentialing',awaiting_confirmation:step==='WAITING_FINAL_CONFIRMATION',last_offered_event_id:lead.event_id??lead.event_interest_id??null,last_offered_slot:lead.store_visit_datetime??null,last_agent_action:payload.last_agent_action,handoff_required:false,state_payload:payload}}}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -2212,7 +2212,7 @@
     },
     {
       "parameters": {
-        "jsCode": "return [{json:$('V2 - CALCULAR ESTADO POS TURNO').item.json}];"
+        "jsCode": "const result = { ...$('V2 - CALCULAR ESTADO POS TURNO').item.json };\nconst normalized = $('V2 - NORMALIZAR ENTRADA').item.json.v2_context ?? {};\nconst lead = $('VALIDADOR - ANALISAR').item.json ?? {};\nconst incoming = String(normalized.message_text ?? '').trim();\nconst isOpeningTrigger = /^(finalizar credenciamento|oi|olá|ola|bom dia|boa tarde|boa noite)[!. ]*$/i.test(incoming);\nconst isNewLead = !String(lead.first_name ?? '').trim() && (!String(lead.name ?? '').trim() || /^Lead WhatsApp$/i.test(String(lead.name)));\n\nif (isOpeningTrigger && isNewLead) {\n  const profileFirstName = String(normalized.lead_profile_name ?? '').trim().split(/\\s+/)[0];\n  const eventName = String($('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.name ?? 'evento').trim();\n  const greetingName = profileFirstName ? \", ${profileFirstName}\" : '';\n  result.output = `Falaa${greetingName}! Tudo certo? Meu nome é Rubinho, sou assistente virtual do ${eventName} e vou dar continuidade ao seu atendimento. Me informa seu nome completo?`;\n}\n\nreturn [{ json: result }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -2623,6 +2623,94 @@
         -4800,
         864
       ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - Integration Key"
+        }
+      }
+    },
+    {
+      "id": "e9a2b282-04d1-4c5a-9637-01c0a9ddbba2",
+      "name": "V2 - GARANTIR NOME DO PERFIL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        240
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $('EverSync').item.json.urlapi }}api/integrations/v1/leads/{{ $('CONSULTAR ETAPA').item.json.items[0].id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ name: ((!$('CONSULTAR ETAPA').item.json.items[0].name || /^Lead WhatsApp$/i.test($('CONSULTAR ETAPA').item.json.items[0].name)) && $('V2 - NORMALIZAR ENTRADA').item.json.v2_context.lead_profile_name) ? $('V2 - NORMALIZAR ENTRADA').item.json.v2_context.lead_profile_name : $('CONSULTAR ETAPA').item.json.items[0].name }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CREDENTIAL_ID>",
+          "name": "PainelGRID - Integration Key"
+        }
+      }
+    },
+    {
+      "id": "6457ed71-9c56-4157-8936-d79aa625d0b4",
+      "name": "V2 - CONTATO INICIAL?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1640,
+        240
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2f511bf0-087d-4f1b-9c12-8270f82784e4",
+              "leftValue": "={{ !$('CONSULTAR ETAPA').item.json.items[0].crm_stage_code || /(?:NOVO_LEAD|TENTATIVA_CONTATO)$/.test($('CONSULTAR ETAPA').item.json.items[0].crm_stage_code) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "fad281c0-6ab0-440a-9dd1-56f36ce3ed69",
+      "name": "V2 - GARANTIR ETAPA EM CONTATO",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1880,
+        160
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('EverSync').item.json.urlapi }}api/integrations/v1/leads/{{ $('CONSULTAR ETAPA').item.json.items[0].id }}/crm/move-by-suffix",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\"stage_suffix\":\"EM_CONTATO\"}",
+        "options": {}
+      },
       "credentials": {
         "httpHeaderAuth": {
           "id": "<CREDENTIAL_ID>",
@@ -3188,7 +3276,7 @@
       "main": [
         [
           {
-            "node": "V2 - VALIDAR ESCOPO LEAD EVENTO",
+            "node": "V2 - GARANTIR NOME DO PERFIL",
             "type": "main",
             "index": 0
           }
@@ -3581,6 +3669,46 @@
         [
           {
             "node": "CONSULTAR ETAPA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "V2 - GARANTIR NOME DO PERFIL": {
+      "main": [
+        [
+          {
+            "node": "V2 - CONTATO INICIAL?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "V2 - CONTATO INICIAL?": {
+      "main": [
+        [
+          {
+            "node": "V2 - GARANTIR ETAPA EM CONTATO",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "V2 - VALIDAR ESCOPO LEAD EVENTO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "V2 - GARANTIR ETAPA EM CONTATO": {
+      "main": [
+        [
+          {
+            "node": "V2 - VALIDAR ESCOPO LEAD EVENTO",
             "type": "main",
             "index": 0
           }
