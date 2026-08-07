@@ -59,6 +59,7 @@ import { Button } from "../../components/ui/Button";
 import { CopyableId } from "../../components/ui/CopyableId";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { VendorSignupLinkCard } from "../../components/shared/VendorSignupLinkCard";
+import { LeadProfileCategories } from "../../components/leads/LeadProfileCategories";
 import { listEvents } from "../../services/events";
 import { listCrmPipelines, type ApiCrmPipeline } from "../../services/crm";
 import { MetaCampaignTree } from "../../components/shared/MetaCampaignTree";
@@ -6334,7 +6335,17 @@ export function ClienteDetailPage() {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <LeadProfileCategories
+              lead={leadProfileOpen}
+              vendorName={
+                staffList.find(
+                  (member) => member.id === leadProfileOpen.assigned_vendor_id,
+                )?.name ?? null
+              }
+              dark={isDarkMode}
+            />
+
+            <div className="hidden grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <div className="space-y-1.5 rounded-xl border border-gray-200 p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
                   Telefone
@@ -6457,49 +6468,97 @@ export function ClienteDetailPage() {
                 </p>
               </div>
               <div className="space-y-1.5 rounded-xl border border-gray-200 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Marca do veículo</p>
-                <p className="text-sm font-medium text-gray-900">{leadProfileOpen.vehicle_brand || "—"}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                  Marca do veículo
+                </p>
+                <p className="text-sm font-medium text-gray-900">
+                  {leadProfileOpen.vehicle_brand || "—"}
+                </p>
               </div>
               <div className="space-y-1.5 rounded-xl border border-gray-200 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Modelo do veículo</p>
-                <p className="text-sm font-medium text-gray-900">{leadProfileOpen.vehicle_model || "—"}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                  Modelo do veículo
+                </p>
+                <p className="text-sm font-medium text-gray-900">
+                  {leadProfileOpen.vehicle_model || "—"}
+                </p>
               </div>
               <div className="space-y-1.5 rounded-xl border border-gray-200 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Ano do veículo</p>
-                <p className="text-sm font-medium text-gray-900">{leadProfileOpen.vehicle_year || "—"}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                  Ano do veículo
+                </p>
+                <p className="text-sm font-medium text-gray-900">
+                  {leadProfileOpen.vehicle_year || "—"}
+                </p>
               </div>
               <div className="space-y-1.5 rounded-xl border border-gray-200 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Valor FIPE</p>
-                <p className="text-sm font-medium text-gray-900">{leadProfileOpen.vehicle_fipe_value || "—"}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                  Valor FIPE
+                </p>
+                <p className="text-sm font-medium text-gray-900">
+                  {leadProfileOpen.vehicle_fipe_value || "—"}
+                </p>
               </div>
               <div className="space-y-1.5 rounded-xl border border-gray-200 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Formulário Meta</p>
-                <p className="break-all text-sm font-medium text-gray-900">{leadProfileOpen.facebook_form_id || "—"}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                  Formulário Meta
+                </p>
+                <p className="break-all text-sm font-medium text-gray-900">
+                  {leadProfileOpen.facebook_form_id || "—"}
+                </p>
               </div>
               <div className="space-y-1.5 rounded-xl border border-gray-200 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Campanha</p>
-                <p className="text-sm font-medium text-gray-900">{leadProfileOpen.facebook_campaign_name || "—"}</p>
-                <p className="break-all text-xs text-gray-500">{leadProfileOpen.facebook_campaign_id || ""}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                  Campanha
+                </p>
+                <p className="text-sm font-medium text-gray-900">
+                  {leadProfileOpen.facebook_campaign_name || "—"}
+                </p>
+                <p className="break-all text-xs text-gray-500">
+                  {leadProfileOpen.facebook_campaign_id || ""}
+                </p>
               </div>
               <div className="space-y-1.5 rounded-xl border border-gray-200 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Conjunto de anúncios</p>
-                <p className="text-sm font-medium text-gray-900">{leadProfileOpen.facebook_ad_set_name || "—"}</p>
-                <p className="break-all text-xs text-gray-500">{leadProfileOpen.facebook_ad_set_id || ""}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                  Conjunto de anúncios
+                </p>
+                <p className="text-sm font-medium text-gray-900">
+                  {leadProfileOpen.facebook_ad_set_name || "—"}
+                </p>
+                <p className="break-all text-xs text-gray-500">
+                  {leadProfileOpen.facebook_ad_set_id || ""}
+                </p>
               </div>
               <div className="space-y-1.5 rounded-xl border border-gray-200 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Anúncio</p>
-                <p className="text-sm font-medium text-gray-900">{leadProfileOpen.facebook_ad_name || "—"}</p>
-                <p className="break-all text-xs text-gray-500">{leadProfileOpen.facebook_ad_id || ""}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                  Anúncio
+                </p>
+                <p className="text-sm font-medium text-gray-900">
+                  {leadProfileOpen.facebook_ad_name || "—"}
+                </p>
+                <p className="break-all text-xs text-gray-500">
+                  {leadProfileOpen.facebook_ad_id || ""}
+                </p>
               </div>
               <div className="space-y-1.5 rounded-xl border border-gray-200 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Canal preferido</p>
-                <p className="text-sm font-medium text-gray-900">{leadProfileOpen.preferred_contact_channel || "—"}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                  Canal preferido
+                </p>
+                <p className="text-sm font-medium text-gray-900">
+                  {leadProfileOpen.preferred_contact_channel || "—"}
+                </p>
               </div>
               <div className="space-y-1.5 rounded-xl border border-gray-200 p-4 sm:col-span-2 lg:col-span-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Respostas do formulário</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
+                  Respostas do formulário
+                </p>
                 <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words text-xs leading-5 text-gray-700">
                   {leadProfileOpen.source_payload?.todos_os_campos
-                    ? JSON.stringify(leadProfileOpen.source_payload.todos_os_campos, null, 2)
+                    ? JSON.stringify(
+                        leadProfileOpen.source_payload.todos_os_campos,
+                        null,
+                        2,
+                      )
                     : "—"}
                 </pre>
               </div>

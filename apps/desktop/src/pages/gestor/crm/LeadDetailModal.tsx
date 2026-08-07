@@ -64,9 +64,9 @@ export function LeadDetailModal({
   /** Move o lead pela trilha de etapas do topo (mesma rota da API do drag). */
   onMoveStage: (lead: Lead, stageId: string) => Promise<Lead | null>;
 }) {
-  const [activeTab, setActiveTab] = useState<"historico" | "dados">(
-    "historico",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "pessoais" | "atendimento" | "veiculo" | "meta" | "historico"
+  >("pessoais");
   const [lead, setLead] = useState(initialLead);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -214,11 +214,13 @@ export function LeadDetailModal({
 
   const vendors = Object.entries(vendorsById);
 
-  const infoRows: Array<{
+  type InfoRow = {
     label: string;
     value: string | null;
     icon: typeof Phone;
-  }> = [
+  };
+
+  const personalRows: InfoRow[] = [
     { label: "Telefone", value: lead.phone || null, icon: Phone },
     { label: "E-mail", value: lead.email || null, icon: Mail },
     {
@@ -226,6 +228,16 @@ export function LeadDetailModal({
       value: formatDateOnly(lead.birth_date),
       icon: CalendarDays,
     },
+    {
+      label: "Nome",
+      value: lead.first_name || lead.name || null,
+      icon: UserIcon,
+    },
+    { label: "Sobrenome", value: lead.last_name || null, icon: UserIcon },
+    { label: "Entrada", value: formatDateShort(lead.created_at), icon: Clock },
+  ];
+
+  const attendanceRows: InfoRow[] = [
     {
       label: "Evento de interesse",
       value: lead.event_interest || null,
@@ -258,26 +270,73 @@ export function LeadDetailModal({
       icon: Check,
     },
     { label: "Vendedor", value: vendorName || null, icon: UserIcon },
-    { label: "Entrada", value: formatDateShort(lead.created_at), icon: Clock },
-    { label: "Nome", value: lead.first_name || null, icon: UserIcon },
-    { label: "Sobrenome", value: lead.last_name || null, icon: UserIcon },
+    { label: "Acompanhantes", value: lead.companions || null, icon: Users },
+    { label: "Descrição", value: lead.description || null, icon: FileText },
+  ];
+
+  const vehicleRows: InfoRow[] = [
     { label: "Placa do veículo", value: lead.vehicle_plate || null, icon: Car },
     { label: "Marca do veículo", value: lead.vehicle_brand || null, icon: Car },
-    { label: "Modelo do veículo", value: lead.vehicle_model || null, icon: Car },
+    {
+      label: "Modelo do veículo",
+      value: lead.vehicle_model || null,
+      icon: Car,
+    },
     { label: "Ano do veículo", value: lead.vehicle_year || null, icon: Car },
-    { label: "Valor FIPE", value: lead.vehicle_fipe_value || null, icon: Car },
-    { label: "ID do lead Meta", value: lead.facebook_lead_id || null, icon: FileText },
-    { label: "ID do formulário", value: lead.facebook_form_id || null, icon: FileText },
-    { label: "Campanha", value: lead.facebook_campaign_name || null, icon: FileText },
-    { label: "ID da campanha", value: lead.facebook_campaign_id || null, icon: FileText },
-    { label: "Conjunto de anúncios", value: lead.facebook_ad_set_name || null, icon: FileText },
-    { label: "ID do conjunto", value: lead.facebook_ad_set_id || null, icon: FileText },
+    {
+      label: "Valor FIPE",
+      value: lead.vehicle_fipe_value || null,
+      icon: TrendingUp,
+    },
+  ];
+
+  const metaRows: InfoRow[] = [
+    {
+      label: "ID do lead Meta",
+      value: lead.facebook_lead_id || null,
+      icon: FileText,
+    },
+    {
+      label: "ID do formulário",
+      value: lead.facebook_form_id || null,
+      icon: FileText,
+    },
+    {
+      label: "Campanha",
+      value: lead.facebook_campaign_name || null,
+      icon: FileText,
+    },
+    {
+      label: "ID da campanha",
+      value: lead.facebook_campaign_id || null,
+      icon: FileText,
+    },
+    {
+      label: "Conjunto de anúncios",
+      value: lead.facebook_ad_set_name || null,
+      icon: FileText,
+    },
+    {
+      label: "ID do conjunto",
+      value: lead.facebook_ad_set_id || null,
+      icon: FileText,
+    },
     { label: "Anúncio", value: lead.facebook_ad_name || null, icon: FileText },
-    { label: "ID do anúncio", value: lead.facebook_ad_id || null, icon: FileText },
-    { label: "Canal preferido", value: lead.preferred_contact_channel || null, icon: FileText },
+    {
+      label: "ID do anúncio",
+      value: lead.facebook_ad_id || null,
+      icon: FileText,
+    },
+    {
+      label: "Canal preferido",
+      value: lead.preferred_contact_channel || null,
+      icon: FileText,
+    },
     {
       label: "Criado na Meta",
-      value: lead.source_created_at ? formatDateShort(lead.source_created_at) : null,
+      value: lead.source_created_at
+        ? formatDateShort(lead.source_created_at)
+        : null,
       icon: Clock,
     },
     {
@@ -287,9 +346,18 @@ export function LeadDetailModal({
         : null,
       icon: FileText,
     },
-    { label: "Acompanhantes", value: lead.companions || null, icon: Users },
-    { label: "Descrição", value: lead.description || null, icon: FileText },
   ];
+
+  const sidebarRows = personalRows.slice(0, 3);
+
+  const tabRows =
+    activeTab === "pessoais"
+      ? personalRows
+      : activeTab === "atendimento"
+        ? attendanceRows
+        : activeTab === "veiculo"
+          ? vehicleRows
+          : metaRows;
 
   return (
     <div
@@ -752,7 +820,7 @@ export function LeadDetailModal({
               ) : (
                 <>
                   <div className="space-y-4">
-                    {infoRows.map(({ label, value, icon: Icon }) => (
+                    {sidebarRows.map(({ label, value, icon: Icon }) => (
                       <div key={label} className="flex items-start gap-3">
                         <Icon
                           size={14}
@@ -824,8 +892,11 @@ export function LeadDetailModal({
             >
               {(
                 [
+                  { id: "pessoais", label: "Dados pessoais" },
+                  { id: "atendimento", label: "Atendimento" },
+                  { id: "veiculo", label: "Veículo" },
+                  { id: "meta", label: "Origem Meta" },
                   { id: "historico", label: "Histórico" },
-                  { id: "dados", label: "Consulta" },
                 ] as const
               ).map((tab) => (
                 <button
@@ -971,86 +1042,82 @@ export function LeadDetailModal({
                 </div>
               )}
 
-              {activeTab === "dados" && (
-                <div className="space-y-3">
-                  {lead.active_appointment ? (
+              {activeTab !== "historico" && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {tabRows.map(({ label, value, icon: Icon }) => (
                     <div
+                      key={label}
                       className={clsx(
                         "rounded-2xl border p-4",
                         dark
-                          ? "border-[#1f1f1f] bg-[#111]"
-                          : "border-zinc-100 bg-zinc-50",
+                          ? "border-[#242424] bg-[#111]"
+                          : "border-zinc-100 bg-zinc-50/70",
+                        label === "Respostas do formulário" && "sm:col-span-2",
                       )}
                     >
-                      <p
-                        className={clsx(
-                          "mb-3 text-[10px] font-semibold uppercase tracking-[0.18em]",
-                          dark ? "text-zinc-500" : "text-zinc-400",
-                        )}
-                      >
-                        Consulta ativa
-                      </p>
-                      <div className="space-y-2">
-                        {[
-                          {
-                            label: "Data",
-                            value: formatDateFull(
-                              lead.active_appointment.scheduled_at,
-                            ),
-                          },
-                          {
-                            label: "Status",
-                            value: lead.active_appointment.status,
-                          },
-                          {
-                            label: "ID",
-                            value: lead.active_appointment.id.slice(0, 8) + "…",
-                          },
-                        ].map(({ label, value }) => (
-                          <div
-                            key={label}
-                            className="flex items-center justify-between gap-4"
-                          >
-                            <span
-                              className={clsx(
-                                "text-[12px]",
-                                dark ? "text-zinc-500" : "text-zinc-500",
-                              )}
-                            >
-                              {label}
-                            </span>
-                            <span
-                              className={clsx(
-                                "text-[13px] font-medium",
-                                dark ? "text-zinc-200" : "text-zinc-800",
-                              )}
-                            >
-                              {value}
-                            </span>
-                          </div>
-                        ))}
+                      <div className="flex items-center gap-2">
+                        <Icon
+                          size={14}
+                          className={dark ? "text-zinc-500" : "text-zinc-400"}
+                        />
+                        <p
+                          className={clsx(
+                            "text-[10px] font-semibold uppercase tracking-[0.14em]",
+                            dark ? "text-zinc-500" : "text-zinc-400",
+                          )}
+                        >
+                          {label}
+                        </p>
                       </div>
+                      {label === "Respostas do formulário" && value ? (
+                        <pre
+                          className={clsx(
+                            "mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xl p-3 text-[12px] leading-5",
+                            dark
+                              ? "bg-black/30 text-zinc-300"
+                              : "bg-white text-zinc-700",
+                          )}
+                        >
+                          {value}
+                        </pre>
+                      ) : (
+                        <p
+                          className={clsx(
+                            "mt-3 break-words text-[13px] font-medium leading-5",
+                            value
+                              ? dark
+                                ? "text-zinc-100"
+                                : "text-zinc-900"
+                              : dark
+                                ? "text-zinc-600"
+                                : "text-zinc-400",
+                          )}
+                        >
+                          {value ?? "—"}
+                        </p>
+                      )}
                     </div>
-                  ) : (
+                  ))}
+
+                  {activeTab === "atendimento" && lead.notes && (
                     <div
                       className={clsx(
-                        "flex flex-col items-center justify-center gap-2 rounded-2xl border py-10 text-center",
+                        "rounded-2xl border p-4 sm:col-span-2",
                         dark
-                          ? "border-[#1f1f1f] bg-[#111]"
-                          : "border-zinc-100 bg-zinc-50",
+                          ? "border-[#242424] bg-[#111]"
+                          : "border-zinc-100 bg-zinc-50/70",
                       )}
                     >
-                      <CalendarDays
-                        size={28}
-                        className={dark ? "text-zinc-600" : "text-zinc-300"}
-                      />
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
+                        Observações
+                      </p>
                       <p
                         className={clsx(
-                          "text-[13px]",
-                          dark ? "text-zinc-500" : "text-zinc-400",
+                          "mt-3 whitespace-pre-wrap text-[13px] leading-6",
+                          dark ? "text-zinc-300" : "text-zinc-700",
                         )}
                       >
-                        Nenhuma consulta agendada
+                        {lead.notes}
                       </p>
                     </div>
                   )}
