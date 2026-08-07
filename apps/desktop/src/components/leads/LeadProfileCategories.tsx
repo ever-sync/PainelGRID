@@ -21,10 +21,12 @@ export function LeadProfileCategories({
   lead,
   vendorName,
   dark = false,
+  compact = false,
 }: {
   lead: Lead;
   vendorName?: string | null;
   dark?: boolean;
+  compact?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("personal");
   const [history, setHistory] = useState<ApiLeadTimelineItem[]>([]);
@@ -106,6 +108,12 @@ export function LeadProfileCategories({
     { id: "meta", label: "Origem Meta", icon: FileText },
     { id: "history", label: "Histórico", icon: Clock },
   ];
+  const visibleFields =
+    tab === "history"
+      ? []
+      : groups[tab].filter(
+          (field) => Boolean(field.value) && field.value !== "—",
+        );
 
   return (
     <div
@@ -116,8 +124,10 @@ export function LeadProfileCategories({
     >
       <div
         className={clsx(
-          "flex overflow-x-auto border-b px-2 pt-2",
-          dark ? "border-zinc-800" : "border-gray-100",
+          compact
+            ? "grid grid-cols-2 gap-1.5 p-2"
+            : "grid grid-cols-2 gap-1.5 border-b p-2 sm:grid-cols-3 lg:grid-cols-5",
+          !compact && (dark ? "border-zinc-800" : "border-gray-100"),
         )}
       >
         {tabs.map(({ id, label, icon: Icon }) => (
@@ -126,64 +136,89 @@ export function LeadProfileCategories({
             type="button"
             onClick={() => setTab(id)}
             className={clsx(
-              "flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-xs font-semibold transition",
+              "flex min-w-0 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold transition",
               tab === id
-                ? "border-[#FF0636] text-[#FF0636]"
+                ? dark
+                  ? "bg-[#FF0636]/15 text-[#ff496b]"
+                  : "bg-[#fff0f3] text-[#e6002d]"
                 : dark
-                  ? "border-transparent text-zinc-400"
-                  : "border-transparent text-gray-500 hover:text-gray-900",
+                  ? "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-900",
             )}
           >
-            <Icon size={14} />
-            {label}
+            <Icon size={15} className="shrink-0" />
+            <span className="truncate">{label}</span>
           </button>
         ))}
       </div>
-      <div className="p-4 sm:p-5">
+      <div className={compact ? "p-3" : "p-4 sm:p-5"}>
         {tab !== "history" ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {groups[tab].map((field) => (
-              <div
-                key={field.label}
-                className={clsx(
-                  "rounded-xl border p-4",
-                  field.wide && "sm:col-span-2 lg:col-span-3",
-                  dark
-                    ? "border-zinc-800 bg-black/20"
-                    : "border-gray-100 bg-gray-50/70",
-                )}
-              >
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">
-                  {field.label}
-                </p>
-                {field.json && field.value ? (
-                  <pre
-                    className={clsx(
-                      "mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg p-3 text-xs",
-                      dark
-                        ? "bg-black/40 text-zinc-300"
-                        : "bg-white text-gray-700",
-                    )}
-                  >
-                    {field.value}
-                  </pre>
-                ) : (
-                  <p
-                    className={clsx(
-                      "mt-2 break-words whitespace-pre-wrap text-sm font-medium",
-                      field.value
-                        ? dark
-                          ? "text-zinc-100"
-                          : "text-gray-900"
-                        : "text-gray-400",
-                    )}
-                  >
-                    {field.value || "—"}
+          visibleFields.length > 0 ? (
+            <div
+              className={clsx(
+                "grid gap-2.5",
+                !compact && "sm:grid-cols-2 lg:grid-cols-3",
+              )}
+            >
+              {visibleFields.map((field) => (
+                <div
+                  key={field.label}
+                  className={clsx(
+                    "rounded-xl border",
+                    compact ? "px-3.5 py-3" : "p-4",
+                    !compact && field.wide && "sm:col-span-2 lg:col-span-3",
+                    dark
+                      ? "border-zinc-800 bg-black/20"
+                      : "border-gray-100 bg-[#fafafa]",
+                  )}
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">
+                    {field.label}
                   </p>
-                )}
-              </div>
-            ))}
-          </div>
+                  {field.json && field.value ? (
+                    <pre
+                      className={clsx(
+                        "mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg p-3 text-xs",
+                        dark
+                          ? "bg-black/40 text-zinc-300"
+                          : "bg-white text-gray-700",
+                      )}
+                    >
+                      {field.value}
+                    </pre>
+                  ) : (
+                    <p
+                      className={clsx(
+                        "mt-2 break-words whitespace-pre-wrap text-sm font-medium",
+                        field.value
+                          ? dark
+                            ? "text-zinc-100"
+                            : "text-gray-900"
+                          : "text-gray-400",
+                      )}
+                    >
+                      {field.value || "—"}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div
+              className={clsx(
+                "rounded-xl border border-dashed px-4 py-8 text-center",
+                dark
+                  ? "border-zinc-800 text-zinc-500"
+                  : "border-gray-200 bg-gray-50/50 text-gray-400",
+              )}
+            >
+              <p className="text-sm font-medium">
+                {tab === "meta" && lead.source !== "facebook_ads"
+                  ? "Este lead não veio de uma campanha Meta."
+                  : "Nenhuma informação registrada nesta categoria."}
+              </p>
+            </div>
+          )
         ) : (
           <div className="space-y-3">
             <div

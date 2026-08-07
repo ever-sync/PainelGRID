@@ -6301,7 +6301,7 @@ export function ClienteDetailPage() {
         open={Boolean(leadProfileOpen)}
         onClose={closeLeadProfile}
         title="Perfil do lead"
-        size="lg"
+        size="2xl"
         dark={isDarkMode}
         footer={
           <Button variant="secondary" onClick={closeLeadProfile}>

@@ -8,6 +8,7 @@ import { Select } from "../ui/Select";
 import { Badge, ConfirmationBadge, SourceBadge, StageBadge } from "../ui/Badge";
 import type { ApiCrmPipeline, ApiCrmStage } from "../../services/crm";
 import type { Event, Lead } from "../../types";
+import { LeadProfileCategories } from "../leads/LeadProfileCategories";
 
 export type LeadStatusValue =
   "pending" | "scheduled" | "confirmed" | "checked_in" | "cancelled";
@@ -340,6 +341,8 @@ export function LeadDrawer({
               {lifecycleLabel(leadLifecycle)}
             </Badge>
           </div>
+
+          <LeadProfileCategories lead={lead} dark={dark} compact />
 
           <div className="grid gap-3">
             <Input
