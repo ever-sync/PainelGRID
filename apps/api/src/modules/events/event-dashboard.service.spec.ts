@@ -213,6 +213,7 @@ describe("EventDashboardService.getTvDashboard", () => {
       scheduled: 2,
       confirmed: 2,
       checked_in: 2,
+      no_show: 0,
       sold: 2,
     });
 
@@ -226,6 +227,7 @@ describe("EventDashboardService.getTvDashboard", () => {
       confirmed: 1,
       checked_in: 1,
       sold: 1,
+      revenue: 150000,
       team_id: teamId,
       team_name: "Ferrari",
     });
@@ -239,6 +241,7 @@ describe("EventDashboardService.getTvDashboard", () => {
       confirmed: 1,
       checked_in: 1,
       sold: 1,
+      revenue: 120000,
     });
 
     // Ranking: empate total → desempata alfabético; Ana primeiro
@@ -251,6 +254,7 @@ describe("EventDashboardService.getTvDashboard", () => {
       leads: 3,
       sold: 2,
       checked_in: 2,
+      revenue: 270000,
     });
 
     // Carros: 1 NOVO + 1 SEMINOVO, Haval H6 top com 2
@@ -287,6 +291,12 @@ describe("EventDashboardService.getTvDashboard", () => {
         { source: LeadSource.facebook_ads, count: 1 },
       ]),
     );
+    expect(result.arrivals_by_hour).toEqual(
+      expect.arrayContaining([
+        { hour: 11, count: 1 },
+        { hour: 14, count: 1 },
+      ]),
+    );
 
     expect(typeof result.generated_at).toBe("string");
   });
@@ -295,6 +305,8 @@ describe("EventDashboardService.getTvDashboard", () => {
 describe("EventDashboardService.getExecutiveReport attribution", () => {
   const eventId = "99999999-9999-4999-8999-999999999999";
   const clientId = "11111111-1111-4111-8111-111111111111";
+  const vendor1 = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const teamId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
   const gestor = {
     sub: "gestor-1",
     role: Role.GESTOR,
@@ -321,11 +333,14 @@ describe("EventDashboardService.getExecutiveReport attribution", () => {
       client: { count: jest.fn().mockResolvedValue(1) },
       lead: { findMany: jest.fn().mockResolvedValue([]) },
       sale: {
-        findMany: jest
-          .fn()
-          .mockResolvedValue([
-            { lead_id: "lead-1", value: new Prisma.Decimal("100000") },
-          ]),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            lead_id: "lead-1",
+            vendor_id: vendor1,
+            team_id: teamId,
+            value: new Prisma.Decimal("100000"),
+          },
+        ]),
       },
       metaLeadImport: {
         findMany: jest.fn().mockResolvedValue([
@@ -372,11 +387,15 @@ describe("EventDashboardService.getExecutiveReport attribution", () => {
         ]),
       },
       appointment: {
-        findMany: jest
-          .fn()
-          .mockResolvedValue([
-            { lead_id: "lead-1", status: AppointmentStatus.completed },
-          ]),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            lead_id: "lead-1",
+            status: AppointmentStatus.completed,
+            source: "n8n_ai_agent",
+            created_by_type: "external_agent",
+            completed_at: new Date("2026-08-14T15:00:00.000Z"),
+          },
+        ]),
         count: jest.fn().mockResolvedValue(1),
       },
       metaCampaignAssignment: {
@@ -439,6 +458,17 @@ describe("EventDashboardService.getExecutiveReport attribution", () => {
       total_leads: 1,
       attributed_sold: 1,
       total_sold: 1,
+    });
+    expect(result.rubinho).toMatchObject({
+      agendamentos: 1,
+      comparecimentos: 1,
+      vendas_originadas: 1,
+      receita_influenciada: 100000,
+      attribution_method: "agent_created_appointment",
+    });
+    expect(result.commercial_revenue).toEqual({
+      by_vendor: [{ vendor_id: vendor1, revenue: 100000 }],
+      by_team: [{ team_id: teamId, revenue: 100000 }],
     });
     expect(prisma.metaDailyInsight.findMany).toHaveBeenCalledWith(
       expect.objectContaining({

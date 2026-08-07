@@ -152,6 +152,7 @@ export type EventDashboardTvResponse = {
     scheduled: number;
     confirmed: number;
     checked_in: number;
+    no_show?: number;
     sold: number;
   };
   vendors: Array<{
@@ -166,6 +167,7 @@ export type EventDashboardTvResponse = {
     confirmed: number;
     checked_in: number;
     sold: number;
+    revenue?: number;
     points: number;
   }>;
   teams: Array<{
@@ -177,6 +179,7 @@ export type EventDashboardTvResponse = {
     confirmed: number;
     checked_in: number;
     sold: number;
+    revenue?: number;
     points: number;
   }>;
   cars: {
@@ -193,6 +196,7 @@ export type EventDashboardTvResponse = {
     sold: number;
   }>;
   checkin_by_source: Array<{ source: LeadSource; count: number }>;
+  arrivals_by_hour?: Array<{ hour: number; count: number }>;
   activeCalls?: Array<{
     id: string;
     lead_id: string;
@@ -365,6 +369,16 @@ export type ExecutiveReportResponse = {
     vendas_originadas: number;
     receita_influenciada: number;
     acoes_ia: number;
+    attribution_method?: "agent_created_appointment";
+  };
+  commercial_revenue?: {
+    by_vendor: Array<{ vendor_id: string; revenue: number }>;
+    by_team: Array<{ team_id: string; revenue: number }>;
+  };
+  data_quality?: {
+    real: string[];
+    attributed: string[];
+    estimated: string[];
   };
   history: Array<{
     event_id: string;

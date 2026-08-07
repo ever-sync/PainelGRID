@@ -27,6 +27,7 @@ type VendorBucket = {
   confirmed: number;
   checked_in: number;
   sold: number;
+  revenue: number;
   points: number;
 };
 
@@ -177,6 +178,7 @@ export class EventDashboardService {
     const scheduledLeadIds = new Set<string>();
     const confirmedLeadIds = new Set<string>();
     const checkedInLeadIds = new Set<string>();
+    const noShowLeadIds = new Set<string>();
     leads.forEach((lead) => {
       const status = lead.confirmation_status;
       if (
@@ -196,6 +198,11 @@ export class EventDashboardService {
         checkedInLeadIds.add(lead.id);
       }
     });
+    appointments.forEach((appointment) => {
+      if (appointment.status === AppointmentStatus.no_show) {
+        noShowLeadIds.add(appointment.lead_id);
+      }
+    });
     const soldLeadIds = new Set(sales.map((sale) => sale.lead_id));
 
     const funnel = {
@@ -203,6 +210,7 @@ export class EventDashboardService {
       scheduled: scheduledLeadIds.size,
       confirmed: confirmedLeadIds.size,
       checked_in: checkedInLeadIds.size,
+      no_show: noShowLeadIds.size,
       sold: soldLeadIds.size,
     };
 
@@ -229,6 +237,7 @@ export class EventDashboardService {
           confirmed: 0,
           checked_in: 0,
           sold: 0,
+          revenue: 0,
           points: pointsByVendor.get(vendorId) ?? 0,
         };
         vendorMap.set(vendorId, bucket);
@@ -262,7 +271,9 @@ export class EventDashboardService {
     });
 
     sales.forEach((sale) => {
-      ensureVendor(sale.vendor_id).sold += 1;
+      const vendor = ensureVendor(sale.vendor_id);
+      vendor.sold += 1;
+      vendor.revenue += Number(sale.value);
     });
 
     const vendorRanking = Array.from(vendorMap.values()).sort(
@@ -285,6 +296,7 @@ export class EventDashboardService {
         confirmed: number;
         checked_in: number;
         sold: number;
+        revenue: number;
         points: number;
       }
     >();
@@ -298,6 +310,7 @@ export class EventDashboardService {
         confirmed: 0,
         checked_in: 0,
         sold: 0,
+        revenue: 0,
         points: 0,
       });
     });
@@ -310,6 +323,7 @@ export class EventDashboardService {
       teamBucket.confirmed += vendor.confirmed;
       teamBucket.checked_in += vendor.checked_in;
       teamBucket.sold += vendor.sold;
+      teamBucket.revenue += vendor.revenue;
       teamBucket.points += vendor.points;
     });
     const teamRanking = Array.from(teamMap.values()).sort(
@@ -393,6 +407,23 @@ export class EventDashboardService {
       .map(([source, count]) => ({ source, count }))
       .sort((a, b) => b.count - a.count);
 
+    // Chegadas reais: somente o instante em que o agendamento foi concluído.
+    const arrivalHourMap = new Map<number, number>();
+    const hourFormatter = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: EVENT_TIMEZONE,
+      hour: "2-digit",
+      hourCycle: "h23",
+    });
+    appointments.forEach((appointment) => {
+      if (!appointment.completed_at) return;
+      const hour = Number(hourFormatter.format(appointment.completed_at));
+      if (Number.isNaN(hour)) return;
+      arrivalHourMap.set(hour, (arrivalHourMap.get(hour) ?? 0) + 1);
+    });
+    const arrivalsByHour = [...arrivalHourMap.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([hour, count]) => ({ hour, count }));
+
     // Buscar chamadas de vendedores ativas no Redis
     const activeCalls: unknown[] = [];
     for (const clientId of participantClientIds) {
@@ -440,6 +471,7 @@ export class EventDashboardService {
       },
       daily,
       checkin_by_source: checkinBySource,
+      arrivals_by_hour: arrivalsByHour,
       activeCalls,
       generated_at: new Date().toISOString(),
     };
@@ -612,7 +644,12 @@ export class EventDashboardService {
       }),
       this.prisma.sale.findMany({
         where: { appointment: { event_id: eventId } },
-        select: { lead_id: true, value: true },
+        select: {
+          lead_id: true,
+          vendor_id: true,
+          team_id: true,
+          value: true,
+        },
       }),
       this.prisma.metaLeadImport.findMany({
         where: {
@@ -656,7 +693,13 @@ export class EventDashboardService {
       }),
       this.prisma.appointment.findMany({
         where: { event_id: eventId },
-        select: { lead_id: true, status: true },
+        select: {
+          lead_id: true,
+          status: true,
+          source: true,
+          created_by_type: true,
+          completed_at: true,
+        },
       }),
       this.prisma.metaCampaignAssignment.findMany({
         where: { event_id: eventId, client_id: { in: clientIds } },
@@ -990,43 +1033,69 @@ export class EventDashboardService {
     ).size;
 
     // ── Rubinho ──
-    const [messageCount, conversations, agentLogCount, appointmentsAgent] =
-      await Promise.all([
-        this.prisma.message.count({
-          where: { conversation: { lead: { event_interest_id: eventId } } },
-        }),
-        this.prisma.conversation.findMany({
-          where: { lead: { event_interest_id: eventId }, channel: "whatsapp" },
-          select: { id: true },
-        }),
-        this.prisma.agentActionLog.count({
-          where: { lead: { event_interest_id: eventId } },
-        }),
-        this.prisma.appointment.count({
-          where: {
-            event_id: eventId,
-            OR: [
-              { source: "n8n_ai_agent" },
-              { created_by_type: "external_agent" },
-            ],
-          },
-        }),
-      ]);
+    const agentAppointments = appointments.filter(
+      (appointment) =>
+        appointment.source === "n8n_ai_agent" ||
+        appointment.created_by_type === "external_agent",
+    );
+    const agentAppointmentLeadIds = new Set(
+      agentAppointments.map((appointment) => appointment.lead_id),
+    );
+    const agentCompletedLeadIds = new Set(
+      agentAppointments
+        .filter(
+          (appointment) =>
+            appointment.status === AppointmentStatus.completed ||
+            Boolean(appointment.completed_at),
+        )
+        .map((appointment) => appointment.lead_id),
+    );
+    const agentSales = sales.filter((sale) =>
+      agentAppointmentLeadIds.has(sale.lead_id),
+    );
+    const agentSoldLeadIds = new Set(agentSales.map((sale) => sale.lead_id));
 
-    const eventRevenue = sales.reduce((s, sale) => s + Number(sale.value), 0);
+    const [messageCount, conversations, agentLogCount] = await Promise.all([
+      this.prisma.message.count({
+        where: {
+          sender_type: "user",
+          conversation: {
+            lead: { event_interest_id: eventId },
+            agent_action_logs: { some: {} },
+          },
+        },
+      }),
+      this.prisma.conversation.findMany({
+        where: {
+          lead: { event_interest_id: eventId },
+          channel: "whatsapp",
+          agent_action_logs: { some: {} },
+        },
+        select: { id: true },
+      }),
+      this.prisma.agentActionLog.count({
+        where: { lead: { event_interest_id: eventId } },
+      }),
+    ]);
+
+    const agentRevenue = agentSales.reduce(
+      (sum, sale) => sum + Number(sale.value),
+      0,
+    );
     const rubinho = {
       mensagens: messageCount,
       conversas_iniciadas: conversations.length,
-      credenciamentos: scheduledIds.size,
-      agendamentos: appointmentsAgent || scheduledIds.size,
-      comparecimentos: checkedInIds.size,
+      credenciamentos: agentAppointmentLeadIds.size,
+      agendamentos: agentAppointments.length,
+      comparecimentos: agentCompletedLeadIds.size,
       taxa_comparecimento:
-        scheduledIds.size > 0
-          ? (checkedInIds.size / scheduledIds.size) * 100
+        agentAppointmentLeadIds.size > 0
+          ? (agentCompletedLeadIds.size / agentAppointmentLeadIds.size) * 100
           : 0,
-      vendas_originadas: soldLeadIds.size,
-      receita_influenciada: Math.round(eventRevenue * 100) / 100,
+      vendas_originadas: agentSoldLeadIds.size,
+      receita_influenciada: Math.round(agentRevenue * 100) / 100,
       acoes_ia: agentLogCount,
+      attribution_method: "agent_created_appointment" as const,
     };
 
     // ── Histórico (últimos eventos do mesmo cliente) ──
@@ -1133,6 +1202,39 @@ export class EventDashboardService {
         total_sold: soldLeadIds.size,
       },
       rubinho,
+      commercial_revenue: {
+        by_vendor: [...new Set(sales.map((sale) => sale.vendor_id))].map(
+          (vendorId) => ({
+            vendor_id: vendorId,
+            revenue: round2(
+              sales
+                .filter((sale) => sale.vendor_id === vendorId)
+                .reduce((sum, sale) => sum + Number(sale.value), 0),
+            ),
+          }),
+        ),
+        by_team: [
+          ...new Set(sales.map((sale) => sale.team_id).filter(Boolean)),
+        ].map((teamId) => ({
+          team_id: teamId as string,
+          revenue: round2(
+            sales
+              .filter((sale) => sale.team_id === teamId)
+              .reduce((sum, sale) => sum + Number(sale.value), 0),
+          ),
+        })),
+      },
+      data_quality: {
+        real: [
+          "funnel",
+          "revenue",
+          "sales_by_vendor",
+          "sales_by_team",
+          "ratings",
+        ],
+        attributed: ["meta_last_touch", "rubinho_agent_created_appointment"],
+        estimated: ["profit_by_segment_margin", "grand_prix_score"],
+      },
       history,
     };
   }

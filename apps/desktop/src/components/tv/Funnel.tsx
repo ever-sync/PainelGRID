@@ -16,8 +16,8 @@ export function Funnel({
   return (
     <section className="grid shrink-0 grid-cols-[1fr_1fr_1fr_1fr_minmax(310px,1.2fr)] gap-3">
       {FUNNEL_STEPS.map((step, idx) => {
-        const value = funnel[step.key];
-        const prev = idx > 0 ? funnel[FUNNEL_STEPS[idx - 1].key] : null;
+        const value = funnel[step.key] ?? 0;
+        const prev = idx > 0 ? (funnel[FUNNEL_STEPS[idx - 1].key] ?? 0) : null;
         const rate = prev !== null ? pct(value, prev) : null;
         const isSold = step.key === "sold";
         const metaPct = isSold && meta ? pct(value, meta) : null;
