@@ -82,6 +82,10 @@ describe("AppointmentsService", () => {
         findUnique: jest.fn(),
         update: jest.fn(),
       },
+      leadTimeline: {
+        findFirst: jest.fn(),
+        create: jest.fn(),
+      },
       client: {
         findUnique: jest.fn().mockResolvedValue({ settings: {} }),
       },
@@ -293,6 +297,81 @@ describe("AppointmentsService", () => {
         vendorAvatarUrl: "/auth/avatar/user-vendor-1?v=123",
       }),
     );
+  });
+
+  it("envia credencial por e-mail para automacao quando evento esta ativo", async () => {
+    prisma.leadTimeline.findFirst.mockResolvedValue(null);
+    prisma.appointment.findFirst.mockResolvedValue({
+      ...baseAppointment,
+      lead: {
+        ...baseAppointment.lead,
+        name: "Lead Teste",
+        email: "lead@example.com",
+        assigned_vendor_id: null,
+        checkin_token: "checkin-1",
+      },
+      event: {
+        ...event,
+        name: "Evento Teste",
+        location: "Local Teste",
+      },
+    });
+    prisma.client.findUnique.mockResolvedValue({ company_name: "Cliente" });
+    prisma.leadTimeline.create.mockResolvedValue({
+      id: "timeline-1",
+      occurred_at: new Date("2026-08-06T20:00:00.000Z"),
+    });
+
+    const result = await service.sendEventCredentialEmailForAutomation(
+      leadId,
+      `credencial-email:${leadId}:${eventId}`,
+    );
+
+    expect(result.sent).toBe(true);
+    expect(mail.sendAppointmentWelcome).toHaveBeenCalledTimes(1);
+    expect(prisma.leadTimeline.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          lead_id: leadId,
+          metadata: expect.objectContaining({
+            dispatch_type: "credencial-email",
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("bloqueia credencial por e-mail quando evento nao esta ativo", async () => {
+    prisma.leadTimeline.findFirst.mockResolvedValue(null);
+    prisma.appointment.findFirst.mockResolvedValue({
+      ...baseAppointment,
+      lead: { ...baseAppointment.lead, email: "lead@example.com" },
+      event: { ...event, status: EventStatus.completed },
+    });
+
+    await expect(
+      service.sendEventCredentialEmailForAutomation(
+        leadId,
+        `credencial-email:${leadId}:${eventId}`,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(mail.sendAppointmentWelcome).not.toHaveBeenCalled();
+  });
+
+  it("nao reenvia credencial com a mesma chave idempotente", async () => {
+    prisma.leadTimeline.findFirst.mockResolvedValue({
+      id: "timeline-existing",
+      occurred_at: new Date("2026-08-06T20:00:00.000Z"),
+    });
+
+    const result = await service.sendEventCredentialEmailForAutomation(
+      leadId,
+      `credencial-email:${leadId}:${eventId}`,
+    );
+
+    expect(result.idempotent_replay).toBe(true);
+    expect(prisma.appointment.findFirst).not.toHaveBeenCalled();
+    expect(mail.sendAppointmentWelcome).not.toHaveBeenCalled();
   });
 
   it("permite criar appointment para empresa convidada no evento compartilhado", async () => {

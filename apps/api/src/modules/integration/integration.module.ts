@@ -10,6 +10,9 @@ import { IntegrationCredentialsService } from "./integration-credentials.service
 import { MetaLeadIngestionController } from "./meta-lead-ingestion.controller";
 import { MetaLeadIngestionKeyGuard } from "./meta-lead-ingestion-key.guard";
 import { ConversationsModule } from "../conversations/conversations.module";
+import { AppointmentsModule } from "../appointments/appointments.module";
+import { AutomationController } from "./automation.controller";
+import { AutomationKeyGuard } from "./automation-key.guard";
 
 @Module({
   imports: [
@@ -18,16 +21,19 @@ import { ConversationsModule } from "../conversations/conversations.module";
     EventsModule,
     RubinhoModule,
     ConversationsModule,
+    AppointmentsModule,
   ],
   controllers: [
     IntegrationController,
     IntegrationCredentialsController,
     MetaLeadIngestionController,
+    AutomationController,
   ],
   providers: [
     IntegrationKeyGuard,
     IntegrationCredentialsService,
     MetaLeadIngestionKeyGuard,
+    AutomationKeyGuard,
   ],
 })
 export class IntegrationModule {}

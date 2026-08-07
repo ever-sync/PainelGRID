@@ -600,6 +600,75 @@ export class AppointmentsService {
     });
   }
 
+  async sendEventCredentialEmailForAutomation(
+    leadId: string,
+    dispatchKey: string,
+  ) {
+    const previous = await this.prisma.leadTimeline.findFirst({
+      where: {
+        lead_id: leadId,
+        metadata: { path: ["dispatch_key"], equals: dispatchKey },
+      },
+      select: { id: true, occurred_at: true },
+    });
+    if (previous) {
+      return {
+        sent: false,
+        idempotent_replay: true,
+        timeline_id: previous.id,
+        sent_at: previous.occurred_at,
+      };
+    }
+
+    const appointment = await this.prisma.appointment.findFirst({
+      where: {
+        lead_id: leadId,
+        status: {
+          in: [AppointmentStatus.scheduled, AppointmentStatus.confirmed],
+        },
+      },
+      include: { lead: true, event: true, conversation: true },
+      orderBy: { scheduled_at: "desc" },
+    });
+    if (!appointment) {
+      throw new NotFoundException("Agendamento ativo do lead nao encontrado");
+    }
+    if (appointment.event.status !== EventStatus.active) {
+      throw new BadRequestException("Evento nao esta ativo");
+    }
+    if (!appointment.lead.email) {
+      throw new BadRequestException("Lead sem e-mail cadastrado");
+    }
+
+    await this.sendAppointmentWelcomeEmail(appointment);
+
+    const timeline = await this.prisma.leadTimeline.create({
+      data: {
+        client_id: appointment.client_id,
+        lead_id: appointment.lead_id,
+        event_type: "message",
+        origin: "n8n",
+        actor_label: "Disparos multiempresa",
+        notes: "Credencial do evento enviada por e-mail",
+        metadata: {
+          dispatch_key: dispatchKey,
+          dispatch_type: "credencial-email",
+          channel: "email",
+          appointment_id: appointment.id,
+          event_id: appointment.event_id,
+        },
+      },
+      select: { id: true, occurred_at: true },
+    });
+
+    return {
+      sent: true,
+      idempotent_replay: false,
+      timeline_id: timeline.id,
+      sent_at: timeline.occurred_at,
+    };
+  }
+
   private async confirmInternal(
     appointment: Awaited<
       ReturnType<AppointmentsService["getAppointmentOrFail"]>

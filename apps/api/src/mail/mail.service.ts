@@ -304,7 +304,7 @@ export class MailService {
       this.logger.warn(
         "Email de boas-vindas ao evento nao enviado: Resend nao configurado",
       );
-      return;
+      throw new Error("Resend nao configurado");
     }
 
     const subject = `Bem-vindo(a) ao ${params.eventName}! 🏁 Seu QR Code de Check-in`;
@@ -317,6 +317,7 @@ export class MailService {
       this.logger.error(
         `Falha ao enviar email de boas-vindas ao evento: ${(err as Error).message}`,
       );
+      throw err;
     }
   }
 

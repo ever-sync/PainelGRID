@@ -5,6 +5,7 @@ const apiUrl = (
   process.env.N8N_API_URL ?? "https://n9n.gridlabs.digital/api/v1"
 ).replace(/\/$/, "");
 const apply = process.argv.includes("--apply");
+const automationKey = process.env.N8N_AUTOMATION_API_KEY?.trim();
 
 if (!apiKey) throw new Error("Defina N8N_API_KEY somente no ambiente.");
 
@@ -241,20 +242,35 @@ return $input.all().map((item) => {
     };
     previous = send;
   } else if (def.channel === "email") {
-    const placeholder = node(
-      "Enviar e-mail pela API configurada",
-      "n8n-nodes-base.code",
+    const sendEmail = node(
+      "Enviar credencial pelo PainelGRID",
+      "n8n-nodes-base.httpRequest",
       [780, 300],
       {
-        jsCode:
-          "throw new Error('Configure o provedor/template de e-mail antes de ativar este workflow.');",
+        method: "POST",
+        url: "https://api.gpdevendas.app/api/integrations/v1/automations/credential-email",
+        sendHeaders: true,
+        headerParameters: {
+          parameters: [
+            {
+              name: "X-N8N-Automation-Key",
+              value: automationKey || "CONFIGURAR_AUTOMATION_KEY",
+            },
+            { name: "Content-Type", value: "application/json" },
+          ],
+        },
+        sendBody: true,
+        specifyBody: "json",
+        jsonBody:
+          "={{ { lead_id: $json.lead_id, dispatch_key: $json.dispatch_key } }}",
+        options: {},
       },
     );
-    nodes.push(placeholder);
+    nodes.push(sendEmail);
     connections[prepare.name] = {
-      main: [[{ node: placeholder.name, type: "main", index: 0 }]],
+      main: [[{ node: sendEmail.name, type: "main", index: 0 }]],
     };
-    previous = placeholder;
+    previous = sendEmail;
   }
 
   const mark = node(
@@ -279,11 +295,14 @@ return $input.all().map((item) => {
 )
 INSERT INTO lead_timeline (
   id, client_id, lead_id, event_type, origin, actor_label, notes, metadata, occurred_at, created_at
-) VALUES (
+) SELECT
   gen_random_uuid(), $1::uuid, $2::uuid, 'message', 'n8n',
   'Disparos multiempresa', $3,
   jsonb_build_object('dispatch_key', $5, 'dispatch_type', $6, 'template_name', $7),
   now(), now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM lead_timeline
+  WHERE lead_id = $2::uuid AND metadata->>'dispatch_key' = $5
 )
 RETURNING id;`,
       options: {
