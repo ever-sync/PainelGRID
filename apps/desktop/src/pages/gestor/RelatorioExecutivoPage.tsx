@@ -1366,35 +1366,29 @@ function RubinhoPerformance({
     );
   }
   const journey = r.attribution_breakdown;
-  const journeyCards = journey
+  const ownership = r.appointment_ownership;
+  const ownershipCards = ownership
     ? [
         {
-          key: "originated",
-          label: "Originado pelo Rubinho",
-          description: "Agendamento criado diretamente pela IA.",
+          key: "rubinho",
+          label: "Agendado pelo Rubinho",
+          description: "Criado diretamente pelo agente de IA.",
           color: "#8b5cf6",
-          value: journey.originated,
+          value: ownership.rubinho,
         },
         {
-          key: "recovered",
-          label: "Recuperado por automação",
-          description: "Retomado por follow-up, lembrete ou recuperação.",
-          color: "#f59e0b",
-          value: journey.recovered,
-        },
-        {
-          key: "influenced",
-          label: "Influenciado pelo Rubinho",
-          description: "Teve interação da IA antes do agendamento humano.",
+          key: "seller",
+          label: "Agendado pelo vendedor",
+          description: "Criado pelo vendedor responsável pelo atendimento.",
           color: "#3b82f6",
-          value: journey.influenced,
+          value: ownership.seller,
         },
         {
-          key: "manual",
-          label: "Humano ou manual",
-          description: "Sem evidência anterior de atuação da IA.",
+          key: "human_manual",
+          label: "Gestor ou operação manual",
+          description: "Criado por outro usuário ou processo manual.",
           color: "#71717a",
-          value: journey.manual,
+          value: ownership.human_manual,
         },
       ]
     : [];
@@ -1428,7 +1422,7 @@ function RubinhoPerformance({
           isDark={isDark}
         />
         <BigStat
-          label="Agendamentos"
+          label="Agendamentos do Rubinho"
           value={formatNumber(r.agendamentos)}
           isDark={isDark}
         />
@@ -1455,9 +1449,9 @@ function RubinhoPerformance({
           isDark={isDark}
         />
       </div>
-      {journeyCards.length > 0 && (
-        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {journeyCards.map((item) => (
+      {ownershipCards.length > 0 && (
+        <div className="mt-6 grid gap-3 md:grid-cols-3">
+          {ownershipCards.map((item) => (
             <div
               key={item.key}
               className={clsx(
@@ -1521,9 +1515,17 @@ function RubinhoPerformance({
           isDark ? "text-zinc-500" : "text-zinc-400",
         )}
       >
-        Categorias exclusivas, nesta precedência: recuperado, originado pelo
-        Rubinho, influenciado pelo Rubinho e humano/manual. Uma jornada não é
-        contada duas vezes.
+        O crédito do agendamento pertence exclusivamente a quem o criou.
+        Interações anteriores do Rubinho não transferem para a IA um agendamento
+        feito pelo vendedor.
+        {journey && (
+          <>
+            {" "}
+            Sinais secundários: {journey.recovered.appointments} recuperados por
+            automação e {journey.influenced.appointments} agendamentos humanos
+            com interação anterior do Rubinho.
+          </>
+        )}
       </p>
     </div>
   );

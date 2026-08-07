@@ -20,6 +20,7 @@ import { Role } from "../../common/types";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { CreateEventDto } from "./dto/create-event.dto";
 import { FindEventsQueryDto } from "./dto/find-events-query.dto";
+import { OperationalReportQueryDto } from "./dto/operational-report-query.dto";
 import { UpdateEventDto } from "./dto/update-event.dto";
 import { EventDashboardService } from "./event-dashboard.service";
 import { EventsService } from "./events.service";
@@ -61,6 +62,22 @@ export class EventsController {
   @ApiResponse({ status: 200, description: "Resumo retornado com sucesso" })
   getActiveEventsSummary(@CurrentUser() user: AuthenticatedUser) {
     return this.eventDashboardService.getActiveEventsSummary(user);
+  }
+
+  @Get("reports/operational")
+  @Roles(Role.GESTOR, Role.CLIENTE)
+  @ApiOperation({
+    summary: "Relatório operacional agregado e paginado",
+    description:
+      "Contrato de dados do relatório enxuto do gestor. Agrega leads no backend e devolve a lista paginada usando os mesmos filtros.",
+  })
+  @ApiResponse({ status: 200, description: "Relatório operacional" })
+  @ApiResponse({ status: 403, description: "Cliente ou evento fora do escopo" })
+  getOperationalReport(
+    @Query() query: OperationalReportQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.eventDashboardService.getOperationalReport(user, query);
   }
 
   @Get(":id/dashboard-tv")

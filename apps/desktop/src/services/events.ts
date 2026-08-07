@@ -451,6 +451,12 @@ export type ExecutiveReportResponse = {
       manual: ExecutiveJourneyAttribution;
       precedence: string[];
     };
+    appointment_ownership?: {
+      rubinho: ExecutiveJourneyAttribution;
+      seller: ExecutiveJourneyAttribution;
+      human_manual: ExecutiveJourneyAttribution;
+      rule: "appointment_creator";
+    };
   };
   commercial_revenue?: {
     total_sales: number;
@@ -502,6 +508,107 @@ export function getEventExecutiveReport(
 ) {
   return httpRequest<ExecutiveReportResponse>(
     `/events/${eventId}/executive-report`,
+    { method: "GET", token, signal },
+  );
+}
+
+export type OperationalReportResponse = {
+  filters: {
+    client_id: string | null;
+    event_id: string | null;
+    date_from: string | null;
+    date_to: string | null;
+    source: LeadSource | null;
+    crm_stage_id: string | null;
+    search: string | null;
+  };
+  summary: {
+    leads: number;
+    funnel: {
+      leads: number;
+      scheduled: number;
+      confirmed: number;
+      checked_in: number;
+      sold: number;
+    };
+    appointments: {
+      records: number;
+      leads: number;
+      confirmed_leads: number;
+      checked_in_leads: number;
+    };
+    sales: {
+      records: number;
+      leads: number;
+      revenue: number;
+      average_ticket: number;
+    };
+    rates: {
+      lead_to_appointment: number;
+      appointment_to_checkin: number;
+      checkin_to_sale: number;
+      lead_to_sale: number;
+    };
+    inconsistencies: {
+      marked_scheduled_without_appointment: number;
+    };
+    by_confirmation_status: Record<string, number>;
+    by_source: Array<{ source: LeadSource; count: number }>;
+    by_crm_stage: Array<{ crm_stage_id: string | null; count: number }>;
+  };
+  pagination: {
+    page: number;
+    page_size: number;
+    total: number;
+    total_pages: number;
+  };
+  items: Array<{
+    id: string;
+    client_id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    source: LeadSource;
+    confirmation_status: string;
+    created_at: string;
+    updated_at: string;
+    crm_stage_id: string | null;
+    event_interest_id: string | null;
+    crm_stage: {
+      id: string;
+      code: string;
+      name: string;
+      color: string | null;
+    } | null;
+    event_interest: { id: string; name: string } | null;
+    client: { id: string; company_name: string };
+  }>;
+  data_quality: {
+    aggregation: string;
+    appointment_metrics: string;
+    checkin_metrics: string;
+    sales_metrics: string;
+    campaign_metrics: string;
+  };
+};
+
+export function getOperationalReport(
+  params: {
+    client_id?: string;
+    event_id?: string;
+    page?: number;
+    page_size?: number;
+  },
+  token: string,
+  signal?: AbortSignal,
+) {
+  const qs = new URLSearchParams();
+  if (params.client_id) qs.set("client_id", params.client_id);
+  if (params.event_id) qs.set("event_id", params.event_id);
+  qs.set("page", String(params.page ?? 1));
+  qs.set("page_size", String(params.page_size ?? 25));
+  return httpRequest<OperationalReportResponse>(
+    `/events/reports/operational?${qs.toString()}`,
     { method: "GET", token, signal },
   );
 }

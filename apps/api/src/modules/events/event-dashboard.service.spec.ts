@@ -39,7 +39,11 @@ describe("EventDashboardService.getTvDashboard", () => {
   beforeEach(() => {
     prisma = {
       event: { findUnique: jest.fn() },
-      lead: { findMany: jest.fn().mockResolvedValue([]) },
+      lead: {
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
       appointment: { findMany: jest.fn().mockResolvedValue([]) },
       scoreEvent: { findMany: jest.fn().mockResolvedValue([]) },
       leadTimeline: { findMany: jest.fn().mockResolvedValue([]) },
@@ -71,6 +75,132 @@ describe("EventDashboardService.getTvDashboard", () => {
       participants: [{ client_id: clientA }, { client_id: clientB }],
     });
   }
+
+  describe("getOperationalReport", () => {
+    it("agrega no servidor e pagina a lista com o mesmo filtro", async () => {
+      setupEvent();
+      prisma.lead.count.mockResolvedValueOnce(3).mockResolvedValueOnce(0);
+      prisma.lead.groupBy
+        .mockResolvedValueOnce([
+          {
+            confirmation_status: ConfirmationStatus.scheduled,
+            _count: { _all: 2 },
+          },
+          {
+            confirmation_status: ConfirmationStatus.pending,
+            _count: { _all: 1 },
+          },
+        ])
+        .mockResolvedValueOnce([
+          { source: LeadSource.facebook_ads, _count: { _all: 3 } },
+        ])
+        .mockResolvedValueOnce([
+          { crm_stage_id: "stage-1", _count: { _all: 3 } },
+        ]);
+      prisma.lead.findMany.mockResolvedValue([
+        { id: "lead-2", name: "Lead 2" },
+      ]);
+      prisma.appointment.findMany.mockResolvedValue([
+        {
+          id: "appointment-1",
+          lead_id: "lead-1",
+          status: AppointmentStatus.completed,
+          confirmed_at: new Date("2026-08-06T12:00:00.000Z"),
+          completed_at: new Date("2026-08-06T13:00:00.000Z"),
+        },
+        {
+          id: "appointment-2",
+          lead_id: "lead-2",
+          status: AppointmentStatus.scheduled,
+          confirmed_at: null,
+          completed_at: null,
+        },
+      ]);
+      prisma.sale.findMany.mockResolvedValue([
+        { id: "sale-1", lead_id: "lead-1", value: new Prisma.Decimal(85000) },
+      ]);
+      prisma.leadTimeline.findMany.mockResolvedValue([{ lead_id: "lead-3" }]);
+
+      const result = await service.getOperationalReport(gestorUser, {
+        client_id: clientA,
+        event_id: eventId,
+        source: LeadSource.facebook_ads,
+        search: "Raphael",
+        page: 2,
+        page_size: 1,
+      });
+
+      expect(prisma.lead.count).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          client_id: clientA,
+          event_interest_id: eventId,
+          source: LeadSource.facebook_ads,
+          deleted_at: null,
+          OR: expect.arrayContaining([
+            { name: { contains: "Raphael", mode: "insensitive" } },
+          ]),
+        }),
+      });
+      expect(prisma.lead.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 1, take: 1 }),
+      );
+      expect(result).toMatchObject({
+        summary: {
+          leads: 3,
+          funnel: {
+            leads: 3,
+            scheduled: 2,
+            confirmed: 1,
+            checked_in: 2,
+            sold: 1,
+          },
+          appointments: {
+            records: 2,
+            leads: 2,
+            confirmed_leads: 1,
+            checked_in_leads: 2,
+          },
+          sales: {
+            records: 1,
+            leads: 1,
+            revenue: 85000,
+            average_ticket: 85000,
+          },
+          rates: {
+            lead_to_appointment: 66.67,
+            appointment_to_checkin: 100,
+            checkin_to_sale: 50,
+            lead_to_sale: 33.33,
+          },
+          inconsistencies: {
+            marked_scheduled_without_appointment: 0,
+          },
+          by_confirmation_status: { scheduled: 2, pending: 1 },
+          by_source: [{ source: LeadSource.facebook_ads, count: 3 }],
+          by_crm_stage: [{ crm_stage_id: "stage-1", count: 3 }],
+        },
+        pagination: { page: 2, page_size: 1, total: 3, total_pages: 3 },
+        items: [{ id: "lead-2", name: "Lead 2" }],
+        data_quality: {
+          aggregation: "server",
+          appointment_metrics: "real_appointment_records",
+          checkin_metrics: "appointment_completion_or_checkin_timeline",
+          sales_metrics: "real_sale_records",
+        },
+      });
+    });
+
+    it("impede cliente de consultar outro cliente", async () => {
+      await expect(
+        service.getOperationalReport(otherClienteUser, {
+          client_id: clientA,
+          page: 1,
+          page_size: 25,
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.lead.count).not.toHaveBeenCalled();
+    });
+  });
 
   it("lança NotFound quando evento não existe", async () => {
     prisma.event.findUnique.mockResolvedValue(null);
@@ -593,6 +723,30 @@ describe("EventDashboardService.getExecutiveReport attribution", () => {
           revenue: 0,
         },
       },
+      appointment_ownership: {
+        rubinho: {
+          leads: 1,
+          appointments: 1,
+          checked_in: 1,
+          sales: 1,
+          revenue: 100000,
+        },
+        seller: {
+          leads: 0,
+          appointments: 0,
+          checked_in: 0,
+          sales: 0,
+          revenue: 0,
+        },
+        human_manual: {
+          leads: 0,
+          appointments: 0,
+          checked_in: 0,
+          sales: 0,
+          revenue: 0,
+        },
+        rule: "appointment_creator",
+      },
     });
     expect(result.commercial_revenue).toEqual({
       total_sales: 1,
@@ -660,7 +814,7 @@ describe("EventDashboardService.getExecutiveReport attribution", () => {
         id: "appointment-influenced",
         lead_id: "lead-influenced",
         status: AppointmentStatus.completed,
-        source: "panel",
+        source: "vendedor",
         created_by_type: "user",
         completed_at: at(11),
         created_at: at(10),
@@ -669,7 +823,7 @@ describe("EventDashboardService.getExecutiveReport attribution", () => {
         id: "appointment-manual",
         lead_id: "lead-manual",
         status: AppointmentStatus.scheduled,
-        source: "panel",
+        source: "gestor",
         created_by_type: "user",
         completed_at: null,
         created_at: at(10),
@@ -770,6 +924,30 @@ describe("EventDashboardService.getExecutiveReport attribution", () => {
         revenue: 10000,
       },
       precedence: ["recovered", "originated", "influenced", "manual"],
+    });
+    expect(result.rubinho.appointment_ownership).toEqual({
+      rubinho: {
+        leads: 2,
+        appointments: 2,
+        checked_in: 1,
+        sales: 2,
+        revenue: 70000,
+      },
+      seller: {
+        leads: 1,
+        appointments: 1,
+        checked_in: 1,
+        sales: 1,
+        revenue: 20000,
+      },
+      human_manual: {
+        leads: 1,
+        appointments: 1,
+        checked_in: 0,
+        sales: 1,
+        revenue: 10000,
+      },
+      rule: "appointment_creator",
     });
   });
 

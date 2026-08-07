@@ -36,12 +36,29 @@ import { Card } from "../../components/ui/Card";
 import { Tabs } from "../../components/ui/Tabs";
 import { readStoredSession } from "../../services/auth";
 import { listClients, mapApiClientToClient } from "../../services/clients";
-import { listEvents, getEventDashboardTv } from "../../services/events";
-import type { EventDashboardTvResponse } from "../../services/events";
+import {
+  listEvents,
+  getEventDashboardTv,
+  getEventExecutiveReport,
+  getOperationalReport,
+} from "../../services/events";
+import type {
+  EventDashboardTvResponse,
+  ExecutiveReportResponse,
+  OperationalReportResponse,
+} from "../../services/events";
 import { listLeads, mapApiLeadToLead } from "../../services/leads";
 import { listCrmPipelines, type ApiCrmStage } from "../../services/crm";
 import type { AppOutletContext } from "../../layouts/AppLayout";
 import type { Client, Event, Lead } from "../../types";
+import {
+  filterOperationalReportLeads,
+  groupOperationalLeadsBySource,
+  leadsForOperationalEvent,
+  operationalLeadSourceLabel,
+  summarizeOperationalLeads,
+  buildOperationalReportCsv,
+} from "./relatorio-gestor.model";
 import {
   DASHBOARD_DARK_CHANGE_EVENT,
   readDashboardDarkEnabled,
@@ -120,11 +137,19 @@ export function RelatorioGestorPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [crmStages, setCrmStages] = useState<ApiCrmStage[]>([]);
+  const [operationalReport, setOperationalReport] =
+    useState<OperationalReportResponse | null>(null);
+  const [executiveReport, setExecutiveReport] =
+    useState<ExecutiveReportResponse | null>(null);
   const [, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   // Filtros seletores superiores do lado direito
   const [selectedClientId, setSelectedClientId] = useState<string>("all");
   const [selectedEventId, setSelectedEventId] = useState<string>("all");
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   // Estado de sincronia com a API do Modo TV do Evento (/events/:id/dashboard-tv)
   const [tvVendors, setTvVendors] = useState<
@@ -150,9 +175,108 @@ export function RelatorioGestorPage() {
       });
   }, [selectedEventId]);
 
-  // Estado da Paginação dos Leads
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(10);
+  useEffect(() => {
+    const session = readStoredSession();
+    if (!session?.accessToken || selectedEventId === "all") {
+      setExecutiveReport(null);
+      return;
+    }
+    const controller = new AbortController();
+    setExecutiveReport(null);
+    getEventExecutiveReport(
+      selectedEventId,
+      session.accessToken,
+      controller.signal,
+    )
+      .then(setExecutiveReport)
+      .catch((err) => {
+        if (!controller.signal.aborted) {
+          console.warn("Métricas Meta do evento indisponíveis:", err);
+        }
+      });
+    return () => controller.abort();
+  }, [selectedEventId]);
+
+  useEffect(() => {
+    const session = readStoredSession();
+    if (!session?.accessToken) return;
+    const controller = new AbortController();
+    setOperationalReport(null);
+    getOperationalReport(
+      {
+        client_id: selectedClientId === "all" ? undefined : selectedClientId,
+        event_id: selectedEventId === "all" ? undefined : selectedEventId,
+        page: currentPage,
+        page_size: pageSize,
+      },
+      session.accessToken,
+      controller.signal,
+    )
+      .then(setOperationalReport)
+      .catch((err) => {
+        if (!controller.signal.aborted) {
+          console.warn("Relatório operacional indisponível:", err);
+        }
+      });
+    return () => controller.abort();
+  }, [currentPage, pageSize, selectedClientId, selectedEventId]);
+
+  useEffect(() => {
+    const lastPage = operationalReport?.pagination.total_pages;
+    if (lastPage && currentPage > lastPage) setCurrentPage(lastPage);
+  }, [currentPage, operationalReport]);
+
+  const exportOperationalReport = async () => {
+    const session = readStoredSession();
+    if (!session?.accessToken || isExporting) return;
+
+    setIsExporting(true);
+    setExportError(null);
+    try {
+      const params = {
+        client_id: selectedClientId === "all" ? undefined : selectedClientId,
+        event_id: selectedEventId === "all" ? undefined : selectedEventId,
+        page_size: 100,
+      };
+      const firstPage = await getOperationalReport(
+        { ...params, page: 1 },
+        session.accessToken,
+      );
+      const items = [...firstPage.items];
+      for (let page = 2; page <= firstPage.pagination.total_pages; page += 1) {
+        const response = await getOperationalReport(
+          { ...params, page },
+          session.accessToken,
+        );
+        items.push(...response.items);
+      }
+
+      const csv = buildOperationalReportCsv(items);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const selectedEvent = events.find(({ id }) => id === selectedEventId);
+      const scope = (selectedEvent?.name ?? "todos-os-leads")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")
+        .toLowerCase();
+      link.href = url;
+      link.download = `relatorio-gestor-${scope || "leads"}-${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Erro ao exportar relatório operacional:", error);
+      setExportError("Não foi possível exportar. Tente novamente.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Reseta paginação para 1 quando os seletores mudarem
   useEffect(() => {
@@ -199,142 +323,51 @@ export function RelatorioGestorPage() {
 
   // Dados estruturados em árvore para a Aba de Campanhas (Campanha -> Conjunto -> Anúncio)
   const campaignTreeData = useMemo(() => {
-    return [
-      {
-        id: "camp-1",
-        name: "Campanha Feirão Seminovos Premium Meta Ads",
-        status: "active",
-        valorInvestido: 12500,
-        quantidadeLeads: 310,
-        custoPorLead: 40.32,
-        impressoes: 145000,
-        numeroConversas: 185,
-        custoConversasIniciadas: 67.56,
-        contasAlcancadas: 89000,
-        adSets: [
-          {
-            id: "adset-101",
-            name: "Conjunto 01 - Público Aberto Concessionária (25-54 anos)",
-            valorInvestido: 7500,
-            quantidadeLeads: 195,
-            custoPorLead: 38.46,
-            impressoes: 85000,
-            numeroConversas: 110,
-            custoConversasIniciadas: 68.18,
-            contasAlcancadas: 52000,
-            ads: [
-              {
-                id: "ad-1001",
-                name: "Anúncio 01 - Carrossel de Veículos 0km",
-                valorInvestido: 4000,
-                quantidadeLeads: 110,
-                custoPorLead: 36.36,
-                impressoes: 48000,
-                numeroConversas: 65,
-                custoConversasIniciadas: 61.53,
-                contasAlcancadas: 31000,
-              },
-              {
-                id: "ad-1002",
-                name: "Anúncio 02 - Vídeo Feirão de Ofertas 15s",
-                valorInvestido: 3500,
-                quantidadeLeads: 85,
-                custoPorLead: 41.17,
-                impressoes: 37000,
-                numeroConversas: 45,
-                custoConversasIniciadas: 77.77,
-                contasAlcancadas: 21000,
-              },
-            ],
-          },
-          {
-            id: "adset-102",
-            name: "Conjunto 02 - Remarketing Visitantes & WhatsApp",
-            valorInvestido: 5000,
-            quantidadeLeads: 115,
-            custoPorLead: 43.47,
-            impressoes: 60000,
-            numeroConversas: 75,
-            custoConversasIniciadas: 66.66,
-            contasAlcancadas: 37000,
-            ads: [
-              {
-                id: "ad-1003",
-                name: "Anúncio 03 - Imagem Única Taxa Zero Feirão",
-                valorInvestido: 5000,
-                quantidadeLeads: 115,
-                custoPorLead: 43.47,
-                impressoes: 60000,
-                numeroConversas: 75,
-                custoConversasIniciadas: 66.66,
-                contasAlcancadas: 37000,
-              },
-            ],
-          },
-        ],
-      },
-      {
-        id: "camp-2",
-        name: "Campanha WhatsApp Direct - Lançamento SUV",
-        status: "active",
-        valorInvestido: 8400,
-        quantidadeLeads: 210,
-        custoPorLead: 40.0,
-        impressoes: 98000,
-        numeroConversas: 140,
-        custoConversasIniciadas: 60.0,
-        contasAlcancadas: 64000,
-        adSets: [
-          {
-            id: "adset-201",
-            name: "Conjunto 01 - Interesse Automotivo & Financiamento",
-            valorInvestido: 8400,
-            quantidadeLeads: 210,
-            custoPorLead: 40.0,
-            impressoes: 98000,
-            numeroConversas: 140,
-            custoConversasIniciadas: 60.0,
-            contasAlcancadas: 64000,
-            ads: [
-              {
-                id: "ad-2001",
-                name: "Anúncio 01 - CTA Direto para o WhatsApp",
-                valorInvestido: 4800,
-                quantidadeLeads: 125,
-                custoPorLead: 38.4,
-                impressoes: 55000,
-                numeroConversas: 85,
-                custoConversasIniciadas: 56.47,
-                contasAlcancadas: 36000,
-              },
-              {
-                id: "ad-2002",
-                name: "Anúncio 02 - Vídeo Test Drive SUV",
-                valorInvestido: 3600,
-                quantidadeLeads: 85,
-                custoPorLead: 42.35,
-                impressoes: 43000,
-                numeroConversas: 55,
-                custoConversasIniciadas: 65.45,
-                contasAlcancadas: 28000,
-              },
-            ],
-          },
-        ],
-      },
-    ];
-  }, []);
+    const levels = executiveReport?.attribution_by_level;
+    if (!levels) return [];
+    const mapRow = (row: (typeof levels.campaigns)[number]) => ({
+      id: row.entity_id,
+      name: row.name,
+      status: "synced",
+      valorInvestido: row.spend,
+      quantidadeLeads: row.leads,
+      metaLeads: row.meta_leads,
+      custoPorLead: row.cpl,
+      impressoes: row.impressions,
+      numeroConversas: row.conversations,
+      custoConversasIniciadas: row.cost_per_conversation,
+      contasAlcancadas: row.reach,
+    });
+
+    return levels.campaigns.map((campaign) => ({
+      ...mapRow(campaign),
+      adSets: levels.ad_sets
+        .filter((adSet) => adSet.meta_campaign_id === campaign.entity_id)
+        .map((adSet) => ({
+          ...mapRow(adSet),
+          ads: levels.ads
+            .filter(
+              (ad) =>
+                ad.meta_campaign_id === campaign.entity_id &&
+                ad.meta_ad_set_id === adSet.entity_id,
+            )
+            .map(mapRow),
+        })),
+    }));
+  }, [executiveReport]);
 
   // Totais consolidados para o cabeçalho da Aba Campanhas
   const campaignTotals = useMemo(() => {
     let investido = 0;
     let leadsCount = 0;
+    let metaLeadsCount = 0;
     let conversasCount = 0;
     let impressoesCount = 0;
 
     campaignTreeData.forEach((c) => {
       investido += c.valorInvestido;
       leadsCount += c.quantidadeLeads;
+      metaLeadsCount += c.metaLeads;
       conversasCount += c.numeroConversas;
       impressoesCount += c.impressoes;
     });
@@ -344,6 +377,7 @@ export function RelatorioGestorPage() {
     return {
       investido,
       leadsCount,
+      metaLeadsCount,
       conversasCount,
       impressoesCount,
       cplMedio,
@@ -459,46 +493,63 @@ export function RelatorioGestorPage() {
 
   // Leads filtrados conforme seleções de cliente e evento
   const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
-      // Filtro de Cliente
-      if (selectedClientId !== "all" && lead.client_id !== selectedClientId) {
-        return false;
-      }
-      // Filtro de Evento
-      if (selectedEventId !== "all") {
-        const targetEvent = events.find((e) => e.id === selectedEventId);
-        if (targetEvent) {
-          const leadBelongsToEvent =
-            lead.event_id === selectedEventId ||
-            targetEvent.participant_client_ids?.includes(lead.client_id);
-          if (!leadBelongsToEvent) return false;
-        }
-      }
-      return true;
-    });
+    return filterOperationalReportLeads(
+      leads,
+      selectedClientId,
+      selectedEventId,
+    );
   }, [leads, selectedClientId, selectedEventId, events]);
 
   // Métricas calculadas
-  const totalLeads = filteredLeads.length;
-  const leadsAgendados = filteredLeads.filter(
-    (l) =>
-      l.crm_stage === "agendado" ||
-      l.crm_stage === "checkin" ||
-      l.crm_stage === "convertido",
-  ).length;
-  const leadsCheckin = filteredLeads.filter(
-    (l) => l.crm_stage === "checkin" || l.crm_stage === "convertido",
-  ).length;
-  const leadsConvertidos = filteredLeads.filter(
-    (l) => l.crm_stage === "convertido",
-  ).length;
+  const localOperationalSummary = useMemo(
+    () => summarizeOperationalLeads(filteredLeads),
+    [filteredLeads],
+  );
+  const realSummary = operationalReport?.summary;
+  const totalLeads = realSummary?.leads ?? localOperationalSummary.totalLeads;
+  const leadsAgendados =
+    realSummary?.funnel.scheduled ?? localOperationalSummary.scheduled;
+  const leadsCheckin =
+    realSummary?.funnel.checked_in ?? localOperationalSummary.checkedIn;
+  const leadsConvertidos =
+    realSummary?.funnel.sold ?? localOperationalSummary.converted;
   const taxaConversao =
-    totalLeads > 0 ? Math.round((leadsConvertidos / totalLeads) * 100) : 0;
+    realSummary?.rates.lead_to_sale ?? localOperationalSummary.conversionRate;
   const taxaCheckinGeral =
-    totalLeads > 0 ? Math.round((leadsCheckin / totalLeads) * 100) : 0;
+    realSummary?.rates.appointment_to_checkin ??
+    localOperationalSummary.checkinRate;
 
   // Dados do gráfico de funil baseados nas etapas REAIS do CRM
   const crmFunnelData = useMemo(() => {
+    if (realSummary) {
+      return [
+        {
+          stage: "Leads",
+          quantidade: realSummary.funnel.leads,
+          color: "#3b82f6",
+        },
+        {
+          stage: "Agendados",
+          quantidade: realSummary.funnel.scheduled,
+          color: "#f59e0b",
+        },
+        {
+          stage: "Confirmados",
+          quantidade: realSummary.funnel.confirmed,
+          color: "#6366f1",
+        },
+        {
+          stage: "Compareceram",
+          quantidade: realSummary.funnel.checked_in,
+          color: "#8b5cf6",
+        },
+        {
+          stage: "Vendas",
+          quantidade: realSummary.funnel.sold,
+          color: "#10b981",
+        },
+      ];
+    }
     if (crmStages.length > 0) {
       return crmStages.map((stg) => {
         const count = filteredLeads.filter((l) => {
@@ -546,54 +597,60 @@ export function RelatorioGestorPage() {
       ).length,
       color: s.color,
     }));
-  }, [filteredLeads, crmStages]);
+  }, [filteredLeads, crmStages, realSummary]);
 
   // Dados do gráfico por Origem (Source)
   const sourcePieData = useMemo(() => {
-    const map: Record<string, number> = {};
-    filteredLeads.forEach((l) => {
-      const srcRaw = (l.source || "").toLowerCase();
-      let srcName = "Outros Canais";
-      if (
-        srcRaw.includes("facebook") ||
-        srcRaw.includes("meta") ||
-        srcRaw.includes("ig") ||
-        srcRaw === "facebook_ads"
-      ) {
-        srcName = "Facebook Ads (Meta)";
-      } else if (srcRaw.includes("whatsapp")) {
-        srcName = "WhatsApp Direct";
-      } else if (
-        srcRaw.includes("form") ||
-        srcRaw.includes("site") ||
-        srcRaw.includes("web") ||
-        srcRaw === "form_page"
-      ) {
-        srcName = "Formulário Web";
-      } else if (srcRaw.includes("manual") || srcRaw.includes("balcao")) {
-        srcName = "Manual / Balcão";
+    if (realSummary) {
+      const grouped = new Map<string, number>();
+      for (const row of realSummary.by_source) {
+        const label = operationalLeadSourceLabel(row.source);
+        grouped.set(label, (grouped.get(label) ?? 0) + row.count);
       }
-      map[srcName] = (map[srcName] || 0) + 1;
-    });
-    return Object.entries(map).map(([name, value]) => ({ name, value }));
-  }, [filteredLeads]);
+      return [...grouped.entries()].map(([name, value]) => ({ name, value }));
+    }
+    return groupOperationalLeadsBySource(filteredLeads);
+  }, [filteredLeads, realSummary]);
 
-  // Cálculos da Paginação da Tabela de Leads
-  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / pageSize));
+  // A tabela usa a mesma consulta paginada das métricas. O fallback local só
+  // existe durante indisponibilidade transitória do endpoint operacional.
+  const reportTotal = operationalReport?.pagination.total ?? filteredLeads.length;
+  const totalPages =
+    operationalReport?.pagination.total_pages ??
+    Math.max(1, Math.ceil(filteredLeads.length / pageSize));
   const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, filteredLeads.length);
-  const paginatedLeads = useMemo(() => {
-    return filteredLeads.slice(startIndex, startIndex + pageSize);
-  }, [filteredLeads, startIndex, pageSize]);
+  const endIndex = Math.min(startIndex + pageSize, reportTotal);
+  const operationalTableRows = useMemo(() => {
+    if (operationalReport) {
+      return operationalReport.items.map((lead) => ({
+        id: lead.id,
+        name: lead.name,
+        phone: lead.phone,
+        clientName: lead.client.company_name,
+        sourceLabel: operationalLeadSourceLabel(lead.source),
+        stageName: lead.crm_stage?.name ?? "Sem etapa",
+        stageCode: lead.crm_stage?.code ?? "",
+        createdAt: lead.created_at,
+      }));
+    }
+    return filteredLeads.slice(startIndex, startIndex + pageSize).map((lead) => ({
+      id: lead.id,
+      name: lead.name,
+      phone: lead.phone,
+      clientName:
+        clients.find((client) => client.id === lead.client_id)?.company_name ??
+        "Não informada",
+      sourceLabel: operationalLeadSourceLabel(lead.source),
+      stageName: lead.crm_stage_name || lead.crm_stage || "Sem etapa",
+      stageCode: lead.crm_stage_code || lead.crm_stage || "",
+      createdAt: lead.created_at,
+    }));
+  }, [clients, filteredLeads, operationalReport, pageSize, startIndex]);
 
   // Dados para a Aba de Eventos
   const eventMetrics = useMemo(() => {
     return availableEvents.map((ev) => {
-      const evLeads = leads.filter(
-        (l) =>
-          l.event_id === ev.id ||
-          ev.participant_client_ids?.includes(l.client_id),
-      );
+      const evLeads = leadsForOperationalEvent(leads, ev.id);
       const evCheckins = evLeads.filter(
         (l) => l.crm_stage === "checkin" || l.crm_stage === "convertido",
       ).length;
@@ -614,11 +671,17 @@ export function RelatorioGestorPage() {
           ? Math.min(100, Math.round((evCheckins / audienceTarget) * 100))
           : 0;
 
-      // Estimativas Financeiras e CAC do Evento
-      const valorInvestido = (ev.capacity || 100) * 150; // Orçamento alocado (ex: R$ 15.000)
-      const ticketMedio = 75000;
-      const valorTotalVendas = evVendas * ticketMedio;
-      const cac = evVendas > 0 ? Math.round(valorInvestido / evVendas) : 0;
+      const isSelectedEvent = executiveReport?.event_id === ev.id;
+      const valorInvestido = isSelectedEvent
+        ? campaignTotals.investido
+        : (ev.paid_traffic_investment ?? 0);
+      const valorTotalVendas = isSelectedEvent
+        ? (executiveReport.commercial_revenue?.total_revenue ?? 0)
+        : 0;
+      const realSales = isSelectedEvent
+        ? (executiveReport.commercial_revenue?.total_sales ?? 0)
+        : evVendas;
+      const cac = realSales > 0 ? valorInvestido / realSales : 0;
       const nomeResumido =
         ev.name.length > 20 ? `${ev.name.slice(0, 20)}...` : ev.name;
       const taxaCheckin =
@@ -631,7 +694,7 @@ export function RelatorioGestorPage() {
         nomeResumido,
         totalLeads: evLeads.length,
         totalCheckins: evCheckins,
-        totalVendas: evVendas,
+        totalVendas: realSales,
         salesTarget,
         audienceTarget,
         salesProgressPercent,
@@ -642,7 +705,7 @@ export function RelatorioGestorPage() {
         taxaCheckin,
       };
     });
-  }, [availableEvents, leads]);
+  }, [availableEvents, campaignTotals.investido, executiveReport, leads]);
 
   // Eventos destaques (Campeões de Venda e Público)
   const topSalesEvent = useMemo(() => {
@@ -672,75 +735,8 @@ export function RelatorioGestorPage() {
         .sort((a, b) => b.sales - a.sales || b.checkins - a.checkins);
     }
 
-    const vendorMap: Record<
-      string,
-      {
-        id: string;
-        name: string;
-        sales: number;
-        checkins: number;
-        leads: number;
-      }
-    > = {};
-
-    filteredLeads.forEach((lead) => {
-      const vName =
-        lead.registered_by_name ||
-        (lead.assigned_vendor_id
-          ? `Vendedor ${lead.assigned_vendor_id.slice(0, 5)}`
-          : "Vendedor Geral");
-      const vId = lead.assigned_vendor_id || lead.registered_by_id || vName;
-
-      if (!vendorMap[vId]) {
-        vendorMap[vId] = {
-          id: vId,
-          name: vName,
-          sales: 0,
-          checkins: 0,
-          leads: 0,
-        };
-      }
-
-      vendorMap[vId].leads += 1;
-      if (lead.crm_stage === "checkin" || lead.crm_stage === "convertido") {
-        vendorMap[vId].checkins += 1;
-      }
-      if (lead.crm_stage === "convertido") {
-        vendorMap[vId].sales += 1;
-      }
-    });
-
-    const list = Object.values(vendorMap);
-    if (list.length === 0) {
-      return [
-        {
-          id: "v1",
-          name: "Carlos Eduardo Silva",
-          sales: 18,
-          checkins: 42,
-          leads: 95,
-        },
-        {
-          id: "v2",
-          name: "Mariana Oliveira",
-          sales: 14,
-          checkins: 38,
-          leads: 82,
-        },
-        {
-          id: "v3",
-          name: "Roberto Santos",
-          sales: 11,
-          checkins: 29,
-          leads: 64,
-        },
-        { id: "v4", name: "Fernanda Costa", sales: 9, checkins: 24, leads: 51 },
-        { id: "v5", name: "Lucas Mendes", sales: 6, checkins: 18, leads: 40 },
-      ];
-    }
-
-    return list.sort((a, b) => b.sales - a.sales || b.checkins - a.checkins);
-  }, [filteredLeads, tvVendors]);
+    return [];
+  }, [tvVendors]);
 
   // Ranking de Equipes / Times do Evento (Integrado com o Modo TV)
   const rankedTeams = useMemo(() => {
@@ -749,126 +745,55 @@ export function RelatorioGestorPage() {
         .map((t) => ({
           id: t.team_id,
           name: t.team_name,
-          members: 5,
           sales: t.sold ?? 0,
           checkins: t.checked_in ?? 0,
-          meta: t.scheduled || 20,
+          leads: t.scheduled ?? 0,
         }))
         .sort((a, b) => b.sales - a.sales || b.checkins - a.checkins);
     }
 
-    return [
-      {
-        id: "t1",
-        name: "Equipe Alfa (Novos & Seminovos)",
-        members: 6,
-        sales: 28,
-        checkins: 65,
-        meta: 30,
-      },
-      {
-        id: "t2",
-        name: "Equipe Beta (Venda Direta & PCD)",
-        members: 4,
-        sales: 22,
-        checkins: 48,
-        meta: 25,
-      },
-      {
-        id: "t3",
-        name: "Equipe Gama (Consórcio & Assinatura)",
-        members: 5,
-        sales: 15,
-        checkins: 34,
-        meta: 20,
-      },
-      {
-        id: "t4",
-        name: "Equipe Delta (Recepção & Agendamentos)",
-        members: 3,
-        sales: 9,
-        checkins: 22,
-        meta: 15,
-      },
-    ].sort((a, b) => b.sales - a.sales || b.checkins - a.checkins);
+    return [];
   }, [tvTeams]);
 
   // Dados para a Aba de Cruzamento: Campanha x Evento
   const campaignEventCrossData = useMemo(() => {
-    return availableEvents.map((ev) => {
-      const evLeads = leads.filter(
-        (l) =>
-          l.event_id === ev.id ||
-          ev.participant_client_ids?.includes(l.client_id),
-      );
-      const fbLeads = evLeads.filter((l) => l.source === "facebook_ads").length;
-      const waLeads = evLeads.filter((l) => l.source === "whatsapp").length;
-      const formLeads = evLeads.filter((l) => l.source === "form_page").length;
-      const manualLeads = evLeads.filter(
-        (l) => l.source === "manual" || !l.source,
-      ).length;
-
-      const agendados = evLeads.filter(
-        (l) =>
-          l.crm_stage === "agendado" ||
-          l.crm_stage === "checkin" ||
-          l.crm_stage === "convertido",
-      ).length;
-      const vendas = evLeads.filter((l) => l.crm_stage === "convertido").length;
-
-      const valorInvestido = (ev.capacity || 100) * 150; // Orçamento alocado (ex: R$ 15.000)
-      const custoPorAgendamento =
-        agendados > 0 ? Math.round(valorInvestido / agendados) : 0;
-      const taxaConversaoAgendamento =
-        agendados > 0
-          ? Math.min(100, Math.round((vendas / agendados) * 100))
-          : 0;
-
-      return {
-        eventoId: ev.id,
-        eventoNome: ev.name,
-        totalLeads: evLeads.length,
-        facebook_ads: fbLeads,
-        whatsapp: waLeads,
-        form_page: formLeads,
-        manual: manualLeads,
-        agendados,
-        vendas,
-        valorInvestido,
-        custoPorAgendamento,
-        taxaConversaoAgendamento,
-      };
-    });
-  }, [availableEvents, leads]);
+    if (!executiveReport || selectedEventId === "all") return [];
+    const eventName = events.find(
+      (event) => event.id === selectedEventId,
+    )?.name;
+    return executiveReport.attribution_by_level.campaigns.map((campaign) => ({
+      eventoId: selectedEventId,
+      eventoNome: eventName ?? "Evento selecionado",
+      campanhaId: campaign.entity_id,
+      campanhaNome: campaign.name,
+      totalLeads: campaign.leads,
+      metaLeads: campaign.meta_leads,
+      agendados: campaign.scheduled,
+      vendas: campaign.sold,
+      valorInvestido: campaign.spend,
+      custoPorAgendamento: campaign.cost_per_scheduled,
+      taxaConversaoAgendamento:
+        campaign.scheduled > 0
+          ? Math.round((campaign.sold / campaign.scheduled) * 10000) / 100
+          : 0,
+    }));
+  }, [events, executiveReport, selectedEventId]);
 
   // Totais consolidados para a Aba Campanha x Evento
   const crossTotals = useMemo(() => {
-    let fb = 0;
-    let wa = 0;
-    let form = 0;
-    let manual = 0;
+    let metaLeads = 0;
     let totalLeads = 0;
     let agendados = 0;
     let vendas = 0;
     let investido = 0;
 
     campaignEventCrossData.forEach((row) => {
-      fb += row.facebook_ads;
-      wa += row.whatsapp;
-      form += row.form_page;
-      manual += row.manual;
+      metaLeads += row.metaLeads;
       totalLeads += row.totalLeads;
       agendados += row.agendados;
       vendas += row.vendas;
       investido += row.valorInvestido;
     });
-
-    const topChannel =
-      fb >= wa && fb >= form
-        ? "Facebook Ads (Meta)"
-        : wa >= form
-          ? "WhatsApp Direct"
-          : "Formulário Web";
 
     const custoAgendamentoMedio =
       agendados > 0 ? Math.round(investido / agendados) : 0;
@@ -876,17 +801,13 @@ export function RelatorioGestorPage() {
       agendados > 0 ? Math.round((vendas / agendados) * 100) : 0;
 
     return {
-      fb,
-      wa,
-      form,
-      manual,
+      metaLeads,
       totalLeads,
       agendados,
       vendas,
       investido,
       custoAgendamentoMedio,
       taxaConversaoAgendamentoGlobal,
-      topChannel,
     };
   }, [campaignEventCrossData]);
 
@@ -1011,18 +932,21 @@ export function RelatorioGestorPage() {
               subtitle={`Taxa Comparecimento: ${taxaCheckinGeral}%`}
             />
             <StatsCard
-              title="Vendas / Conversões"
+              title="Vendas registradas"
               value={leadsConvertidos}
               icon={<CheckCircle2 size={20} />}
               iconColor="bg-emerald-100 text-emerald-600"
+              subtitle={
+                realSummary
+                  ? `Receita: ${formatCurrency(realSummary.sales.revenue)}`
+                  : undefined
+              }
             />
             <StatsCard
-              title="Taxa de Conversão"
+              title="Conversão lead → venda"
               value={`${taxaConversao}%`}
               icon={<Target size={20} />}
               iconColor="bg-rose-100 text-rose-600"
-              change="+4.2% em relação à média"
-              changeType="positive"
             />
           </div>
 
@@ -1032,10 +956,10 @@ export function RelatorioGestorPage() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">
-                    Funil de Vendas do CRM
+                    Funil operacional real
                   </h3>
                   <p className="text-xs text-gray-500 dark:text-zinc-400">
-                    Distribuição dos leads por etapa do processo comercial
+                    Agendamentos, check-ins e vendas registrados no sistema
                   </p>
                 </div>
                 <BarChart3 size={18} className="text-gray-400" />
@@ -1147,7 +1071,7 @@ export function RelatorioGestorPage() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">
-                  Resumo dos Leads Atendidos ({filteredLeads.length})
+                  Resumo dos Leads Atendidos ({reportTotal})
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-zinc-400">
                   Visualização detalhada dos contatos filtrados por Cliente e
@@ -1155,15 +1079,22 @@ export function RelatorioGestorPage() {
                 </p>
               </div>
               <button
-                onClick={() => alert("Exportação de relatório iniciada!")}
+                onClick={exportOperationalReport}
+                disabled={isExporting}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-700 dark:text-zinc-200 transition-colors"
               >
                 <Download size={14} />
-                <span>Exportar Relatório</span>
+                <span>{isExporting ? "Exportando..." : "Exportar Relatório"}</span>
               </button>
             </div>
 
-            {filteredLeads.length === 0 ? (
+            {exportError && (
+              <p className="mb-4 text-xs font-medium text-red-600 dark:text-red-400">
+                {exportError}
+              </p>
+            )}
+
+            {reportTotal === 0 ? (
               <div className="py-12 text-center text-sm text-gray-500 dark:text-zinc-400">
                 Nenhum lead encontrado para a combinação de filtros selecionada.
               </div>
@@ -1181,10 +1112,7 @@ export function RelatorioGestorPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50 dark:divide-zinc-800/60">
-                    {paginatedLeads.map((l) => {
-                      const clientObj = clients.find(
-                        (c) => c.id === l.client_id,
-                      );
+                    {operationalTableRows.map((l) => {
                       return (
                         <tr
                           key={l.id}
@@ -1197,36 +1125,31 @@ export function RelatorioGestorPage() {
                             {l.phone}
                           </td>
                           <td className="py-3 px-3 text-gray-700 dark:text-zinc-300 font-medium">
-                            {clientObj?.company_name ?? "Não informada"}
+                            {l.clientName}
                           </td>
                           <td className="py-3 px-3 text-gray-600 dark:text-zinc-400 font-medium">
                             <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300">
-                              {l.source === "facebook_ads"
-                                ? "Facebook Ads"
-                                : l.source === "whatsapp"
-                                  ? "WhatsApp"
-                                  : l.source === "form_page"
-                                    ? "Formulário Web"
-                                    : l.source || "Outros"}
+                              {l.sourceLabel}
                             </span>
                           </td>
                           <td className="py-3 px-3">
                             <span
                               className={clsx(
                                 "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                                l.crm_stage === "convertido"
+                                l.stageCode.toLowerCase().includes("convert") ||
+                                  l.stageCode.toLowerCase().includes("vend")
                                   ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900"
-                                  : l.crm_stage === "agendado" ||
-                                      l.crm_stage === "checkin"
+                                  : l.stageCode.toLowerCase().includes("agend") ||
+                                      l.stageCode.toLowerCase().includes("checkin")
                                     ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900"
                                     : "bg-gray-100 text-gray-700 border border-gray-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700",
                               )}
                             >
-                              {l.crm_stage_name || l.crm_stage}
+                              {l.stageName}
                             </span>
                           </td>
                           <td className="py-3 px-3 text-gray-500 dark:text-zinc-400">
-                            {new Date(l.created_at).toLocaleDateString("pt-BR")}
+                            {new Date(l.createdAt).toLocaleDateString("pt-BR")}
                           </td>
                         </tr>
                       );
@@ -1237,7 +1160,7 @@ export function RelatorioGestorPage() {
             )}
 
             {/* Rodapé de Paginação */}
-            {filteredLeads.length > 0 && (
+            {reportTotal > 0 && (
               <div className="mt-4 pt-4 border-t border-gray-100 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
                 <div className="text-gray-500 dark:text-zinc-400">
                   Exibindo{" "}
@@ -1250,7 +1173,7 @@ export function RelatorioGestorPage() {
                   </span>{" "}
                   de{" "}
                   <span className="font-semibold text-gray-900 dark:text-zinc-100">
-                    {filteredLeads.length}
+                    {reportTotal}
                   </span>{" "}
                   leads
                 </div>
@@ -1545,6 +1468,12 @@ export function RelatorioGestorPage() {
                     </div>
                   </div>
                 ))}
+                {rankedVendors.length === 0 && (
+                  <div className="py-10 text-center text-xs text-gray-500 dark:text-zinc-400">
+                    Selecione um evento com atendimentos registrados para ver o
+                    ranking real de vendedores.
+                  </div>
+                )}
               </div>
             </Card>
 
@@ -1584,7 +1513,7 @@ export function RelatorioGestorPage() {
                           {team.name}
                         </h4>
                         <p className="text-[11px] text-gray-500 dark:text-zinc-400">
-                          {team.members} vendedores • {team.checkins} presenças
+                          {team.leads} agendamentos • {team.checkins} presenças
                         </p>
                       </div>
                     </div>
@@ -1594,11 +1523,19 @@ export function RelatorioGestorPage() {
                         {team.sales} vendas
                       </span>
                       <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
-                        Meta: {Math.round((team.sales / team.meta) * 100)}%
+                        {team.leads > 0
+                          ? `${Math.round((team.sales / team.leads) * 100)}% conv.`
+                          : "0% conv."}
                       </span>
                     </div>
                   </div>
                 ))}
+                {rankedTeams.length === 0 && (
+                  <div className="py-10 text-center text-xs text-gray-500 dark:text-zinc-400">
+                    Selecione um evento com equipes registradas para ver o
+                    ranking real dos times.
+                  </div>
+                )}
               </div>
             </Card>
           </div>
@@ -1675,6 +1612,12 @@ export function RelatorioGestorPage() {
       {/* ── ABA 3: CAMPANHAS ── */}
       {activeTab === "campanhas" && (
         <div className="space-y-6">
+          {selectedEventId === "all" && (
+            <Card className="text-sm text-gray-600 dark:text-zinc-300">
+              Selecione um evento para visualizar somente as campanhas Meta
+              vinculadas a ele, sem misturar investimento de outros eventos.
+            </Card>
+          )}
           {/* Summary KPI Cards da Aba Campanhas */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatsCard
@@ -1685,10 +1628,10 @@ export function RelatorioGestorPage() {
               iconColor="bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400"
             />
             <StatsCard
-              title="Total Leads Captados"
+              title="Leads importados"
               value={formatNumber(campaignTotals.leadsCount)}
               icon={<Users size={20} />}
-              subtitle="Origem Anúncios"
+              subtitle={`${formatNumber(campaignTotals.metaLeadsCount)} reportados pela Meta`}
               iconColor="bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
             />
             <StatsCard
@@ -1716,8 +1659,9 @@ export function RelatorioGestorPage() {
                   <span>Desempenho Hierárquico de Campanhas Meta Ads</span>
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-zinc-400">
-                  Clique na linha da campanha ou do conjunto para
-                  expandir/recolher a estrutura de anúncios
+                  {executiveReport
+                    ? `Período: ${new Date(executiveReport.attribution_period.from).toLocaleDateString("pt-BR")} a ${new Date(executiveReport.attribution_period.to).toLocaleDateString("pt-BR")}`
+                    : "Selecione um evento para carregar os dados sincronizados"}
                 </p>
               </div>
 
@@ -1741,6 +1685,12 @@ export function RelatorioGestorPage() {
             </div>
 
             <div className="overflow-x-auto">
+              {selectedEventId !== "all" && campaignTreeData.length === 0 && (
+                <div className="py-10 text-center text-sm text-gray-500 dark:text-zinc-400">
+                  Nenhuma campanha Meta vinculada ou sincronizada para este
+                  evento.
+                </div>
+              )}
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-zinc-800 text-gray-500 dark:text-zinc-400 font-semibold uppercase tracking-wider">
@@ -1907,6 +1857,12 @@ export function RelatorioGestorPage() {
       {/* ── ABA 4: CAMPANHA X EVENTO ── */}
       {activeTab === "campanha_x_evento" && (
         <div className="space-y-6">
+          {selectedEventId === "all" && (
+            <Card className="text-sm text-gray-600 dark:text-zinc-300">
+              Selecione um evento para cruzar suas campanhas vinculadas com
+              agendamentos e vendas atribuídos.
+            </Card>
+          )}
           {/* KPI Summary Cards para Atribuição Cruzada */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatsCard
@@ -1965,7 +1921,7 @@ export function RelatorioGestorPage() {
                     vertical={false}
                   />
                   <XAxis
-                    dataKey="eventoNome"
+                    dataKey="campanhaNome"
                     tick={{ fontSize: 11, fill: chartTickFill }}
                     stroke={chartAxisStroke}
                   />
@@ -1981,14 +1937,14 @@ export function RelatorioGestorPage() {
                   />
                   <Legend wrapperStyle={{ fontSize: "12px" }} />
                   <Bar
-                    dataKey="facebook_ads"
-                    name="Facebook Ads"
+                    dataKey="metaLeads"
+                    name="Leads reportados pela Meta"
                     fill="#FF0636"
                     stackId="a"
                   />
                   <Bar
-                    dataKey="whatsapp"
-                    name="WhatsApp"
+                    dataKey="totalLeads"
+                    name="Leads importados"
                     fill="#3b82f6"
                     stackId="a"
                   />
@@ -2019,9 +1975,9 @@ export function RelatorioGestorPage() {
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-zinc-800 text-gray-500 dark:text-zinc-400 font-semibold uppercase tracking-wider">
-                    <th className="pb-3 px-3">Evento</th>
-                    <th className="pb-3 px-3 text-right">Facebook Ads</th>
-                    <th className="pb-3 px-3 text-right">WhatsApp</th>
+                    <th className="pb-3 px-3">Campanha / Evento</th>
+                    <th className="pb-3 px-3 text-right">Leads Meta</th>
+                    <th className="pb-3 px-3 text-right">Leads importados</th>
                     <th className="pb-3 px-3 text-right">Qtd Agendamentos</th>
                     <th className="pb-3 px-3 text-right">
                       Custo / Agendamento
@@ -2035,17 +1991,20 @@ export function RelatorioGestorPage() {
                 <tbody className="divide-y divide-gray-50 dark:divide-zinc-800/60">
                   {campaignEventCrossData.map((row) => (
                     <tr
-                      key={row.eventoId}
+                      key={row.campanhaId}
                       className="hover:bg-gray-50/50 dark:hover:bg-zinc-900/50"
                     >
                       <td className="py-3 px-3 font-semibold text-gray-900 dark:text-zinc-100">
-                        {row.eventoNome}
+                        <span className="block">{row.campanhaNome}</span>
+                        <span className="block text-[10px] font-normal text-gray-500 dark:text-zinc-400">
+                          {row.eventoNome}
+                        </span>
                       </td>
                       <td className="py-3 px-3 text-right text-rose-600 font-semibold">
-                        {row.facebook_ads}
+                        {row.metaLeads}
                       </td>
                       <td className="py-3 px-3 text-right text-blue-600 font-semibold">
-                        {row.whatsapp}
+                        {row.totalLeads}
                       </td>
                       <td className="py-3 px-3 text-right font-bold text-purple-600">
                         {row.agendados}

@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -123,6 +129,112 @@ function normalizeCheckInPaste(raw: string): string {
 
   return t;
 }
+
+type AppNotificationType = "info" | "alert" | "appointment" | "message";
+
+interface AppNotification {
+  id: string;
+  title: string;
+  description: string;
+  /** ISO. O rotulo ("Há 10 min") e derivado disto, nao gravado. */
+  createdAt: string;
+  read: boolean;
+  type: AppNotificationType;
+  href?: string;
+}
+
+const NOTIFICATIONS_LIMIT = 40;
+
+function notificationsStorageKey(userId: string) {
+  return `painelgrid:notifications:${userId}`;
+}
+
+function readStoredNotifications(userId: string): AppNotification[] {
+  try {
+    const raw = localStorage.getItem(notificationsStorageKey(userId));
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (item): item is AppNotification =>
+        !!item &&
+        typeof item === "object" &&
+        typeof (item as AppNotification).id === "string" &&
+        typeof (item as AppNotification).createdAt === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+function persistNotifications(userId: string, items: AppNotification[]) {
+  try {
+    localStorage.setItem(
+      notificationsStorageKey(userId),
+      JSON.stringify(items),
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+function formatRelativeTime(iso: string, now: number): string {
+  const timestamp = new Date(iso).getTime();
+  if (Number.isNaN(timestamp)) return "";
+  const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
+  if (seconds < 60) return "Agora";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `Há ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Há ${hours} h`;
+  const days = Math.floor(hours / 24);
+  return `Há ${days} d`;
+}
+
+/** Destino de cada notificacao muda por perfil: cada papel tem a sua rota. */
+const chatRouteByRole: Record<string, string> = {
+  gestor: "/gestor/chat",
+  vendedor: "/vendedor/chat",
+  cliente: "/cliente/conversas",
+};
+
+const leadsRouteByRole: Record<string, string> = {
+  gestor: "/gestor/crm",
+  vendedor: "/vendedor/leads",
+  cliente: "/cliente/leads",
+  recepcao: "/recepcao/checkin",
+};
+
+/** Rotulos das acoes que chegam em `lead_updated`. */
+const leadUpdatedLabels: Record<
+  string,
+  { title: string; description: string }
+> = {
+  created: {
+    title: "🆕 Novo lead cadastrado",
+    description: "Um lead entrou na base e aguarda atendimento.",
+  },
+  sale_created: {
+    title: "💰 Venda registrada",
+    description: "Uma venda foi lançada para um lead da sua operação.",
+  },
+  appointment_created: {
+    title: "📅 Novo agendamento",
+    description: "Um lead foi agendado para visita.",
+  },
+  appointment_confirmed: {
+    title: "👍 Agendamento confirmado",
+    description: "O lead confirmou a visita agendada.",
+  },
+  appointment_rescheduled: {
+    title: "🔁 Agendamento remarcado",
+    description: "A visita de um lead mudou de data.",
+  },
+  appointment_cancelled: {
+    title: "❌ Agendamento cancelado",
+    description: "Um lead cancelou a visita agendada.",
+  },
+};
 
 function getNavItems(user: User): NavItem[] {
   switch (user.role) {
@@ -304,6 +416,123 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // ── Central de Notificações ────────────────────────────────────────────────
+  // Alimentada pelos eventos do socket (o backend ainda nao tem historico
+  // proprio), com persistencia local por usuario para sobreviver ao reload.
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>(() =>
+    readStoredNotifications(user.id),
+  );
+  const notificationsRef = useRef<HTMLDivElement | null>(null);
+  /** Rota atual em ref: os handlers do socket sao registrados uma vez so. */
+  const currentPathRef = useRef(location.pathname);
+  useEffect(() => {
+    currentPathRef.current = location.pathname;
+  }, [location.pathname]);
+  /** Tick so para os rotulos "Há X min" nao congelarem com o painel aberto. */
+  const [notificationsClock, setNotificationsClock] = useState(() =>
+    Date.now(),
+  );
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const pushNotification = useCallback(
+    (entry: {
+      title: string;
+      description: string;
+      type: AppNotificationType;
+      href?: string;
+    }) => {
+      setNotifications((prev) => {
+        const next = [
+          {
+            id: `n-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            title: entry.title,
+            description: entry.description,
+            type: entry.type,
+            href: entry.href,
+            createdAt: new Date().toISOString(),
+            read: false,
+          },
+          ...prev,
+        ].slice(0, NOTIFICATIONS_LIMIT);
+        persistNotifications(user.id, next);
+        return next;
+      });
+    },
+    [user.id],
+  );
+
+  const markAllNotificationsRead = useCallback(() => {
+    setNotifications((prev) => {
+      if (prev.every((n) => n.read)) return prev;
+      const next = prev.map((n) => ({ ...n, read: true }));
+      persistNotifications(user.id, next);
+      return next;
+    });
+  }, [user.id]);
+
+  const clearNotifications = useCallback(() => {
+    setNotifications([]);
+    persistNotifications(user.id, []);
+  }, [user.id]);
+
+  const openNotification = useCallback(
+    (notification: AppNotification) => {
+      setNotifications((prev) => {
+        const next = prev.map((n) =>
+          n.id === notification.id ? { ...n, read: true } : n,
+        );
+        persistNotifications(user.id, next);
+        return next;
+      });
+      if (notification.href) {
+        setNotificationsOpen(false);
+        navigate(notification.href);
+      }
+    },
+    [navigate, user.id],
+  );
+
+  // Mantem as abas abertas em sincronia com o mesmo feed.
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === notificationsStorageKey(user.id)) {
+        setNotifications(readStoredNotifications(user.id));
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [user.id]);
+
+  // Fecha o popover ao clicar fora ou apertar Esc.
+  useEffect(() => {
+    if (!notificationsOpen) return;
+
+    setNotificationsClock(Date.now());
+    const interval = window.setInterval(
+      () => setNotificationsClock(Date.now()),
+      30000,
+    );
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!notificationsRef.current?.contains(event.target as Node)) {
+        setNotificationsOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNotificationsOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [notificationsOpen]);
+
   // ── Listener Global de Chamada de Vendedor (Pop-up Vendedor) ───────────────
   const [vendorCallAlert, setVendorCallAlert] = useState<{
     id: string;
@@ -380,13 +609,96 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       }
     };
 
+    const leadsHref = leadsRouteByRole[user.role];
+    const chatHref = chatRouteByRole[user.role];
+
+    const handleVendorCalledNotification = (payload: {
+      lead_name?: string;
+    }) => {
+      pushNotification({
+        title: "🚨 Cliente na recepção",
+        description: `${payload.lead_name ?? "Um lead"} chegou e está aguardando atendimento.`,
+        type: "alert",
+        href: leadsHref,
+      });
+    };
+
+    const handleLeadCheckin = () => {
+      pushNotification({
+        title: "✅ Check-in confirmado",
+        description: "Um lead confirmou presença no evento.",
+        type: "appointment",
+        href: leadsHref,
+      });
+    };
+
+    const handleLeadUpdated = (payload: { action?: string }) => {
+      // `checkin` e `stage_changed` chegam tambem nos eventos dedicados —
+      // ignorar aqui evita a mesma notificacao duas vezes.
+      if (!payload.action || payload.action === "checkin") return;
+      if (payload.action === "stage_changed") return;
+      const label = leadUpdatedLabels[payload.action];
+      if (!label) return;
+      pushNotification({
+        title: label.title,
+        description: label.description,
+        type: payload.action.startsWith("appointment") ? "appointment" : "info",
+        href: leadsHref,
+      });
+    };
+
+    const handleStageChanged = (payload: {
+      stage_code?: string;
+      pipeline_code?: string;
+    }) => {
+      pushNotification({
+        title: "🔀 Lead mudou de etapa",
+        description: payload.stage_code
+          ? `Movido para "${payload.stage_code}"${payload.pipeline_code ? ` no funil ${payload.pipeline_code}` : ""}.`
+          : "Um lead avançou no funil.",
+        type: "info",
+        href: leadsHref,
+      });
+    };
+
+    const handleNewMessage = (payload: {
+      sender_type?: string;
+      content?: string;
+    }) => {
+      // So mensagem de lead vira notificacao: eco das proprias respostas nao.
+      if (payload.sender_type !== "lead") return;
+      // Ja estando no chat, a mensagem aparece na tela — nao vira notificacao.
+      if (chatHref && currentPathRef.current.startsWith(chatHref)) return;
+      const content = (payload.content ?? "").trim();
+      pushNotification({
+        title: "💬 Nova mensagem de lead",
+        description: content
+          ? content.length > 120
+            ? `${content.slice(0, 120)}…`
+            : content
+          : "Uma nova mensagem chegou no chat.",
+        type: "message",
+        href: chatHref,
+      });
+    };
+
     socket.on("vendor_called", handleVendorCalled);
+    socket.on("vendor_called", handleVendorCalledNotification);
+    socket.on("lead_checkin", handleLeadCheckin);
+    socket.on("lead_updated", handleLeadUpdated);
+    socket.on("stage_changed", handleStageChanged);
+    socket.on("new_message", handleNewMessage);
 
     return () => {
       socket.off("vendor_called", handleVendorCalled);
+      socket.off("vendor_called", handleVendorCalledNotification);
+      socket.off("lead_checkin", handleLeadCheckin);
+      socket.off("lead_updated", handleLeadUpdated);
+      socket.off("stage_changed", handleStageChanged);
+      socket.off("new_message", handleNewMessage);
       socket.disconnect();
     };
-  }, [user]);
+  }, [user, pushNotification]);
 
   // Loop de alerta sonoro + vibração contínua estilo ligação enquanto vendorCallAlert estiver aberto
   useEffect(() => {
@@ -462,51 +774,6 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       }
       return next;
     });
-  };
-
-  // ── Central de Notificações ────────────────────────────────────────────────
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<
-    Array<{
-      id: string;
-      title: string;
-      description: string;
-      time: string;
-      read: boolean;
-      type: "info" | "alert" | "appointment";
-    }>
-  >([
-    {
-      id: "notif-1",
-      title: "🎉 Novo agendamento de lead",
-      description:
-        "Edney Ulisses agendou visita para Original Volkswagen | Guarulhos.",
-      time: "Há 10 min",
-      read: false,
-      type: "appointment",
-    },
-    {
-      id: "notif-2",
-      title: "🟢 Vendedor online",
-      description: "Vendedor Roberto ativou o status Online no painel.",
-      time: "Há 25 min",
-      read: false,
-      type: "info",
-    },
-    {
-      id: "notif-3",
-      title: "📧 E-mail de credenciamento enviado",
-      description: "QR Code de check-in enviado com sucesso para o lead.",
-      time: "Há 1 hora",
-      read: true,
-      type: "info",
-    },
-  ]);
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
-
-  const markAllNotificationsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
   // ── Atendimento Ativo com Cronômetro do Vendedor ───────────────────────────
@@ -1179,6 +1446,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
         >
           {/* BOTÃO SINO DE NOTIFICAÇÕES (ACIMA DO BOTÃO DARKMODE) */}
           <div
+            ref={notificationsRef}
             className={clsx(
               "relative flex items-center",
               isSidebarExpanded ? "w-full" : "justify-center",
@@ -1186,12 +1454,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
           >
             <button
               type="button"
-              onClick={() => {
-                setNotificationsOpen((prev) => !prev);
-                if (!notificationsOpen) {
-                  markAllNotificationsRead();
-                }
-              }}
+              onClick={() => setNotificationsOpen((prev) => !prev)}
               className={clsx(
                 "relative flex items-center transition-colors cursor-pointer",
                 isSidebarExpanded
@@ -1249,32 +1512,76 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                   </button>
                 </div>
 
-                <div className="max-h-72 overflow-y-auto space-y-2 text-xs divide-y divide-zinc-100 dark:divide-zinc-800/60">
-                  {notifications.map((n) => (
-                    <div key={n.id} className="pt-2 first:pt-0 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-zinc-900 dark:text-zinc-100">
-                          {n.title}
-                        </span>
-                        <span className="text-[10px] text-zinc-400 font-mono">
-                          {n.time}
-                        </span>
-                      </div>
-                      <p className="text-zinc-500 dark:text-zinc-400 text-[11px] leading-relaxed">
-                        {n.description}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+                {notifications.length === 0 ? (
+                  <div className="flex flex-col items-center gap-1.5 py-8 text-center">
+                    <Bell size={22} className="text-zinc-300" />
+                    <p className="text-xs font-semibold text-zinc-500">
+                      Nenhuma notificação por aqui
+                    </p>
+                    <p className="text-[11px] leading-relaxed text-zinc-400">
+                      Check-ins, agendamentos, vendas e mensagens novas aparecem
+                      aqui em tempo real.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="max-h-72 overflow-y-auto text-xs divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                    {notifications.map((n) => (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => openNotification(n)}
+                        className={clsx(
+                          "w-full space-y-1 px-2 py-2.5 text-left transition-colors rounded-lg cursor-pointer",
+                          dashboardDark
+                            ? "hover:bg-zinc-800/70"
+                            : "hover:bg-zinc-50",
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            {!n.read && (
+                              <span className="mt-px h-1.5 w-1.5 shrink-0 rounded-full bg-[#FF0636]" />
+                            )}
+                            <span
+                              className={clsx(
+                                "truncate",
+                                n.read
+                                  ? "font-medium text-zinc-500 dark:text-zinc-400"
+                                  : "font-bold text-zinc-900 dark:text-zinc-100",
+                              )}
+                            >
+                              {n.title}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-[10px] text-zinc-400 font-mono">
+                            {formatRelativeTime(
+                              n.createdAt,
+                              notificationsClock,
+                            )}
+                          </span>
+                        </div>
+                        <p className="text-zinc-500 dark:text-zinc-400 text-[11px] leading-relaxed">
+                          {n.description}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 flex justify-between items-center text-[11px]">
-                  <span className="text-zinc-400">
-                    Total: {notifications.length}
-                  </span>
+                  <button
+                    type="button"
+                    onClick={clearNotifications}
+                    disabled={notifications.length === 0}
+                    className="font-semibold text-zinc-400 hover:text-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    Limpar tudo
+                  </button>
                   <button
                     type="button"
                     onClick={markAllNotificationsRead}
-                    className="text-[#FF0636] font-bold hover:underline cursor-pointer"
+                    disabled={unreadCount === 0}
+                    className="text-[#FF0636] font-bold hover:underline disabled:opacity-40 disabled:cursor-not-allowed disabled:no-underline cursor-pointer"
                   >
                     Marcar como lidas
                   </button>

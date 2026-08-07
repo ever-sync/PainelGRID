@@ -14,6 +14,7 @@ import { Role } from "../../common/types";
 import { PrismaService } from "../../config/prisma.service";
 import { RedisService } from "../../config/redis.service";
 import { AuthenticatedUser } from "../auth/auth.types";
+import { OperationalReportQueryDto } from "./dto/operational-report-query.dto";
 
 type VendorBucket = {
   vendor_id: string;
@@ -48,6 +49,285 @@ export class EventDashboardService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
   ) {}
+
+  async getOperationalReport(
+    user: AuthenticatedUser,
+    query: OperationalReportQueryDto,
+  ) {
+    let scopedClientId = query.client_id;
+    if (user.role === Role.CLIENTE) {
+      if (!user.client_id) throw new ForbiddenException("Sem permissao");
+      if (scopedClientId && scopedClientId !== user.client_id) {
+        throw new ForbiddenException("Cliente fora do escopo");
+      }
+      scopedClientId = user.client_id;
+    }
+
+    if (query.event_id) {
+      const event = await this.prisma.event.findUnique({
+        where: { id: query.event_id },
+        select: {
+          id: true,
+          participants: { select: { client_id: true } },
+        },
+      });
+      if (!event) throw new NotFoundException("Evento nao encontrado");
+      await this.assertEventRead(user, event);
+      if (
+        scopedClientId &&
+        !event.participants.some(
+          (participant) => participant.client_id === scopedClientId,
+        )
+      ) {
+        throw new ForbiddenException("Cliente nao participa do evento");
+      }
+    }
+
+    const page = query.page ?? 1;
+    const pageSize = query.page_size ?? 25;
+    const search = query.search?.trim();
+    const where: Prisma.LeadWhereInput = {
+      deleted_at: null,
+      ...(scopedClientId ? { client_id: scopedClientId } : {}),
+      ...(query.event_id ? { event_interest_id: query.event_id } : {}),
+      ...(query.source ? { source: query.source } : {}),
+      ...(query.crm_stage_id ? { crm_stage_id: query.crm_stage_id } : {}),
+      ...(query.date_from || query.date_to
+        ? {
+            created_at: {
+              ...(query.date_from ? { gte: new Date(query.date_from) } : {}),
+              ...(query.date_to ? { lte: new Date(query.date_to) } : {}),
+            },
+          }
+        : {}),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" } },
+              { email: { contains: search, mode: "insensitive" } },
+              { phone: { contains: search } },
+            ],
+          }
+        : {}),
+    };
+
+    const [
+      total,
+      statusRows,
+      sourceRows,
+      stageRows,
+      items,
+      appointments,
+      sales,
+      checkinTimelineRows,
+      markedScheduledWithoutAppointment,
+    ] = await Promise.all([
+      this.prisma.lead.count({ where }),
+      this.prisma.lead.groupBy({
+        by: ["confirmation_status"],
+        where,
+        _count: { _all: true },
+      }),
+      this.prisma.lead.groupBy({
+        by: ["source"],
+        where,
+        _count: { _all: true },
+      }),
+      this.prisma.lead.groupBy({
+        by: ["crm_stage_id"],
+        where,
+        _count: { _all: true },
+      }),
+      this.prisma.lead.findMany({
+        where,
+        orderBy: [{ created_at: "desc" }, { id: "desc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          client_id: true,
+          name: true,
+          email: true,
+          phone: true,
+          source: true,
+          confirmation_status: true,
+          created_at: true,
+          updated_at: true,
+          crm_stage_id: true,
+          event_interest_id: true,
+          crm_stage: {
+            select: { id: true, code: true, name: true, color: true },
+          },
+          event_interest: { select: { id: true, name: true } },
+          client: { select: { id: true, company_name: true } },
+        },
+      }),
+      this.prisma.appointment.findMany({
+        where: {
+          lead: where,
+          ...(query.event_id ? { event_id: query.event_id } : {}),
+        },
+        select: {
+          id: true,
+          lead_id: true,
+          status: true,
+          confirmed_at: true,
+          completed_at: true,
+        },
+      }),
+      this.prisma.sale.findMany({
+        where: { lead: where },
+        select: { id: true, lead_id: true, value: true },
+      }),
+      this.prisma.leadTimeline.findMany({
+        where: {
+          event_type: "status_changed",
+          to_value: ConfirmationStatus.checked_in,
+          lead: where,
+        },
+        select: { lead_id: true },
+      }),
+      this.prisma.lead.count({
+        where: {
+          AND: [
+            where,
+            {
+              confirmation_status: {
+                in: [
+                  ConfirmationStatus.scheduled,
+                  ConfirmationStatus.confirmed,
+                  ConfirmationStatus.checked_in,
+                  ConfirmationStatus.closed,
+                ],
+              },
+              appointments: {
+                none: query.event_id ? { event_id: query.event_id } : {},
+              },
+            },
+          ],
+        },
+      }),
+    ]);
+
+    const status = Object.fromEntries(
+      statusRows.map((row) => [row.confirmation_status, row._count._all]),
+    );
+    const sources = sourceRows.map((row) => ({
+      source: row.source,
+      count: row._count._all,
+    }));
+    const stages = stageRows.map((row) => ({
+      crm_stage_id: row.crm_stage_id,
+      count: row._count._all,
+    }));
+    const activeAppointmentStatuses = new Set<AppointmentStatus>([
+      AppointmentStatus.scheduled,
+      AppointmentStatus.confirmed,
+      AppointmentStatus.completed,
+      AppointmentStatus.no_show,
+      AppointmentStatus.rescheduled,
+    ]);
+    const scheduledLeadIds = new Set(
+      appointments
+        .filter((row) => activeAppointmentStatuses.has(row.status))
+        .map((row) => row.lead_id),
+    );
+    const confirmedLeadIds = new Set(
+      appointments
+        .filter(
+          (row) =>
+            Boolean(row.confirmed_at) ||
+            row.status === AppointmentStatus.confirmed ||
+            row.status === AppointmentStatus.completed ||
+            row.status === AppointmentStatus.no_show,
+        )
+        .map((row) => row.lead_id),
+    );
+    const checkedInLeadIds = new Set([
+      ...appointments
+        .filter(
+          (row) =>
+            Boolean(row.completed_at) ||
+            row.status === AppointmentStatus.completed,
+        )
+        .map((row) => row.lead_id),
+      ...checkinTimelineRows.map((row) => row.lead_id),
+    ]);
+    const soldLeadIds = new Set(sales.map((row) => row.lead_id));
+    const revenue = sales.reduce(
+      (sum, row) => sum.plus(row.value),
+      new Prisma.Decimal(0),
+    );
+    const rate = (value: number, base: number) =>
+      base > 0 ? Math.round((value / base) * 10000) / 100 : 0;
+
+    return {
+      filters: {
+        client_id: scopedClientId ?? null,
+        event_id: query.event_id ?? null,
+        date_from: query.date_from ?? null,
+        date_to: query.date_to ?? null,
+        source: query.source ?? null,
+        crm_stage_id: query.crm_stage_id ?? null,
+        search: search ?? null,
+      },
+      summary: {
+        leads: total,
+        funnel: {
+          leads: total,
+          scheduled: scheduledLeadIds.size,
+          confirmed: confirmedLeadIds.size,
+          checked_in: checkedInLeadIds.size,
+          sold: soldLeadIds.size,
+        },
+        appointments: {
+          records: appointments.length,
+          leads: scheduledLeadIds.size,
+          confirmed_leads: confirmedLeadIds.size,
+          checked_in_leads: checkedInLeadIds.size,
+        },
+        sales: {
+          records: sales.length,
+          leads: soldLeadIds.size,
+          revenue: revenue.toNumber(),
+          average_ticket:
+            sales.length > 0
+              ? revenue.dividedBy(sales.length).toDecimalPlaces(2).toNumber()
+              : 0,
+        },
+        rates: {
+          lead_to_appointment: rate(scheduledLeadIds.size, total),
+          appointment_to_checkin: rate(
+            checkedInLeadIds.size,
+            scheduledLeadIds.size,
+          ),
+          checkin_to_sale: rate(soldLeadIds.size, checkedInLeadIds.size),
+          lead_to_sale: rate(soldLeadIds.size, total),
+        },
+        inconsistencies: {
+          marked_scheduled_without_appointment:
+            markedScheduledWithoutAppointment,
+        },
+        by_confirmation_status: status,
+        by_source: sources,
+        by_crm_stage: stages,
+      },
+      pagination: {
+        page,
+        page_size: pageSize,
+        total,
+        total_pages: Math.max(1, Math.ceil(total / pageSize)),
+      },
+      items,
+      data_quality: {
+        aggregation: "server",
+        appointment_metrics: "real_appointment_records",
+        checkin_metrics: "appointment_completion_or_checkin_timeline",
+        sales_metrics: "real_sale_records",
+        campaign_metrics: "event_executive_report",
+      },
+    };
+  }
 
   async getTvDashboard(user: AuthenticatedUser, eventId: string) {
     const event = await this.prisma.event.findUnique({
@@ -1353,6 +1633,53 @@ export class EventDashboardService {
       precedence: ["recovered", "originated", "influenced", "manual"],
     };
 
+    // A propriedade do agendamento é independente da influência da jornada.
+    // Um contato anterior do Rubinho não transfere para a IA o crédito de um
+    // agendamento efetivamente criado pelo vendedor ou por outra pessoa.
+    type AppointmentOwner = "rubinho" | "seller" | "human_manual";
+    const ownerByAppointmentId = new Map<string, AppointmentOwner>();
+    const ownerBuckets: Record<
+      AppointmentOwner,
+      ReturnType<typeof bucketStats>
+    > = {
+      rubinho: bucketStats(),
+      seller: bucketStats(),
+      human_manual: bucketStats(),
+    };
+    for (const appointment of appointments) {
+      const owner: AppointmentOwner =
+        appointment.source === "n8n_ai_agent" ||
+        appointment.created_by_type === "external_agent"
+          ? "rubinho"
+          : appointment.source === "vendedor"
+            ? "seller"
+            : "human_manual";
+      ownerByAppointmentId.set(appointment.id, owner);
+      const stats = ownerBuckets[owner];
+      stats.leadIds.add(appointment.lead_id);
+      stats.appointments += 1;
+      if (
+        appointment.status === AppointmentStatus.completed ||
+        appointment.completed_at
+      ) {
+        stats.checkedIn += 1;
+      }
+    }
+    for (const sale of sales) {
+      const owner =
+        ownerByAppointmentId.get(sale.appointment_id) ?? "human_manual";
+      const stats = ownerBuckets[owner];
+      stats.leadIds.add(sale.lead_id);
+      stats.sales += 1;
+      stats.revenue += Number(sale.value);
+    }
+    const appointmentOwnership = {
+      rubinho: presentBucket(ownerBuckets.rubinho),
+      seller: presentBucket(ownerBuckets.seller),
+      human_manual: presentBucket(ownerBuckets.human_manual),
+      rule: "appointment_creator" as const,
+    };
+
     const agentRevenue = agentSales.reduce(
       (sum, sale) => sum + Number(sale.value),
       0,
@@ -1374,6 +1701,7 @@ export class EventDashboardService {
       acoes_ia: agentLogCount,
       attribution_method: "agent_created_appointment" as const,
       attribution_breakdown: attributionBreakdown,
+      appointment_ownership: appointmentOwnership,
     };
 
     // ── Histórico (últimos eventos do mesmo cliente) ──
