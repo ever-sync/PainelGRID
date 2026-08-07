@@ -9,27 +9,22 @@ target iOS 13.0, **somente iPhone**, Xcode 26.6.
 | --- | --- | --- |
 | Conta Apple Developer Program | ✅ | |
 | Xcode 26.6 | ✅ instalado | SDK iOS 26.5 |
-| CocoaPods | ❌ **ausente** | Bloqueia o build. Ver passo 2. |
+| Homebrew + CocoaPods 1.17.0 | ✅ instalado | |
+| Conta Apple logada no Xcode | ❌ **pendente** | `security find-identity -p codesigning` não encontra nenhuma identidade. Ver passo 4. |
 | Política de privacidade publicada | **pendente** | URL obrigatória no App Store Connect. |
 | Conta demo para a revisão | **pendente** | O app abre em tela de login; a Apple rejeita se não conseguir entrar. |
 
-## 2. Instalar CocoaPods (bloqueio atual)
+## 2. CocoaPods
 
-O Ruby do sistema é o 2.6.10, antigo demais para as versões atuais do
-CocoaPods. Caminho recomendado — Homebrew, que traz o próprio Ruby:
+Já instalado via Homebrew (`brew install cocoapods`, versão 1.17.0). O Ruby do
+sistema (2.6.10) é antigo demais para o CocoaPods atual — por isso o Homebrew,
+que traz o próprio Ruby.
 
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-brew install cocoapods
-```
-
-Alternativa sem Homebrew (usa o Ruby do sistema, pode falhar em versões novas):
+Se `pod` não aparecer no PATH de um shell novo:
 
 ```bash
-sudo gem install cocoapods -n /usr/local/bin
+export PATH="/opt/homebrew/bin:$PATH"
 ```
-
-Confirme com `pod --version`.
 
 ## 3. Build do bundle web + sync
 
@@ -46,13 +41,31 @@ Com CocoaPods instalado, o `cap sync` roda o `pod install` sozinho. Sem ele, o
 sync avisa `Skipping pod install because CocoaPods is not installed` e o
 workspace não compila.
 
+### Build de verificação (sem assinatura)
+
+Roda sem conta Apple e serve para saber se o app compila:
+
+```bash
+cd apps/desktop/ios/App
+xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
+  -sdk iphoneos -destination 'generic/platform=iOS' \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+```
+
+Última execução: **BUILD SUCCEEDED**, incluindo o `-validate-for-store` que o
+Xcode roda no fim.
+
 ## 4. Assinatura no Xcode
 
 ```bash
 cd apps/desktop && npx cap open ios
 ```
 
-No target **App** → aba **Signing & Capabilities**:
+Primeiro, **Xcode > Settings > Accounts > +** e entrar com o Apple ID da conta
+de desenvolvedor (pede 2FA). Sem isso não existe identidade de assinatura na
+máquina e o *Archive* falha.
+
+Depois, no target **App** → aba **Signing & Capabilities**:
 
 - Marcar *Automatically manage signing*
 - Selecionar o **Team** da conta Apple Developer
