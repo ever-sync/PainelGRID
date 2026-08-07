@@ -232,6 +232,7 @@ describe("LeadsService", () => {
           set: jest.fn().mockResolvedValue("OK"),
         },
       } as never,
+      { upsert: jest.fn().mockResolvedValue({ id: "dispatch-1" }) } as never,
     );
   });
 

@@ -7,9 +7,16 @@ import { MetaModule } from "../meta/meta.module";
 import { AppointmentsController } from "./appointments.controller";
 import { AppointmentsService } from "./appointments.service";
 import { PanelAppointmentsController } from "./panel-appointments.controller";
+import { DispatchTrackingModule } from "../dispatch-tracking/dispatch-tracking.module";
 
 @Module({
-  imports: [ScoreEventsModule, CrmModule, RealtimeModule, MetaModule],
+  imports: [
+    ScoreEventsModule,
+    CrmModule,
+    RealtimeModule,
+    MetaModule,
+    DispatchTrackingModule,
+  ],
   controllers: [AppointmentsController, PanelAppointmentsController],
   providers: [AppointmentsService, IntegrationKeyGuard],
   exports: [AppointmentsService],

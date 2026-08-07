@@ -17,7 +17,13 @@ export async function fetchRatingTarget(token: string): Promise<RatingTarget> {
 
 export async function submitServiceRating(
   token: string,
-  payload: { score: number; comment?: string; customer_name?: string },
+  payload: {
+    score: number;
+    event_score?: number;
+    nps_score?: number;
+    comment?: string;
+    customer_name?: string;
+  },
 ): Promise<void> {
   const res = await fetch(
     `${API_BASE}/public/rating/${encodeURIComponent(token)}`,

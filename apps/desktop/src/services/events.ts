@@ -197,6 +197,14 @@ export type EventDashboardTvResponse = {
   }>;
   checkin_by_source: Array<{ source: LeadSource; count: number }>;
   arrivals_by_hour?: Array<{ hour: number; count: number }>;
+  arrival_data_quality?: {
+    checked_in_leads: number;
+    with_real_timestamp: number;
+    missing_timestamp: number;
+    coverage_percent: number;
+    appointment_timestamps: number;
+    timeline_timestamps: number;
+  };
   activeCalls?: Array<{
     id: string;
     lead_id: string;
@@ -328,11 +336,24 @@ export type ExecutiveAttributionRow = {
   sold: number;
   revenue: number;
   spend: number;
+  meta_leads: number;
+  impressions: number;
+  reach: number;
+  conversations: number;
   cpl: number;
+  cost_per_conversation: number;
   cost_per_scheduled: number;
   cost_per_sale: number;
   roas: number;
   roi_percent: number;
+};
+
+export type ExecutiveJourneyAttribution = {
+  leads: number;
+  appointments: number;
+  checked_in: number;
+  sales: number;
+  revenue: number;
 };
 
 export type ExecutiveReportResponse = {
@@ -346,13 +367,66 @@ export type ExecutiveReportResponse = {
     total: number;
     by_vendor: Array<{ vendor_id: string; avg_score: number; count: number }>;
   };
+  event_feedback: {
+    event_rating: { average: number; responses: number };
+    nps: {
+      score: number;
+      responses: number;
+      promoters: number;
+      passives: number;
+      detractors: number;
+    };
+    google: {
+      requested: number;
+      clicked: number;
+      verified_published: number;
+    };
+  };
+  vehicle_intelligence: {
+    coverage: {
+      total_leads: number;
+      identified_vehicles: number;
+      with_fipe_value: number;
+      vehicle_percent: number;
+      fipe_percent: number;
+    };
+    trade_in_fleet: {
+      total_fipe: number;
+      average_fipe: number;
+      by_brand: Array<{ name: string; count: number }>;
+      by_model: Array<{ name: string; count: number }>;
+      by_year: Array<{ name: string; count: number }>;
+      by_fipe_range: Array<{
+        key: string;
+        label: string;
+        leads: number;
+        sold: number;
+        conversion_percent: number;
+      }>;
+    };
+    conversion: {
+      identified_vehicle_leads: number;
+      sold_with_vehicle: number;
+      conversion_percent: number;
+      identified_not_sold: number;
+    };
+    sold_vehicles: Array<{ model: string; count: number }>;
+    desired_vehicle: { available: boolean; reason: string };
+  };
   attribution: Array<ExecutiveAttributionRow & { meta_campaign_id: string }>;
   attribution_by_level: {
     campaigns: ExecutiveAttributionRow[];
     ad_sets: ExecutiveAttributionRow[];
     ads: ExecutiveAttributionRow[];
   };
-  attribution_period: { from: string; to: string };
+  attribution_period: {
+    from: string;
+    to: string;
+    source: "event_launch_date" | "default_30_days";
+    timezone: string;
+    default_lookback_days: number | null;
+    campaigns_started_before_window: number;
+  };
   attribution_coverage: {
     attributed_leads: number;
     total_leads: number;
@@ -370,15 +444,43 @@ export type ExecutiveReportResponse = {
     receita_influenciada: number;
     acoes_ia: number;
     attribution_method?: "agent_created_appointment";
+    attribution_breakdown?: {
+      originated: ExecutiveJourneyAttribution;
+      influenced: ExecutiveJourneyAttribution;
+      recovered: ExecutiveJourneyAttribution;
+      manual: ExecutiveJourneyAttribution;
+      precedence: string[];
+    };
   };
   commercial_revenue?: {
-    by_vendor: Array<{ vendor_id: string; revenue: number }>;
-    by_team: Array<{ team_id: string; revenue: number }>;
+    total_sales: number;
+    total_revenue: number;
+    by_vendor: Array<{
+      vendor_id: string;
+      sales: number;
+      revenue: number;
+      average_ticket: number;
+    }>;
+    by_team: Array<{
+      team_id: string;
+      sales: number;
+      revenue: number;
+      average_ticket: number;
+    }>;
+    coverage: {
+      vendor_sales: number;
+      vendor_percent: number;
+      team_sales: number;
+      team_percent: number;
+      unassigned_team_sales: number;
+      unassigned_team_revenue: number;
+    };
   };
   data_quality?: {
     real: string[];
     attributed: string[];
     estimated: string[];
+    warnings: string[];
   };
   history: Array<{
     event_id: string;

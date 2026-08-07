@@ -76,6 +76,7 @@ const INSIGHTS_HISTORY_MONTHS: Record<MetaInsightLevel, number> = {
   ad: 2,
 };
 import { assertMetaGraphUrl, assertMetaMediaUrl } from "./meta-url.util";
+import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.service";
 
 @Injectable()
 export class MetaService implements OnModuleInit {
@@ -91,6 +92,7 @@ export class MetaService implements OnModuleInit {
     private readonly configService: ConfigService,
     private readonly realtimeEvents: RealtimeEventsService,
     private readonly clientWebhook: ClientWebhookService,
+    private readonly dispatchTracking: DispatchTrackingService,
     @InjectQueue("meta-sync") private readonly metaSyncQueue: Queue,
   ) {}
 
@@ -3367,9 +3369,39 @@ export class MetaService implements OnModuleInit {
     }
 
     const messages = this.readArray<Record<string, unknown>>(value.messages);
-    if (messages.length === 0) {
-      return false;
+    const statuses = this.readArray<Record<string, unknown>>(value.statuses);
+    let processedStatuses = 0;
+    for (const statusItem of statuses) {
+      const providerMessageId = this.readString(statusItem.id);
+      const providerStatus = this.readString(statusItem.status);
+      if (!providerMessageId || !providerStatus) continue;
+      const mappedStatus = this.mapWhatsappDispatchStatus(providerStatus);
+      if (!mappedStatus) continue;
+      const errors = this.readArray<Record<string, unknown>>(statusItem.errors);
+      const firstError = errors[0];
+      const updated = await this.dispatchTracking
+        .markProviderStatus({
+          providerMessageId,
+          status: mappedStatus,
+          occurredAt: this.resolveWhatsappTimestamp(statusItem.timestamp),
+          failureCode: firstError
+            ? this.readString(firstError.code)
+            : undefined,
+          failureReason: firstError
+            ? (this.readString(firstError.message) ??
+              this.readString(firstError.title))
+            : undefined,
+          metadata: { whatsapp_status: statusItem },
+        })
+        .catch((error) => {
+          this.logger.error(
+            `Falha ao rastrear status ${providerStatus} da mensagem ${providerMessageId}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          return 0;
+        });
+      processedStatuses += updated;
     }
+    if (messages.length === 0) return processedStatuses > 0;
 
     let processed = 0;
     const rootReferral = this.readRecord(value.referral);
@@ -3426,11 +3458,21 @@ export class MetaService implements OnModuleInit {
           sender_id: null,
           external_id: wamid ?? null,
           content: extractedMessage.content,
+          author_type: "lead",
+          origin: "whatsapp",
           media_id: extractedMessage.mediaId,
           media_url: extractedMessage.mediaUrl,
           created_at: occurredAt,
         },
       });
+
+      await this.dispatchTracking
+        .markReply(lead.id, occurredAt, createdMessage.id)
+        .catch((error) => {
+          this.logger.error(
+            `Mensagem recebida, mas a atribuição da resposta falhou: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        });
 
       await this.db.conversation.update({
         where: { id: conversation.id },
@@ -3496,7 +3538,16 @@ export class MetaService implements OnModuleInit {
       processed += 1;
     }
 
-    return processed > 0;
+    return processed > 0 || processedStatuses > 0;
+  }
+
+  private mapWhatsappDispatchStatus(status: string) {
+    const normalized = status.trim().toLowerCase();
+    if (normalized === "sent") return "sent" as const;
+    if (normalized === "delivered") return "delivered" as const;
+    if (normalized === "read") return "read" as const;
+    if (normalized === "failed") return "failed" as const;
+    return null;
   }
 
   private resolveWhatsappTimestamp(value: unknown) {

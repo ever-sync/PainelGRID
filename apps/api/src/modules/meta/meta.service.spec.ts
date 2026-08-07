@@ -115,6 +115,10 @@ describe("MetaService", () => {
       config as unknown as ConfigService,
       realtime as unknown as RealtimeEventsService,
       { dispatch: jest.fn() } as never,
+      {
+        markProviderStatus: jest.fn().mockResolvedValue(0),
+        markReply: jest.fn().mockResolvedValue(null),
+      } as never,
       metaSyncQueue as never,
     );
   });

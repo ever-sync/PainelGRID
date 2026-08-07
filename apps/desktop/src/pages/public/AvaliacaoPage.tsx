@@ -16,6 +16,8 @@ export function AvaliacaoPage() {
   const [error, setError] = useState(false);
   const [score, setScore] = useState(0);
   const [hoverScore, setHoverScore] = useState(0);
+  const [eventScore, setEventScore] = useState(0);
+  const [npsScore, setNpsScore] = useState<number | null>(null);
   const [comment, setComment] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -54,6 +56,8 @@ export function AvaliacaoPage() {
     try {
       await submitServiceRating(token, {
         score,
+        event_score: eventScore || undefined,
+        nps_score: npsScore ?? undefined,
         comment: comment.trim() || undefined,
         customer_name: customerName.trim() || undefined,
       });
@@ -156,6 +160,58 @@ export function AvaliacaoPage() {
                   </button>
                 );
               })}
+            </div>
+
+            <div className="mt-7 border-t border-zinc-100 pt-6">
+              <p className="text-center text-sm font-medium text-zinc-800">
+                E como foi sua experiência geral no evento?
+              </p>
+              <div className="mt-3 flex items-center justify-center gap-2">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-label={`Nota ${value} para o evento`}
+                    onClick={() => setEventScore(value)}
+                    className={clsx(
+                      "h-9 w-9 rounded-xl border text-sm font-semibold transition-colors",
+                      eventScore === value
+                        ? "border-[#FF0636] bg-[#FF0636] text-white"
+                        : "border-zinc-200 text-zinc-600 hover:border-zinc-300",
+                    )}
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <p className="text-center text-sm font-medium text-zinc-800">
+                De 0 a 10, quanto você indicaria este evento?
+              </p>
+              <div className="mt-3 grid grid-cols-11 gap-1">
+                {Array.from({ length: 11 }, (_, value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-label={`NPS ${value}`}
+                    onClick={() => setNpsScore(value)}
+                    className={clsx(
+                      "h-8 rounded-lg border text-xs font-semibold transition-colors",
+                      npsScore === value
+                        ? "border-[#FF0636] bg-[#FF0636] text-white"
+                        : "border-zinc-200 text-zinc-600 hover:border-zinc-300",
+                    )}
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-1 flex justify-between text-[10px] text-zinc-400">
+                <span>Não indicaria</span>
+                <span>Indicaria muito</span>
+              </div>
             </div>
 
             <input

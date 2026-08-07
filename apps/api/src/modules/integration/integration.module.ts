@@ -13,6 +13,7 @@ import { ConversationsModule } from "../conversations/conversations.module";
 import { AppointmentsModule } from "../appointments/appointments.module";
 import { AutomationController } from "./automation.controller";
 import { AutomationKeyGuard } from "./automation-key.guard";
+import { DispatchTrackingModule } from "../dispatch-tracking/dispatch-tracking.module";
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AutomationKeyGuard } from "./automation-key.guard";
     RubinhoModule,
     ConversationsModule,
     AppointmentsModule,
+    DispatchTrackingModule,
   ],
   controllers: [
     IntegrationController,

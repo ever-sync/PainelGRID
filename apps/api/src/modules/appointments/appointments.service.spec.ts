@@ -158,6 +158,7 @@ describe("AppointmentsService", () => {
       { emitLeadUpdated: jest.fn(), emitNewMessage: jest.fn() } as any,
       mail as any,
       meta as any,
+      { markConversion: jest.fn().mockResolvedValue(null) } as any,
     );
     prisma.eventParticipant.findMany.mockResolvedValue([
       { client_id: clientId },

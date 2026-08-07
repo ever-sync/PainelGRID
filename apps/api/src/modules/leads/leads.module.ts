@@ -7,6 +7,7 @@ import { RealtimeModule } from "../realtime/realtime.module";
 import { ScoreEventsModule } from "../score-events/score-events.module";
 import { LeadsController } from "./leads.controller";
 import { LeadsService } from "./leads.service";
+import { DispatchTrackingModule } from "../dispatch-tracking/dispatch-tracking.module";
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { LeadsService } from "./leads.service";
     CrmModule,
     MetaModule,
     LeadTimelineModule,
+    DispatchTrackingModule,
   ],
   controllers: [LeadsController],
   providers: [LeadsService],

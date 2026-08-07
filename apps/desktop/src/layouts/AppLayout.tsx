@@ -150,16 +150,6 @@ function getNavItems(user: User): NavItem[] {
           label: "Eventos",
         },
         {
-          href: "/gestor/rubinho",
-          icon: <Sparkles size={18} />,
-          label: "Rubinho",
-        },
-        {
-          href: "/gestor/operacoes",
-          icon: <ShieldAlert size={18} />,
-          label: "Operações",
-        },
-        {
           href: "/gestor/relatorio",
           icon: <BarChart3 size={18} />,
           label: "Relatório",
@@ -168,11 +158,6 @@ function getNavItems(user: User): NavItem[] {
           href: "/gestor/relatorio-executivo",
           icon: <Trophy size={18} />,
           label: "Rel. Executivo",
-        },
-        {
-          href: "/gestor/performance",
-          icon: <Gauge size={18} />,
-          label: "Performance",
         },
       ];
     case "cliente":
@@ -258,6 +243,31 @@ function getNavItems(user: User): NavItem[] {
     default:
       return [];
   }
+}
+
+/**
+ * Itens que saem da barra lateral e vivem dentro do menu de perfil
+ * (mesmo lugar de Configuração/Sair).
+ */
+function getProfileNavItems(user: User): NavItem[] {
+  if (user.role !== "gestor") return [];
+  return [
+    {
+      href: "/gestor/rubinho",
+      icon: <Sparkles size={16} />,
+      label: "Rubinho",
+    },
+    {
+      href: "/gestor/operacoes",
+      icon: <ShieldAlert size={16} />,
+      label: "Central de operações",
+    },
+    {
+      href: "/gestor/performance",
+      icon: <Gauge size={16} />,
+      label: "Performance real",
+    },
+  ];
 }
 
 export function AppLayout({ user, onLogout }: AppLayoutProps) {
@@ -754,6 +764,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     readDashboardDarkEnabled(user.id),
   );
   const navItems = getNavItems(user);
+  const profileNavItems = getProfileNavItems(user);
   const settingsPath = `/${user.role}/configuracao`;
   const mobileNavItems =
     user.role === "vendedor"
@@ -1443,6 +1454,36 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                   </div>
                 )}
               </div>
+              {profileNavItems.length > 0 && (
+                <div
+                  className={clsx(
+                    "border-b py-1",
+                    dashboardDark ? "border-zinc-800" : "border-zinc-100",
+                  )}
+                >
+                  {profileNavItems.map((item) => (
+                    <NavLink
+                      key={item.href}
+                      to={item.href}
+                      className={({ isActive }) =>
+                        clsx(
+                          "flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors",
+                          isActive
+                            ? dashboardDark
+                              ? "text-white font-semibold"
+                              : "text-zinc-900 font-semibold"
+                            : dashboardDark
+                              ? "text-zinc-300 hover:bg-zinc-800/80 hover:text-white"
+                              : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900",
+                        )
+                      }
+                    >
+                      <span className="shrink-0">{item.icon}</span>
+                      <span className="truncate">{item.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => navigate(settingsPath)}
@@ -2005,6 +2046,29 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                   : "Consulte o cadastro do cliente"}
               </p>
             </div>
+
+            {profileNavItems.length > 0 && (
+              <div className="mb-3 space-y-2">
+                {profileNavItems.map((item) => (
+                  <NavLink
+                    key={item.href}
+                    to={item.href}
+                    onClick={() => setProfileOpen(false)}
+                    className={({ isActive }) =>
+                      clsx(
+                        "flex w-full items-center justify-center gap-2 rounded-2xl border py-3 text-sm font-semibold transition-colors",
+                        isActive
+                          ? "border-[#E51838]/40 bg-[#E51838]/15 text-white"
+                          : "border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10",
+                      )
+                    }
+                  >
+                    {item.icon}
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            )}
 
             <button
               type="button"

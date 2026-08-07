@@ -242,6 +242,11 @@ export type MessageSendStatus =
 export interface Message {
   id: string;
   sender: "lead" | "vendor" | "system";
+  author_type?: ApiMessageAuthorType;
+  origin?: string;
+  workflow_key?: string | null;
+  template_name?: string | null;
+  agent_action_log_id?: string | null;
   text: string;
   media_id?: string | null;
   media_url?: string | null;
@@ -249,6 +254,15 @@ export interface Message {
   /** Só mensagens próprias (vendor); omitido ou `sent` = mostrar conferido ao servidor */
   send_status?: MessageSendStatus;
 }
+
+export type ApiMessageAuthorType =
+  | "lead"
+  | "rubinho"
+  | "human"
+  | "system"
+  | "automation"
+  | "template"
+  | "legacy_unknown";
 
 export interface AgentActionLog {
   id: string;

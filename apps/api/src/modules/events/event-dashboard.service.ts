@@ -76,81 +76,97 @@ export class EventDashboardService {
       new Set(event.participants.map((participant) => participant.client_id)),
     );
 
-    const [leads, appointments, sales, teams, vendors, scoreRows] =
-      await Promise.all([
-        this.prisma.lead.findMany({
-          where: { event_interest_id: eventId, deleted_at: null },
-          select: {
-            id: true,
-            source: true,
-            assigned_vendor_id: true,
-            team_id: true,
-            created_at: true,
-            confirmation_status: true,
-          },
-        }),
-        this.prisma.appointment.findMany({
-          where: { event_id: eventId },
-          select: {
-            id: true,
-            lead_id: true,
-            status: true,
-            scheduled_at: true,
-            confirmed_at: true,
-            completed_at: true,
-          },
-        }),
-        this.prisma.sale.findMany({
-          where: {
-            OR: [
-              { appointment: { event_id: eventId } },
-              { lead: { event_interest_id: eventId } },
-              { sales_team: { event_id: eventId } },
-            ],
-          },
-          select: {
-            id: true,
-            lead_id: true,
-            vendor_id: true,
-            team_id: true,
-            type: true,
-            model: true,
-            value: true,
-            sold_at: true,
-          },
-        }),
-        this.prisma.salesTeam.findMany({
-          where: { event_id: eventId },
-          select: {
-            id: true,
-            name: true,
-            logo_url: true,
-            members: {
-              select: {
-                user_id: true,
-                user: { select: { id: true, name: true, client_id: true } },
-              },
+    const [
+      leads,
+      appointments,
+      sales,
+      teams,
+      vendors,
+      scoreRows,
+      checkinTimelineRows,
+    ] = await Promise.all([
+      this.prisma.lead.findMany({
+        where: { event_interest_id: eventId, deleted_at: null },
+        select: {
+          id: true,
+          source: true,
+          assigned_vendor_id: true,
+          team_id: true,
+          created_at: true,
+          confirmation_status: true,
+        },
+      }),
+      this.prisma.appointment.findMany({
+        where: { event_id: eventId },
+        select: {
+          id: true,
+          lead_id: true,
+          status: true,
+          scheduled_at: true,
+          confirmed_at: true,
+          completed_at: true,
+        },
+      }),
+      this.prisma.sale.findMany({
+        where: {
+          OR: [
+            { appointment: { event_id: eventId } },
+            { lead: { event_interest_id: eventId } },
+            { sales_team: { event_id: eventId } },
+          ],
+        },
+        select: {
+          id: true,
+          lead_id: true,
+          vendor_id: true,
+          team_id: true,
+          type: true,
+          model: true,
+          value: true,
+          sold_at: true,
+        },
+      }),
+      this.prisma.salesTeam.findMany({
+        where: { event_id: eventId },
+        select: {
+          id: true,
+          name: true,
+          logo_url: true,
+          members: {
+            select: {
+              user_id: true,
+              user: { select: { id: true, name: true, client_id: true } },
             },
           },
-        }),
-        this.prisma.user.findMany({
-          where: {
-            role: "vendedor",
-            client_id: { in: participantClientIds },
-            is_active: true,
-          },
-          select: { id: true, name: true, client_id: true, avatar_url: true },
-        }),
-        this.prisma.scoreEvent.findMany({
-          where: {
-            OR: [
-              { appointment: { event_id: eventId } },
-              { lead: { event_interest_id: eventId } },
-            ],
-          },
-          select: { vendor_id: true, points: true },
-        }),
-      ]);
+        },
+      }),
+      this.prisma.user.findMany({
+        where: {
+          role: "vendedor",
+          client_id: { in: participantClientIds },
+          is_active: true,
+        },
+        select: { id: true, name: true, client_id: true, avatar_url: true },
+      }),
+      this.prisma.scoreEvent.findMany({
+        where: {
+          OR: [
+            { appointment: { event_id: eventId } },
+            { lead: { event_interest_id: eventId } },
+          ],
+        },
+        select: { vendor_id: true, points: true },
+      }),
+      this.prisma.leadTimeline.findMany({
+        where: {
+          event_type: "status_changed",
+          to_value: ConfirmationStatus.checked_in,
+          lead: { event_interest_id: eventId, deleted_at: null },
+        },
+        select: { lead_id: true, occurred_at: true },
+        orderBy: { occurred_at: "asc" },
+      }),
+    ]);
 
     // Pontos por vendedor no evento
     const pointsByVendor = new Map<string, number>();
@@ -407,16 +423,38 @@ export class EventDashboardService {
       .map(([source, count]) => ({ source, count }))
       .sort((a, b) => b.count - a.count);
 
-    // Chegadas reais: somente o instante em que o agendamento foi concluído.
+    // Chegadas reais: conclusão do agendamento é a fonte primária. Para
+    // check-ins sem agendamento, usamos o status_changed registrado no instante
+    // da leitura do voucher. Nunca usamos created_at/updated_at do lead.
+    const arrivalByLead = new Map<
+      string,
+      { occurredAt: Date; source: "appointment" | "timeline" }
+    >();
+    for (const appointment of appointments) {
+      if (!appointment.completed_at) continue;
+      const current = arrivalByLead.get(appointment.lead_id);
+      if (!current || appointment.completed_at < current.occurredAt) {
+        arrivalByLead.set(appointment.lead_id, {
+          occurredAt: appointment.completed_at,
+          source: "appointment",
+        });
+      }
+    }
+    for (const row of checkinTimelineRows) {
+      if (arrivalByLead.has(row.lead_id)) continue;
+      arrivalByLead.set(row.lead_id, {
+        occurredAt: row.occurred_at,
+        source: "timeline",
+      });
+    }
     const arrivalHourMap = new Map<number, number>();
     const hourFormatter = new Intl.DateTimeFormat("pt-BR", {
       timeZone: EVENT_TIMEZONE,
       hour: "2-digit",
       hourCycle: "h23",
     });
-    appointments.forEach((appointment) => {
-      if (!appointment.completed_at) return;
-      const hour = Number(hourFormatter.format(appointment.completed_at));
+    arrivalByLead.forEach(({ occurredAt }) => {
+      const hour = Number(hourFormatter.format(occurredAt));
       if (Number.isNaN(hour)) return;
       arrivalHourMap.set(hour, (arrivalHourMap.get(hour) ?? 0) + 1);
     });
@@ -472,6 +510,25 @@ export class EventDashboardService {
       daily,
       checkin_by_source: checkinBySource,
       arrivals_by_hour: arrivalsByHour,
+      arrival_data_quality: {
+        checked_in_leads: checkedInLeadIds.size,
+        with_real_timestamp: arrivalByLead.size,
+        missing_timestamp: Math.max(
+          checkedInLeadIds.size - arrivalByLead.size,
+          0,
+        ),
+        coverage_percent:
+          checkedInLeadIds.size > 0
+            ? Math.round((arrivalByLead.size / checkedInLeadIds.size) * 10000) /
+              100
+            : 100,
+        appointment_timestamps: [...arrivalByLead.values()].filter(
+          (entry) => entry.source === "appointment",
+        ).length,
+        timeline_timestamps: [...arrivalByLead.values()].filter(
+          (entry) => entry.source === "timeline",
+        ).length,
+      },
       activeCalls,
       generated_at: new Date().toISOString(),
     };
@@ -611,6 +668,7 @@ export class EventDashboardService {
       select: {
         id: true,
         client_id: true,
+        launch_date: true,
         event_date: true,
         event_end_date: true,
         total_investment: true,
@@ -637,18 +695,32 @@ export class EventDashboardService {
       appointments,
       campaignAssignments,
       ratingRows,
+      ratingDetailRows,
     ] = await Promise.all([
       this.prisma.lead.findMany({
         where: { event_interest_id: eventId, deleted_at: null },
-        select: { id: true, confirmation_status: true },
+        select: {
+          id: true,
+          confirmation_status: true,
+          vehicle_plate: true,
+          vehicle_brand: true,
+          vehicle_model: true,
+          vehicle_year: true,
+          vehicle_fipe_value: true,
+        },
       }),
       this.prisma.sale.findMany({
         where: { appointment: { event_id: eventId } },
         select: {
+          id: true,
           lead_id: true,
+          appointment_id: true,
           vendor_id: true,
           team_id: true,
           value: true,
+          sold_at: true,
+          model: true,
+          type: true,
         },
       }),
       this.prisma.metaLeadImport.findMany({
@@ -694,11 +766,13 @@ export class EventDashboardService {
       this.prisma.appointment.findMany({
         where: { event_id: eventId },
         select: {
+          id: true,
           lead_id: true,
           status: true,
           source: true,
           created_by_type: true,
           completed_at: true,
+          created_at: true,
         },
       }),
       this.prisma.metaCampaignAssignment.findMany({
@@ -710,6 +784,16 @@ export class EventDashboardService {
         where: { event_id: eventId },
         _avg: { score: true },
         _count: { _all: true },
+      }),
+      this.prisma.serviceRating.findMany({
+        where: { event_id: eventId },
+        select: {
+          event_score: true,
+          nps_score: true,
+          google_review_requested_at: true,
+          google_review_clicked_at: true,
+          google_review_verified_at: true,
+        },
       }),
     ]);
 
@@ -799,7 +883,12 @@ export class EventDashboardService {
       sold: number;
       revenue: number;
       spend: number;
+      meta_leads: number;
+      impressions: number;
+      reach: number;
+      conversations: number;
       cpl: number;
+      cost_per_conversation: number;
       cost_per_scheduled: number;
       cost_per_sale: number;
       roas: number;
@@ -832,7 +921,12 @@ export class EventDashboardService {
           sold: 0,
           revenue: 0,
           spend: 0,
+          meta_leads: 0,
+          impressions: 0,
+          reach: 0,
+          conversations: 0,
           cpl: 0,
+          cost_per_conversation: 0,
           cost_per_scheduled: 0,
           cost_per_sale: 0,
           roas: 0,
@@ -943,14 +1037,13 @@ export class EventDashboardService {
       .filter((campaign) => reportCampaignIds.has(campaign.meta_campaign_id))
       .map((campaign) => campaign.start_time)
       .filter((date): date is Date => Boolean(date));
-    const attributionDates = [...latestImportByLead.values()].map(
-      (entry) => entry.source_created_at ?? entry.imported_at,
-    );
-    const rangeCandidates = [...campaignStarts, ...attributionDates];
-    const reportFrom =
-      rangeCandidates.length > 0
-        ? new Date(Math.min(...rangeCandidates.map((date) => date.getTime())))
-        : new Date(event.event_date);
+    const defaultLookbackDays = 30;
+    const reportFrom = event.launch_date
+      ? new Date(event.launch_date)
+      : new Date(
+          event.event_date.getTime() -
+            defaultLookbackDays * 24 * 60 * 60 * 1000,
+        );
     reportFrom.setUTCHours(0, 0, 0, 0);
     const reportTo = new Date(event.event_end_date ?? event.event_date);
     reportTo.setUTCHours(23, 59, 59, 999);
@@ -978,7 +1071,15 @@ export class EventDashboardService {
               date: { gte: reportFrom, lte: reportTo },
               OR: insightEntityFilters,
             },
-            select: { level: true, entity_id: true, spend: true },
+            select: {
+              level: true,
+              entity_id: true,
+              spend: true,
+              leads: true,
+              impressions: true,
+              reach: true,
+              raw_payload: true,
+            },
           })
         : [];
     for (const insight of insightRows) {
@@ -990,7 +1091,27 @@ export class EventDashboardService {
         continue;
       }
       const row = attributionMaps[insight.level].get(insight.entity_id);
-      if (row) row.spend += Number(insight.spend ?? 0);
+      if (row) {
+        row.spend += Number(insight.spend ?? 0);
+        row.meta_leads += insight.leads ?? 0;
+        row.impressions += insight.impressions ?? 0;
+        row.reach += insight.reach ?? 0;
+        const actions = (
+          insight.raw_payload as {
+            actions?: Array<{ action_type?: string; value?: string }>;
+          } | null
+        )?.actions;
+        const conversationAction = actions?.find(
+          ({ action_type }) =>
+            action_type ===
+              "onsite_conversion.messaging_conversation_started_7d" ||
+            action_type === "messaging_conversation_started_7d",
+        );
+        const conversationCount = Number(conversationAction?.value ?? 0);
+        if (Number.isFinite(conversationCount) && conversationCount >= 0) {
+          row.conversations += conversationCount;
+        }
+      }
     }
 
     const round2 = (value: number) => Math.round(value * 100) / 100;
@@ -1000,7 +1121,13 @@ export class EventDashboardService {
           ...row,
           revenue: round2(row.revenue),
           spend: round2(row.spend),
+          meta_leads: row.meta_leads,
+          impressions: row.impressions,
+          reach: row.reach,
+          conversations: row.conversations,
           cpl: row.leads > 0 ? round2(row.spend / row.leads) : 0,
+          cost_per_conversation:
+            row.conversations > 0 ? round2(row.spend / row.conversations) : 0,
           cost_per_scheduled:
             row.scheduled > 0 ? round2(row.spend / row.scheduled) : 0,
           cost_per_sale: row.sold > 0 ? round2(row.spend / row.sold) : 0,
@@ -1032,7 +1159,10 @@ export class EventDashboardService {
       ),
     ).size;
 
-    // ── Rubinho ──
+    // ── Rubinho e atribuicao operacional ──
+    // As categorias abaixo sao mutuamente exclusivas. A precedencia evita
+    // atribuir a mesma jornada mais de uma vez:
+    // recuperado > originado > influenciado > humano/manual.
     const agentAppointments = appointments.filter(
       (appointment) =>
         appointment.source === "n8n_ai_agent" ||
@@ -1055,36 +1185,183 @@ export class EventDashboardService {
     );
     const agentSoldLeadIds = new Set(agentSales.map((sale) => sale.lead_id));
 
-    const [messageCount, conversations, agentLogCount] = await Promise.all([
-      this.prisma.message.count({
+    const [rubinhoMessages, dispatches, agentLogCount] = await Promise.all([
+      this.prisma.message.findMany({
         where: {
-          sender_type: "user",
+          author_type: "rubinho",
           conversation: {
             lead: { event_interest_id: eventId },
-            agent_action_logs: { some: {} },
           },
         },
-      }),
-      this.prisma.conversation.findMany({
-        where: {
-          lead: { event_interest_id: eventId },
-          channel: "whatsapp",
-          agent_action_logs: { some: {} },
+        select: {
+          conversation_id: true,
+          created_at: true,
+          conversation: { select: { lead_id: true } },
         },
-        select: { id: true },
+      }),
+      this.prisma.dispatchEvent.findMany({
+        where: {
+          OR: [
+            { event_id: eventId },
+            { event_id: null, lead: { event_interest_id: eventId } },
+          ],
+        },
+        select: {
+          lead_id: true,
+          appointment_id: true,
+          sale_id: true,
+          workflow_key: true,
+          dispatch_type: true,
+          sent_at: true,
+          replied_at: true,
+          converted_at: true,
+        },
       }),
       this.prisma.agentActionLog.count({
         where: { lead: { event_interest_id: eventId } },
       }),
     ]);
 
+    const firstRubinhoMessageByLead = new Map<string, Date>();
+    for (const message of rubinhoMessages) {
+      const leadId = message.conversation.lead_id;
+      const current = firstRubinhoMessageByLead.get(leadId);
+      if (!current || message.created_at < current) {
+        firstRubinhoMessageByLead.set(leadId, message.created_at);
+      }
+    }
+
+    const recoveryPattern =
+      /follow[\s_-]?up|reativa|recuper|no[\s_-]?show|lembrete/i;
+    const recoveryDispatches = dispatches.filter((dispatch) => {
+      const recoveryFlow = recoveryPattern.test(
+        `${dispatch.workflow_key} ${dispatch.dispatch_type}`,
+      );
+      const producedOutcome = Boolean(
+        dispatch.replied_at ||
+        dispatch.converted_at ||
+        dispatch.appointment_id ||
+        dispatch.sale_id,
+      );
+      return recoveryFlow && producedOutcome;
+    });
+    const recoveredAppointmentIds = new Set(
+      recoveryDispatches
+        .map((dispatch) => dispatch.appointment_id)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const recoveredSaleIds = new Set(
+      recoveryDispatches
+        .map((dispatch) => dispatch.sale_id)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const recoveryByLead = new Map<string, Date>();
+    for (const dispatch of recoveryDispatches) {
+      const occurredAt =
+        dispatch.converted_at ?? dispatch.replied_at ?? dispatch.sent_at;
+      if (!occurredAt) continue;
+      const current = recoveryByLead.get(dispatch.lead_id);
+      if (!current || occurredAt < current) {
+        recoveryByLead.set(dispatch.lead_id, occurredAt);
+      }
+    }
+
+    type AttributionBucket =
+      "originated" | "influenced" | "recovered" | "manual";
+    const appointmentBucketById = new Map<string, AttributionBucket>();
+    const classifyAppointment = (
+      appointment: (typeof appointments)[number],
+    ): AttributionBucket => {
+      const recoveredAt = recoveryByLead.get(appointment.lead_id);
+      if (
+        recoveredAppointmentIds.has(appointment.id) ||
+        (recoveredAt && recoveredAt <= appointment.created_at)
+      ) {
+        return "recovered";
+      }
+      if (
+        appointment.source === "n8n_ai_agent" ||
+        appointment.created_by_type === "external_agent"
+      ) {
+        return "originated";
+      }
+      const firstRubinhoMessage = firstRubinhoMessageByLead.get(
+        appointment.lead_id,
+      );
+      if (
+        firstRubinhoMessage &&
+        firstRubinhoMessage <= appointment.created_at
+      ) {
+        return "influenced";
+      }
+      return "manual";
+    };
+
+    const bucketStats = () => ({
+      leadIds: new Set<string>(),
+      appointments: 0,
+      checkedIn: 0,
+      sales: 0,
+      revenue: 0,
+    });
+    const buckets: Record<AttributionBucket, ReturnType<typeof bucketStats>> = {
+      originated: bucketStats(),
+      influenced: bucketStats(),
+      recovered: bucketStats(),
+      manual: bucketStats(),
+    };
+    for (const appointment of appointments) {
+      const bucket = classifyAppointment(appointment);
+      appointmentBucketById.set(appointment.id, bucket);
+      const stats = buckets[bucket];
+      stats.leadIds.add(appointment.lead_id);
+      stats.appointments += 1;
+      if (
+        appointment.status === AppointmentStatus.completed ||
+        appointment.completed_at
+      ) {
+        stats.checkedIn += 1;
+      }
+    }
+    for (const sale of sales) {
+      let bucket = appointmentBucketById.get(sale.appointment_id);
+      if (!bucket && recoveredSaleIds.has(sale.id)) bucket = "recovered";
+      if (!bucket) {
+        const firstRubinhoMessage = firstRubinhoMessageByLead.get(sale.lead_id);
+        bucket =
+          firstRubinhoMessage && firstRubinhoMessage <= sale.sold_at
+            ? "influenced"
+            : "manual";
+      }
+      const stats = buckets[bucket];
+      stats.leadIds.add(sale.lead_id);
+      stats.sales += 1;
+      stats.revenue += Number(sale.value);
+    }
+    const presentBucket = (stats: ReturnType<typeof bucketStats>) => ({
+      leads: stats.leadIds.size,
+      appointments: stats.appointments,
+      checked_in: stats.checkedIn,
+      sales: stats.sales,
+      revenue: round2(stats.revenue),
+    });
+    const attributionBreakdown = {
+      originated: presentBucket(buckets.originated),
+      influenced: presentBucket(buckets.influenced),
+      recovered: presentBucket(buckets.recovered),
+      manual: presentBucket(buckets.manual),
+      precedence: ["recovered", "originated", "influenced", "manual"],
+    };
+
     const agentRevenue = agentSales.reduce(
       (sum, sale) => sum + Number(sale.value),
       0,
     );
     const rubinho = {
-      mensagens: messageCount,
-      conversas_iniciadas: conversations.length,
+      mensagens: rubinhoMessages.length,
+      conversas_iniciadas: new Set(
+        rubinhoMessages.map((message) => message.conversation_id),
+      ).size,
       credenciamentos: agentAppointmentLeadIds.size,
       agendamentos: agentAppointments.length,
       comparecimentos: agentCompletedLeadIds.size,
@@ -1096,6 +1373,7 @@ export class EventDashboardService {
       receita_influenciada: Math.round(agentRevenue * 100) / 100,
       acoes_ia: agentLogCount,
       attribution_method: "agent_created_appointment" as const,
+      attribution_breakdown: attributionBreakdown,
     };
 
     // ── Histórico (últimos eventos do mesmo cliente) ──
@@ -1167,6 +1445,220 @@ export class EventDashboardService {
               100,
           ) / 100
         : 0;
+    const eventScores = ratingDetailRows
+      .map((row) => row.event_score)
+      .filter((score): score is number => score !== null);
+    const npsScores = ratingDetailRows
+      .map((row) => row.nps_score)
+      .filter((score): score is number => score !== null);
+    const promoters = npsScores.filter((score) => score >= 9).length;
+    const passives = npsScores.filter(
+      (score) => score >= 7 && score <= 8,
+    ).length;
+    const detractors = npsScores.filter((score) => score <= 6).length;
+    const eventFeedback = {
+      event_rating: {
+        average:
+          eventScores.length > 0
+            ? round2(
+                eventScores.reduce((sum, score) => sum + score, 0) /
+                  eventScores.length,
+              )
+            : 0,
+        responses: eventScores.length,
+      },
+      nps: {
+        score:
+          npsScores.length > 0
+            ? round2(((promoters - detractors) / npsScores.length) * 100)
+            : 0,
+        responses: npsScores.length,
+        promoters,
+        passives,
+        detractors,
+      },
+      google: {
+        requested: ratingDetailRows.filter(
+          (row) => row.google_review_requested_at,
+        ).length,
+        clicked: ratingDetailRows.filter((row) => row.google_review_clicked_at)
+          .length,
+        verified_published: ratingDetailRows.filter(
+          (row) => row.google_review_verified_at,
+        ).length,
+      },
+    };
+
+    const parseFipeValue = (raw: string | null): number | null => {
+      if (!raw?.trim()) return null;
+      const normalized = raw
+        .replace(/R\$/gi, "")
+        .replace(/\s/g, "")
+        .replace(/[^0-9,.-]/g, "");
+      if (!/[0-9]/.test(normalized)) return null;
+      const numeric = normalized.includes(",")
+        ? normalized.replace(/\./g, "").replace(",", ".")
+        : normalized;
+      const parsed = Number(numeric);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+    };
+    const identifiedVehicles = leads.filter(
+      (lead) =>
+        lead.vehicle_plate ||
+        lead.vehicle_brand ||
+        lead.vehicle_model ||
+        lead.vehicle_year ||
+        lead.vehicle_fipe_value,
+    );
+    const fipeByLead = new Map<string, number>();
+    for (const lead of identifiedVehicles) {
+      const value = parseFipeValue(lead.vehicle_fipe_value);
+      if (value !== null) fipeByLead.set(lead.id, value);
+    }
+    const countVehicleField = (
+      read: (lead: (typeof leads)[number]) => string | null,
+    ) => {
+      const counts = new Map<string, number>();
+      for (const lead of identifiedVehicles) {
+        const value = read(lead)?.trim();
+        if (!value) continue;
+        counts.set(value, (counts.get(value) ?? 0) + 1);
+      }
+      return [...counts.entries()]
+        .map(([name, count]) => ({ name, count }))
+        .sort(
+          (left, right) =>
+            right.count - left.count || left.name.localeCompare(right.name),
+        )
+        .slice(0, 15);
+    };
+    const ranges = [
+      { key: "up_to_30k", label: "Até R$ 30 mil", min: 0, max: 30000 },
+      {
+        key: "30k_to_60k",
+        label: "R$ 30 mil a R$ 60 mil",
+        min: 30000,
+        max: 60000,
+      },
+      {
+        key: "60k_to_100k",
+        label: "R$ 60 mil a R$ 100 mil",
+        min: 60000,
+        max: 100000,
+      },
+      {
+        key: "above_100k",
+        label: "Acima de R$ 100 mil",
+        min: 100000,
+        max: Number.POSITIVE_INFINITY,
+      },
+    ];
+    const fipeRanges = ranges.map((range) => {
+      const leadIds = [...fipeByLead.entries()]
+        .filter(([, value]) => value >= range.min && value < range.max)
+        .map(([leadId]) => leadId);
+      const sold = leadIds.filter((leadId) => soldLeadIds.has(leadId)).length;
+      return {
+        key: range.key,
+        label: range.label,
+        leads: leadIds.length,
+        sold,
+        conversion_percent:
+          leadIds.length > 0 ? round2((sold / leadIds.length) * 100) : 0,
+      };
+    });
+    const fipeValues = [...fipeByLead.values()];
+    const soldWithVehicle = identifiedVehicles.filter((lead) =>
+      soldLeadIds.has(lead.id),
+    ).length;
+    const soldModelCounts = new Map<string, number>();
+    for (const sale of sales) {
+      const model = sale.model?.trim() || "Sem modelo";
+      soldModelCounts.set(model, (soldModelCounts.get(model) ?? 0) + 1);
+    }
+    const vehicleIntelligence = {
+      coverage: {
+        total_leads: leads.length,
+        identified_vehicles: identifiedVehicles.length,
+        with_fipe_value: fipeByLead.size,
+        vehicle_percent:
+          leads.length > 0
+            ? round2((identifiedVehicles.length / leads.length) * 100)
+            : 0,
+        fipe_percent:
+          identifiedVehicles.length > 0
+            ? round2((fipeByLead.size / identifiedVehicles.length) * 100)
+            : 0,
+      },
+      trade_in_fleet: {
+        total_fipe: round2(fipeValues.reduce((sum, value) => sum + value, 0)),
+        average_fipe:
+          fipeValues.length > 0
+            ? round2(
+                fipeValues.reduce((sum, value) => sum + value, 0) /
+                  fipeValues.length,
+              )
+            : 0,
+        by_brand: countVehicleField((lead) => lead.vehicle_brand),
+        by_model: countVehicleField((lead) => lead.vehicle_model),
+        by_year: countVehicleField((lead) => lead.vehicle_year),
+        by_fipe_range: fipeRanges,
+      },
+      conversion: {
+        identified_vehicle_leads: identifiedVehicles.length,
+        sold_with_vehicle: soldWithVehicle,
+        conversion_percent:
+          identifiedVehicles.length > 0
+            ? round2((soldWithVehicle / identifiedVehicles.length) * 100)
+            : 0,
+        identified_not_sold: identifiedVehicles.length - soldWithVehicle,
+      },
+      sold_vehicles: [...soldModelCounts.entries()]
+        .map(([model, count]) => ({ model, count }))
+        .sort(
+          (left, right) =>
+            right.count - left.count || left.model.localeCompare(right.model),
+        ),
+      desired_vehicle: {
+        available: false,
+        reason: "Modelo desejado ainda não é coletado em campo estruturado.",
+      },
+    };
+
+    const revenueByVendor = new Map<
+      string,
+      { sales: number; revenue: number }
+    >();
+    const revenueByTeam = new Map<string, { sales: number; revenue: number }>();
+    let unassignedTeamSales = 0;
+    let unassignedTeamRevenue = 0;
+    for (const sale of sales) {
+      const value = Number(sale.value);
+      const vendor = revenueByVendor.get(sale.vendor_id) ?? {
+        sales: 0,
+        revenue: 0,
+      };
+      vendor.sales += 1;
+      vendor.revenue += value;
+      revenueByVendor.set(sale.vendor_id, vendor);
+
+      if (sale.team_id) {
+        const team = revenueByTeam.get(sale.team_id) ?? {
+          sales: 0,
+          revenue: 0,
+        };
+        team.sales += 1;
+        team.revenue += value;
+        revenueByTeam.set(sale.team_id, team);
+      } else {
+        unassignedTeamSales += 1;
+        unassignedTeamRevenue += value;
+      }
+    }
+    const totalCommercialRevenue = sales.reduce(
+      (sum, sale) => sum + Number(sale.value),
+      0,
+    );
 
     return {
       event_id: eventId,
@@ -1185,6 +1677,8 @@ export class EventDashboardService {
         total: totalRatings,
         by_vendor: vendorRatings,
       },
+      event_feedback: eventFeedback,
+      vehicle_intelligence: vehicleIntelligence,
       attribution,
       attribution_by_level: {
         campaigns: campaignAttribution,
@@ -1194,6 +1688,12 @@ export class EventDashboardService {
       attribution_period: {
         from: reportFrom,
         to: reportTo,
+        source: event.launch_date ? "event_launch_date" : "default_30_days",
+        timezone: EVENT_TIMEZONE,
+        default_lookback_days: event.launch_date ? null : defaultLookbackDays,
+        campaigns_started_before_window: campaignStarts.filter(
+          (start) => start < reportFrom,
+        ).length,
       },
       attribution_coverage: {
         attributed_leads: attributedLeadCount,
@@ -1203,26 +1703,35 @@ export class EventDashboardService {
       },
       rubinho,
       commercial_revenue: {
-        by_vendor: [...new Set(sales.map((sale) => sale.vendor_id))].map(
-          (vendorId) => ({
-            vendor_id: vendorId,
-            revenue: round2(
-              sales
-                .filter((sale) => sale.vendor_id === vendorId)
-                .reduce((sum, sale) => sum + Number(sale.value), 0),
-            ),
-          }),
-        ),
-        by_team: [
-          ...new Set(sales.map((sale) => sale.team_id).filter(Boolean)),
-        ].map((teamId) => ({
-          team_id: teamId as string,
-          revenue: round2(
-            sales
-              .filter((sale) => sale.team_id === teamId)
-              .reduce((sum, sale) => sum + Number(sale.value), 0),
-          ),
+        total_sales: sales.length,
+        total_revenue: round2(totalCommercialRevenue),
+        by_vendor: [...revenueByVendor.entries()].map(([vendorId, totals]) => ({
+          vendor_id: vendorId,
+          sales: totals.sales,
+          revenue: round2(totals.revenue),
+          average_ticket:
+            totals.sales > 0 ? round2(totals.revenue / totals.sales) : 0,
         })),
+        by_team: [...revenueByTeam.entries()].map(([teamId, totals]) => ({
+          team_id: teamId,
+          sales: totals.sales,
+          revenue: round2(totals.revenue),
+          average_ticket:
+            totals.sales > 0 ? round2(totals.revenue / totals.sales) : 0,
+        })),
+        coverage: {
+          vendor_sales: sales.length,
+          vendor_percent: 100,
+          team_sales: sales.length - unassignedTeamSales,
+          team_percent:
+            sales.length > 0
+              ? round2(
+                  ((sales.length - unassignedTeamSales) / sales.length) * 100,
+                )
+              : 100,
+          unassigned_team_sales: unassignedTeamSales,
+          unassigned_team_revenue: round2(unassignedTeamRevenue),
+        },
       },
       data_quality: {
         real: [
@@ -1234,6 +1743,18 @@ export class EventDashboardService {
         ],
         attributed: ["meta_last_touch", "rubinho_agent_created_appointment"],
         estimated: ["profit_by_segment_margin", "grand_prix_score"],
+        warnings: [
+          ...(event.launch_date
+            ? []
+            : [
+                "Janela Meta usa 30 dias antes do evento porque a data de lançamento não foi informada.",
+              ]),
+          ...(campaignStarts.some((start) => start < reportFrom)
+            ? [
+                "Há campanhas iniciadas antes da janela; o gasto anterior não foi incluído.",
+              ]
+            : []),
+        ],
       },
       history,
     };

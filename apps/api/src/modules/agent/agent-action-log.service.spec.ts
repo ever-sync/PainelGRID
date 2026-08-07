@@ -15,6 +15,9 @@ describe("AgentActionLogService", () => {
         create: jest.fn(),
         findMany: jest.fn(),
       },
+      message: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
     };
 
     conversationStateService = {
@@ -59,6 +62,7 @@ describe("AgentActionLogService", () => {
     });
 
     const result = await service.createActionLog(conversationId, {
+      message_id: "44444444-4444-4444-8444-444444444444",
       provider: "openai",
       model: "gpt-5.4-mini",
       trigger_type: "incoming_message",
@@ -71,6 +75,17 @@ describe("AgentActionLogService", () => {
     });
 
     expect(prisma.agentActionLog.create).toHaveBeenCalled();
+    expect(prisma.message.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "44444444-4444-4444-8444-444444444444",
+        conversation_id: conversationId,
+      },
+      data: {
+        author_type: "rubinho",
+        origin: "n8n",
+        agent_action_log_id: "log-1",
+      },
+    });
     expect(result).toEqual(
       expect.objectContaining({
         conversation_id: conversationId,

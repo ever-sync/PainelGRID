@@ -15,7 +15,9 @@ export class AutomationKeyGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<{
       headers: Record<string, string | string[] | undefined>;
     }>();
-    const provided = String(request.headers["x-n8n-automation-key"] ?? "").trim();
+    const provided = String(
+      request.headers["x-n8n-automation-key"] ?? "",
+    ).trim();
     const expected = this.config.get<string>("N8N_AUTOMATION_API_KEY")?.trim();
     if (!provided || !expected || !this.safeEqual(provided, expected)) {
       throw new UnauthorizedException("Chave de automacao invalida");

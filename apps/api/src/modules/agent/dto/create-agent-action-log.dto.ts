@@ -1,6 +1,17 @@
-import { IsNumber, IsOptional, IsString, Max, Min } from "class-validator";
+import {
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+} from "class-validator";
 
 export class CreateAgentActionLogDto {
+  @IsOptional()
+  @IsUUID()
+  message_id?: string;
+
   @IsOptional()
   @IsString()
   provider?: string;

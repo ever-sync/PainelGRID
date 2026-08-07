@@ -36,6 +36,7 @@ import { ConfirmAppointmentDto } from "./dto/confirm-appointment.dto";
 import { CreateAppointmentDto } from "./dto/create-appointment.dto";
 import { NoShowAppointmentDto } from "./dto/no-show-appointment.dto";
 import { RescheduleAppointmentDto } from "./dto/reschedule-appointment.dto";
+import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.service";
 
 const ACTIVE_APPOINTMENT_STATUSES = [
   AppointmentStatus.proposed,
@@ -79,6 +80,7 @@ export class AppointmentsService {
     private readonly realtimeEvents: RealtimeEventsService,
     private readonly mail: MailService,
     private readonly metaService: MetaService,
+    private readonly dispatchTracking: DispatchTrackingService,
   ) {}
 
   private checkinVoucherSecret(): string {
@@ -161,6 +163,14 @@ export class AppointmentsService {
     );
 
     if (!result.idempotent_replay) {
+      await this.dispatchTracking
+        .markConversion({
+          leadId: dto.lead_id,
+          type: "appointment",
+          occurredAt: new Date(),
+          appointmentId: result.id,
+        })
+        .catch(() => undefined);
       void this.clientWebhook.dispatch(lead.client_id, "appointment.created", {
         appointment_id: result.id,
         lead_id: dto.lead_id,
@@ -270,6 +280,9 @@ export class AppointmentsService {
               sender_type: SenderType.system,
               content: caption,
               external_id: sent.wamid,
+              author_type: "automation",
+              origin: "credential_qrcode",
+              workflow_key: "appointment-credential",
               media_id: sent.mediaId,
               media_url: sent.mediaUrl,
             },

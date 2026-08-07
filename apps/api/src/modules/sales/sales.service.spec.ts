@@ -91,6 +91,7 @@ describe("SalesService", () => {
       prisma,
       scoreEvents as any,
       { emitLeadUpdated: jest.fn() } as any,
+      { markConversion: jest.fn().mockResolvedValue(null) } as any,
     );
   });
 

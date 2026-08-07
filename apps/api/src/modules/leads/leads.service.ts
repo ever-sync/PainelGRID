@@ -38,6 +38,7 @@ import { LeadTimelineService } from "../lead-timeline/lead-timeline.service";
 import type { MetaLeadWhatsappTemplateParameterKey } from "../meta/dto/upsert-meta-lead-routing.dto";
 import { MetaService } from "../meta/meta.service";
 import { resolveConfirmationStatusForStage } from "../clients/client-settings";
+import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.service";
 import { clientIdToStageCode } from "../crm/default-crm-pipeline";
 import { RealtimeEventsService } from "../realtime/realtime-events.service";
 import { ScoreEventsService } from "../score-events/score-events.service";
@@ -239,6 +240,7 @@ export class LeadsService {
     private readonly metaService: MetaService,
     private readonly leadTimeline: LeadTimelineService,
     private readonly redis: RedisService,
+    private readonly dispatchTracking: DispatchTrackingService,
   ) {}
 
   private checkinVoucherSecret(): string {
@@ -2496,6 +2498,31 @@ export class LeadsService {
         messageId,
       );
 
+      await this.dispatchTracking
+        .upsert(lead.client_id, {
+          lead_id: lead.id,
+          event_id: routing.eventId,
+          dispatch_key: `meta-lead-template:${lead.facebook_lead_id ?? lead.id}:${templateName}`,
+          workflow_key: "facebook-lead-auto-template",
+          dispatch_type: "lead_welcome_template",
+          channel: "whatsapp",
+          provider: "meta",
+          provider_message_id: messageId ?? undefined,
+          template_name: templateName,
+          status: "sent",
+          occurred_at: new Date().toISOString(),
+          metadata: {
+            form_id: routing.formId,
+            template_language: templateLanguage,
+            chat_recorded: chatRecorded,
+          },
+        })
+        .catch((trackingError) => {
+          this.logger.error(
+            `Template enviado, mas o rastreamento falhou para o lead ${lead.id}: ${this.errorMessage(trackingError)}`,
+          );
+        });
+
       await this.leadTimeline.record({
         clientId: lead.client_id,
         leadId: lead.id,
@@ -2535,6 +2562,29 @@ export class LeadsService {
         leadId: lead.id,
         metadata: { form_id: routing.formId, template_name: templateName },
       });
+      await this.dispatchTracking
+        .upsert(lead.client_id, {
+          lead_id: lead.id,
+          event_id: routing.eventId,
+          dispatch_key: `meta-lead-template:${lead.facebook_lead_id ?? lead.id}:${templateName}`,
+          workflow_key: "facebook-lead-auto-template",
+          dispatch_type: "lead_welcome_template",
+          channel: "whatsapp",
+          provider: "meta",
+          template_name: templateName,
+          status: "failed",
+          occurred_at: new Date().toISOString(),
+          failure_reason: errorMessage,
+          metadata: {
+            form_id: routing.formId,
+            template_language: templateLanguage,
+          },
+        })
+        .catch((trackingError) => {
+          this.logger.error(
+            `Falha ao registrar erro do disparo para o lead ${lead.id}: ${this.errorMessage(trackingError)}`,
+          );
+        });
       return {
         status: "failed",
         reason: "provider_error",
@@ -2600,6 +2650,10 @@ export class LeadsService {
             sender_id: null,
             content: `Template WhatsApp enviado: ${templateName}`,
             external_id: messageId,
+            author_type: "template",
+            origin: "meta_template",
+            workflow_key: "facebook-lead-auto-template",
+            template_name: templateName,
           },
         });
         await tx.conversation.update({
@@ -3428,6 +3482,7 @@ export class LeadsService {
   }
 
   async checkInByToken(user: AuthenticatedUser, token: string) {
+    const checkedInAt = new Date();
     const allowedRoles = [
       Role.RECEPCAO,
       Role.VENDEDOR,
@@ -3568,7 +3623,7 @@ export class LeadsService {
     });
 
     if (appointment) {
-      const completedAt = new Date();
+      const completedAt = checkedInAt;
       await this.prisma.$transaction(async (tx) => {
         const updatedAppointment = await tx.appointment.update({
           where: { id: appointment.id },
@@ -3600,10 +3655,24 @@ export class LeadsService {
       });
     }
 
+    void this.leadTimeline.record({
+      clientId: updated.client_id,
+      leadId: updated.id,
+      eventType: "status_changed",
+      origin: user.role === Role.VENDEDOR ? "vendor" : "gestor",
+      fromValue: lead.confirmation_status,
+      toValue: ConfirmationStatus.checked_in,
+      actorId: user.sub,
+      actorLabel: user.name ?? null,
+      notes: "Check-in realizado por token/voucher",
+      metadata: { action: "checkin", method: "token_voucher" },
+      occurredAt: checkedInAt,
+    });
+
     this.realtimeEvents.emitLeadCheckin(updated.client_id, {
       lead_id: updated.id,
       confirmation_status: updated.confirmation_status,
-      checked_in_at: new Date().toISOString(),
+      checked_in_at: checkedInAt.toISOString(),
     });
     this.realtimeEvents.emitLeadUpdated(updated.client_id, {
       client_id: updated.client_id,

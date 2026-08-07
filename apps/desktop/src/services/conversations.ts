@@ -27,6 +27,18 @@ export type ApiMessage = {
   conversation_id: string;
   sender_type: "system" | "user" | "lead";
   sender_id: string | null;
+  author_type?:
+    | "lead"
+    | "rubinho"
+    | "human"
+    | "system"
+    | "automation"
+    | "template"
+    | "legacy_unknown";
+  origin?: string;
+  workflow_key?: string | null;
+  template_name?: string | null;
+  agent_action_log_id?: string | null;
   content: string;
   media_id?: string | null;
   media_url?: string | null;
@@ -120,6 +132,11 @@ export function mapApiMessagesToMessages(messages: ApiMessage[]): Message[] {
   return messages.map((m) => ({
     id: m.id,
     sender: mapSender(m.sender_type),
+    author_type: m.author_type,
+    origin: m.origin,
+    workflow_key: m.workflow_key,
+    template_name: m.template_name,
+    agent_action_log_id: m.agent_action_log_id,
     text: m.content,
     media_id: m.media_id ?? null,
     media_url: m.media_url ?? null,

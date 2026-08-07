@@ -14,6 +14,18 @@ export class SubmitRatingDto {
   score!: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  event_score?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10)
+  nps_score?: number;
+
+  @IsOptional()
   @IsString()
   @MaxLength(1000)
   comment?: string;

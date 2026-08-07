@@ -13,7 +13,6 @@ import {
 import { Notice } from "../../components/ui/Notice";
 import type { UserRole } from "../../types";
 import gpLogo from "../../assets/logo.png";
-import loginPoster from "../../assets/login-poster.jpg";
 import {
   loginWithPassword,
   verifyTwoFactorCode,
@@ -108,10 +107,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   };
 
   return (
-    <div className="min-h-screen flex">
-      {/* ── Esquerda: Formulário ── */}
-      <div className="w-full lg:w-1/2 flex flex-col justify-center bg-white px-8 py-10 lg:px-14 min-h-screen lg:min-h-0">
-        <div className="flex flex-col max-w-sm mx-auto w-full">
+    <div className="min-h-screen flex items-center justify-center bg-white px-6 py-10">
+      <div className="w-full max-w-sm">
+        <div className="flex w-full flex-col">
           {/* Logo */}
           <div className="mb-8">
             <div className="mb-6 flex items-center justify-between">
@@ -311,18 +309,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             </form>
           )}
         </div>
-      </div>
-
-      {/* ── Direita: arte institucional (copy ja faz parte da imagem) ── */}
-      <div className="hidden h-screen w-1/2 items-center justify-center bg-white p-6 lg:flex">
-        <img
-          src={loginPoster}
-          alt="Grand Prix de Vendas — a plataforma de alta performance para concessionárias"
-          width={1122}
-          height={1402}
-          decoding="async"
-          className="max-h-full max-w-full rounded-3xl object-contain"
-        />
       </div>
     </div>
   );

@@ -66,18 +66,25 @@ enum UserApprovalStatus {
 }
 
 model ServiceRating {
-  id            String   @id @default(uuid()) @db.Uuid
-  vendor_id     String   @db.Uuid
-  score         Int
-  comment       String?
-  customer_name String?  @db.VarChar(255)
-  event_id      String?  @db.Uuid
-  created_at    DateTime @default(now())
-  vendor        User     @relation(fields: [vendor_id], references: [id])
-  event         Event?   @relation(fields: [event_id], references: [id])
+  id                         String    @id @default(uuid()) @db.Uuid
+  vendor_id                  String    @db.Uuid
+  score                      Int
+  event_score                Int?
+  nps_score                  Int?
+  comment                    String?
+  customer_name              String?   @db.VarChar(255)
+  event_id                   String?   @db.Uuid
+  google_review_requested_at DateTime?
+  google_review_clicked_at   DateTime?
+  google_review_verified_at  DateTime?
+  created_at                 DateTime  @default(now())
+  vendor                     User      @relation(fields: [vendor_id], references: [id])
+  event                      Event?    @relation(fields: [event_id], references: [id])
 
   @@index([vendor_id])
   @@index([event_id])
+  @@index([event_id, event_score])
+  @@index([event_id, nps_score])
   @@map("service_ratings")
 }
 
@@ -150,6 +157,7 @@ model Client {
   gestor                      User                       @relation("GestorClients", fields: [gestor_id], references: [id])
   conversation_states         ConversationState[]
   conversations               Conversation[]
+  dispatch_events             DispatchEvent[]
   crm_pipelines               CrmPipeline[]
   crm_stages                  CrmStage[]
   event_participations        EventParticipant[]
@@ -252,6 +260,7 @@ model Lead {
   conversations               Conversation[]
   crm_history                 CrmHistory[]
   lead_timeline               LeadTimeline[]
+  dispatch_events             DispatchEvent[]
   assigned_vendor             User?                      @relation("VendorLeads", fields: [assigned_vendor_id], references: [id])
   attendant_user              User?                      @relation("LeadAttendantUser", fields: [attendant_user_id], references: [id])
   campaign                    Campaign?                  @relation(fields: [campaign_id], references: [id])
@@ -315,6 +324,7 @@ model Event {
   total_investment              Decimal?                 @db.Decimal(12, 2)
   paid_traffic_investment       Decimal?                 @db.Decimal(12, 2)
   appointments                  Appointment[]
+  dispatch_events               DispatchEvent[]
   conversation_state_last_offer ConversationState[]      @relation("ConversationStateLastOfferedEvent")
   participants                  EventParticipant[]
   client                        Client                   @relation(fields: [client_id], references: [id])
@@ -481,6 +491,7 @@ model Conversation {
   client                   Client                     @relation(fields: [client_id], references: [id])
   lead                     Lead                       @relation(fields: [lead_id], references: [id])
   messages                 Message[]
+  dispatch_events          DispatchEvent[]
   WhatsAppAttributionEvent WhatsAppAttributionEvent[]
 
   @@index([client_id])
@@ -491,20 +502,30 @@ model Conversation {
 }
 
 model Message {
-  id              String       @id @default(uuid()) @db.Uuid
-  conversation_id String       @db.Uuid
-  sender_type     SenderType
-  sender_id       String?      @db.Uuid
-  content         String
-  media_url       String?      @db.VarChar(500)
-  read_at         DateTime?
-  created_at      DateTime     @default(now())
-  external_id     String?      @unique @db.VarChar(191)
-  media_id        String?      @db.VarChar(191)
-  conversation    Conversation @relation(fields: [conversation_id], references: [id])
+  id                  String          @id @default(uuid()) @db.Uuid
+  conversation_id     String          @db.Uuid
+  sender_type         SenderType
+  sender_id           String?         @db.Uuid
+  content             String
+  media_url           String?         @db.VarChar(500)
+  read_at             DateTime?
+  created_at          DateTime        @default(now())
+  external_id         String?         @unique @db.VarChar(191)
+  media_id            String?         @db.VarChar(191)
+  author_type         String          @default("legacy_unknown") @db.VarChar(40)
+  origin              String          @default("legacy") @db.VarChar(40)
+  workflow_key        String?         @db.VarChar(160)
+  template_name       String?         @db.VarChar(512)
+  agent_action_log_id String?         @db.Uuid
+  conversation        Conversation    @relation(fields: [conversation_id], references: [id])
+  agent_action_log    AgentActionLog? @relation(fields: [agent_action_log_id], references: [id], onDelete: SetNull)
+  dispatch_events     DispatchEvent[]
 
   @@index([conversation_id])
   @@index([created_at])
+  @@index([author_type, created_at])
+  @@index([workflow_key])
+  @@index([agent_action_log_id])
   @@index([conversation_id, created_at(sort: Desc)], map: "idx_messages_conversation_created")
   @@map("messages")
 }
@@ -970,6 +991,7 @@ model Appointment {
   rescheduled_to                  Appointment[]        @relation("AppointmentRescheduleChain")
   sale                            Sale?
   score_events                    ScoreEvent[]
+  dispatch_events                 DispatchEvent[]
 
   @@index([client_id])
   @@index([lead_id])
@@ -983,25 +1005,26 @@ model Appointment {
 }
 
 model Sale {
-  id             String       @id @default(uuid()) @db.Uuid
-  client_id      String       @db.Uuid
-  lead_id        String       @db.Uuid
-  appointment_id String       @unique @db.Uuid
-  vendor_id      String       @db.Uuid
-  type           SaleType
-  model          String       @db.VarChar(255)
-  value          Decimal      @db.Decimal(12, 2)
-  sold_at        DateTime     @default(now())
-  notes          String?
-  created_at     DateTime     @default(now())
-  updated_at     DateTime     @updatedAt
-  team_id        String?      @db.Uuid
-  appointment    Appointment  @relation(fields: [appointment_id], references: [id], onDelete: Cascade)
-  client         Client       @relation(fields: [client_id], references: [id], onDelete: Cascade)
-  lead           Lead         @relation(fields: [lead_id], references: [id], onDelete: Cascade)
-  sales_team     SalesTeam?   @relation(fields: [team_id], references: [id])
-  vendor         User         @relation("VendorSales", fields: [vendor_id], references: [id])
-  score_events   ScoreEvent[]
+  id              String          @id @default(uuid()) @db.Uuid
+  client_id       String          @db.Uuid
+  lead_id         String          @db.Uuid
+  appointment_id  String          @unique @db.Uuid
+  vendor_id       String          @db.Uuid
+  type            SaleType
+  model           String          @db.VarChar(255)
+  value           Decimal         @db.Decimal(12, 2)
+  sold_at         DateTime        @default(now())
+  notes           String?
+  created_at      DateTime        @default(now())
+  updated_at      DateTime        @updatedAt
+  team_id         String?         @db.Uuid
+  appointment     Appointment     @relation(fields: [appointment_id], references: [id], onDelete: Cascade)
+  client          Client          @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  lead            Lead            @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+  sales_team      SalesTeam?      @relation(fields: [team_id], references: [id])
+  vendor          User            @relation("VendorSales", fields: [vendor_id], references: [id])
+  score_events    ScoreEvent[]
+  dispatch_events DispatchEvent[]
 
   @@index([client_id])
   @@index([lead_id])
@@ -1010,6 +1033,58 @@ model Sale {
   @@index([sold_at])
   @@index([client_id, sold_at(sort: Desc)], map: "idx_sales_client_sold_at")
   @@map("sales")
+}
+
+/// Jornada mensuravel de cada comunicacao disparada por workflow, agente ou operador.
+/// O registro nasce antes/do envio e recebe os marcos do provedor e das conversoes.
+model DispatchEvent {
+  id                  String        @id @default(uuid()) @db.Uuid
+  client_id           String        @db.Uuid
+  event_id            String?       @db.Uuid
+  lead_id             String        @db.Uuid
+  conversation_id     String?       @db.Uuid
+  message_id          String?       @db.Uuid
+  appointment_id      String?       @db.Uuid
+  sale_id             String?       @db.Uuid
+  dispatch_key        String        @db.VarChar(191)
+  workflow_key        String        @db.VarChar(160)
+  dispatch_type       String        @db.VarChar(80)
+  channel             String        @db.VarChar(40)
+  provider            String?       @db.VarChar(80)
+  provider_message_id String?       @db.VarChar(191)
+  template_name       String?       @db.VarChar(512)
+  status              String        @default("queued") @db.VarChar(40)
+  scheduled_at        DateTime?
+  sent_at             DateTime?
+  delivered_at        DateTime?
+  read_at             DateTime?
+  replied_at          DateTime?
+  failed_at           DateTime?
+  converted_at        DateTime?
+  conversion_type     String?       @db.VarChar(80)
+  revenue             Decimal?      @db.Decimal(12, 2)
+  failure_code        String?       @db.VarChar(100)
+  failure_reason      String?
+  metadata            Json          @default("{}")
+  created_at          DateTime      @default(now())
+  updated_at          DateTime      @updatedAt
+  client              Client        @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  event               Event?        @relation(fields: [event_id], references: [id], onDelete: SetNull)
+  lead                Lead          @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+  conversation        Conversation? @relation(fields: [conversation_id], references: [id], onDelete: SetNull)
+  message             Message?      @relation(fields: [message_id], references: [id], onDelete: SetNull)
+  appointment         Appointment?  @relation(fields: [appointment_id], references: [id], onDelete: SetNull)
+  sale                Sale?         @relation(fields: [sale_id], references: [id], onDelete: SetNull)
+
+  @@unique([client_id, dispatch_key])
+  @@index([client_id, created_at(sort: Desc)])
+  @@index([event_id, created_at(sort: Desc)])
+  @@index([lead_id, created_at(sort: Desc)])
+  @@index([workflow_key, status])
+  @@index([provider_message_id])
+  @@index([appointment_id])
+  @@index([sale_id])
+  @@map("dispatch_events")
 }
 
 model ScoreEvent {
@@ -1069,32 +1144,33 @@ model ConversationState {
 }
 
 model AgentActionLog {
-  id              String       @id @default(uuid()) @db.Uuid
-  client_id       String       @db.Uuid
-  lead_id         String       @db.Uuid
-  conversation_id String       @db.Uuid
-  provider        String?      @db.VarChar(80)
-  model           String?      @db.VarChar(120)
-  trigger_type    String       @db.VarChar(80)
-  decision_type   String       @db.VarChar(80)
-  confidence      Float?
-  input_summary   String?
-  output_summary  String?
-  action_payload  Json         @default("{}")
-  result_status   String       @db.VarChar(80)
-  error_message   String?
-  previous_state  Json?
+  id               String       @id @default(uuid()) @db.Uuid
+  client_id        String       @db.Uuid
+  lead_id          String       @db.Uuid
+  conversation_id  String       @db.Uuid
+  provider         String?      @db.VarChar(80)
+  model            String?      @db.VarChar(120)
+  trigger_type     String       @db.VarChar(80)
+  decision_type    String       @db.VarChar(80)
+  confidence       Float?
+  input_summary    String?
+  output_summary   String?
+  action_payload   Json         @default("{}")
+  result_status    String       @db.VarChar(80)
+  error_message    String?
+  previous_state   Json?
   received_message String?
-  next_stage      String?      @db.VarChar(120)
-  tool_name       String?      @db.VarChar(120)
-  tool_input      Json?
-  api_response    Json?
-  resulting_state Json?
-  block_reason    String?
-  created_at      DateTime     @default(now())
-  client          Client       @relation(fields: [client_id], references: [id])
-  conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
-  lead            Lead         @relation(fields: [lead_id], references: [id])
+  next_stage       String?      @db.VarChar(120)
+  tool_name        String?      @db.VarChar(120)
+  tool_input       Json?
+  api_response     Json?
+  resulting_state  Json?
+  block_reason     String?
+  created_at       DateTime     @default(now())
+  client           Client       @relation(fields: [client_id], references: [id])
+  conversation     Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  lead             Lead         @relation(fields: [lead_id], references: [id])
+  messages         Message[]
 
   @@index([client_id])
   @@index([lead_id])
@@ -1108,26 +1184,26 @@ model AgentActionLog {
 /// Fila operacional unificada. `fingerprint` evita criar várias ocorrências
 /// para o mesmo problema enquanto occurrence_count/last_seen_at preservam a recorrência.
 model OperationalIssue {
-  id               String   @id @default(uuid()) @db.Uuid
-  client_id        String?  @db.Uuid
-  lead_id          String?  @db.Uuid
-  conversation_id  String?  @db.Uuid
-  event_id         String?  @db.Uuid
-  type              String   @db.VarChar(80)
-  severity          String   @default("warning") @db.VarChar(20)
-  status            String   @default("open") @db.VarChar(20)
-  title             String   @db.VarChar(255)
-  message           String
-  source            String   @db.VarChar(80)
-  fingerprint       String   @unique @db.VarChar(255)
-  metadata          Json     @default("{}")
-  occurrence_count Int      @default(1)
-  first_seen_at     DateTime @default(now())
-  last_seen_at      DateTime @default(now())
-  resolved_at       DateTime?
-  resolved_by       String?  @db.Uuid
-  created_at        DateTime @default(now())
-  updated_at        DateTime @updatedAt
+  id               String    @id @default(uuid()) @db.Uuid
+  client_id        String?   @db.Uuid
+  lead_id          String?   @db.Uuid
+  conversation_id  String?   @db.Uuid
+  event_id         String?   @db.Uuid
+  type             String    @db.VarChar(80)
+  severity         String    @default("warning") @db.VarChar(20)
+  status           String    @default("open") @db.VarChar(20)
+  title            String    @db.VarChar(255)
+  message          String
+  source           String    @db.VarChar(80)
+  fingerprint      String    @unique @db.VarChar(255)
+  metadata         Json      @default("{}")
+  occurrence_count Int       @default(1)
+  first_seen_at    DateTime  @default(now())
+  last_seen_at     DateTime  @default(now())
+  resolved_at      DateTime?
+  resolved_by      String?   @db.Uuid
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
 
   @@index([status, last_seen_at(sort: Desc)])
   @@index([type, status])

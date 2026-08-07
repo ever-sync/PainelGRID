@@ -37,6 +37,8 @@ import { IntegrationKeyGuard } from "./integration-key.guard";
 import type { IntegrationRequest } from "./integration-request";
 import { RubinhoService } from "../rubinho/rubinho.service";
 import { ConversationsService } from "../conversations/conversations.service";
+import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.service";
+import { UpsertDispatchDto } from "../dispatch-tracking/dto/upsert-dispatch.dto";
 
 @ApiTags("integrations")
 @Controller("integrations/v1")
@@ -51,7 +53,45 @@ export class IntegrationController {
     private readonly eventsService: EventsService,
     private readonly rubinhoService: RubinhoService,
     private readonly conversationsService: ConversationsService,
+    private readonly dispatchTracking: DispatchTrackingService,
   ) {}
+
+  @Post("dispatches")
+  @ApiOperation({
+    summary: "Registra ou atualiza a jornada mensurável de um disparo",
+    description:
+      "Endpoint idempotente por client_id + dispatch_key. O n8n pode chamá-lo " +
+      "ao agendar, enviar, falhar ou converter uma comunicação.",
+  })
+  upsertDispatch(
+    @Body() dto: UpsertDispatchDto,
+    @Req() req: IntegrationRequest,
+  ) {
+    const clientId = req.integrationClientId ?? dto.client_id;
+    if (!clientId) {
+      throw new BadRequestException(
+        "client_id obrigatório para esta credencial",
+      );
+    }
+    return this.dispatchTracking.upsert(clientId, dto);
+  }
+
+  @Get("dispatches")
+  @ApiOperation({ summary: "Lista os disparos registrados para auditoria" })
+  listDispatches(
+    @Req() req: IntegrationRequest,
+    @Query("client_id") requestedClientId?: string,
+    @Query("event_id") eventId?: string,
+    @Query("lead_id") leadId?: string,
+  ) {
+    const clientId = req.integrationClientId ?? requestedClientId;
+    if (!clientId) {
+      throw new BadRequestException(
+        "client_id obrigatório para esta credencial",
+      );
+    }
+    return this.dispatchTracking.list(clientId, { eventId, leadId });
+  }
 
   @Get("events")
   @ApiOperation({

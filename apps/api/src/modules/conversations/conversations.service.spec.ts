@@ -79,6 +79,7 @@ describe("ConversationsService", () => {
         upload: jest.fn(),
         download: jest.fn().mockResolvedValue(null),
       } as never,
+      { upsert: jest.fn().mockResolvedValue({ id: "dispatch-1" }) } as never,
     );
   });
 
@@ -115,10 +116,15 @@ describe("ConversationsService", () => {
             expect.objectContaining({
               sender_type: SenderType.lead,
               external_id: "n8n-history:10",
+              author_type: "lead",
+              origin: "n8n",
             }),
             expect.objectContaining({
               sender_type: SenderType.user,
               external_id: "n8n-history:11",
+              author_type: "rubinho",
+              origin: "n8n",
+              workflow_key: "n8n-agent-history",
             }),
           ],
         }),

@@ -23,10 +23,6 @@ import {
   type EventDashboardTvResponse,
   type ExecutiveReportResponse,
 } from "../../services/events";
-import {
-  getMetaCampaignsReport,
-  type MetaCampaignsReportItem,
-} from "../../services/meta";
 import type { Client, Event } from "../../types";
 import {
   DASHBOARD_DARK_CHANGE_EVENT,
@@ -117,7 +113,6 @@ export function RelatorioExecutivoPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [tv, setTv] = useState<EventDashboardTvResponse | null>(null);
   const [exec, setExec] = useState<ExecutiveReportResponse | null>(null);
-  const [campaigns, setCampaigns] = useState<MetaCampaignsReportItem[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -187,15 +182,13 @@ export function RelatorioExecutivoPage() {
       .finally(() => setLoading(false));
   }, [selectedClientId]);
 
-  // Carrega snapshot + relatório executivo + leads + campanhas do evento.
-  // As campanhas do Meta são buscadas para TODOS os clientes participantes do
-  // evento (um evento pode ser compartilhado por 2+ clientes) e mescladas.
+  // Carrega snapshot e relatório executivo. Toda métrica Meta já vem filtrada
+  // no backend pelas campanhas vinculadas/importadas para este evento.
   useEffect(() => {
     const token = readStoredSession()?.accessToken;
     if (!token || !selectedEventId) {
       setTv(null);
       setExec(null);
-      setCampaigns([]);
       return;
     }
     getEventDashboardTv(selectedEventId, token)
@@ -204,34 +197,9 @@ export function RelatorioExecutivoPage() {
     getEventExecutiveReport(selectedEventId, token)
       .then(setExec)
       .catch(() => setExec(null));
-    const ev = events.find((e) => e.id === selectedEventId);
-    const clientIds =
-      ev && ev.participant_client_ids.length > 0
-        ? ev.participant_client_ids
-        : ev
-          ? [ev.client_id]
-          : selectedClientId !== "all"
-            ? [selectedClientId]
-            : [];
-    Promise.all(
-      clientIds.map((cid) =>
-        getMetaCampaignsReport(cid, token).catch(() => ({ campaigns: [] })),
-      ),
-    )
-      .then((reports) => {
-        const merged = reports.flatMap(
-          (r) =>
-            (r as { campaigns?: MetaCampaignsReportItem[] }).campaigns ?? [],
-        );
-        setCampaigns(merged);
-      })
-      .catch(() => setCampaigns([]));
   }, [selectedEventId, events, selectedClientId]);
 
-  const report = useMemo(
-    () => buildReport(tv, exec, campaigns),
-    [tv, exec, campaigns],
-  );
+  const report = useMemo(() => buildReport(tv, exec), [tv, exec]);
   const selectedEvent = events.find((e) => e.id === selectedEventId);
 
   const panel = clsx(
@@ -467,7 +435,6 @@ type ReportModel = ReturnType<typeof buildReport>;
 function buildReport(
   tv: EventDashboardTvResponse | null,
   exec: ExecutiveReportResponse | null,
-  campaigns: MetaCampaignsReportItem[],
 ) {
   const f = tv?.funnel ?? {
     leads: 0,
@@ -485,7 +452,12 @@ function buildReport(
     entity_id: row.entity_id ?? row.meta_campaign_id,
     meta_ad_set_id: null,
     spend: row.spend ?? 0,
+    meta_leads: row.meta_leads ?? row.leads ?? 0,
+    impressions: row.impressions ?? 0,
+    reach: row.reach ?? 0,
+    conversations: row.conversations ?? 0,
     cpl: row.cpl ?? 0,
+    cost_per_conversation: row.cost_per_conversation ?? 0,
     cost_per_scheduled: row.cost_per_scheduled ?? 0,
     cost_per_sale: row.cost_per_sale ?? 0,
     roas: row.roas ?? 0,
@@ -496,17 +468,30 @@ function buildReport(
     ad_sets: [],
     ads: [],
   };
-  const metaSpend = levelAttribution.campaigns.length
-    ? levelAttribution.campaigns.reduce((sum, row) => sum + (row.spend || 0), 0)
-    : campaigns.reduce((sum, campaign) => sum + (campaign.spend || 0), 0);
+  const metaSpend = levelAttribution.campaigns.reduce(
+    (sum, row) => sum + (row.spend || 0),
+    0,
+  );
   // Prefere o investimento declarado no evento; cai para o gasto do Meta.
   const investimento = exec?.investment?.total ?? metaSpend;
   const paidTraffic = exec?.investment?.paid_traffic ?? metaSpend;
   const investimentoDeclarado = exec?.investment?.total != null;
-  const leadsMidia = campaigns.reduce((s, c) => s + (c.leads || 0), 0);
-  const impressoes = campaigns.reduce((s, c) => s + (c.impressions || 0), 0);
-  const conversas = campaigns.reduce((s, c) => s + (c.conversations || 0), 0);
-  const alcance = campaigns.reduce((s, c) => s + (c.reach || 0), 0);
+  const leadsMidia = levelAttribution.campaigns.reduce(
+    (sum, row) => sum + (row.meta_leads || 0),
+    0,
+  );
+  const impressoes = levelAttribution.campaigns.reduce(
+    (sum, row) => sum + (row.impressions || 0),
+    0,
+  );
+  const conversas = levelAttribution.campaigns.reduce(
+    (sum, row) => sum + (row.conversations || 0),
+    0,
+  );
+  const alcance = levelAttribution.campaigns.reduce(
+    (sum, row) => sum + (row.reach || 0),
+    0,
+  );
   const cplMedio = leadsMidia > 0 ? paidTraffic / leadsMidia : 0;
 
   const faturamento = tv ? Number(tv.cars.total_value) || 0 : 0;
@@ -531,34 +516,28 @@ function buildReport(
     investimento > 0 ? ((faturamento - investimento) / investimento) * 100 : 0;
   const retornoPorReal = investimento > 0 ? faturamento / investimento : 0;
 
-  // Atribuição REAL por campanha (exec) cruzada com o custo de mídia (campaigns)
+  // Métricas e atribuição vêm da mesma fonte, já restrita ao evento no backend.
   const attrById = new Map(
     levelAttribution.campaigns.map((attribution) => [
       attribution.entity_id,
       attribution,
     ]),
   );
-  const campaignMetricsById = new Map(
-    campaigns.map((campaign) => [campaign.id, campaign]),
-  );
-  const campaignIds = new Set([
-    ...campaignMetricsById.keys(),
-    ...attrById.keys(),
-  ]);
+  const campaignIds = new Set(attrById.keys());
   const campaignRows: CampaignRow[] = [...campaignIds].map((campaignId) => {
-    const c = campaignMetricsById.get(campaignId);
     const a = attrById.get(campaignId);
     const receita = a?.revenue ?? 0;
     return {
       id: campaignId,
-      name: a?.name ?? c?.name ?? "Campanha sem nome",
-      investimento: a?.spend ?? c?.spend ?? 0,
-      leads: a?.leads ?? c?.leads ?? 0,
-      cpl: a?.cpl ?? c?.cost_per_lead ?? 0,
-      impressoes: c?.impressions || 0,
-      conversas: c?.conversations || 0,
-      custoConversa: c?.cost_per_conversation || 0,
-      alcance: c?.reach || 0,
+      name: a?.name ?? "Campanha sem nome",
+      investimento: a?.spend ?? 0,
+      leads: a?.meta_leads ?? 0,
+      cpl:
+        (a?.meta_leads ?? 0) > 0 ? (a?.spend ?? 0) / (a?.meta_leads ?? 1) : 0,
+      impressoes: a?.impressions ?? 0,
+      conversas: a?.conversations ?? 0,
+      custoConversa: a?.cost_per_conversation ?? 0,
+      alcance: a?.reach ?? 0,
       agendados: a?.scheduled ?? 0,
       compareceram: a?.checked_in ?? 0,
       vendas: a?.sold ?? 0,
@@ -569,22 +548,25 @@ function buildReport(
   });
   const attrReal = Boolean(exec);
   const coverage = exec?.attribution_coverage;
+  const attributionPeriod = exec?.attribution_period ?? null;
+  const dataQuality = exec?.data_quality ?? null;
 
   // Avaliações dos clientes por vendedor (real, do exec)
   const ratingByVendor = new Map(
     (exec?.ratings?.by_vendor ?? []).map((r) => [r.vendor_id, r]),
   );
 
-  // Ranking (real) + receita estimada por ticket médio + avaliação + tempos de atendimento e ausência
-  const vendorRevenue = new Map(
+  // Ranking comercial: receita e ticket calculados com os valores reais das vendas.
+  const vendorCommercial = new Map(
     (exec?.commercial_revenue?.by_vendor ?? []).map((row) => [
       row.vendor_id,
-      row.revenue,
+      row,
     ]),
   );
   const vendors = (tv?.vendors ?? [])
     .map((v) => {
       const rt = ratingByVendor.get(v.vendor_id);
+      const commercial = vendorCommercial.get(v.vendor_id);
 
       return {
         id: v.vendor_id,
@@ -595,7 +577,8 @@ function buildReport(
         compareceram: v.checked_in,
         vendas: v.sold,
         pontos: v.points,
-        receita: v.revenue ?? vendorRevenue.get(v.vendor_id) ?? 0,
+        receita: commercial?.revenue ?? v.revenue ?? 0,
+        ticketMedio: commercial?.average_ticket ?? 0,
         avaliacao: rt?.avg_score ?? 0,
         avaliacaoCount: rt?.count ?? 0,
       };
@@ -604,12 +587,10 @@ function buildReport(
 
   const ratingsOverall = exec?.ratings?.overall_avg ?? 0;
   const ratingsTotal = exec?.ratings?.total ?? 0;
+  const eventFeedback = exec?.event_feedback ?? null;
 
-  const teamRevenue = new Map(
-    (exec?.commercial_revenue?.by_team ?? []).map((row) => [
-      row.team_id,
-      row.revenue,
-    ]),
+  const teamCommercial = new Map(
+    (exec?.commercial_revenue?.by_team ?? []).map((row) => [row.team_id, row]),
   );
   const teams = (tv?.teams ?? [])
     .map((t) => ({
@@ -617,7 +598,8 @@ function buildReport(
       name: t.team_name,
       vendas: t.sold,
       pontos: t.points,
-      receita: teamRevenue.get(t.team_id) ?? t.revenue ?? 0,
+      receita: teamCommercial.get(t.team_id)?.revenue ?? t.revenue ?? 0,
+      ticketMedio: teamCommercial.get(t.team_id)?.average_ticket ?? 0,
     }))
     .sort((a, b) => b.vendas - a.vendas);
 
@@ -651,6 +633,7 @@ function buildReport(
     .sort((a, b) => b.count - a.count);
 
   const topModels = tv?.cars.top_models ?? [];
+  const vehicleIntelligence = exec?.vehicle_intelligence ?? null;
 
   // Rubinho (real quando exec disponível)
   const rubinho = exec?.rubinho ?? null;
@@ -731,16 +714,22 @@ function buildReport(
     attributionByLevel: levelAttribution,
     attrReal,
     coverage,
+    attributionPeriod,
+    dataQuality,
     vendors,
     teams,
+    commercialRevenueCoverage: exec?.commercial_revenue?.coverage ?? null,
     ratingsOverall,
     ratingsTotal,
+    eventFeedback,
     salesByWeekday,
     arrivalsByHour,
+    arrivalDataQuality: tv?.arrival_data_quality ?? null,
     peakHour,
     bySource,
     bySegment,
     topModels,
+    vehicleIntelligence,
     rubinho,
     history,
     narrative,
@@ -1102,45 +1091,83 @@ function CampaignsMediaTable({
     );
   }
   return (
-    <div className={t.wrap}>
-      <table className={t.table}>
-        <thead>
-          <tr className={t.thead}>
-            <th className={t.th}>Campanha</th>
-            <th className={t.th}>Investimento</th>
-            <th className={t.th}>Leads</th>
-            <th className={t.th}>CPL</th>
-            <th className={t.th}>Conversas</th>
-            <th className={t.th}>Custo/Conversa</th>
-            <th className={t.th}>Impressões</th>
-            <th className={t.th}>Alcance</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((c) => (
-            <tr key={c.id} className={t.row}>
-              <td className={clsx(t.td, "font-semibold")}>{c.name}</td>
-              <td className={t.td}>{formatCurrency(c.investimento)}</td>
-              <td className={t.td}>{formatNumber(c.leads)}</td>
-              <td className={t.td}>{formatCurrency(c.cpl, 2)}</td>
-              <td className={t.td}>{formatNumber(c.conversas)}</td>
-              <td className={t.td}>{formatCurrency(c.custoConversa, 2)}</td>
-              <td className={t.td}>{formatNumber(c.impressoes)}</td>
-              <td className={t.td}>{formatNumber(c.alcance)}</td>
+    <div className="space-y-3">
+      {report.attributionPeriod && (
+        <div
+          className={clsx(
+            "rounded-xl border px-4 py-3 text-xs",
+            isDark
+              ? "border-zinc-800 bg-zinc-900/60 text-zinc-400"
+              : "border-zinc-200 bg-zinc-50 text-zinc-500",
+          )}
+        >
+          Janela considerada:{" "}
+          {new Date(report.attributionPeriod.from).toLocaleDateString("pt-BR")}{" "}
+          até{" "}
+          {new Date(report.attributionPeriod.to).toLocaleDateString("pt-BR")} ·{" "}
+          {report.attributionPeriod.source === "event_launch_date"
+            ? "início definido pela data de lançamento do evento"
+            : "janela padrão de 30 dias antes do evento"}
+          {report.attributionPeriod.campaigns_started_before_window > 0 && (
+            <span className="ml-1 text-amber-500">
+              · {report.attributionPeriod.campaigns_started_before_window}{" "}
+              campanha(s) começaram antes da janela
+            </span>
+          )}
+        </div>
+      )}
+      <div className={t.wrap}>
+        <table className={t.table}>
+          <thead>
+            <tr className={t.thead}>
+              <th className={t.th}>Campanha</th>
+              <th className={t.th}>Investimento</th>
+              <th className={t.th}>Leads</th>
+              <th className={t.th}>CPL</th>
+              <th className={t.th}>Conversas</th>
+              <th className={t.th}>Custo/Conversa</th>
+              <th className={t.th}>Impressões</th>
+              <th className={t.th}>Alcance</th>
             </tr>
+          </thead>
+          <tbody>
+            {rows.map((c) => (
+              <tr key={c.id} className={t.row}>
+                <td className={clsx(t.td, "font-semibold")}>{c.name}</td>
+                <td className={t.td}>{formatCurrency(c.investimento)}</td>
+                <td className={t.td}>{formatNumber(c.leads)}</td>
+                <td className={t.td}>{formatCurrency(c.cpl, 2)}</td>
+                <td className={t.td}>{formatNumber(c.conversas)}</td>
+                <td className={t.td}>{formatCurrency(c.custoConversa, 2)}</td>
+                <td className={t.td}>{formatNumber(c.impressoes)}</td>
+                <td className={t.td}>{formatNumber(c.alcance)}</td>
+              </tr>
+            ))}
+            <tr className={t.totalRow}>
+              <td className={t.td}>TOTAL</td>
+              <td className={t.td}>{formatCurrency(report.metaSpend)}</td>
+              <td className={t.td}>{formatNumber(report.leadsMidia)}</td>
+              <td className={t.td}>{formatCurrency(report.cplMedio, 2)}</td>
+              <td className={t.td}>{formatNumber(report.conversas)}</td>
+              <td className={t.td}>—</td>
+              <td className={t.td}>{formatNumber(report.impressoes)}</td>
+              <td className={t.td}>{formatNumber(report.alcance)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      {(report.dataQuality?.warnings.length ?? 0) > 0 && (
+        <ul
+          className={clsx(
+            "space-y-1 text-[11px]",
+            isDark ? "text-amber-300/80" : "text-amber-700",
+          )}
+        >
+          {report.dataQuality?.warnings.map((warning) => (
+            <li key={warning}>• {warning}</li>
           ))}
-          <tr className={t.totalRow}>
-            <td className={t.td}>TOTAL</td>
-            <td className={t.td}>{formatCurrency(report.metaSpend)}</td>
-            <td className={t.td}>{formatNumber(report.leadsMidia)}</td>
-            <td className={t.td}>{formatCurrency(report.cplMedio, 2)}</td>
-            <td className={t.td}>{formatNumber(report.conversas)}</td>
-            <td className={t.td}>—</td>
-            <td className={t.td}>{formatNumber(report.impressoes)}</td>
-            <td className={t.td}>{formatNumber(report.alcance)}</td>
-          </tr>
-        </tbody>
-      </table>
+        </ul>
+      )}
     </div>
   );
 }
@@ -1175,7 +1202,12 @@ function CampaignsToCrm({
       sold: row.vendas,
       revenue: row.receita,
       spend: row.investimento,
+      meta_leads: row.leads,
+      impressions: row.impressoes,
+      reach: row.alcance,
+      conversations: row.conversas,
       cpl: row.cpl,
+      cost_per_conversation: row.custoConversa,
       cost_per_scheduled:
         row.agendados > 0 ? row.investimento / row.agendados : 0,
       cost_per_sale: row.vendas > 0 ? row.investimento / row.vendas : 0,
@@ -1333,6 +1365,39 @@ function RubinhoPerformance({
       />
     );
   }
+  const journey = r.attribution_breakdown;
+  const journeyCards = journey
+    ? [
+        {
+          key: "originated",
+          label: "Originado pelo Rubinho",
+          description: "Agendamento criado diretamente pela IA.",
+          color: "#8b5cf6",
+          value: journey.originated,
+        },
+        {
+          key: "recovered",
+          label: "Recuperado por automação",
+          description: "Retomado por follow-up, lembrete ou recuperação.",
+          color: "#f59e0b",
+          value: journey.recovered,
+        },
+        {
+          key: "influenced",
+          label: "Influenciado pelo Rubinho",
+          description: "Teve interação da IA antes do agendamento humano.",
+          color: "#3b82f6",
+          value: journey.influenced,
+        },
+        {
+          key: "manual",
+          label: "Humano ou manual",
+          description: "Sem evidência anterior de atuação da IA.",
+          color: "#71717a",
+          value: journey.manual,
+        },
+      ]
+    : [];
   return (
     <div>
       <div className="mb-4 flex items-center gap-2">
@@ -1390,13 +1455,75 @@ function RubinhoPerformance({
           isDark={isDark}
         />
       </div>
+      {journeyCards.length > 0 && (
+        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {journeyCards.map((item) => (
+            <div
+              key={item.key}
+              className={clsx(
+                "rounded-2xl border p-4",
+                isDark
+                  ? "border-zinc-800 bg-zinc-900/60"
+                  : "border-zinc-200 bg-zinc-50/80",
+              )}
+            >
+              <div className="mb-3 flex items-center gap-2">
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: item.color }}
+                />
+                <span
+                  className={clsx(
+                    "text-xs font-bold",
+                    isDark ? "text-zinc-200" : "text-zinc-700",
+                  )}
+                >
+                  {item.label}
+                </span>
+              </div>
+              <p
+                className={clsx(
+                  "mb-4 min-h-8 text-[11px] leading-4",
+                  isDark ? "text-zinc-500" : "text-zinc-400",
+                )}
+              >
+                {item.description}
+              </p>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                <span className={isDark ? "text-zinc-500" : "text-zinc-500"}>
+                  Agendamentos
+                </span>
+                <strong className="text-right">
+                  {item.value.appointments}
+                </strong>
+                <span className={isDark ? "text-zinc-500" : "text-zinc-500"}>
+                  Comparecimentos
+                </span>
+                <strong className="text-right">{item.value.checked_in}</strong>
+                <span className={isDark ? "text-zinc-500" : "text-zinc-500"}>
+                  Vendas
+                </span>
+                <strong className="text-right">{item.value.sales}</strong>
+                <span className={isDark ? "text-zinc-500" : "text-zinc-500"}>
+                  Receita
+                </span>
+                <strong className="text-right" style={{ color: "#10b981" }}>
+                  {formatCurrencyCompact(item.value.revenue)}
+                </strong>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       <p
         className={clsx(
           "mt-4 text-xs",
           isDark ? "text-zinc-500" : "text-zinc-400",
         )}
       >
-        Métricas atribuídas somente a leads com agendamento criado pelo agente.
+        Categorias exclusivas, nesta precedência: recuperado, originado pelo
+        Rubinho, influenciado pelo Rubinho e humano/manual. Uma jornada não é
+        contada duas vezes.
       </p>
     </div>
   );
@@ -1545,6 +1672,65 @@ function SalesRanking({
   const medal = ["🥇", "🥈", "🥉"];
   return (
     <div className="space-y-6">
+      {report.eventFeedback && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div
+            className={clsx(
+              "rounded-2xl border p-4",
+              isDark
+                ? "border-zinc-800 bg-zinc-900/60"
+                : "border-zinc-200 bg-zinc-50",
+            )}
+          >
+            <p className="text-xs text-zinc-500">Avaliação do evento</p>
+            <p className="mt-1 text-xl font-black">
+              {report.eventFeedback.event_rating.responses > 0
+                ? `${report.eventFeedback.event_rating.average.toFixed(2)} / 5`
+                : "—"}
+            </p>
+            <p className="mt-1 text-[11px] text-zinc-500">
+              {formatNumber(report.eventFeedback.event_rating.responses)}{" "}
+              respostas
+            </p>
+          </div>
+          <div
+            className={clsx(
+              "rounded-2xl border p-4",
+              isDark
+                ? "border-zinc-800 bg-zinc-900/60"
+                : "border-zinc-200 bg-zinc-50",
+            )}
+          >
+            <p className="text-xs text-zinc-500">NPS do evento</p>
+            <p className="mt-1 text-xl font-black">
+              {report.eventFeedback.nps.responses > 0
+                ? report.eventFeedback.nps.score.toFixed(0)
+                : "—"}
+            </p>
+            <p className="mt-1 text-[11px] text-zinc-500">
+              {formatNumber(report.eventFeedback.nps.responses)} respostas
+            </p>
+          </div>
+          <div
+            className={clsx(
+              "rounded-2xl border p-4",
+              isDark
+                ? "border-zinc-800 bg-zinc-900/60"
+                : "border-zinc-200 bg-zinc-50",
+            )}
+          >
+            <p className="text-xs text-zinc-500">Jornada Google</p>
+            <p className="mt-1 text-sm font-bold">
+              {formatNumber(report.eventFeedback.google.requested)} solicitados
+              · {formatNumber(report.eventFeedback.google.clicked)} cliques
+            </p>
+            <p className="mt-1 text-[11px] text-zinc-500">
+              {formatNumber(report.eventFeedback.google.verified_published)}{" "}
+              publicados verificados
+            </p>
+          </div>
+        </div>
+      )}
       {report.ratingsTotal > 0 && (
         <div
           className={clsx(
@@ -1575,6 +1761,28 @@ function SalesRanking({
           </span>
         </div>
       )}
+      {report.commercialRevenueCoverage &&
+        report.commercialRevenueCoverage.team_percent < 100 && (
+          <div
+            className={clsx(
+              "rounded-2xl border px-5 py-3 text-xs",
+              isDark
+                ? "border-amber-500/25 bg-amber-500/10 text-amber-200"
+                : "border-amber-200 bg-amber-50 text-amber-800",
+            )}
+          >
+            Cobertura por equipe:{" "}
+            {report.commercialRevenueCoverage.team_percent.toFixed(1)}%.{" "}
+            {formatNumber(
+              report.commercialRevenueCoverage.unassigned_team_sales,
+            )}{" "}
+            venda(s), somando{" "}
+            {formatCurrencyCompact(
+              report.commercialRevenueCoverage.unassigned_team_revenue,
+            )}
+            , ainda estão sem equipe registrada na própria venda.
+          </div>
+        )}
       <div className={t.wrap}>
         <table className={t.table}>
           <thead>
@@ -1584,6 +1792,7 @@ function SalesRanking({
               <th className={t.th}>Atendimentos</th>
               <th className={t.th}>Vendas</th>
               <th className={t.th}>Receita</th>
+              <th className={t.th}>Ticket médio</th>
               <th className={t.th}>Avaliação</th>
             </tr>
           </thead>
@@ -1617,6 +1826,7 @@ function SalesRanking({
                 >
                   {formatCurrencyCompact(v.receita)}
                 </td>
+                <td className={t.td}>{formatCurrencyCompact(v.ticketMedio)}</td>
                 <td className={t.td}>
                   {v.avaliacaoCount > 0 ? (
                     <span className="font-semibold">
@@ -1664,6 +1874,7 @@ function SalesRanking({
                   <th className={t.th}>Vendas</th>
                   <th className={t.th}>Pontos</th>
                   <th className={t.th}>Receita</th>
+                  <th className={t.th}>Ticket médio</th>
                 </tr>
               </thead>
               <tbody>
@@ -1678,6 +1889,9 @@ function SalesRanking({
                       style={{ color: "#10b981" }}
                     >
                       {formatCurrencyCompact(tm.receita)}
+                    </td>
+                    <td className={t.td}>
+                      {formatCurrencyCompact(tm.ticketMedio)}
                     </td>
                   </tr>
                 ))}
@@ -1781,14 +1995,29 @@ function CommercialIntelligence({
           <Clock size={14} /> Qual horário trouxe mais clientes?
         </h3>
         {report.arrivalsByHour.length ? (
-          <BarList
-            data={report.arrivalsByHour.map((h) => ({
-              label: h.label,
-              value: h.value,
-            }))}
-            color="#f59e0b"
-            isDark={isDark}
-          />
+          <>
+            <BarList
+              data={report.arrivalsByHour.map((h) => ({
+                label: h.label,
+                value: h.value,
+              }))}
+              color="#f59e0b"
+              isDark={isDark}
+            />
+            {report.arrivalDataQuality && (
+              <p
+                className={clsx(
+                  "mt-3 text-[11px]",
+                  isDark ? "text-zinc-500" : "text-zinc-400",
+                )}
+              >
+                Cobertura de horários reais:{" "}
+                {report.arrivalDataQuality.coverage_percent.toFixed(1)}% (
+                {report.arrivalDataQuality.with_real_timestamp} de{" "}
+                {report.arrivalDataQuality.checked_in_leads} check-ins).
+              </p>
+            )}
+          </>
         ) : (
           <EmptyNote
             isDark={isDark}
@@ -1844,6 +2073,89 @@ function CommercialIntelligence({
           <EmptyNote isDark={isDark} text="Sem segmentação de vendas." />
         )}
       </div>
+      {report.vehicleIntelligence && (
+        <div className="space-y-5 md:col-span-2">
+          <div className="border-t border-zinc-200 pt-6 dark:border-zinc-800">
+            <h3 className={heading}>Inteligência da frota de troca</h3>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <BigStat
+                label="Veículos identificados"
+                value={formatNumber(
+                  report.vehicleIntelligence.coverage.identified_vehicles,
+                )}
+                isDark={isDark}
+              />
+              <BigStat
+                label="Potencial FIPE"
+                value={formatCurrencyCompact(
+                  report.vehicleIntelligence.trade_in_fleet.total_fipe,
+                )}
+                accent="#10b981"
+                isDark={isDark}
+              />
+              <BigStat
+                label="FIPE médio"
+                value={formatCurrencyCompact(
+                  report.vehicleIntelligence.trade_in_fleet.average_fipe,
+                )}
+                isDark={isDark}
+              />
+              <BigStat
+                label="Conversão com veículo"
+                value={`${report.vehicleIntelligence.conversion.conversion_percent.toFixed(1)}%`}
+                accent="#8b5cf6"
+                isDark={isDark}
+              />
+            </div>
+          </div>
+          <div className="grid gap-8 md:grid-cols-2">
+            <div>
+              <h3 className={heading}>Modelos usados na troca</h3>
+              {report.vehicleIntelligence.trade_in_fleet.by_model.length ? (
+                <BarList
+                  data={report.vehicleIntelligence.trade_in_fleet.by_model.map(
+                    (row) => ({ label: row.name, value: row.count }),
+                  )}
+                  color="#0ea5e9"
+                  isDark={isDark}
+                />
+              ) : (
+                <EmptyNote
+                  isDark={isDark}
+                  text="Sem modelos de troca identificados."
+                />
+              )}
+            </div>
+            <div>
+              <h3 className={heading}>Conversão por faixa FIPE</h3>
+              <BarList
+                data={report.vehicleIntelligence.trade_in_fleet.by_fipe_range.map(
+                  (row) => ({
+                    label: row.label,
+                    value: row.conversion_percent,
+                  }),
+                )}
+                color="#f59e0b"
+                format={(value) => `${value.toFixed(1)}%`}
+                isDark={isDark}
+              />
+            </div>
+          </div>
+          <p
+            className={clsx(
+              "text-[11px]",
+              isDark ? "text-zinc-500" : "text-zinc-400",
+            )}
+          >
+            Cobertura:{" "}
+            {report.vehicleIntelligence.coverage.vehicle_percent.toFixed(1)}%
+            dos leads possuem veículo identificado e{" "}
+            {report.vehicleIntelligence.coverage.fipe_percent.toFixed(1)}%
+            desses possuem valor FIPE. Modelo desejado não é inferido a partir
+            do veículo de troca.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

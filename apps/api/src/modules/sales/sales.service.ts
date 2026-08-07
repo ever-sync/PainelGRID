@@ -18,6 +18,7 @@ import { RealtimeEventsService } from "../realtime/realtime-events.service";
 import { ScoreEventsService } from "../score-events/score-events.service";
 import { resolveConfirmationStatusForStage } from "../clients/client-settings";
 import { CreateSaleDto } from "./dto/create-sale.dto";
+import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.service";
 
 @Injectable()
 export class SalesService {
@@ -25,6 +26,7 @@ export class SalesService {
     private readonly prisma: PrismaService,
     private readonly scoreEvents: ScoreEventsService,
     private readonly realtimeEvents: RealtimeEventsService,
+    private readonly dispatchTracking: DispatchTrackingService,
   ) {}
 
   async create(user: AuthenticatedUser, dto: CreateSaleDto) {
@@ -200,6 +202,17 @@ export class SalesService {
       action: "sale_created",
       updated_at: new Date().toISOString(),
     });
+
+    await this.dispatchTracking
+      .markConversion({
+        leadId: appointment.lead_id,
+        type: "sale",
+        occurredAt: soldAt,
+        appointmentId: appointment.id,
+        saleId: sale.id,
+        revenue: Number(sale.value),
+      })
+      .catch(() => undefined);
 
     return this.toResponse(sale);
   }

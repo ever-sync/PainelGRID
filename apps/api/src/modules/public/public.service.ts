@@ -265,6 +265,8 @@ export class PublicService {
       data: {
         vendor_id: vendor.id,
         score: dto.score,
+        event_score: dto.event_score ?? null,
+        nps_score: dto.nps_score ?? null,
         comment: dto.comment?.trim() || null,
         customer_name: dto.customer_name?.trim() || null,
         event_id: eventId,

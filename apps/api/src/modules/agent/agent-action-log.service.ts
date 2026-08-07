@@ -47,6 +47,20 @@ export class AgentActionLogService {
       },
     });
 
+    if (dto.message_id) {
+      await this.prisma.message.updateMany({
+        where: {
+          id: dto.message_id,
+          conversation_id: conversation.id,
+        },
+        data: {
+          author_type: "rubinho",
+          origin: "n8n",
+          agent_action_log_id: log.id,
+        },
+      });
+    }
+
     return this.mapLog(log);
   }
 

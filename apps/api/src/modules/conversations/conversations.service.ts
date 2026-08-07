@@ -16,6 +16,7 @@ import { RealtimeEventsService } from "../realtime/realtime-events.service";
 import { CreateMessageDto } from "./dto/create-message.dto";
 import { EnsureConversationDto } from "./dto/ensure-conversation.dto";
 import { FindConversationsQueryDto } from "./dto/find-conversations-query.dto";
+import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.service";
 
 type N8nHistoryRow = {
   history_id: number;
@@ -37,6 +38,7 @@ export class ConversationsService {
     private readonly metaService: MetaService,
     private readonly clientWebhook: ClientWebhookService,
     private readonly storage: StorageService,
+    private readonly dispatchTracking: DispatchTrackingService,
   ) {}
 
   private mediaStorageKey(messageId: string): string {
@@ -272,6 +274,10 @@ export class ConversationsService {
             sender_id: null,
             content: row.content.trim(),
             external_id: `n8n-history:${row.history_id}`,
+            author_type: row.message_type === "human" ? "lead" : "rubinho",
+            origin: "n8n",
+            workflow_key:
+              row.message_type === "ai" ? "n8n-agent-history" : null,
             created_at: timestampByHistoryId.get(row.history_id)!,
           })),
           skipDuplicates: true,
@@ -545,8 +551,33 @@ export class ConversationsService {
         sender_id: senderId,
         content,
         external_id: externalId,
+        author_type: senderType === SenderType.user ? "human" : "system",
+        origin: "panel",
       },
     });
+
+    if (externalId && conv.channel === "whatsapp") {
+      await this.dispatchTracking
+        .upsert(conv.client_id, {
+          lead_id: conv.lead_id,
+          conversation_id: conv.id,
+          message_id: msg.id,
+          dispatch_key: `panel-message:${msg.id}`,
+          workflow_key: "panel-manual-message",
+          dispatch_type: "manual_message",
+          channel: "whatsapp",
+          provider: "meta",
+          provider_message_id: externalId,
+          status: "sent",
+          occurred_at: msg.created_at.toISOString(),
+          metadata: { sender_id: senderId },
+        })
+        .catch((error) => {
+          this.logger.error(
+            `Mensagem ${msg.id} enviada, mas o rastreamento falhou: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        });
+    }
 
     await this.prisma.conversation.update({
       where: { id: conversationId },
@@ -666,8 +697,33 @@ export class ConversationsService {
         external_id: sent.wamid,
         media_id: sent.mediaId,
         media_url: sent.mediaUrl,
+        author_type: "human",
+        origin: "panel",
       },
     });
+
+    if (sent.wamid) {
+      await this.dispatchTracking
+        .upsert(conv.client_id, {
+          lead_id: conv.lead_id,
+          conversation_id: conv.id,
+          message_id: msg.id,
+          dispatch_key: `panel-media:${msg.id}`,
+          workflow_key: "panel-manual-message",
+          dispatch_type: "manual_media",
+          channel: "whatsapp",
+          provider: "meta",
+          provider_message_id: sent.wamid,
+          status: "sent",
+          occurred_at: msg.created_at.toISOString(),
+          metadata: { sender_id: user.sub, mime_type: args.mimeType },
+        })
+        .catch((error) => {
+          this.logger.error(
+            `Mídia ${msg.id} enviada, mas o rastreamento falhou: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        });
+    }
 
     void this.storage.upload(
       this.mediaStorageKey(msg.id),
