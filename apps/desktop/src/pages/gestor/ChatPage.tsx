@@ -44,7 +44,12 @@ import {
   connectRealtime,
   type RealtimeNewMessageEvent,
 } from "../../services/realtime";
-import { listLeads, mapApiLeadToLead, updateLead } from "../../services/leads";
+import {
+  getLead,
+  listLeads,
+  mapApiLeadToLead,
+  updateLead,
+} from "../../services/leads";
 import { pushToast } from "../../components/ui/Toast";
 import type { Client, Conversation, Event, Lead, Message } from "../../types";
 import { useGestorClient } from "../../hooks/useGestorClient";
@@ -828,6 +833,52 @@ export function ChatPage() {
   }, [leadDrawerDraft.pipelineId, leadDrawerOpen, token]);
 
   useEffect(() => {
+    if (
+      !leadDrawerOpen ||
+      leadDrawerDraft.pipelineId ||
+      !leadDrawerDraft.stageId ||
+      !token ||
+      crmPipelines.length === 0
+    ) {
+      return;
+    }
+
+    let active = true;
+    void Promise.all(
+      crmPipelines.map(async (pipeline) => {
+        const cached = crmStagesCacheRef.current.get(pipeline.id);
+        const stages = cached ?? (await listPipelineStages(pipeline.id, token));
+        crmStagesCacheRef.current.set(pipeline.id, stages);
+        return { pipeline, stages };
+      }),
+    )
+      .then((results) => {
+        if (!active) return;
+        const match = results.find(({ stages }) =>
+          stages.some((stage) => stage.id === leadDrawerDraft.stageId),
+        );
+        if (!match) return;
+        setPipelineStages(match.stages);
+        setLeadDrawerDraft((current) =>
+          current.pipelineId
+            ? current
+            : { ...current, pipelineId: match.pipeline.id },
+        );
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, [
+    crmPipelines,
+    leadDrawerDraft.pipelineId,
+    leadDrawerDraft.stageId,
+    leadDrawerOpen,
+    token,
+  ]);
+
+  useEffect(() => {
     if (!leadDrawerOpen || !profileLead) return;
     setLeadDrawerDraft(makeLeadDrawerDraft(profileLead));
   }, [leadDrawerOpen, profileLead]);
@@ -835,6 +886,19 @@ export function ChatPage() {
   function openLeadDrawer() {
     if (!profileLead) return;
     setLeadDrawerOpen(true);
+    if (!token) return;
+    void getLead(profileLead.id, token)
+      .then((row) => {
+        const mapped = mapApiLeadToLead(row);
+        setLeads((current) => {
+          const exists = current.some((lead) => lead.id === mapped.id);
+          return exists
+            ? current.map((lead) => (lead.id === mapped.id ? mapped : lead))
+            : [mapped, ...current];
+        });
+        setLeadDrawerDraft(makeLeadDrawerDraft(mapped));
+      })
+      .catch(() => undefined);
   }
 
   function closeLeadDrawer() {

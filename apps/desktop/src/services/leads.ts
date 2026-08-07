@@ -131,7 +131,10 @@ export function mapApiLeadToLead(row: ApiLead): Lead {
     attendant_user_id: row.attendant_user_id ?? null,
     sold_by_vendor_id: row.sold_by_vendor_id ?? null,
     event_interest: row.event_interest_name ?? null,
-    event_id: row.event_interest_id,
+    // Algumas rotas antigas preenchem apenas event_id, enquanto as novas
+    // usam event_interest_id. Para a interface, ambos representam o evento
+    // atualmente vinculado ao lead.
+    event_id: row.event_interest_id ?? row.event_id ?? null,
     store_visit_datetime: row.store_visit_datetime
       ? new Date(row.store_visit_datetime).toISOString()
       : null,
