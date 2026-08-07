@@ -68,6 +68,7 @@ describe("AppointmentsService", () => {
   let service: AppointmentsService;
   let configService: ConfigService;
   let mail: { sendAppointmentWelcome: jest.Mock };
+  let meta: { sendClientWhatsappMediaMessage: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -92,6 +93,10 @@ describe("AppointmentsService", () => {
       },
       conversation: {
         findUnique: jest.fn(),
+        update: jest.fn(),
+      },
+      message: {
+        create: jest.fn(),
       },
       crmHistory: {
         create: jest.fn(),
@@ -130,6 +135,14 @@ describe("AppointmentsService", () => {
       }),
     } as any as ConfigService;
     mail = { sendAppointmentWelcome: jest.fn() };
+    meta = {
+      sendClientWhatsappMediaMessage: jest.fn().mockResolvedValue({
+        wamid: "wamid-checkin-1",
+        mediaId: "media-checkin-1",
+        mediaUrl: null,
+        contentLabel: "Credencial QR Code",
+      }),
+    };
 
     service = new AppointmentsService(
       prisma,
@@ -138,8 +151,9 @@ describe("AppointmentsService", () => {
         awardWithTx: jest.fn(),
       } as any,
       { dispatch: jest.fn() } as any,
-      { emitLeadUpdated: jest.fn() } as any,
+      { emitLeadUpdated: jest.fn(), emitNewMessage: jest.fn() } as any,
       mail as any,
+      meta as any,
     );
     prisma.eventParticipant.findMany.mockResolvedValue([
       { client_id: clientId },
@@ -376,6 +390,105 @@ describe("AppointmentsService", () => {
         appointment_id: appointmentId,
         lead_id: leadId,
         status: AppointmentStatus.confirmed,
+      }),
+    );
+  });
+
+  it("envia QR Code de forma auditavel e idempotente", async () => {
+    const appointment = {
+      ...baseAppointment,
+      conversation_id: "66666666-6666-4666-8666-666666666666",
+      lead: {
+        ...baseAppointment.lead,
+        name: "Cliente Teste",
+        first_name: "Cliente",
+        phone: "+5511999999999",
+        checkin_token: "0123456789abcdef01234567",
+      },
+      event: {
+        ...event,
+        name: "Evento Teste",
+        location: "Sao Paulo",
+      },
+    };
+    prisma.appointment.findUnique.mockResolvedValue(appointment);
+    prisma.apiIdempotencyRequest.findUnique.mockResolvedValue(null);
+    prisma.apiIdempotencyRequest.create.mockResolvedValue({ id: "idem-qr" });
+    prisma.apiIdempotencyRequest.upsert.mockResolvedValue({ id: "idem-qr" });
+    prisma.message.create.mockResolvedValue({
+      id: "77777777-7777-4777-8777-777777777777",
+      created_at: new Date("2026-04-20T12:05:00.000Z"),
+    });
+
+    const result = await service.sendCheckinNotification(
+      appointmentId,
+      "qr-appointment-1",
+    );
+
+    expect(meta.sendClientWhatsappMediaMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientId,
+        to: "+5511999999999",
+        mimeType: "image/png",
+      }),
+    );
+    expect(prisma.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          conversation_id: appointment.conversation_id,
+          sender_type: "system",
+          external_id: "wamid-checkin-1",
+          media_id: "media-checkin-1",
+        }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        sent: true,
+        appointment_id: appointmentId,
+        wamid: "wamid-checkin-1",
+      }),
+    );
+  });
+
+  it("reproduz o resultado do envio sem disparar QR novamente", async () => {
+    prisma.appointment.findUnique.mockResolvedValue({
+      ...baseAppointment,
+      lead: {
+        ...baseAppointment.lead,
+        phone: "+5511999999999",
+        checkin_token: "0123456789abcdef01234567",
+      },
+    });
+    prisma.apiIdempotencyRequest.findUnique.mockResolvedValue({
+      request_hash: createHash("sha256")
+        .update(
+          JSON.stringify({
+            appointment_id: appointmentId,
+            lead_id: leadId,
+            event_id: eventId,
+            conversation_id: null,
+          }),
+        )
+        .digest("hex"),
+      response: {
+        sent: true,
+        appointment_id: appointmentId,
+        wamid: "wamid-existing",
+      },
+    });
+
+    const result = await service.sendCheckinNotification(
+      appointmentId,
+      "qr-appointment-1",
+    );
+
+    expect(meta.sendClientWhatsappMediaMessage).not.toHaveBeenCalled();
+    expect(result).toEqual(
+      expect.objectContaining({
+        sent: true,
+        idempotent_replay: true,
+        wamid: "wamid-existing",
       }),
     );
   });

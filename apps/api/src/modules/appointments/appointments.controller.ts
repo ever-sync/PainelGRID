@@ -56,6 +56,18 @@ export class AppointmentsController {
     return this.appointmentsService.confirm(id, dto, idempotencyKey);
   }
 
+  @Post(":id/checkin-notification")
+  @ApiOperation({
+    summary: "Envia a credencial e o QR Code do agendamento via WhatsApp",
+  })
+  @ApiResponse({ status: 201, description: "Credencial enviada com sucesso" })
+  sendCheckinNotification(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Headers("idempotency-key") idempotencyKey?: string,
+  ) {
+    return this.appointmentsService.sendCheckinNotification(id, idempotencyKey);
+  }
+
   @Post(":id/reschedule")
   @ApiOperation({ summary: "Reagenda agendamento via integração" })
   @ApiResponse({

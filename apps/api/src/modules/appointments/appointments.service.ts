@@ -6,6 +6,7 @@ import {
   ConfirmationStatus,
   EventStatus,
   Prisma,
+  SenderType,
 } from "@prisma/client";
 import {
   BadRequestException,
@@ -15,7 +16,9 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createHash } from "crypto";
+import { generateQrPngBuffer } from "../../common/qrcode.util";
 import {
+  decryptCheckinToken,
   encryptCheckinToken,
   generateRawCheckinToken,
 } from "../../common/utils/crypto.util";
@@ -26,6 +29,7 @@ import { ClientWebhookService } from "../crm/client-webhook.service";
 import { MailService } from "../../mail/mail.service";
 import { RealtimeEventsService } from "../realtime/realtime-events.service";
 import { ScoreEventsService } from "../score-events/score-events.service";
+import { MetaService } from "../meta/meta.service";
 import { resolveConfirmationStatusForStage } from "../clients/client-settings";
 import { CancelAppointmentDto } from "./dto/cancel-appointment.dto";
 import { ConfirmAppointmentDto } from "./dto/confirm-appointment.dto";
@@ -74,6 +78,7 @@ export class AppointmentsService {
     private readonly clientWebhook: ClientWebhookService,
     private readonly realtimeEvents: RealtimeEventsService,
     private readonly mail: MailService,
+    private readonly metaService: MetaService,
   ) {}
 
   private checkinVoucherSecret(): string {
@@ -206,6 +211,115 @@ export class AppointmentsService {
     }
 
     return result;
+  }
+
+  async sendCheckinNotification(id: string, idempotencyKey?: string) {
+    const appointment = await this.getAppointmentOrFail(id);
+    if (
+      appointment.status !== AppointmentStatus.scheduled &&
+      appointment.status !== AppointmentStatus.confirmed
+    ) {
+      throw new BadRequestException(
+        "Status do appointment nao permite envio da credencial",
+      );
+    }
+    if (!appointment.lead.phone || !appointment.lead.checkin_token) {
+      throw new BadRequestException(
+        "Lead sem telefone ou token de check-in para envio",
+      );
+    }
+
+    const endpoint = "agent.appointments.checkin-notification";
+    const requestHash = this.createRequestHash({
+      appointment_id: appointment.id,
+      lead_id: appointment.lead_id,
+      event_id: appointment.event_id,
+      conversation_id: appointment.conversation_id ?? null,
+    });
+
+    return this.runIdempotentAction(
+      appointment.client_id,
+      endpoint,
+      requestHash,
+      idempotencyKey,
+      async () => {
+        const token = decryptCheckinToken(
+          appointment.lead.checkin_token!,
+          this.checkinVoucherSecret(),
+        );
+        const qrPng = await generateQrPngBuffer(token, {
+          size: 720,
+          margin: 4,
+          errorCorrectionLevel: "M",
+        });
+        const caption = this.buildCheckinCaption(appointment);
+        const sent = await this.metaService.sendClientWhatsappMediaMessage({
+          clientId: appointment.client_id,
+          to: appointment.lead.phone!,
+          fileBuffer: qrPng,
+          filename: `checkin-${appointment.lead_id}.png`,
+          mimeType: "image/png",
+          caption,
+        });
+
+        let messageId: string | null = null;
+        if (appointment.conversation_id) {
+          const message = await this.prisma.message.create({
+            data: {
+              conversation_id: appointment.conversation_id,
+              sender_type: SenderType.system,
+              content: caption,
+              external_id: sent.wamid,
+              media_id: sent.mediaId,
+              media_url: sent.mediaUrl,
+            },
+          });
+          messageId = message.id;
+          await this.prisma.conversation.update({
+            where: { id: appointment.conversation_id },
+            data: { last_message_at: message.created_at },
+          });
+          this.realtimeEvents.emitNewMessage(appointment.client_id, {
+            conversation_id: appointment.conversation_id,
+            message_id: message.id,
+            sender_type: SenderType.system,
+            sender_id: null,
+            content: caption,
+            media_id: sent.mediaId,
+            media_url: sent.mediaUrl,
+            created_at: message.created_at,
+          });
+          void this.clientWebhook.dispatch(
+            appointment.client_id,
+            "conversation.message.sent",
+            {
+              message_id: message.id,
+              conversation_id: appointment.conversation_id,
+              lead_id: appointment.lead_id,
+              sender_type: SenderType.system,
+              sender_id: null,
+              content: caption,
+              channel: "whatsapp",
+              media_id: sent.mediaId,
+              media_url: sent.mediaUrl,
+              created_at: message.created_at.toISOString(),
+            },
+          );
+        }
+
+        return {
+          sent: true,
+          appointment_id: appointment.id,
+          lead_id: appointment.lead_id,
+          event_id: appointment.event_id,
+          conversation_id: appointment.conversation_id,
+          message_id: messageId,
+          wamid: sent.wamid,
+          media_id: sent.mediaId,
+          idempotent_replay: false,
+        };
+      },
+    );
   }
 
   async reschedule(
@@ -824,6 +938,36 @@ export class AppointmentsService {
     }
 
     return appointment;
+  }
+
+  private buildCheckinCaption(
+    appointment: Awaited<
+      ReturnType<AppointmentsService["getAppointmentOrFail"]>
+    >,
+  ) {
+    const firstName =
+      appointment.lead.first_name?.trim() ||
+      appointment.lead.name?.trim().split(/\s+/)[0] ||
+      "";
+    const greeting = firstName ? `Olá, ${firstName}!` : "Olá!";
+    const scheduledAt = new Intl.DateTimeFormat("pt-BR", {
+      dateStyle: "full",
+      timeStyle: "short",
+      timeZone: appointment.timezone || "America/Sao_Paulo",
+    }).format(appointment.scheduled_at);
+    return [
+      greeting,
+      "Sua credencial foi confirmada com sucesso.",
+      "",
+      `*${appointment.event.name}*`,
+      `Agendamento: ${scheduledAt}`,
+      ...(appointment.event.location?.trim()
+        ? [`Local: ${appointment.event.location.trim()}`]
+        : []),
+      "",
+      "Apresente este QR Code na recepção para fazer seu check-in.",
+      "Te esperamos!",
+    ].join("\n");
   }
 
   private async awardScheduledIfVendor(
