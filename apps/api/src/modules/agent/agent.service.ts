@@ -25,7 +25,7 @@ export class AgentService {
       ? await this.resolveLeadFromConversation(query.conversation_id)
       : await this.resolveLeadById(query.lead_id!);
 
-    const conversation = query.conversation_id
+    let conversation = query.conversation_id
       ? await this.prisma.conversation.findUnique({
           where: { id: query.conversation_id },
           include: {
@@ -39,6 +39,37 @@ export class AgentService {
             messages: { orderBy: { created_at: "desc" }, take: 20 },
           },
         });
+
+    // Leads recebidos diretamente pelo WhatsApp podem existir antes da
+    // primeira conversa ser persistida. O contexto do agente deve ser
+    // auto-recuperavel: sem isso o workflow termina como sucesso tecnico, mas
+    // sem responder ao lead (`conversation_not_found`).
+    if (!conversation && !query.conversation_id) {
+      conversation = await this.prisma.$transaction(async (tx) => {
+        const lockKey = `${lead.client_id}:${lead.id}:whatsapp`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+        const concurrentConversation = await tx.conversation.findFirst({
+          where: { lead_id: lead.id, channel: "whatsapp" },
+          orderBy: [{ last_message_at: "desc" }, { created_at: "desc" }],
+          include: {
+            messages: { orderBy: { created_at: "desc" }, take: 20 },
+          },
+        });
+        if (concurrentConversation) return concurrentConversation;
+
+        return tx.conversation.create({
+          data: {
+            client_id: lead.client_id,
+            lead_id: lead.id,
+            channel: "whatsapp",
+            last_message_at: new Date(),
+          },
+          include: {
+            messages: { orderBy: { created_at: "desc" }, take: 20 },
+          },
+        });
+      });
+    }
 
     const [client, appointments, activeEvents, conversationState] =
       await Promise.all([
