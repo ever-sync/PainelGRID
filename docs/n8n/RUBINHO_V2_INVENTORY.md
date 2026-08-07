@@ -411,7 +411,8 @@ prefixado por `rubinho-v2-finalize-`.
 
 ## Fase 10 — validação completa e liberação gradual
 
-Estado inicial do rollout: Rubinho v1 ativo; Rubinho v2 desativado.
+Estado do rollout: backend publicado; Rubinho v1 ativo; Rubinho v2 desativado
+aguardando o primeiro canário real controlado.
 
 ### Gates de qualidade
 
@@ -439,6 +440,18 @@ Estado inicial do rollout: Rubinho v1 ativo; Rubinho v2 desativado.
 Se o canário apresentar erro, o v2 deve permanecer ou voltar a ficar
 desativado e o v1 deve continuar ativo. A publicação do endpoint novo é
 compatível com o v1 e não exige rollback do backend.
+
+### Resultado da publicação
+
+- commit de produção da API: `c515ed374b476e5cd3caebe34bffbb0b5ae6196d`;
+- deployment Railway: `d3209d50-4d56-484a-bc58-4f90902f50b0` (`SUCCESS`);
+- `/api/health`: HTTP 200, PostgreSQL e Redis operacionais;
+- endpoint de QR registrado e protegido: chamada sem chave retorna HTTP 401;
+- Rubinho v1 confirmado ativo na versão congelada;
+- Rubinho v2 confirmado desativado, com 78 nós e versão
+  `d56796de-a1d0-46ae-aeb9-f9c4cfd4434c`;
+- não há execuções anteriores do v2 e, portanto, nenhuma evidência de canário
+  real que autorize substituir automaticamente o fluxo produtivo.
 
 ## Fase 9 — correção estrutural do workflow
 
