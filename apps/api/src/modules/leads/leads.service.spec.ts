@@ -22,11 +22,12 @@ describe("LeadsService", () => {
       findFirst: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
+      delete: jest.Mock;
       createMany: jest.Mock;
     };
     crmStage: { findFirst: jest.Mock; findUnique: jest.Mock };
     crmPipeline: { findFirst: jest.Mock };
-    crmHistory: { create: jest.Mock };
+    crmHistory: { create: jest.Mock; deleteMany: jest.Mock };
     event: { findFirst: jest.Mock };
     user: { findFirst: jest.Mock; findUnique: jest.Mock };
     salesTeamMember: { findFirst: jest.Mock };
@@ -35,13 +36,31 @@ describe("LeadsService", () => {
     metaAd: { findMany: jest.Mock };
     metaAdSet: { findMany: jest.Mock };
     metaCampaign: { findMany: jest.Mock };
-    metaLeadImport: { upsert: jest.Mock };
+    metaLeadImport: { upsert: jest.Mock; deleteMany: jest.Mock };
     conversation: {
+      findMany: jest.Mock;
       findFirst: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
+      deleteMany: jest.Mock;
     };
-    message: { findUnique: jest.Mock; create: jest.Mock };
+    message: {
+      findUnique: jest.Mock;
+      create: jest.Mock;
+      deleteMany: jest.Mock;
+    };
+    appointment: {
+      findMany: jest.Mock;
+      updateMany: jest.Mock;
+      deleteMany: jest.Mock;
+    };
+    scoreEvent: { deleteMany: jest.Mock };
+    sale: { deleteMany: jest.Mock };
+    conversationState: { deleteMany: jest.Mock };
+    agentActionLog: { deleteMany: jest.Mock };
+    whatsAppAttributionEvent: { deleteMany: jest.Mock };
+    leadTimeline: { deleteMany: jest.Mock };
+    webhookEvent: { deleteMany: jest.Mock };
     $transaction: jest.Mock;
     $queryRaw: jest.Mock;
   };
@@ -69,11 +88,12 @@ describe("LeadsService", () => {
         findFirst: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
         createMany: jest.fn(),
       },
       crmStage: { findFirst: jest.fn(), findUnique: jest.fn() },
       crmPipeline: { findFirst: jest.fn() },
-      crmHistory: { create: jest.fn() },
+      crmHistory: { create: jest.fn(), deleteMany: jest.fn() },
       event: { findFirst: jest.fn() },
       user: { findFirst: jest.fn(), findUnique: jest.fn() },
       salesTeamMember: { findFirst: jest.fn() },
@@ -82,23 +102,43 @@ describe("LeadsService", () => {
       metaAd: { findMany: jest.fn() },
       metaAdSet: { findMany: jest.fn() },
       metaCampaign: { findMany: jest.fn() },
-      metaLeadImport: { upsert: jest.fn() },
+      metaLeadImport: { upsert: jest.fn(), deleteMany: jest.fn() },
       conversation: {
+        findMany: jest.fn(),
         findFirst: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        deleteMany: jest.fn(),
       },
-      message: { findUnique: jest.fn(), create: jest.fn() },
+      message: {
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        deleteMany: jest.fn(),
+      },
+      appointment: {
+        findMany: jest.fn(),
+        updateMany: jest.fn(),
+        deleteMany: jest.fn(),
+      },
+      scoreEvent: { deleteMany: jest.fn() },
+      sale: { deleteMany: jest.fn() },
+      conversationState: { deleteMany: jest.fn() },
+      agentActionLog: { deleteMany: jest.fn() },
+      whatsAppAttributionEvent: { deleteMany: jest.fn() },
+      leadTimeline: { deleteMany: jest.fn() },
+      webhookEvent: { deleteMany: jest.fn() },
       $transaction: jest.fn(),
       $queryRaw: jest.fn(),
     };
     prisma.lead.findFirst.mockResolvedValue(null);
     prisma.lead.findMany.mockResolvedValue([]);
     prisma.lead.createMany.mockResolvedValue({ count: 0 });
+    prisma.lead.delete.mockResolvedValue({ id: "lead-deleted" });
     prisma.crmStage.findFirst.mockResolvedValue(null);
     prisma.crmStage.findUnique.mockResolvedValue(null);
     prisma.crmPipeline.findFirst.mockResolvedValue(null);
     prisma.crmHistory.create.mockResolvedValue({ id: "hist-1" });
+    prisma.crmHistory.deleteMany.mockResolvedValue({ count: 0 });
     prisma.event.findFirst.mockResolvedValue(null);
     prisma.user.findUnique.mockResolvedValue({ id: gestorId });
     prisma.metaAssetSelection.findMany.mockResolvedValue([
@@ -112,6 +152,8 @@ describe("LeadsService", () => {
     prisma.metaAdSet.findMany.mockResolvedValue([]);
     prisma.metaCampaign.findMany.mockResolvedValue([]);
     prisma.metaLeadImport.upsert.mockResolvedValue({ id: "meta-import-1" });
+    prisma.metaLeadImport.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.conversation.findMany.mockResolvedValue([]);
     prisma.conversation.findFirst.mockResolvedValue(null);
     prisma.conversation.create.mockResolvedValue({
       id: "conversation-1",
@@ -126,6 +168,22 @@ describe("LeadsService", () => {
       content: "Template WhatsApp enviado: boas_vindas_a",
       created_at: new Date("2026-08-04T00:00:01.000Z"),
     });
+    for (const model of [
+      prisma.conversation,
+      prisma.message,
+      prisma.appointment,
+      prisma.scoreEvent,
+      prisma.sale,
+      prisma.conversationState,
+      prisma.agentActionLog,
+      prisma.whatsAppAttributionEvent,
+      prisma.leadTimeline,
+      prisma.webhookEvent,
+    ]) {
+      model.deleteMany?.mockResolvedValue({ count: 0 });
+    }
+    prisma.appointment.findMany.mockResolvedValue([]);
+    prisma.appointment.updateMany.mockResolvedValue({ count: 0 });
     prisma.$transaction.mockImplementation(async (callback) =>
       callback(prisma),
     );
@@ -549,6 +607,64 @@ describe("LeadsService", () => {
     appointments: [],
     deleted_at: null,
   };
+
+  it("remove definitivamente o lead e todos os registros relacionados", async () => {
+    prisma.lead.findFirst.mockResolvedValue(baseExistingLead);
+    prisma.conversation.findMany.mockResolvedValue([
+      { id: "conversation-1" },
+      { id: "conversation-2" },
+    ]);
+    prisma.appointment.findMany.mockResolvedValue([{ id: "appointment-1" }]);
+    prisma.message.deleteMany.mockResolvedValue({ count: 7 });
+    prisma.conversation.deleteMany.mockResolvedValue({ count: 2 });
+    prisma.appointment.deleteMany.mockResolvedValue({ count: 1 });
+    prisma.agentActionLog.deleteMany.mockResolvedValue({ count: 3 });
+    prisma.metaLeadImport.deleteMany.mockResolvedValue({ count: 1 });
+
+    const result = await service.remove(
+      {
+        sub: "cliente-user",
+        role: Role.CLIENTE,
+        name: "Cliente",
+        email: "cliente@teste.com",
+        client_id: clientId,
+      },
+      baseExistingLead.id,
+    );
+
+    expect(prisma.appointment.updateMany).toHaveBeenCalledWith({
+      where: {
+        rescheduled_from_appointment_id: { in: ["appointment-1"] },
+      },
+      data: { rescheduled_from_appointment_id: null },
+    });
+    expect(prisma.message.deleteMany).toHaveBeenCalledWith({
+      where: {
+        conversation_id: { in: ["conversation-1", "conversation-2"] },
+      },
+    });
+    expect(prisma.lead.delete).toHaveBeenCalledWith({
+      where: { id: baseExistingLead.id },
+    });
+    expect(prisma.lead.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ deleted_at: expect.anything() }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        deleted: true,
+        hard_deleted: true,
+        related_records: expect.objectContaining({
+          messages: 7,
+          conversations: 2,
+          appointments: 1,
+          agent_action_logs: 3,
+          meta_lead_imports: 1,
+        }),
+      }),
+    );
+  });
 
   it("createForIntegration: retorna lead existente com already_existed=true quando telefone coincide", async () => {
     prisma.lead.findFirst.mockResolvedValue(baseExistingLead);

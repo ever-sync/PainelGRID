@@ -1449,10 +1449,83 @@ export class LeadsService {
 
     await this.assertLeadAccess(user, lead);
 
-    await this.prisma.lead.update({
-      where: { id },
-      data: { deleted_at: new Date() },
+    const deleted = await this.prisma.$transaction(async (tx) => {
+      const [conversations, appointments] = await Promise.all([
+        tx.conversation.findMany({
+          where: { lead_id: id },
+          select: { id: true },
+        }),
+        tx.appointment.findMany({
+          where: { lead_id: id },
+          select: { id: true },
+        }),
+      ]);
+      const conversationIds = conversations.map((item) => item.id);
+      const appointmentIds = appointments.map((item) => item.id);
+
+      // A cadeia de reagendamento possui uma FK para outro appointment. Ela
+      // precisa ser solta antes de remover os appointments do lead.
+      if (appointmentIds.length > 0) {
+        await tx.appointment.updateMany({
+          where: {
+            rescheduled_from_appointment_id: { in: appointmentIds },
+          },
+          data: { rescheduled_from_appointment_id: null },
+        });
+      }
+
+      const counts = {
+        score_events: (
+          await tx.scoreEvent.deleteMany({ where: { lead_id: id } })
+        ).count,
+        sales: (await tx.sale.deleteMany({ where: { lead_id: id } })).count,
+        appointments: (
+          await tx.appointment.deleteMany({ where: { lead_id: id } })
+        ).count,
+        messages:
+          conversationIds.length > 0
+            ? (
+                await tx.message.deleteMany({
+                  where: { conversation_id: { in: conversationIds } },
+                })
+              ).count
+            : 0,
+        conversation_states: (
+          await tx.conversationState.deleteMany({ where: { lead_id: id } })
+        ).count,
+        agent_action_logs: (
+          await tx.agentActionLog.deleteMany({ where: { lead_id: id } })
+        ).count,
+        whatsapp_attribution_events: (
+          await tx.whatsAppAttributionEvent.deleteMany({
+            where: {
+              OR: [
+                { lead_id: id },
+                ...(conversationIds.length > 0
+                  ? [{ conversation_id: { in: conversationIds } }]
+                  : []),
+              ],
+            },
+          })
+        ).count,
+        conversations: (
+          await tx.conversation.deleteMany({ where: { lead_id: id } })
+        ).count,
+        crm_history: (
+          await tx.crmHistory.deleteMany({ where: { lead_id: id } })
+        ).count,
+        lead_timeline: (
+          await tx.leadTimeline.deleteMany({ where: { lead_id: id } })
+        ).count,
+        meta_lead_imports: (
+          await tx.metaLeadImport.deleteMany({ where: { lead_id: id } })
+        ).count,
+      };
+
+      await tx.lead.delete({ where: { id } });
+      return counts;
     });
+
     this.realtimeEvents.emitLeadUpdated(lead.client_id, {
       client_id: lead.client_id,
       lead_id: lead.id,
@@ -1460,7 +1533,7 @@ export class LeadsService {
       updated_at: new Date().toISOString(),
     });
 
-    return { deleted: true };
+    return { deleted: true, hard_deleted: true, related_records: deleted };
   }
 
   async patchLeadForIntegration(leadId: string, dto: IntegrationPatchLeadDto) {
