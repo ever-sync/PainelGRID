@@ -67,6 +67,7 @@ import {
   combineLeadDrawerDateTime,
   type LeadDrawerDraft,
 } from "../../components/chat/LeadDrawer";
+import { confirmationStatusFromLeadDrawer } from "../../components/chat/lead-drawer.model";
 
 type ViewFilter = "all" | "unread" | "whatsapp" | "internal";
 type ComposeModal = "contact" | "poll" | "event" | null;
@@ -927,14 +928,9 @@ export function ChatPage() {
           crm_stage_id: leadDrawerDraft.stageId || null,
           event_interest_id: leadDrawerDraft.eventId || null,
           store_visit_datetime: payloadDate,
-          confirmation_status:
-            leadDrawerDraft.status === "confirmed"
-              ? "confirmed"
-              : leadDrawerDraft.status === "checked_in"
-                ? "checked_in"
-                : leadDrawerDraft.status === "cancelled"
-                  ? "cancelled"
-                  : "pending",
+          confirmation_status: confirmationStatusFromLeadDrawer(
+            leadDrawerDraft.status,
+          ),
           source: leadDrawerDraft.source,
         },
         token,
