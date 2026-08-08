@@ -91,9 +91,7 @@ describe("relatório operacional do gestor — contrato atual", () => {
       { name: "Formulário Web", value: 1 },
       { name: "Outros Canais", value: 1 },
     ]);
-    expect(operationalLeadSourceLabel("instagram")).toBe(
-      "Facebook Ads (Meta)",
-    );
+    expect(operationalLeadSourceLabel("instagram")).toBe("Facebook Ads (Meta)");
   });
 
   it("expõe a confiança atual das métricas operacionais", () => {

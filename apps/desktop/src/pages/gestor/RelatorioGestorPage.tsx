@@ -614,7 +614,8 @@ export function RelatorioGestorPage() {
 
   // A tabela usa a mesma consulta paginada das métricas. O fallback local só
   // existe durante indisponibilidade transitória do endpoint operacional.
-  const reportTotal = operationalReport?.pagination.total ?? filteredLeads.length;
+  const reportTotal =
+    operationalReport?.pagination.total ?? filteredLeads.length;
   const totalPages =
     operationalReport?.pagination.total_pages ??
     Math.max(1, Math.ceil(filteredLeads.length / pageSize));
@@ -633,18 +634,20 @@ export function RelatorioGestorPage() {
         createdAt: lead.created_at,
       }));
     }
-    return filteredLeads.slice(startIndex, startIndex + pageSize).map((lead) => ({
-      id: lead.id,
-      name: lead.name,
-      phone: lead.phone,
-      clientName:
-        clients.find((client) => client.id === lead.client_id)?.company_name ??
-        "Não informada",
-      sourceLabel: operationalLeadSourceLabel(lead.source),
-      stageName: lead.crm_stage_name || lead.crm_stage || "Sem etapa",
-      stageCode: lead.crm_stage_code || lead.crm_stage || "",
-      createdAt: lead.created_at,
-    }));
+    return filteredLeads
+      .slice(startIndex, startIndex + pageSize)
+      .map((lead) => ({
+        id: lead.id,
+        name: lead.name,
+        phone: lead.phone,
+        clientName:
+          clients.find((client) => client.id === lead.client_id)
+            ?.company_name ?? "Não informada",
+        sourceLabel: operationalLeadSourceLabel(lead.source),
+        stageName: lead.crm_stage_name || lead.crm_stage || "Sem etapa",
+        stageCode: lead.crm_stage_code || lead.crm_stage || "",
+        createdAt: lead.created_at,
+      }));
   }, [clients, filteredLeads, operationalReport, pageSize, startIndex]);
 
   // Dados para a Aba de Eventos
@@ -1084,7 +1087,9 @@ export function RelatorioGestorPage() {
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 hover:bg-gray-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-700 dark:text-zinc-200 transition-colors"
               >
                 <Download size={14} />
-                <span>{isExporting ? "Exportando..." : "Exportar Relatório"}</span>
+                <span>
+                  {isExporting ? "Exportando..." : "Exportar Relatório"}
+                </span>
               </button>
             </div>
 
@@ -1139,8 +1144,12 @@ export function RelatorioGestorPage() {
                                 l.stageCode.toLowerCase().includes("convert") ||
                                   l.stageCode.toLowerCase().includes("vend")
                                   ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-900"
-                                  : l.stageCode.toLowerCase().includes("agend") ||
-                                      l.stageCode.toLowerCase().includes("checkin")
+                                  : l.stageCode
+                                        .toLowerCase()
+                                        .includes("agend") ||
+                                      l.stageCode
+                                        .toLowerCase()
+                                        .includes("checkin")
                                     ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900"
                                     : "bg-gray-100 text-gray-700 border border-gray-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700",
                               )}
