@@ -112,8 +112,8 @@ export class IntegrationKeyGuard implements CanActivate {
   ): Promise<void> {
     const body = this.asRecord(req.body);
     const query = this.asRecord(req.query);
-    this.assertExplicitClientId(body.client_id, clientId);
-    this.assertExplicitClientId(query.client_id, clientId);
+    await this.assertExplicitClientId(body.client_id, clientId);
+    await this.assertExplicitClientId(query.client_id, clientId);
 
     const path = (req.originalUrl || req.url).split("?")[0];
     const routeId = this.firstRouteParam(req.params);
@@ -123,7 +123,7 @@ export class IntegrationKeyGuard implements CanActivate {
         where: { id: routeId },
         select: { client_id: true },
       });
-      this.assertOwned(appointment?.client_id, clientId);
+      await this.assertOwned(appointment?.client_id, clientId);
     } else if (/\/agent\/conversations\/[^/]+(?:\/|$)/.test(path) && routeId) {
       await this.assertConversation(routeId, clientId);
     } else if (
@@ -172,7 +172,7 @@ export class IntegrationKeyGuard implements CanActivate {
       where: { id },
       select: { client_id: true },
     });
-    this.assertOwned(lead?.client_id, clientId);
+    await this.assertOwned(lead?.client_id, clientId);
   }
 
   private async assertConversation(
@@ -183,7 +183,7 @@ export class IntegrationKeyGuard implements CanActivate {
       where: { id },
       select: { client_id: true },
     });
-    this.assertOwned(conversation?.client_id, clientId);
+    await this.assertOwned(conversation?.client_id, clientId);
   }
 
   private async assertEvent(
@@ -193,29 +193,89 @@ export class IntegrationKeyGuard implements CanActivate {
     if (!id) {
       return;
     }
-    const participant = await this.prisma!.eventParticipant.findFirst({
-      where: { event_id: id, client_id: clientId },
-      select: { id: true },
+    const participants = await this.prisma!.eventParticipant.findMany({
+      where: { event_id: id },
+      select: { client_id: true },
     });
-    if (!participant) {
-      throw new ForbiddenException("Recurso fora do escopo da integracao");
+    for (const participant of participants) {
+      if (await this.isClientInScope(participant.client_id, clientId)) {
+        return;
+      }
     }
+    throw new ForbiddenException("Recurso fora do escopo da integracao");
   }
 
-  private assertExplicitClientId(value: unknown, clientId: string): void {
+  private async assertExplicitClientId(
+    value: unknown,
+    clientId: string,
+  ): Promise<void> {
     const supplied = this.stringValue(value);
-    if (supplied && supplied !== clientId) {
+    if (supplied && !(await this.isClientInScope(supplied, clientId))) {
       throw new ForbiddenException("Cliente fora do escopo da integracao");
     }
   }
 
-  private assertOwned(
+  private async assertOwned(
     resourceClientId: string | undefined,
     clientId: string,
-  ): void {
-    if (!resourceClientId || resourceClientId !== clientId) {
+  ): Promise<void> {
+    if (
+      !resourceClientId ||
+      !(await this.isClientInScope(resourceClientId, clientId))
+    ) {
       throw new ForbiddenException("Recurso fora do escopo da integracao");
     }
+  }
+
+  /**
+   * Uma credencial continua pertencendo a um cliente. O acesso cruzado só é
+   * permitido quando origem e destino compartilham explicitamente o mesmo
+   * número de WhatsApp conectado. Esse é o vínculo operacional usado pelo
+   * Rubinho multicliente e evita transformar a chave em uma credencial global.
+   */
+  private async isClientInScope(
+    targetClientId: string,
+    credentialClientId: string,
+  ): Promise<boolean> {
+    if (targetClientId === credentialClientId) {
+      return true;
+    }
+    if (!this.prisma?.metaAssetSelection) {
+      return false;
+    }
+
+    const sourceAssets = await this.prisma.metaAssetSelection.findMany({
+      where: {
+        phone_number_id: { not: null },
+        meta_connection: {
+          client_id: credentialClientId,
+          status: "connected",
+        },
+      },
+      select: { phone_number_id: true },
+    });
+    const sharedPhoneIds = [
+      ...new Set(
+        sourceAssets
+          .map((asset) => asset.phone_number_id)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ];
+    if (sharedPhoneIds.length === 0) {
+      return false;
+    }
+
+    const targetAsset = await this.prisma.metaAssetSelection.findFirst({
+      where: {
+        phone_number_id: { in: sharedPhoneIds },
+        meta_connection: {
+          client_id: targetClientId,
+          status: "connected",
+        },
+      },
+      select: { id: true },
+    });
+    return Boolean(targetAsset);
   }
 
   private firstRouteParam(params: Request["params"]): string | undefined {

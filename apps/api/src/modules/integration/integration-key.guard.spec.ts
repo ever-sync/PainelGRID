@@ -53,6 +53,45 @@ describe("IntegrationKeyGuard tenant scope", () => {
     );
   });
 
+  it("permite client_id de outro cliente quando ambos compartilham o WhatsApp conectado", async () => {
+    const prisma = {
+      metaAssetSelection: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ phone_number_id: "shared-rubinho-phone" }]),
+        findFirst: jest.fn().mockResolvedValue({ id: "target-phone-asset" }),
+      },
+    };
+    const guard = createGuard(prisma as unknown as Partial<PrismaService>);
+    const request = {
+      headers: { "x-leadflow-integration-key": apiKey },
+      body: {},
+      query: { client_id: otherClientId },
+      params: {},
+      originalUrl: "/api/integrations/v1/leads",
+      method: "GET",
+    } as Partial<Request>;
+
+    await expect(guard.canActivate(contextFor(request))).resolves.toBe(true);
+    expect(prisma.metaAssetSelection.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          meta_connection: expect.objectContaining({ client_id: clientId }),
+        }),
+      }),
+    );
+    expect(prisma.metaAssetSelection.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          phone_number_id: { in: ["shared-rubinho-phone"] },
+          meta_connection: expect.objectContaining({
+            client_id: otherClientId,
+          }),
+        }),
+      }),
+    );
+  });
+
   it("bloqueia operação por ID quando o lead pertence a outro cliente", async () => {
     const prisma = {
       lead: {
