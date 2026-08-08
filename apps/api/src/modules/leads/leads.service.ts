@@ -3065,7 +3065,10 @@ export class LeadsService {
     const { lead, prepared } = item;
     switch (key) {
       case "lead_name":
-        return lead.name;
+        return lead.name
+          .trim()
+          .replace(/^["']+|["']+$/g, "")
+          .trim();
       case "event_name":
         return prepared.routing.eventName;
       case "company_name":
