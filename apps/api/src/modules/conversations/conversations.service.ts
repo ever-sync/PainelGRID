@@ -95,13 +95,19 @@ export class ConversationsService {
     const where: Prisma.ConversationWhereInput = clientId
       ? { client_id: clientId }
       : {};
-    if (user.role === Role.VENDEDOR) {
-      where.lead = { assigned_vendor_id: user.sub, deleted_at: null };
-    }
+    // Lead excluido nao tem conversa para listar. Sem isto, so o vendedor
+    // ficava protegido e gestor/cliente enxergavam conversas de leads que
+    // eles proprios apagaram.
+    where.lead =
+      user.role === Role.VENDEDOR
+        ? { assigned_vendor_id: user.sub, deleted_at: null }
+        : { deleted_at: null };
 
     const rows = await this.prisma.conversation.findMany({
       where,
-      orderBy: { last_message_at: "desc" },
+      // `last_message_at` e opcional: no DESC do Postgres, NULL vem primeiro e
+      // uma conversa recem-criada sem mensagem furaria a fila no topo.
+      orderBy: { last_message_at: { sort: "desc", nulls: "last" } },
       include: {
         lead: { select: { id: true, name: true } },
         state: {
@@ -191,12 +197,25 @@ export class ConversationsService {
         FROM leads lead
         WHERE lead.deleted_at IS NULL
           ${clientFilter}
-          AND length(regexp_replace(COALESCE(lead.phone, ''), '[^0-9]', '', 'g')) >= 10
           AND (
-            regexp_replace(COALESCE(lead.phone, ''), '[^0-9]', '', 'g') =
-              regexp_replace(history.session_id, '[^0-9]', '', 'g')
-            OR right(regexp_replace(COALESCE(lead.phone, ''), '[^0-9]', '', 'g'), 11) =
-              right(regexp_replace(history.session_id, '[^0-9]', '', 'g'), 11)
+            -- Rubinho v2 carrega o lead no proprio session_id
+            -- ("rubinho-v2:<client_id>:<agente>:<lead_id>"), entao casamos pelo
+            -- ID. Sem isto, o casamento por telefone abaixo nunca acerta essas
+            -- sessoes e as mensagens ficam de fora do painel.
+            lead.id::text = CASE
+              WHEN split_part(history.session_id, ':', 4) ~*
+                '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+              THEN split_part(history.session_id, ':', 4)
+            END
+            OR (
+              length(regexp_replace(COALESCE(lead.phone, ''), '[^0-9]', '', 'g')) >= 10
+              AND (
+                regexp_replace(COALESCE(lead.phone, ''), '[^0-9]', '', 'g') =
+                  regexp_replace(history.session_id, '[^0-9]', '', 'g')
+                OR right(regexp_replace(COALESCE(lead.phone, ''), '[^0-9]', '', 'g'), 11) =
+                  right(regexp_replace(history.session_id, '[^0-9]', '', 'g'), 11)
+              )
+            )
           )
         ORDER BY lead.updated_at DESC, lead.id DESC
         LIMIT 1

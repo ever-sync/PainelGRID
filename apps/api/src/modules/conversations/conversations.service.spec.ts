@@ -191,7 +191,7 @@ describe("ConversationsService", () => {
 
       expect(clientsService.assertGestorOwnsClient).not.toHaveBeenCalled();
       expect(prisma.conversation.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: {} }),
+        expect.objectContaining({ where: { lead: { deleted_at: null } } }),
       );
       expect(result).toHaveLength(1);
     });
@@ -211,8 +211,26 @@ describe("ConversationsService", () => {
       );
 
       expect(prisma.conversation.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { client_id: clientId } }),
+        expect.objectContaining({
+          where: { client_id: clientId, lead: { deleted_at: null } },
+        }),
       );
+    });
+
+    it("nao lista conversa de lead excluido", async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+
+      await service.findAll(
+        { sub: "g1", role: Role.GESTOR, email: "g@x", name: "G" } as any,
+        { client_id: clientId } as any,
+      );
+
+      const call = prisma.conversation.findMany.mock.calls[0][0];
+      expect(call.where.lead).toEqual({ deleted_at: null });
+      // NULL por ultimo: conversa sem mensagem nao pode furar a fila no topo.
+      expect(call.orderBy).toEqual({
+        last_message_at: { sort: "desc", nulls: "last" },
+      });
     });
 
     it("VENDEDOR: passa quando client_id coincide", async () => {
