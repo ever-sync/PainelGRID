@@ -59,10 +59,13 @@ describe("LeadsService", () => {
     conversationState: { deleteMany: jest.Mock };
     agentActionLog: { deleteMany: jest.Mock };
     whatsAppAttributionEvent: { deleteMany: jest.Mock };
+    dispatchEvent: { deleteMany: jest.Mock };
+    operationalIssue: { deleteMany: jest.Mock };
     leadTimeline: { deleteMany: jest.Mock };
     webhookEvent: { deleteMany: jest.Mock };
     $transaction: jest.Mock;
     $queryRaw: jest.Mock;
+    $executeRaw: jest.Mock;
   };
   let clientsService: {
     assertGestorOwnsClient: jest.Mock;
@@ -125,10 +128,13 @@ describe("LeadsService", () => {
       conversationState: { deleteMany: jest.fn() },
       agentActionLog: { deleteMany: jest.fn() },
       whatsAppAttributionEvent: { deleteMany: jest.fn() },
+      dispatchEvent: { deleteMany: jest.fn() },
+      operationalIssue: { deleteMany: jest.fn() },
       leadTimeline: { deleteMany: jest.fn() },
       webhookEvent: { deleteMany: jest.fn() },
       $transaction: jest.fn(),
       $queryRaw: jest.fn(),
+      $executeRaw: jest.fn(),
     };
     prisma.lead.findFirst.mockResolvedValue(null);
     prisma.lead.findMany.mockResolvedValue([]);
@@ -177,6 +183,8 @@ describe("LeadsService", () => {
       prisma.conversationState,
       prisma.agentActionLog,
       prisma.whatsAppAttributionEvent,
+      prisma.dispatchEvent,
+      prisma.operationalIssue,
       prisma.leadTimeline,
       prisma.webhookEvent,
     ]) {
@@ -188,6 +196,7 @@ describe("LeadsService", () => {
       callback(prisma),
     );
     prisma.$queryRaw.mockResolvedValue([]);
+    prisma.$executeRaw.mockResolvedValue(0);
     clientsService = {
       assertGestorOwnsClient: jest.fn(),
     };
@@ -625,6 +634,10 @@ describe("LeadsService", () => {
     prisma.appointment.deleteMany.mockResolvedValue({ count: 1 });
     prisma.agentActionLog.deleteMany.mockResolvedValue({ count: 3 });
     prisma.metaLeadImport.deleteMany.mockResolvedValue({ count: 1 });
+    prisma.dispatchEvent.deleteMany.mockResolvedValue({ count: 4 });
+    prisma.operationalIssue.deleteMany.mockResolvedValue({ count: 2 });
+    prisma.$queryRaw.mockResolvedValue([{ exists: true }]);
+    prisma.$executeRaw.mockResolvedValue(5);
 
     const result = await service.remove(
       {
@@ -648,6 +661,22 @@ describe("LeadsService", () => {
         conversation_id: { in: ["conversation-1", "conversation-2"] },
       },
     });
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.dispatchEvent.deleteMany).toHaveBeenCalledWith({
+      where: { lead_id: baseExistingLead.id },
+    });
+    expect(prisma.operationalIssue.deleteMany).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          { lead_id: baseExistingLead.id },
+          {
+            conversation_id: {
+              in: ["conversation-1", "conversation-2"],
+            },
+          },
+        ],
+      },
+    });
     expect(prisma.lead.delete).toHaveBeenCalledWith({
       where: { id: baseExistingLead.id },
     });
@@ -666,6 +695,9 @@ describe("LeadsService", () => {
           appointments: 1,
           agent_action_logs: 3,
           meta_lead_imports: 1,
+          dispatch_events: 4,
+          operational_issues: 2,
+          n8n_agent_memory: 5,
         }),
       }),
     );

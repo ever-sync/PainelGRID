@@ -1467,6 +1467,29 @@ export class LeadsService {
       const conversationIds = conversations.map((item) => item.id);
       const appointmentIds = appointments.map((item) => item.id);
 
+      // O Rubinho legado usa uma tabela do LangChain sem FK para o lead. A
+      // sessao ja foi gravada historicamente pelo telefone, pelo UUID do lead
+      // ou pelo UUID da conversa; por isso a memoria precisa ser removida
+      // explicitamente antes do lead desaparecer.
+      const [n8nHistoryTable] = await tx.$queryRaw<
+        Array<{ exists: boolean }>
+      >(Prisma.sql`
+        SELECT to_regclass('agent_chat_history') IS NOT NULL AS exists
+      `);
+      const n8nAgentMemory = n8nHistoryTable?.exists
+        ? await tx.$executeRaw(Prisma.sql`
+            DELETE FROM agent_chat_history
+            WHERE session_id = ${id}
+              OR session_id = ANY(${conversationIds}::text[])
+              OR (
+                ${lead.phone ?? null}::text IS NOT NULL
+                AND length(regexp_replace(${lead.phone ?? ""}, '[^0-9]', '', 'g')) >= 10
+                AND right(regexp_replace(session_id, '[^0-9]', '', 'g'), 11) =
+                  right(regexp_replace(${lead.phone ?? ""}, '[^0-9]', '', 'g'), 11)
+              )
+          `)
+        : 0;
+
       // A cadeia de reagendamento possui uma FK para outro appointment. Ela
       // precisa ser solta antes de remover os appointments do lead.
       if (appointmentIds.length > 0) {
@@ -1479,6 +1502,22 @@ export class LeadsService {
       }
 
       const counts = {
+        n8n_agent_memory: Number(n8nAgentMemory),
+        operational_issues: (
+          await tx.operationalIssue.deleteMany({
+            where: {
+              OR: [
+                { lead_id: id },
+                ...(conversationIds.length > 0
+                  ? [{ conversation_id: { in: conversationIds } }]
+                  : []),
+              ],
+            },
+          })
+        ).count,
+        dispatch_events: (
+          await tx.dispatchEvent.deleteMany({ where: { lead_id: id } })
+        ).count,
         score_events: (
           await tx.scoreEvent.deleteMany({ where: { lead_id: id } })
         ).count,
