@@ -706,6 +706,52 @@ describe("LeadsService", () => {
     );
   });
 
+  it("agenda silenciosamente e move o lead quando o Rubinho salva a primeira data", async () => {
+    const scheduledAt = "2026-08-15T12:00:00.000Z";
+    const scheduledStage = {
+      id: "77777777-7777-4777-8777-777777777777",
+      pipeline_id: "88888888-8888-4888-8888-888888888888",
+    };
+    prisma.lead.findFirst.mockResolvedValue(baseExistingLead);
+    prisma.crmStage.findFirst.mockResolvedValue(scheduledStage);
+    prisma.lead.update.mockResolvedValue({
+      ...baseExistingLead,
+      tags: ["agendado"],
+      store_visit_datetime: new Date(scheduledAt),
+      confirmation_status: ConfirmationStatus.scheduled,
+      crm_stage_id: scheduledStage.id,
+      crm_pipeline_id: scheduledStage.pipeline_id,
+      crm_stage: { id: scheduledStage.id, name: "Presenca agendada" },
+    });
+
+    await service.patchLeadForIntegration(baseExistingLead.id, {
+      store_visit_datetime: scheduledAt,
+    });
+
+    expect(prisma.lead.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: baseExistingLead.id },
+        data: expect.objectContaining({
+          store_visit_datetime: new Date(scheduledAt),
+          crm_stage_id: scheduledStage.id,
+          crm_pipeline_id: scheduledStage.pipeline_id,
+          confirmation_status: ConfirmationStatus.scheduled,
+          tags: ["agendado"],
+        }),
+      }),
+    );
+    expect(metaService.sendClientWhatsappMediaMessage).not.toHaveBeenCalled();
+    expect(leadTimeline.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        leadId: baseExistingLead.id,
+        eventType: "stage_moved",
+        origin: "automation",
+        toStageId: scheduledStage.id,
+        actorLabel: "Rubinho",
+      }),
+    );
+  });
+
   it("createForIntegration: retorna lead existente com already_existed=true quando telefone coincide", async () => {
     prisma.lead.findFirst.mockResolvedValue(baseExistingLead);
 

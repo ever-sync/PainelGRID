@@ -1628,6 +1628,33 @@ export class LeadsService {
       }
     }
     const data = this.buildGestorUpdateData(asUpdate);
+    const scheduleSilentlyFromFirstDate =
+      !lead.store_visit_datetime && Boolean(asUpdate.store_visit_datetime);
+    let automaticScheduledStage: { id: string; pipeline_id: string } | null =
+      null;
+
+    if (scheduleSilentlyFromFirstDate) {
+      automaticScheduledStage = await this.prisma.crmStage.findFirst({
+        where: {
+          client_id: lead.client_id,
+          code: clientIdToStageCode(
+            lead.client_id,
+            "PRESENCA_AGENDADA",
+          ),
+        },
+        select: { id: true, pipeline_id: true },
+      });
+      if (!automaticScheduledStage) {
+        throw new BadRequestException(
+          "Etapa PRESENCA_AGENDADA nao configurada para o cliente",
+        );
+      }
+
+      data.crm_stage_id = automaticScheduledStage.id;
+      data.crm_pipeline_id = automaticScheduledStage.pipeline_id;
+      data.confirmation_status = ConfirmationStatus.scheduled;
+      data.tags = Array.from(new Set([...(lead.tags ?? []), "agendado"]));
+    }
     if (
       asUpdate.crm_stage_id != null &&
       asUpdate.crm_stage_id !== lead.crm_stage_id &&
@@ -1689,6 +1716,31 @@ export class LeadsService {
       source: "integration",
       updated_at: new Date().toISOString(),
     });
+
+    if (automaticScheduledStage) {
+      void this.leadTimeline.record({
+        clientId: updated.client_id,
+        leadId: updated.id,
+        eventType: "stage_moved",
+        origin: "automation",
+        fromStageId: lead.crm_stage_id,
+        toStageId: automaticScheduledStage.id,
+        fromValue: lead.crm_stage?.name ?? null,
+        toValue: updated.crm_stage?.name ?? "Presenca agendada",
+        actorLabel: "Rubinho",
+        notes: "Movimentacao silenciosa apos escolha da data",
+      });
+      void this.leadTimeline.record({
+        clientId: updated.client_id,
+        leadId: updated.id,
+        eventType: "status_changed",
+        origin: "automation",
+        fromValue: lead.confirmation_status,
+        toValue: ConfirmationStatus.scheduled,
+        actorLabel: "Rubinho",
+        notes: "Status atualizado automaticamente apos escolha da data",
+      });
+    }
 
     if (confirming) {
       void this.notifyCheckinViaWhatsapp(updated);
