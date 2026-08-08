@@ -6,6 +6,7 @@ import { AppointmentsService } from "../appointments/appointments.service";
 import { LeadsService } from "../leads/leads.service";
 import { AutomationKeyGuard } from "./automation-key.guard";
 import { SendCredentialEmailDto } from "./dto/send-credential-email.dto";
+import { ReconcileScheduledLeadDto } from "./dto/reconcile-scheduled-lead.dto";
 
 @ApiTags("automations")
 @Controller("integrations/v1/automations")
@@ -40,6 +41,15 @@ export class AutomationController {
       dto.lead_id,
       dto.dispatch_key,
     );
+  }
+
+  @Post("reconcile-scheduled-lead")
+  @ApiOperation({
+    summary:
+      "Reconcilia um lead que escolheu uma data e envia a credencial por e-mail",
+  })
+  reconcileScheduledLead(@Body() dto: ReconcileScheduledLeadDto) {
+    return this.appointments.reconcileScheduledLeadForAutomation(dto);
   }
 
   @Post("initial-template/status")

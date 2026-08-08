@@ -37,6 +37,7 @@ import { CreateAppointmentDto } from "./dto/create-appointment.dto";
 import { NoShowAppointmentDto } from "./dto/no-show-appointment.dto";
 import { RescheduleAppointmentDto } from "./dto/reschedule-appointment.dto";
 import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.service";
+import type { ReconcileScheduledLeadDto } from "../integration/dto/reconcile-scheduled-lead.dto";
 
 const ACTIVE_APPOINTMENT_STATUSES = [
   AppointmentStatus.proposed,
@@ -184,6 +185,101 @@ export class AppointmentsService {
     }
 
     return result;
+  }
+
+  async reconcileScheduledLeadForAutomation(dto: ReconcileScheduledLeadDto) {
+    const lead = await this.prisma.lead.findFirst({
+      where: { id: dto.lead_id, deleted_at: null },
+      include: { event_interest: true },
+    });
+    if (!lead?.event_interest) {
+      throw new NotFoundException("Lead sem evento vinculado");
+    }
+
+    const scheduledAt = new Date(dto.scheduled_at);
+    if (Number.isNaN(scheduledAt.getTime())) {
+      throw new BadRequestException("Data de agendamento invalida");
+    }
+
+    const eventStarts = Array.isArray(lead.event_interest.event_days)
+      ? lead.event_interest.event_days
+          .map((day) => {
+            if (!day || typeof day !== "object" || !("start" in day)) {
+              return null;
+            }
+            const value = (day as { start?: unknown }).start;
+            return typeof value === "string" ? new Date(value) : null;
+          })
+          .filter(
+            (value): value is Date =>
+              value instanceof Date && !Number.isNaN(value.getTime()),
+          )
+      : [];
+    if (
+      eventStarts.length > 0 &&
+      !eventStarts.some((start) => start.getTime() === scheduledAt.getTime())
+    ) {
+      throw new BadRequestException(
+        "Data escolhida nao pertence aos dias configurados do evento",
+      );
+    }
+
+    let appointment: AppointmentRecord | null =
+      await this.prisma.appointment.findFirst({
+        where: {
+          lead_id: lead.id,
+          event_id: lead.event_interest.id,
+          status: { in: ACTIVE_APPOINTMENT_STATUSES },
+        },
+        include: { lead: true, event: true, conversation: true },
+        orderBy: { created_at: "desc" },
+      });
+
+    let idempotentReplay = true;
+    if (!appointment) {
+      const conversation = await this.prisma.conversation.findFirst({
+        where: { lead_id: lead.id, client_id: lead.client_id },
+        orderBy: [{ last_message_at: "desc" }, { created_at: "desc" }],
+        select: { id: true },
+      });
+      const created = await this.create(
+        {
+          lead_id: lead.id,
+          event_id: lead.event_interest.id,
+          conversation_id: conversation?.id ?? null,
+          scheduled_at: scheduledAt.toISOString(),
+          timezone: "America/Sao_Paulo",
+          channel: AppointmentChannel.whatsapp,
+          source: AppointmentSource.n8n_ai_agent,
+          created_by_type: AppointmentActorType.external_agent,
+          notes: "Agendamento reconciliado por auditoria do Rubinho",
+        },
+        `scheduled-reconciliation:${lead.id}:${scheduledAt.toISOString()}`,
+      );
+      appointment = await this.prisma.appointment.findUnique({
+        where: { id: created.id },
+        include: { lead: true, event: true, conversation: true },
+      });
+      idempotentReplay = created.idempotent_replay;
+    }
+
+    if (!appointment) {
+      throw new NotFoundException(
+        "Agendamento nao encontrado apos reconciliacao",
+      );
+    }
+
+    const email = await this.sendEventCredentialEmailForAutomation(
+      lead.id,
+      dto.dispatch_key,
+    );
+
+    return {
+      reconciled: true,
+      idempotent_replay: idempotentReplay,
+      appointment: this.toAppointmentResponse(appointment),
+      email,
+    };
   }
 
   async confirm(
