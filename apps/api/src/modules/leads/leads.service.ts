@@ -255,6 +255,243 @@ export class LeadsService {
     return this.config.get<string>("JWT_SECRET", "leadflow_access_secret");
   }
 
+  private initialTemplateQueueWhere(): Prisma.LeadWhereInput {
+    return {
+      deleted_at: null,
+      phone: { not: null },
+      facebook_form_id: { not: null },
+      event_interest_id: { not: null },
+      OR: [
+        { preferred_contact_channel: null },
+        { preferred_contact_channel: { not: "ligacao" } },
+      ],
+      crm_stage: { code: { endsWith: "_NOVO_LEAD" } },
+      dispatch_events: {
+        none: { dispatch_type: "lead_welcome_template" },
+      },
+    };
+  }
+
+  async countInitialTemplateQueue() {
+    const pending = await this.prisma.lead.count({
+      where: this.initialTemplateQueueWhere(),
+    });
+    return { pending };
+  }
+
+  /**
+   * Drena somente um item por chamada. O agendador externo controla a
+   * cadência, enquanto a chave única em dispatch_events impede duplicidade.
+   */
+  async dispatchNextInitialWhatsappTemplate() {
+    const candidates = await this.prisma.lead.findMany({
+      where: this.initialTemplateQueueWhere(),
+      orderBy: [{ created_at: "asc" }, { id: "asc" }],
+      take: 20,
+      select: leadSelect,
+    });
+
+    for (const candidate of candidates as LeadWithRelations[]) {
+      const formId = candidate.facebook_form_id?.trim();
+      const eventId = candidate.event_interest_id;
+      const pipelineId = candidate.crm_pipeline_id;
+      if (!formId || !eventId || !pipelineId) continue;
+
+      const routing = await this.prisma.metaLeadRoutingRule.findFirst({
+        where: {
+          form_id: formId,
+          client_id: candidate.client_id,
+          event_id: eventId,
+          crm_pipeline_id: pipelineId,
+        },
+        select: {
+          form_id: true,
+          form_name: true,
+          client_id: true,
+          event_id: true,
+          crm_pipeline_id: true,
+          whatsapp_template_name: true,
+          whatsapp_template_language: true,
+          whatsapp_template_parameter_keys: true,
+          client: { select: { company_name: true, settings: true } },
+          event: {
+            select: { name: true, event_date: true, location: true },
+          },
+          crm_pipeline: { select: { code: true } },
+          call_stage: { select: { id: true, code: true, name: true } },
+          whatsapp_stage: { select: { id: true, code: true, name: true } },
+        },
+      });
+      const contactStage = await this.prisma.crmStage.findFirst({
+        where: {
+          client_id: candidate.client_id,
+          pipeline_id: pipelineId,
+          code: { endsWith: "_EM_CONTATO" },
+        },
+        select: { id: true, code: true, name: true },
+      });
+      if (
+        !routing?.whatsapp_template_name ||
+        !routing.whatsapp_template_language ||
+        !contactStage
+      ) {
+        continue;
+      }
+
+      const dispatchKey = `meta-lead-template:${candidate.facebook_lead_id ?? candidate.id}:${routing.whatsapp_template_name}`;
+      try {
+        await this.prisma.dispatchEvent.create({
+          data: {
+            client_id: candidate.client_id,
+            event_id: eventId,
+            lead_id: candidate.id,
+            dispatch_key: dispatchKey,
+            workflow_key: "initial-template-queue",
+            dispatch_type: "lead_welcome_template",
+            channel: "whatsapp",
+            provider: "meta",
+            template_name: routing.whatsapp_template_name,
+            status: "queued",
+            scheduled_at: new Date(),
+            metadata: {
+              form_id: formId,
+              cadence_seconds: 10,
+            },
+          },
+        });
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        ) {
+          continue;
+        }
+        throw error;
+      }
+
+      const preparedRouting: AutomaticFacebookRouting = {
+        formId,
+        formName: routing.form_name ?? formId,
+        metaConnectionId: "queue",
+        clientId: routing.client_id,
+        clientName: routing.client.company_name,
+        eventId: routing.event_id,
+        eventName: routing.event.name,
+        eventDate: routing.event.event_date,
+        eventLocation: routing.event.location,
+        pipelineId: routing.crm_pipeline_id,
+        pipelineCode: routing.crm_pipeline.code,
+        callStage: routing.call_stage,
+        whatsappStage: routing.whatsapp_stage,
+        whatsappTemplateName: routing.whatsapp_template_name,
+        whatsappTemplateLanguage: routing.whatsapp_template_language,
+        whatsappTemplateParameterKeys:
+          routing.whatsapp_template_parameter_keys.filter(
+            (key): key is MetaLeadWhatsappTemplateParameterKey =>
+              AUTOMATIC_WHATSAPP_TEMPLATE_PARAMETER_KEYS.has(key),
+          ),
+        clientSettings: routing.client.settings,
+      };
+      const item: AutomaticFacebookTransactionItem = {
+        lead: candidate,
+        alreadyExisted: true,
+        stageMoved: false,
+        fromStageId: candidate.crm_stage_id,
+        fromStageCode: candidate.crm_stage?.code ?? null,
+        shouldDispatchWhatsapp: true,
+        prepared: {
+          payload: {
+            lead_id: candidate.facebook_lead_id ?? candidate.id,
+            nome: candidate.name,
+            ...(candidate.email ? { email: candidate.email } : {}),
+            ...(candidate.phone ? { telefone: candidate.phone } : {}),
+            preferencia_atendimento: "whatsapp",
+            formulario_id: formId,
+          },
+          routing: preparedRouting,
+          channel: "whatsapp",
+          targetStage: contactStage,
+          mappedStatus: null,
+          metadata: {
+            externalRef: candidate.external_ref ?? candidate.id,
+            facebookLeadId: candidate.facebook_lead_id ?? candidate.id,
+            facebookFormId: formId,
+            facebookAdId: candidate.facebook_ad_id,
+            facebookAdName: candidate.facebook_ad_name,
+            facebookAdSetId: candidate.facebook_ad_set_id,
+            facebookAdSetName: candidate.facebook_ad_set_name,
+            facebookCampaignId: candidate.facebook_campaign_id,
+            facebookCampaignName: candidate.facebook_campaign_name,
+            facebookCreativeId: null,
+            preferredContactChannel: "whatsapp",
+            sourceCreatedAt: candidate.source_created_at,
+            sourcePayload:
+              (candidate.source_payload as Prisma.InputJsonValue | null) ?? {},
+          },
+        },
+      };
+
+      const dispatch = await this.dispatchAutomaticWhatsappTemplate(item);
+      if (dispatch.status !== "sent") {
+        return {
+          processed: true,
+          sent: false,
+          lead_id: candidate.id,
+          client_id: candidate.client_id,
+          event_id: eventId,
+          dispatch,
+        };
+      }
+
+      const actorId = this.config
+        .get<string>("LEADFLOW_INTEGRATION_ACTOR_USER_ID")
+        ?.trim();
+      await this.prisma.$transaction(async (tx) => {
+        await tx.lead.update({
+          where: { id: candidate.id },
+          data: { crm_stage_id: contactStage.id },
+        });
+        if (actorId) {
+          await tx.crmHistory.create({
+            data: {
+              lead_id: candidate.id,
+              from_stage_id: candidate.crm_stage_id,
+              to_stage_id: contactStage.id,
+              changed_by_user_id: actorId,
+              notes: "Template inicial enviado; lead movido para Em contato",
+            },
+          });
+        }
+      });
+      await this.leadTimeline.record({
+        clientId: candidate.client_id,
+        leadId: candidate.id,
+        eventType: "stage_moved",
+        origin: "automation",
+        fromStageId: candidate.crm_stage_id,
+        toStageId: contactStage.id,
+        fromValue: candidate.crm_stage?.code ?? null,
+        toValue: contactStage.code,
+        actorId,
+        actorLabel: "Fila de template inicial",
+        notes: "Movido após confirmação de envio do template pela Meta",
+      });
+      return {
+        processed: true,
+        sent: true,
+        lead_id: candidate.id,
+        lead_name: candidate.name,
+        client_id: candidate.client_id,
+        event_id: eventId,
+        from_stage: candidate.crm_stage?.code ?? null,
+        to_stage: contactStage.code,
+        dispatch,
+      };
+    }
+
+    return { processed: false, sent: false, reason: "queue_empty" };
+  }
+
   private async findLeadByEmail(
     clientId: string,
     email?: string | null,
