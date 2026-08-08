@@ -7,6 +7,7 @@ describe("AgentActionLogService", () => {
 
   let prisma: any;
   let conversationStateService: any;
+  let appointments: any;
   let service: AgentActionLogService;
 
   beforeEach(() => {
@@ -17,6 +18,10 @@ describe("AgentActionLogService", () => {
       },
       message: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      lead: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        update: jest.fn(),
       },
     };
 
@@ -37,9 +42,15 @@ describe("AgentActionLogService", () => {
       }),
     };
 
-    service = new AgentActionLogService(prisma, conversationStateService, {
-      dispatch: jest.fn(),
-    } as never);
+    appointments = {
+      deliverCredentialForLead: jest.fn(),
+    };
+    service = new AgentActionLogService(
+      prisma,
+      conversationStateService,
+      { dispatch: jest.fn() } as never,
+      appointments,
+    );
   });
 
   it("registra acao do agente vinculada a conversa", async () => {
@@ -137,6 +148,67 @@ describe("AgentActionLogService", () => {
         conversation_id: conversationId,
         handoff_required: true,
         handoff_reason: "solicitou humano",
+      }),
+    );
+  });
+
+  it("consolida nome do acompanhante quando a quantidade ja foi salva", async () => {
+    prisma.lead.findUnique.mockResolvedValue({ companions: "1" });
+    prisma.lead.update.mockResolvedValue({});
+    prisma.agentActionLog.create.mockImplementation(({ data }: any) =>
+      Promise.resolve({
+        id: "log-companion",
+        ...data,
+        created_at: new Date("2026-08-08T12:22:48.000Z"),
+      }),
+    );
+
+    await service.createActionLog(conversationId, {
+      trigger_type: "incoming_message",
+      decision_type: "collect_data",
+      result_status: "success",
+      tool_name: "WAITING_COMPANIONS",
+      received_message: "Gael Lobo",
+    });
+
+    expect(prisma.lead.update).toHaveBeenCalledWith({
+      where: { id: leadId },
+      data: { companions: "1 acompanhante: Gael Lobo" },
+    });
+  });
+
+  it("aciona entrega garantida da credencial na confirmacao final", async () => {
+    appointments.deliverCredentialForLead.mockResolvedValue({
+      sent: true,
+      email: { sent: true },
+    });
+    prisma.agentActionLog.create.mockImplementation(({ data }: any) =>
+      Promise.resolve({
+        id: "log-final",
+        ...data,
+        created_at: new Date("2026-08-08T12:26:23.000Z"),
+      }),
+    );
+
+    await service.createActionLog(conversationId, {
+      trigger_type: "incoming_message",
+      decision_type: "finalize",
+      result_status: "success",
+      tool_name: "final_confirmation",
+      received_message: "Está sim",
+    });
+
+    expect(appointments.deliverCredentialForLead).toHaveBeenCalledWith(
+      leadId,
+      `rubinho-final:${conversationId}:${leadId}`,
+    );
+    expect(prisma.agentActionLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          api_response: expect.objectContaining({
+            qr_delivery: expect.objectContaining({ sent: true }),
+          }),
+        }),
       }),
     );
   });

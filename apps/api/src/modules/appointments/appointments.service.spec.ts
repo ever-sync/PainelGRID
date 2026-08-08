@@ -484,6 +484,8 @@ describe("AppointmentsService", () => {
         first_name: "Cliente",
         phone: "+5511999999999",
         checkin_token: "0123456789abcdef01234567",
+        companions: "Sem acompanhantes",
+        description: "Carro na troca: não",
       },
       event: {
         ...event,
@@ -531,13 +533,95 @@ describe("AppointmentsService", () => {
     );
   });
 
+  it("envia a credencial por email e informa isso na legenda do QR Code", async () => {
+    const appointment = {
+      ...baseAppointment,
+      conversation_id: "66666666-6666-4666-8666-666666666666",
+      lead: {
+        ...baseAppointment.lead,
+        name: "Cliente Teste",
+        first_name: "Cliente",
+        email: "cliente@example.com",
+        phone: "+5511999999999",
+        checkin_token: "0123456789abcdef01234567",
+        companions: "1 acompanhante: Gael Lobo",
+        description: "Carro na troca: não",
+        assigned_vendor_id: null,
+      },
+      event: {
+        ...event,
+        name: "Evento Teste",
+        location: "Sao Paulo",
+      },
+    };
+    prisma.appointment.findUnique.mockResolvedValue(appointment);
+    prisma.appointment.findFirst.mockResolvedValue(appointment);
+    prisma.apiIdempotencyRequest.findUnique.mockResolvedValue(null);
+    prisma.apiIdempotencyRequest.create.mockResolvedValue({ id: "idem-mail" });
+    prisma.apiIdempotencyRequest.upsert.mockResolvedValue({ id: "idem-mail" });
+    prisma.leadTimeline.findFirst.mockResolvedValue(null);
+    prisma.leadTimeline.create.mockResolvedValue({
+      id: "timeline-email",
+      occurred_at: new Date("2026-08-08T12:30:00.000Z"),
+    });
+    prisma.client.findUnique.mockResolvedValue({
+      company_name: "Cliente Teste",
+    });
+    prisma.message.create.mockResolvedValue({
+      id: "77777777-7777-4777-8777-777777777777",
+      created_at: new Date("2026-08-08T12:30:01.000Z"),
+    });
+
+    const result = await service.sendCheckinNotification(
+      appointmentId,
+      "qr-with-email",
+    );
+
+    expect(mail.sendAppointmentWelcome).toHaveBeenCalledTimes(1);
+    expect(meta.sendClientWhatsappMediaMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        caption: expect.stringContaining(
+          "Também enviamos uma cópia da credencial para o seu e-mail.",
+        ),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        sent: true,
+        email: expect.objectContaining({ sent: true }),
+      }),
+    );
+  });
+
+  it("nao envia credencial quando faltam os nomes dos acompanhantes", async () => {
+    prisma.appointment.findUnique.mockResolvedValue({
+      ...baseAppointment,
+      lead: {
+        ...baseAppointment.lead,
+        name: "Cliente Teste",
+        phone: "+5511999999999",
+        checkin_token: "0123456789abcdef01234567",
+        companions: "1",
+        description: "Carro na troca: não",
+      },
+    });
+
+    await expect(
+      service.sendCheckinNotification(appointmentId, "qr-incomplete"),
+    ).rejects.toThrow("nome dos acompanhantes");
+    expect(meta.sendClientWhatsappMediaMessage).not.toHaveBeenCalled();
+  });
+
   it("reproduz o resultado do envio sem disparar QR novamente", async () => {
     prisma.appointment.findUnique.mockResolvedValue({
       ...baseAppointment,
       lead: {
         ...baseAppointment.lead,
+        name: "Cliente Teste",
         phone: "+5511999999999",
         checkin_token: "0123456789abcdef01234567",
+        companions: "Sem acompanhantes",
+        description: "Carro na troca: não",
       },
     });
     prisma.apiIdempotencyRequest.findUnique.mockResolvedValue({

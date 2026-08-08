@@ -233,10 +233,24 @@ export class AppointmentsService {
         "Status do appointment nao permite envio da credencial",
       );
     }
-    if (!appointment.lead.phone || !appointment.lead.checkin_token) {
+    if (!appointment.lead.phone) {
       throw new BadRequestException(
-        "Lead sem telefone ou token de check-in para envio",
+        "Lead sem telefone para envio da credencial",
       );
+    }
+
+    this.assertCredentialReady(appointment);
+
+    if (!appointment.lead.checkin_token) {
+      const encryptedToken = encryptCheckinToken(
+        generateRawCheckinToken(),
+        this.checkinVoucherSecret(),
+      );
+      await this.prisma.lead.update({
+        where: { id: appointment.lead_id },
+        data: { checkin_token: encryptedToken },
+      });
+      appointment.lead.checkin_token = encryptedToken;
     }
 
     const endpoint = "agent.appointments.checkin-notification";
@@ -253,6 +267,32 @@ export class AppointmentsService {
       requestHash,
       idempotencyKey,
       async () => {
+        let emailDelivery:
+          | { sent: boolean; idempotent_replay: boolean; reason?: string }
+          | undefined;
+
+        if (appointment.lead.email) {
+          try {
+            const result = await this.sendEventCredentialEmailForAutomation(
+              appointment.lead_id,
+              `appointment-credential:${appointment.id}`,
+            );
+            emailDelivery = {
+              sent: result.sent || result.idempotent_replay,
+              idempotent_replay: result.idempotent_replay,
+            };
+          } catch (error) {
+            emailDelivery = {
+              sent: false,
+              idempotent_replay: false,
+              reason:
+                error instanceof Error
+                  ? error.message
+                  : "Falha desconhecida ao enviar e-mail",
+            };
+          }
+        }
+
         const token = decryptCheckinToken(
           appointment.lead.checkin_token!,
           this.checkinVoucherSecret(),
@@ -262,7 +302,10 @@ export class AppointmentsService {
           margin: 4,
           errorCorrectionLevel: "M",
         });
-        const caption = this.buildCheckinCaption(appointment);
+        const caption = this.buildCheckinCaption(
+          appointment,
+          emailDelivery?.sent === true,
+        );
         const sent = await this.metaService.sendClientWhatsappMediaMessage({
           clientId: appointment.client_id,
           to: appointment.lead.phone!,
@@ -329,10 +372,78 @@ export class AppointmentsService {
           message_id: messageId,
           wamid: sent.wamid,
           media_id: sent.mediaId,
+          email: emailDelivery ?? {
+            sent: false,
+            idempotent_replay: false,
+            reason: "Lead sem e-mail cadastrado",
+          },
           idempotent_replay: false,
         };
       },
     );
+  }
+
+  async deliverCredentialForLead(leadId: string, idempotencyKey?: string) {
+    const appointment = await this.prisma.appointment.findFirst({
+      where: {
+        lead_id: leadId,
+        status: {
+          in: [AppointmentStatus.scheduled, AppointmentStatus.confirmed],
+        },
+      },
+      select: { id: true },
+      orderBy: { scheduled_at: "desc" },
+    });
+    if (!appointment) {
+      throw new NotFoundException("Agendamento ativo do lead nao encontrado");
+    }
+    return this.sendCheckinNotification(appointment.id, idempotencyKey);
+  }
+
+  private assertCredentialReady(
+    appointment: Awaited<
+      ReturnType<AppointmentsService["getAppointmentOrFail"]>
+    >,
+  ) {
+    const missing: string[] = [];
+    const name = appointment.lead.name?.trim() ?? "";
+    if (name.split(/\s+/).filter(Boolean).length < 2) {
+      missing.push("nome completo");
+    }
+
+    const companions = appointment.lead.companions?.trim() ?? "";
+    if (!companions) {
+      missing.push("acompanhantes");
+    } else {
+      const count = Number(companions.match(/^\d+/)?.[0] ?? NaN);
+      const noCompanions =
+        count === 0 || /^sem acompanhantes?$/i.test(companions);
+      if (!noCompanions && Number.isInteger(count) && count > 0) {
+        const names = companions.split(":").slice(1).join(":").trim();
+        if (!names) missing.push("nome dos acompanhantes");
+      }
+    }
+
+    const description = appointment.lead.description?.trim().toLowerCase();
+    if (!description?.startsWith("carro na troca:")) {
+      missing.push("resposta sobre carro na troca");
+    } else if (description.startsWith("carro na troca: sim")) {
+      if (!appointment.lead.vehicle_plate?.trim()) {
+        missing.push("placa do veículo");
+      }
+      if (!appointment.lead.vehicle_model?.trim()) {
+        missing.push("modelo do veículo");
+      }
+      if (!appointment.lead.vehicle_year?.trim()) {
+        missing.push("ano do veículo");
+      }
+    }
+
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Credencial ainda nao pode ser enviada. Campos pendentes: ${missing.join(", ")}`,
+      );
+    }
   }
 
   async reschedule(
@@ -1026,6 +1137,7 @@ export class AppointmentsService {
     appointment: Awaited<
       ReturnType<AppointmentsService["getAppointmentOrFail"]>
     >,
+    emailSent = false,
   ) {
     const firstName =
       appointment.lead.first_name?.trim() ||
@@ -1039,7 +1151,7 @@ export class AppointmentsService {
     }).format(appointment.scheduled_at);
     return [
       greeting,
-      "Sua credencial foi confirmada com sucesso.",
+      "Este é o seu QR Code de credenciamento.",
       "",
       `*${appointment.event.name}*`,
       `Agendamento: ${scheduledAt}`,
@@ -1048,6 +1160,9 @@ export class AppointmentsService {
         : []),
       "",
       "Apresente este QR Code na recepção para fazer seu check-in.",
+      ...(emailSent
+        ? ["Também enviamos uma cópia da credencial para o seu e-mail."]
+        : []),
       "Te esperamos!",
     ].join("\n");
   }

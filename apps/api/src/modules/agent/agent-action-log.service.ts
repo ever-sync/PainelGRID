@@ -5,6 +5,7 @@ import { ClientWebhookService } from "../crm/client-webhook.service";
 import { CreateAgentActionLogDto } from "./dto/create-agent-action-log.dto";
 import { RequestConversationHandoffDto } from "./dto/request-conversation-handoff.dto";
 import { ConversationStateService } from "./conversation-state.service";
+import { AppointmentsService } from "../appointments/appointments.service";
 
 @Injectable()
 export class AgentActionLogService {
@@ -12,6 +13,7 @@ export class AgentActionLogService {
     private readonly prisma: PrismaService,
     private readonly conversationStateService: ConversationStateService,
     private readonly clientWebhook: ClientWebhookService,
+    private readonly appointments: AppointmentsService,
   ) {}
 
   async createActionLog(conversationId: string, dto: CreateAgentActionLogDto) {
@@ -19,6 +21,40 @@ export class AgentActionLogService {
       await this.conversationStateService.getRequiredConversation(
         conversationId,
       );
+
+    const recoveredCompanion = await this.recoverCompanionNames(
+      conversation.lead_id,
+      dto,
+    );
+
+    let finalDelivery: Record<string, unknown> | null = null;
+    let finalDeliveryError: string | null = null;
+    if (dto.tool_name?.trim().toLowerCase() === "final_confirmation") {
+      try {
+        finalDelivery = (await this.appointments.deliverCredentialForLead(
+          conversation.lead_id,
+          `rubinho-final:${conversation.id}:${conversation.lead_id}`,
+        )) as Record<string, unknown>;
+      } catch (error) {
+        finalDeliveryError =
+          error instanceof Error ? error.message : String(error);
+      }
+    }
+
+    const apiResponse = {
+      ...(dto.api_response ?? {}),
+      ...(recoveredCompanion
+        ? { companion_names_recovered: recoveredCompanion }
+        : {}),
+      ...(finalDelivery ? { qr_delivery: finalDelivery } : {}),
+      ...(finalDeliveryError
+        ? {
+            qr_delivery: null,
+            validator_blocked: true,
+            finalization_error: finalDeliveryError,
+          }
+        : {}),
+    };
 
     const log = await this.prisma.agentActionLog.create({
       data: {
@@ -40,7 +76,7 @@ export class AgentActionLogService {
         next_stage: dto.next_stage ?? null,
         tool_name: dto.tool_name ?? null,
         tool_input: dto.tool_input as Prisma.InputJsonValue | undefined,
-        api_response: dto.api_response as Prisma.InputJsonValue | undefined,
+        api_response: apiResponse as Prisma.InputJsonValue,
         resulting_state: dto.resulting_state as
           Prisma.InputJsonValue | undefined,
         block_reason: dto.block_reason ?? null,
@@ -62,6 +98,55 @@ export class AgentActionLogService {
     }
 
     return this.mapLog(log);
+  }
+
+  private async recoverCompanionNames(
+    leadId: string,
+    dto: CreateAgentActionLogDto,
+  ): Promise<string | null> {
+    const received = dto.received_message?.trim();
+    if (!received || !this.looksLikeCompanionName(received)) return null;
+    if (
+      !["waiting_companions", "waiting_companion_names"].includes(
+        dto.tool_name?.trim().toLowerCase() ?? "",
+      )
+    ) {
+      return null;
+    }
+
+    const lead = await this.prisma.lead.findUnique({
+      where: { id: leadId },
+      select: { companions: true },
+    });
+    const current = lead?.companions?.trim() ?? "";
+    const countMatch = current.match(/^(\d+)$/);
+    if (!countMatch) return null;
+
+    const count = Number(countMatch[1]);
+    if (!Number.isInteger(count) || count < 1) return null;
+    const value = `${count} acompanhante${count === 1 ? "" : "s"}: ${received}`;
+    await this.prisma.lead.update({
+      where: { id: leadId },
+      data: { companions: value },
+    });
+    return value;
+  }
+
+  private looksLikeCompanionName(value: string): boolean {
+    const words = value.split(/\s+/).filter(Boolean);
+    if (words.length < 2 || words.length > 8) return false;
+    const normalized = value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    if (
+      /\b(um|uma|dois|duas|tres|quatro|cinco|somente|so|sozinho|sozinha|acompanhante|pessoa|pessoas)\b/.test(
+        normalized,
+      )
+    ) {
+      return false;
+    }
+    return words.every((word) => /^[A-Za-zÀ-ÖØ-öø-ÿ'’-]+$/.test(word));
   }
 
   async listConversationLogs(conversationId: string, limit = 10) {
