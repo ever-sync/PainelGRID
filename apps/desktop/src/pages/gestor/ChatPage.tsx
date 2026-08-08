@@ -22,7 +22,11 @@ import {
   readDashboardDarkEnabled,
 } from "../../lib/dashboard-dark-mode";
 import { readStoredSession } from "../../services/auth";
-import { listClients, mapApiClientToClient } from "../../services/clients";
+import {
+  listClients,
+  mapApiClientToClient,
+  onlyActiveClients,
+} from "../../services/clients";
 import {
   listCrmPipelines,
   listPipelineStages,
@@ -457,7 +461,7 @@ export function ChatPage() {
     if (!token) return;
     void listClients(token)
       .then((rows) => {
-        const mapped = rows.map(mapApiClientToClient);
+        const mapped = onlyActiveClients(rows.map(mapApiClientToClient));
         setClients(mapped);
         const selectedClientStillAvailable = gestorClientId
           ? mapped.some((client) => client.id === gestorClientId)

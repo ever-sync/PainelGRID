@@ -24,7 +24,11 @@ import { Drawer, Modal } from "../../components/ui/Modal";
 import { Notice } from "../../components/ui/Notice";
 import { Tabs } from "../../components/ui/Tabs";
 import { readStoredSession } from "../../services/auth";
-import { listClients, mapApiClientToClient } from "../../services/clients";
+import {
+  listClients,
+  mapApiClientToClient,
+  onlyActiveClients,
+} from "../../services/clients";
 import { fetchAllLeads } from "../../services/leads";
 import {
   createEvent,
@@ -216,7 +220,9 @@ export function EventosPage() {
     const t = readStoredSession()?.accessToken;
     if (!t) return;
     void listClients(t)
-      .then((rows) => setClients(rows.map(mapApiClientToClient)))
+      .then((rows) =>
+        setClients(onlyActiveClients(rows.map(mapApiClientToClient))),
+      )
       .catch(() => setClients([]));
   }, []);
 

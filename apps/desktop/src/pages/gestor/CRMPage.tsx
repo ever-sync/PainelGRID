@@ -31,7 +31,11 @@ import { Card } from "../../components/ui/Card";
 import { ConfirmationBadge, SourceBadge } from "../../components/ui/Badge";
 import type { Client, Lead, User } from "../../types";
 import { readStoredSession } from "../../services/auth";
-import { listClients, mapApiClientToClient } from "../../services/clients";
+import {
+  listClients,
+  mapApiClientToClient,
+  onlyActiveClients,
+} from "../../services/clients";
 import {
   bulkMoveCrmLeads,
   createCrmPipeline,
@@ -569,7 +573,7 @@ export function CRMPage() {
 
     listClients(session.accessToken)
       .then((rows) => {
-        const mapped = rows.map(mapApiClientToClient);
+        const mapped = onlyActiveClients(rows.map(mapApiClientToClient));
         setCrmClients(mapped);
         setSelectedClient((current) => {
           if (current && mapped.some((client) => client.id === current)) {

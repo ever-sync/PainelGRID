@@ -26,6 +26,17 @@ export function listClients(token: string) {
   return httpRequest<ApiClient[]>("/clients", { method: "GET", token });
 }
 
+/**
+ * Empresas que ainda operam — o que os seletores das telas de trabalho devem
+ * oferecer. Empresa desativada continua existindo (e aparecendo em Clientes,
+ * para reativar ou excluir) mas nao deve ser escolhivel em CRM, Chat ou
+ * Eventos. Relatorios sao a excecao proposital: o historico dela continua
+ * valendo depois de desativada.
+ */
+export function onlyActiveClients(clients: Client[]): Client[] {
+  return clients.filter((client) => client.status === "active");
+}
+
 export function getClient(id: string, token: string) {
   return httpRequest<ApiClient>(`/clients/${id}`, { method: "GET", token });
 }
