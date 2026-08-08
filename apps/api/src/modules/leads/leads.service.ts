@@ -4834,6 +4834,10 @@ export class LeadsService {
     value: string;
   } | null> {
     const token = process.env.APIBRASIL_TOKEN;
+    // A APIBrasil documenta `DeviceToken` junto do Bearer. Enviamos apenas se
+    // estiver configurado: as chaves antigas funcionam so com o Bearer, e
+    // mandar o header vazio quebraria quem ja esta em producao.
+    const deviceToken = process.env.APIBRASIL_DEVICE_TOKEN?.trim();
 
     if (token) {
       try {
@@ -4844,6 +4848,7 @@ export class LeadsService {
             headers: {
               Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
+              ...(deviceToken ? { DeviceToken: deviceToken } : {}),
             },
             body: JSON.stringify({ placa: plate }),
             signal: AbortSignal.timeout(15_000),
