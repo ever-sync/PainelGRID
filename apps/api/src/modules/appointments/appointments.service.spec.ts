@@ -79,6 +79,7 @@ describe("AppointmentsService", () => {
         delete: jest.fn(),
       },
       lead: {
+        findFirst: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
       },
@@ -340,6 +341,47 @@ describe("AppointmentsService", () => {
         }),
       }),
     );
+  });
+
+  it("envia credencial por e-mail ao ficar agendado mesmo sem appointment", async () => {
+    prisma.leadTimeline.findFirst.mockResolvedValue(null);
+    prisma.appointment.findFirst.mockResolvedValue(null);
+    prisma.lead.findFirst.mockResolvedValue({
+      id: leadId,
+      client_id: clientId,
+      name: "Rafaela",
+      first_name: "Rafaela",
+      last_name: "Lobo",
+      email: "rafaela@example.com",
+      checkin_token: "checkin-1",
+      assigned_vendor_id: null,
+      store_visit_datetime: new Date("2026-08-14T12:00:00.000Z"),
+      event_interest: {
+        ...event,
+        name: "Champions Festival",
+        location: "Sao Paulo",
+      },
+    });
+    prisma.client.findUnique.mockResolvedValue({ company_name: "Cliente" });
+    prisma.leadTimeline.create.mockResolvedValue({
+      id: "timeline-platform-email",
+      occurred_at: new Date("2026-08-08T13:30:00.000Z"),
+    });
+
+    const result = await service.sendEventCredentialEmailForAutomation(
+      leadId,
+      `lead-scheduled-email:${leadId}:2026-08-14T12:00:00.000Z`,
+    );
+
+    expect(mail.sendAppointmentWelcome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "rafaela@example.com",
+        leadName: "Rafaela Lobo",
+        eventName: "Champions Festival",
+        scheduledAt: new Date("2026-08-14T12:00:00.000Z"),
+      }),
+    );
+    expect(result).toEqual(expect.objectContaining({ sent: true }));
   });
 
   it("bloqueia credencial por e-mail quando evento nao esta ativo", async () => {

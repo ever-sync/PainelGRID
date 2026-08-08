@@ -105,18 +105,23 @@ export class AgentActionLogService {
     dto: CreateAgentActionLogDto,
   ): Promise<string | null> {
     const received = dto.received_message?.trim();
-    if (!received || !this.looksLikeCompanionName(received)) return null;
-    if (
-      !["waiting_companions", "waiting_companion_names"].includes(
-        dto.tool_name?.trim().toLowerCase() ?? "",
-      )
-    ) {
-      return null;
-    }
+    if (!received) return null;
+    const toolName = dto.tool_name?.trim().toLowerCase() ?? "";
+    const canRecover = [
+      "waiting_companions",
+      "waiting_companion_names",
+      "final_confirmation",
+    ].includes(toolName);
+    if (!canRecover) return null;
 
     const lead = await this.prisma.lead.findUnique({
       where: { id: leadId },
-      select: { companions: true },
+      select: {
+        companions: true,
+        name: true,
+        first_name: true,
+        last_name: true,
+      },
     });
     const current = lead?.companions?.trim() ?? "";
     const countMatch = current.match(/^(\d+)$/);
@@ -124,7 +129,40 @@ export class AgentActionLogService {
 
     const count = Number(countMatch[1]);
     if (!Number.isInteger(count) || count < 1) return null;
-    const value = `${count} acompanhante${count === 1 ? "" : "s"}: ${received}`;
+
+    let companionName = this.looksLikeCompanionName(received) ? received : null;
+    if (!companionName) {
+      const previousLogs = await this.prisma.agentActionLog.findMany({
+        where: {
+          lead_id: leadId,
+          tool_name: {
+            in: ["WAITING_COMPANIONS", "WAITING_COMPANION_NAMES"],
+          },
+          received_message: { not: null },
+        },
+        orderBy: { created_at: "desc" },
+        take: 12,
+        select: { received_message: true },
+      });
+      const leadName = [lead?.first_name, lead?.last_name]
+        .filter(Boolean)
+        .join(" ")
+        .trim()
+        .toLocaleLowerCase("pt-BR");
+      companionName =
+        previousLogs
+          .map((log) => log.received_message?.trim() ?? "")
+          .find(
+            (candidate) =>
+              this.looksLikeCompanionName(candidate) &&
+              candidate.toLocaleLowerCase("pt-BR") !== leadName &&
+              candidate.toLocaleLowerCase("pt-BR") !==
+                lead?.name?.trim().toLocaleLowerCase("pt-BR"),
+          ) ?? null;
+    }
+    if (!companionName) return null;
+
+    const value = `${count} acompanhante${count === 1 ? "" : "s"}: ${companionName}`;
     await this.prisma.lead.update({
       where: { id: leadId },
       data: { companions: value },

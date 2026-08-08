@@ -39,6 +39,7 @@ import type { MetaLeadWhatsappTemplateParameterKey } from "../meta/dto/upsert-me
 import { MetaService } from "../meta/meta.service";
 import { resolveConfirmationStatusForStage } from "../clients/client-settings";
 import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.service";
+import { AppointmentsService } from "../appointments/appointments.service";
 import { clientIdToStageCode } from "../crm/default-crm-pipeline";
 import { RealtimeEventsService } from "../realtime/realtime-events.service";
 import { ScoreEventsService } from "../score-events/score-events.service";
@@ -241,6 +242,7 @@ export class LeadsService {
     private readonly leadTimeline: LeadTimelineService,
     private readonly redis: RedisService,
     private readonly dispatchTracking: DispatchTrackingService,
+    private readonly appointmentsService: AppointmentsService,
   ) {}
 
   private checkinVoucherSecret(): string {
@@ -1023,6 +1025,11 @@ export class LeadsService {
         updated_at: new Date().toISOString(),
       });
 
+      this.notifyCredentialEmailWhenScheduled(
+        lead.confirmation_status,
+        updated,
+      );
+
       if (confirming) {
         void this.notifyCheckinViaWhatsapp(updated);
       }
@@ -1159,6 +1166,8 @@ export class LeadsService {
         actorLabel: user.name ?? null,
       });
     }
+
+    this.notifyCredentialEmailWhenScheduled(lead.confirmation_status, updated);
 
     if (confirming) {
       void this.notifyCheckinViaWhatsapp(updated);
@@ -1740,6 +1749,8 @@ export class LeadsService {
         notes: "Status atualizado automaticamente apos escolha da data",
       });
     }
+
+    this.notifyCredentialEmailWhenScheduled(lead.confirmation_status, updated);
 
     if (confirming) {
       void this.notifyCheckinViaWhatsapp(updated);
@@ -4074,6 +4085,44 @@ export class LeadsService {
         eventId: lead.event_interest_id,
       });
     }
+  }
+
+  private notifyCredentialEmailWhenScheduled(
+    previousStatus: ConfirmationStatus,
+    lead: LeadWithRelations,
+  ): void {
+    if (
+      previousStatus === ConfirmationStatus.scheduled ||
+      lead.confirmation_status !== ConfirmationStatus.scheduled ||
+      !lead.email
+    ) {
+      return;
+    }
+
+    const scheduledKey = lead.store_visit_datetime
+      ? lead.store_visit_datetime.toISOString()
+      : "sem-data";
+    void this.appointmentsService
+      .sendEventCredentialEmailForAutomation(
+        lead.id,
+        `lead-scheduled-email:${lead.id}:${scheduledKey}`,
+      )
+      .catch(async (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(
+          `Falha ao enviar credencial por e-mail lead=${lead.id} client=${lead.client_id}: ${message}`,
+        );
+        await this.recordOperationalIssue({
+          type: "CREDENTIAL_EMAIL_NOT_DELIVERED",
+          severity: "warning",
+          title: "Credencial não entregue por e-mail",
+          message,
+          fingerprint: `credential-email:${lead.id}:${scheduledKey}`,
+          clientId: lead.client_id,
+          leadId: lead.id,
+          eventId: lead.event_interest_id,
+        });
+      });
   }
 
   private buildCheckinWhatsappCaption(

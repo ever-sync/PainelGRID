@@ -14,7 +14,7 @@ describe("AgentActionLogService", () => {
     prisma = {
       agentActionLog: {
         create: jest.fn(),
-        findMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       message: {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -153,7 +153,12 @@ describe("AgentActionLogService", () => {
   });
 
   it("consolida nome do acompanhante quando a quantidade ja foi salva", async () => {
-    prisma.lead.findUnique.mockResolvedValue({ companions: "1" });
+    prisma.lead.findUnique.mockResolvedValue({
+      companions: "1",
+      name: "Rafaela Lobo",
+      first_name: "Rafaela",
+      last_name: "Lobo",
+    });
     prisma.lead.update.mockResolvedValue({});
     prisma.agentActionLog.create.mockImplementation(({ data }: any) =>
       Promise.resolve({
@@ -174,6 +179,40 @@ describe("AgentActionLogService", () => {
     expect(prisma.lead.update).toHaveBeenCalledWith({
       where: { id: leadId },
       data: { companions: "1 acompanhante: Gael Lobo" },
+    });
+  });
+
+  it("recupera o nome do acompanhante de uma resposta anterior", async () => {
+    prisma.lead.findUnique.mockResolvedValue({
+      companions: "1",
+      name: "Rafaela Lobo",
+      first_name: "Rafaela",
+      last_name: "Lobo",
+    });
+    prisma.agentActionLog.findMany.mockResolvedValue([
+      { received_message: "Elisa Lobo" },
+      { received_message: "Rafaela Lobo" },
+    ]);
+    prisma.lead.update.mockResolvedValue({});
+    prisma.agentActionLog.create.mockImplementation(({ data }: any) =>
+      Promise.resolve({
+        id: "log-companion-history",
+        ...data,
+        created_at: new Date("2026-08-08T13:26:54.000Z"),
+      }),
+    );
+
+    await service.createActionLog(conversationId, {
+      trigger_type: "incoming_message",
+      decision_type: "collect_data",
+      result_status: "success",
+      tool_name: "WAITING_COMPANION_NAMES",
+      received_message: "14",
+    });
+
+    expect(prisma.lead.update).toHaveBeenCalledWith({
+      where: { id: leadId },
+      data: { companions: "1 acompanhante: Elisa Lobo" },
     });
   });
 

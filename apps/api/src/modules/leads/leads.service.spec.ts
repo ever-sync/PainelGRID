@@ -82,6 +82,9 @@ describe("LeadsService", () => {
     sendClientWhatsappMediaMessage: jest.Mock;
     sendClientWhatsappTemplate: jest.Mock;
   };
+  let appointmentsService: {
+    sendEventCredentialEmailForAutomation: jest.Mock;
+  };
   let service: LeadsService;
 
   beforeEach(() => {
@@ -220,6 +223,11 @@ describe("LeadsService", () => {
         .fn()
         .mockResolvedValue("wamid-template-1"),
     };
+    appointmentsService = {
+      sendEventCredentialEmailForAutomation: jest
+        .fn()
+        .mockResolvedValue({ sent: true, idempotent_replay: false }),
+    };
 
     service = new LeadsService(
       prisma as never,
@@ -245,6 +253,7 @@ describe("LeadsService", () => {
         },
       } as never,
       { upsert: jest.fn().mockResolvedValue({ id: "dispatch-1" }) } as never,
+      appointmentsService as never,
     );
   });
 
@@ -741,6 +750,12 @@ describe("LeadsService", () => {
       }),
     );
     expect(metaService.sendClientWhatsappMediaMessage).not.toHaveBeenCalled();
+    expect(
+      appointmentsService.sendEventCredentialEmailForAutomation,
+    ).toHaveBeenCalledWith(
+      baseExistingLead.id,
+      `lead-scheduled-email:${baseExistingLead.id}:${scheduledAt}`,
+    );
     expect(leadTimeline.record).toHaveBeenCalledWith(
       expect.objectContaining({
         leadId: baseExistingLead.id,

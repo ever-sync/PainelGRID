@@ -8,6 +8,7 @@ import { ScoreEventsModule } from "../score-events/score-events.module";
 import { LeadsController } from "./leads.controller";
 import { LeadsService } from "./leads.service";
 import { DispatchTrackingModule } from "../dispatch-tracking/dispatch-tracking.module";
+import { AppointmentsModule } from "../appointments/appointments.module";
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { DispatchTrackingModule } from "../dispatch-tracking/dispatch-tracking.m
     MetaModule,
     LeadTimelineModule,
     DispatchTrackingModule,
+    AppointmentsModule,
   ],
   controllers: [LeadsController],
   providers: [LeadsService],

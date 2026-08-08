@@ -275,7 +275,7 @@ export class AppointmentsService {
           try {
             const result = await this.sendEventCredentialEmailForAutomation(
               appointment.lead_id,
-              `appointment-credential:${appointment.id}`,
+              `lead-scheduled-email:${appointment.lead_id}:${appointment.scheduled_at.toISOString()}`,
             );
             emailDelivery = {
               sent: result.sent || result.idempotent_replay,
@@ -758,22 +758,96 @@ export class AppointmentsService {
       include: { lead: true, event: true, conversation: true },
       orderBy: { scheduled_at: "desc" },
     });
-    if (!appointment) {
-      throw new NotFoundException("Agendamento ativo do lead nao encontrado");
-    }
-    if (appointment.event.status !== EventStatus.active) {
-      throw new BadRequestException("Evento nao esta ativo");
-    }
-    if (!appointment.lead.email) {
-      throw new BadRequestException("Lead sem e-mail cadastrado");
-    }
 
-    await this.sendAppointmentWelcomeEmail(appointment);
+    let timelineContext: {
+      clientId: string;
+      leadId: string;
+      appointmentId: string | null;
+      eventId: string;
+    };
+
+    if (appointment) {
+      if (appointment.event.status !== EventStatus.active) {
+        throw new BadRequestException("Evento nao esta ativo");
+      }
+      if (!appointment.lead.email) {
+        throw new BadRequestException("Lead sem e-mail cadastrado");
+      }
+      await this.sendAppointmentWelcomeEmail(appointment);
+      timelineContext = {
+        clientId: appointment.client_id,
+        leadId: appointment.lead_id,
+        appointmentId: appointment.id,
+        eventId: appointment.event_id,
+      };
+    } else {
+      const lead = await this.prisma.lead.findFirst({
+        where: { id: leadId, deleted_at: null },
+        include: { event_interest: true },
+      });
+      if (!lead?.event_interest || !lead.store_visit_datetime) {
+        throw new NotFoundException(
+          "Lead agendado sem evento ou data para envio da credencial",
+        );
+      }
+      if (lead.event_interest.status !== EventStatus.active) {
+        throw new BadRequestException("Evento nao esta ativo");
+      }
+      if (!lead.email) {
+        throw new BadRequestException("Lead sem e-mail cadastrado");
+      }
+
+      let checkinToken = lead.checkin_token;
+      if (!checkinToken) {
+        checkinToken = encryptCheckinToken(
+          generateRawCheckinToken(),
+          this.checkinVoucherSecret(),
+        );
+        await this.prisma.lead.update({
+          where: { id: lead.id },
+          data: { checkin_token: checkinToken },
+        });
+      }
+
+      const [vendor, client] = await Promise.all([
+        lead.assigned_vendor_id
+          ? this.prisma.user.findUnique({
+              where: { id: lead.assigned_vendor_id },
+              select: { name: true, avatar_url: true },
+            })
+          : Promise.resolve(null),
+        this.prisma.client.findUnique({
+          where: { id: lead.client_id },
+          select: { company_name: true },
+        }),
+      ]);
+
+      await this.mail.sendAppointmentWelcome({
+        to: lead.email,
+        leadName:
+          [lead.first_name, lead.last_name].filter(Boolean).join(" ").trim() ||
+          lead.name,
+        eventName: lead.event_interest.name,
+        eventLocation: lead.event_interest.location,
+        scheduledAt: lead.store_visit_datetime,
+        timezone: "America/Sao_Paulo",
+        vendorName: vendor?.name ?? null,
+        vendorAvatarUrl: vendor?.avatar_url ?? null,
+        clientName: client?.company_name ?? lead.event_interest.name,
+        checkinToken,
+      });
+      timelineContext = {
+        clientId: lead.client_id,
+        leadId: lead.id,
+        appointmentId: null,
+        eventId: lead.event_interest.id,
+      };
+    }
 
     const timeline = await this.prisma.leadTimeline.create({
       data: {
-        client_id: appointment.client_id,
-        lead_id: appointment.lead_id,
+        client_id: timelineContext.clientId,
+        lead_id: timelineContext.leadId,
         event_type: "message",
         origin: "n8n",
         actor_label: "Disparos multiempresa",
@@ -782,8 +856,8 @@ export class AppointmentsService {
           dispatch_key: dispatchKey,
           dispatch_type: "credencial-email",
           channel: "email",
-          appointment_id: appointment.id,
-          event_id: appointment.event_id,
+          appointment_id: timelineContext.appointmentId,
+          event_id: timelineContext.eventId,
         },
       },
       select: { id: true, occurred_at: true },
