@@ -47,9 +47,20 @@ export type ApiMessage = {
 
 export type ApiAgentActionLog = AgentActionLog;
 
-export function listConversations(clientId: string | undefined, token: string) {
+/** Tamanho da pagina do chat. Precisa caber no teto da API (200). */
+export const CONVERSATIONS_PAGE_SIZE = 100;
+
+export function listConversations(
+  clientId: string | undefined,
+  token: string,
+  options?: { search?: string; skip?: number; take?: number },
+) {
   const qs = new URLSearchParams();
   if (clientId) qs.set("client_id", clientId);
+  const search = options?.search?.trim();
+  if (search) qs.set("q", search);
+  qs.set("take", String(options?.take ?? CONVERSATIONS_PAGE_SIZE));
+  if (options?.skip) qs.set("skip", String(options.skip));
   return httpRequest<ApiConversationRow[]>(`/conversations?${qs.toString()}`, {
     method: "GET",
     token,

@@ -35,6 +35,7 @@ import {
 } from "../../services/crm";
 import {
   type ApiMessage,
+  CONVERSATIONS_PAGE_SIZE,
   conversationFromListRow,
   ensureConversation,
   listConversations,
@@ -193,6 +194,10 @@ export function ChatPage() {
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
+  /** `search` com debounce — é este que vai para a API. */
+  const [serverSearch, setServerSearch] = useState("");
+  const [hasMoreConversations, setHasMoreConversations] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
   const [sending, setSending] = useState(false);
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
@@ -244,6 +249,10 @@ export function ChatPage() {
   const selectedIdRef = useRef("");
   const selectedClientIdRef = useRef("");
   const tokenRef = useRef<string | undefined>(undefined);
+  /** Estado da paginação da lista de conversas. */
+  const conversationsRef = useRef<Conversation[]>([]);
+  const serverSearchRef = useRef("");
+  const loadingMoreRef = useRef(false);
   const attachmentButtonRef = useRef<HTMLButtonElement | null>(null);
   const attachmentMenuRef = useRef<HTMLDivElement | null>(null);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
@@ -306,6 +315,21 @@ export function ChatPage() {
   }, [effectiveClientId]);
 
   useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
+  // A busca agora vai ao servidor: filtrar só o que já foi baixado ignoraria
+  // o resto da base. O debounce evita uma consulta por tecla digitada.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setServerSearch(search.trim()), 350);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    serverSearchRef.current = serverSearch;
+  }, [serverSearch]);
+
+  useEffect(() => {
     if (user.role !== "gestor") return;
     if (requestedClientId && requestedClientId !== chatClientId) {
       setChatClientId(requestedClientId);
@@ -358,31 +382,82 @@ export function ChatPage() {
     return () => window.clearInterval(interval);
   }, [recording, recordingStartedAt]);
 
+  /** Mantém mensagens/não-lidos já em memória ao reescrever uma linha da lista. */
+  const mergeConversationRow = useCallback(
+    (row: Conversation, previous: Map<string, Conversation>) => {
+      const existing = previous.get(row.id);
+      return existing
+        ? {
+            ...row,
+            messages: existing.messages,
+            unread_count: existing.unread_count,
+          }
+        : row;
+    },
+    [],
+  );
+
+  /**
+   * Recarrega só a primeira página e funde no que já está em memória. Uma
+   * substituição completa descartaria as páginas antigas que o usuário
+   * pediu com "carregar mais".
+   */
   const refreshConversations = useCallback(() => {
-    const currentClientId = selectedClientIdRef.current;
     const currentToken = tokenRef.current;
     if (!currentToken) return;
 
-    void listConversations(currentClientId || undefined, currentToken)
+    void listConversations(
+      selectedClientIdRef.current || undefined,
+      currentToken,
+      {
+        search: serverSearchRef.current,
+      },
+    )
       .then((convRows) => {
         const mapped = convRows.map(conversationFromListRow);
         setConversations((prev) => {
-          // Preserva mensagens já carregadas em cada conversa para evitar piscar a thread aberta.
           const previousById = new Map(prev.map((conv) => [conv.id, conv]));
-          return mapped.map((row) => {
-            const existing = previousById.get(row.id);
-            return existing
-              ? {
-                  ...row,
-                  messages: existing.messages,
-                  unread_count: existing.unread_count,
-                }
-              : row;
-          });
+          const merged = mapped.map((row) =>
+            mergeConversationRow(row, previousById),
+          );
+          const mergedIds = new Set(merged.map((row) => row.id));
+          // As páginas seguintes continuam onde estavam, na mesma ordem.
+          return [...merged, ...prev.filter((conv) => !mergedIds.has(conv.id))];
         });
       })
       .catch(() => {
         /* fallback silencioso — evita estourar UI em pico de erros */
+      });
+  }, [mergeConversationRow]);
+
+  const loadMoreConversations = useCallback(() => {
+    const currentToken = tokenRef.current;
+    if (!currentToken || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+
+    void listConversations(
+      selectedClientIdRef.current || undefined,
+      currentToken,
+      {
+        search: serverSearchRef.current,
+        skip: conversationsRef.current.length,
+      },
+    )
+      .then((convRows) => {
+        const mapped = convRows.map(conversationFromListRow);
+        setHasMoreConversations(mapped.length === CONVERSATIONS_PAGE_SIZE);
+        setConversations((prev) => {
+          const known = new Set(prev.map((conv) => conv.id));
+          return [...prev, ...mapped.filter((row) => !known.has(row.id))];
+        });
+      })
+      .catch(() => {
+        /* silencioso: o botão continua disponível para nova tentativa */
+      })
+      .finally(() => {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
       });
   }, []);
 
@@ -580,7 +655,10 @@ export function ChatPage() {
   useEffect(() => {
     if (!token) return;
     void Promise.all([
-      listConversations(effectiveClientId || undefined, token),
+      // Primeira página apenas: a lista inteira chegava a 560 conversas.
+      listConversations(effectiveClientId || undefined, token, {
+        search: serverSearch,
+      }),
       listLeads(
         effectiveClientId ? { client_id: effectiveClientId } : {},
         token,
@@ -591,6 +669,7 @@ export function ChatPage() {
         const mappedLeads = leadRows.map(mapApiLeadToLead);
 
         setConversations(mapped);
+        setHasMoreConversations(mapped.length === CONVERSATIONS_PAGE_SIZE);
         setLeads(mappedLeads);
         if (mapped[0]?.id) {
           openConversation(mapped[0].id);
@@ -600,6 +679,7 @@ export function ChatPage() {
       })
       .catch(() => {
         setConversations([]);
+        setHasMoreConversations(false);
         setLeads([]);
         setSelectedId("");
         pushToast({
@@ -607,7 +687,7 @@ export function ChatPage() {
           type: "error",
         });
       });
-  }, [effectiveClientId, openConversation, token]);
+  }, [effectiveClientId, openConversation, serverSearch, token]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -1464,6 +1544,9 @@ export function ChatPage() {
           selectedConversationId={selected?.id ?? ""}
           dark={isDarkMode}
           onSelectConversation={openConversation}
+          hasMore={hasMoreConversations}
+          loadingMore={loadingMore}
+          onLoadMore={loadMoreConversations}
         />
 
         <main

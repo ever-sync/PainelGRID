@@ -15,7 +15,10 @@ import { MetaService } from "../meta/meta.service";
 import { RealtimeEventsService } from "../realtime/realtime-events.service";
 import { CreateMessageDto } from "./dto/create-message.dto";
 import { EnsureConversationDto } from "./dto/ensure-conversation.dto";
-import { FindConversationsQueryDto } from "./dto/find-conversations-query.dto";
+import {
+  CONVERSATIONS_DEFAULT_TAKE,
+  FindConversationsQueryDto,
+} from "./dto/find-conversations-query.dto";
 import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.service";
 
 type N8nHistoryRow = {
@@ -109,16 +112,32 @@ export class ConversationsService {
     // Lead excluido nao tem conversa para listar. Sem isto, so o vendedor
     // ficava protegido e gestor/cliente enxergavam conversas de leads que
     // eles proprios apagaram.
-    where.lead =
+    const leadWhere: Prisma.LeadWhereInput =
       user.role === Role.VENDEDOR
         ? { assigned_vendor_id: user.sub, deleted_at: null }
         : { deleted_at: null };
 
+    const search = query.q?.trim();
+    if (search) {
+      leadWhere.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { phone: { contains: search, mode: "insensitive" } },
+      ];
+    }
+    where.lead = leadWhere;
+
     const rows = await this.prisma.conversation.findMany({
       where,
+      take: query.take ?? CONVERSATIONS_DEFAULT_TAKE,
+      skip: query.skip ?? 0,
       // `last_message_at` e opcional: no DESC do Postgres, NULL vem primeiro e
       // uma conversa recem-criada sem mensagem furaria a fila no topo.
-      orderBy: { last_message_at: { sort: "desc", nulls: "last" } },
+      // O `id` desempata para a paginacao nao repetir nem pular linhas quando
+      // varias conversas dividem o mesmo instante (o import em lote cria isso).
+      orderBy: [
+        { last_message_at: { sort: "desc", nulls: "last" } },
+        { id: "desc" },
+      ],
       include: {
         lead: { select: { id: true, name: true } },
         state: {

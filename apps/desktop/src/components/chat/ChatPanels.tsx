@@ -392,6 +392,9 @@ export function ConversationSidebar({
   selectedConversationId,
   dark,
   onSelectConversation,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
 }: {
   clients: Client[];
   selectedClientId: string;
@@ -405,6 +408,10 @@ export function ConversationSidebar({
   selectedConversationId: string;
   dark: boolean;
   onSelectConversation: (conversationId: string) => void;
+  /** Paginacao: a lista deixou de vir inteira em uma resposta so. */
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
 }) {
   return (
     <aside
@@ -544,15 +551,32 @@ export function ConversationSidebar({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {filteredConversations.length > 0 ? (
-          filteredConversations.map((conversation) => (
-            <MemoConversationRow
-              key={conversation.id}
-              conversation={conversation}
-              selected={conversation.id === selectedConversationId}
-              dark={dark}
-              onClick={() => onSelectConversation(conversation.id)}
-            />
-          ))
+          <>
+            {filteredConversations.map((conversation) => (
+              <MemoConversationRow
+                key={conversation.id}
+                conversation={conversation}
+                selected={conversation.id === selectedConversationId}
+                dark={dark}
+                onClick={() => onSelectConversation(conversation.id)}
+              />
+            ))}
+            {hasMore && (
+              <button
+                type="button"
+                onClick={onLoadMore}
+                disabled={loadingMore}
+                className={clsx(
+                  "w-full px-6 py-4 text-xs font-semibold transition-colors disabled:opacity-60 cursor-pointer",
+                  dark
+                    ? "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
+                    : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800",
+                )}
+              >
+                {loadingMore ? "Carregando…" : "Carregar mais conversas"}
+              </button>
+            )}
+          </>
         ) : (
           <div
             className={clsx(

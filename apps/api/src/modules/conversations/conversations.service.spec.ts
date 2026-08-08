@@ -228,9 +228,42 @@ describe("ConversationsService", () => {
       const call = prisma.conversation.findMany.mock.calls[0][0];
       expect(call.where.lead).toEqual({ deleted_at: null });
       // NULL por ultimo: conversa sem mensagem nao pode furar a fila no topo.
-      expect(call.orderBy).toEqual({
-        last_message_at: { sort: "desc", nulls: "last" },
-      });
+      // O `id` desempata para a paginacao nao repetir nem pular linhas.
+      expect(call.orderBy).toEqual([
+        { last_message_at: { sort: "desc", nulls: "last" } },
+        { id: "desc" },
+      ]);
+    });
+
+    it("pagina a lista e aceita busca por nome ou telefone", async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+
+      await service.findAll(
+        { sub: "g1", role: Role.GESTOR, email: "g@x", name: "G" } as any,
+        { client_id: clientId, q: " Samuel ", take: 25, skip: 50 } as any,
+      );
+
+      const call = prisma.conversation.findMany.mock.calls[0][0];
+      expect(call.take).toBe(25);
+      expect(call.skip).toBe(50);
+      expect(call.where.lead.OR).toEqual([
+        { name: { contains: "Samuel", mode: "insensitive" } },
+        { phone: { contains: "Samuel", mode: "insensitive" } },
+      ]);
+    });
+
+    it("aplica um teto de pagina quando o cliente nao pede tamanho", async () => {
+      prisma.conversation.findMany.mockResolvedValue([]);
+
+      await service.findAll(
+        { sub: "g1", role: Role.GESTOR, email: "g@x", name: "G" } as any,
+        { client_id: clientId } as any,
+      );
+
+      const call = prisma.conversation.findMany.mock.calls[0][0];
+      expect(call.take).toBe(100);
+      expect(call.skip).toBe(0);
+      expect(call.where.lead.OR).toBeUndefined();
     });
 
     it("VENDEDOR: passa quando client_id coincide", async () => {
