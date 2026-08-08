@@ -25,4 +25,16 @@ export class AutomationController {
       dto.dispatch_key,
     );
   }
+
+  @Post("credential-delivery")
+  @ApiOperation({
+    summary:
+      "Envia a credencial completa por WhatsApp e e-mail de forma idempotente",
+  })
+  sendCredentialDelivery(@Body() dto: SendCredentialEmailDto) {
+    return this.appointments.deliverCredentialForLead(
+      dto.lead_id,
+      dto.dispatch_key,
+    );
+  }
 }
