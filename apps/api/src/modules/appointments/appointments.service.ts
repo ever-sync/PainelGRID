@@ -406,8 +406,18 @@ export class AppointmentsService {
     >,
   ) {
     const missing: string[] = [];
-    const name = appointment.lead.name?.trim() ?? "";
-    if (name.split(/\s+/).filter(Boolean).length < 2) {
+    const structuredName = [
+      appointment.lead.first_name?.trim(),
+      appointment.lead.last_name?.trim(),
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const legacyName = appointment.lead.name?.trim() || "";
+    const fullName =
+      structuredName.split(/\s+/).filter(Boolean).length >= 2
+        ? structuredName
+        : legacyName;
+    if (fullName.split(/\s+/).filter(Boolean).length < 2) {
       missing.push("nome completo");
     }
 
@@ -430,12 +440,6 @@ export class AppointmentsService {
     } else if (description.startsWith("carro na troca: sim")) {
       if (!appointment.lead.vehicle_plate?.trim()) {
         missing.push("placa do veículo");
-      }
-      if (!appointment.lead.vehicle_model?.trim()) {
-        missing.push("modelo do veículo");
-      }
-      if (!appointment.lead.vehicle_year?.trim()) {
-        missing.push("ano do veículo");
       }
     }
 

@@ -593,6 +593,50 @@ describe("AppointmentsService", () => {
     );
   });
 
+  it("aceita nome estruturado e placa sem exigir modelo e ano para entregar a credencial", async () => {
+    const appointment = {
+      ...baseAppointment,
+      conversation_id: "66666666-6666-4666-8666-666666666667",
+      lead: {
+        ...baseAppointment.lead,
+        name: "Raphael",
+        first_name: "Raphael",
+        last_name: "dos Santos",
+        email: null,
+        phone: "+5512981092776",
+        checkin_token: "0123456789abcdef01234567",
+        companions: "1 acompanhante: Gael Lobo",
+        description: "Carro na troca: sim",
+        vehicle_plate: "PYZ3452",
+        vehicle_model: null,
+        vehicle_year: null,
+        assigned_vendor_id: null,
+      },
+      event: {
+        ...event,
+        name: "Evento Teste",
+        location: "Sao Paulo",
+      },
+    };
+    prisma.appointment.findUnique.mockResolvedValue(appointment);
+    prisma.apiIdempotencyRequest.findUnique.mockResolvedValue(null);
+    prisma.apiIdempotencyRequest.create.mockResolvedValue({ id: "idem-plate" });
+    prisma.apiIdempotencyRequest.upsert.mockResolvedValue({ id: "idem-plate" });
+    prisma.message.create.mockResolvedValue({
+      id: "77777777-7777-4777-8777-777777777778",
+      created_at: new Date("2026-08-08T12:31:01.000Z"),
+    });
+
+    const result = await service.sendCheckinNotification(
+      appointmentId,
+      "qr-structured-name-and-plate",
+    );
+
+    expect(meta.sendClientWhatsappMediaMessage).toHaveBeenCalledTimes(1);
+    expect(mail.sendAppointmentWelcome).not.toHaveBeenCalled();
+    expect(result).toEqual(expect.objectContaining({ sent: true }));
+  });
+
   it("nao envia credencial quando faltam os nomes dos acompanhantes", async () => {
     prisma.appointment.findUnique.mockResolvedValue({
       ...baseAppointment,

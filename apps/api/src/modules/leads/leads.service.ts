@@ -1673,6 +1673,8 @@ export class LeadsService {
       } as unknown as Pick<
         LeadWithRelations,
         | "name"
+        | "first_name"
+        | "last_name"
         | "phone"
         | "event_interest_id"
         | "store_visit_datetime"
@@ -1750,6 +1752,8 @@ export class LeadsService {
     lead: Pick<
       LeadWithRelations,
       | "name"
+      | "first_name"
+      | "last_name"
       | "phone"
       | "event_interest_id"
       | "store_visit_datetime"
@@ -1761,7 +1765,17 @@ export class LeadsService {
     >,
   ) {
     const missing: string[] = [];
-    if (!lead.name?.trim()) missing.push("nome completo");
+    const structuredName = [lead.first_name?.trim(), lead.last_name?.trim()]
+      .filter(Boolean)
+      .join(" ");
+    const legacyName = lead.name?.trim() || "";
+    const fullName =
+      structuredName.split(/\s+/).filter(Boolean).length >= 2
+        ? structuredName
+        : legacyName;
+    if (fullName.split(/\s+/).filter(Boolean).length < 2) {
+      missing.push("nome completo");
+    }
     if (!lead.phone?.trim()) missing.push("telefone");
     if (!lead.event_interest_id) missing.push("evento");
     if (!lead.store_visit_datetime) missing.push("data da visita");
@@ -1772,8 +1786,6 @@ export class LeadsService {
       missing.push("resposta sobre carro na troca");
     } else if (description.includes("carro na troca: sim")) {
       if (!lead.vehicle_plate?.trim()) missing.push("placa do veículo");
-      if (!lead.vehicle_model?.trim()) missing.push("modelo do veículo");
-      if (!lead.vehicle_year?.trim()) missing.push("ano do veículo");
     }
 
     if (missing.length > 0) {
