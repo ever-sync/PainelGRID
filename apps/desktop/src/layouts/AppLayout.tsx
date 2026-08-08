@@ -60,6 +60,13 @@ import {
   closeLeadAttendance,
 } from "../services/leads";
 import { readStoredSession } from "../services/auth";
+import {
+  clearNotifications as clearNotificationsRequest,
+  listNotifications,
+  markAllNotificationsRead as markAllNotificationsReadRequest,
+  markNotificationRead,
+  type ApiNotification,
+} from "../services/notifications";
 import { listEvents } from "../services/events";
 import { connectRealtime } from "../services/realtime";
 import { resolveClientId } from "../utils/userContext";
@@ -130,54 +137,6 @@ function normalizeCheckInPaste(raw: string): string {
   return t;
 }
 
-type AppNotificationType = "info" | "alert" | "appointment" | "message";
-
-interface AppNotification {
-  id: string;
-  title: string;
-  description: string;
-  /** ISO. O rotulo ("Há 10 min") e derivado disto, nao gravado. */
-  createdAt: string;
-  read: boolean;
-  type: AppNotificationType;
-  href?: string;
-}
-
-const NOTIFICATIONS_LIMIT = 40;
-
-function notificationsStorageKey(userId: string) {
-  return `painelgrid:notifications:${userId}`;
-}
-
-function readStoredNotifications(userId: string): AppNotification[] {
-  try {
-    const raw = localStorage.getItem(notificationsStorageKey(userId));
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (item): item is AppNotification =>
-        !!item &&
-        typeof item === "object" &&
-        typeof (item as AppNotification).id === "string" &&
-        typeof (item as AppNotification).createdAt === "string",
-    );
-  } catch {
-    return [];
-  }
-}
-
-function persistNotifications(userId: string, items: AppNotification[]) {
-  try {
-    localStorage.setItem(
-      notificationsStorageKey(userId),
-      JSON.stringify(items),
-    );
-  } catch {
-    /* ignore */
-  }
-}
-
 function formatRelativeTime(iso: string, now: number): string {
   const timestamp = new Date(iso).getTime();
   if (Number.isNaN(timestamp)) return "";
@@ -190,51 +149,6 @@ function formatRelativeTime(iso: string, now: number): string {
   const days = Math.floor(hours / 24);
   return `Há ${days} d`;
 }
-
-/** Destino de cada notificacao muda por perfil: cada papel tem a sua rota. */
-const chatRouteByRole: Record<string, string> = {
-  gestor: "/gestor/chat",
-  vendedor: "/vendedor/chat",
-  cliente: "/cliente/conversas",
-};
-
-const leadsRouteByRole: Record<string, string> = {
-  gestor: "/gestor/crm",
-  vendedor: "/vendedor/leads",
-  cliente: "/cliente/leads",
-  recepcao: "/recepcao/checkin",
-};
-
-/** Rotulos das acoes que chegam em `lead_updated`. */
-const leadUpdatedLabels: Record<
-  string,
-  { title: string; description: string }
-> = {
-  created: {
-    title: "🆕 Novo lead cadastrado",
-    description: "Um lead entrou na base e aguarda atendimento.",
-  },
-  sale_created: {
-    title: "💰 Venda registrada",
-    description: "Uma venda foi lançada para um lead da sua operação.",
-  },
-  appointment_created: {
-    title: "📅 Novo agendamento",
-    description: "Um lead foi agendado para visita.",
-  },
-  appointment_confirmed: {
-    title: "👍 Agendamento confirmado",
-    description: "O lead confirmou a visita agendada.",
-  },
-  appointment_rescheduled: {
-    title: "🔁 Agendamento remarcado",
-    description: "A visita de um lead mudou de data.",
-  },
-  appointment_cancelled: {
-    title: "❌ Agendamento cancelado",
-    description: "Um lead cancelou a visita agendada.",
-  },
-};
 
 function getNavItems(user: User): NavItem[] {
   switch (user.role) {
@@ -417,12 +331,11 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
   }, []);
 
   // ── Central de Notificações ────────────────────────────────────────────────
-  // Alimentada pelos eventos do socket (o backend ainda nao tem historico
-  // proprio), com persistencia local por usuario para sobreviver ao reload.
+  // O historico vive na API: a central acompanha a pessoa entre navegadores e
+  // aparelhos, e sobrevive a limpeza de armazenamento do WKWebView no iOS.
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<AppNotification[]>(() =>
-    readStoredNotifications(user.id),
-  );
+  const [notifications, setNotifications] = useState<ApiNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const notificationsRef = useRef<HTMLDivElement | null>(null);
   /** Rota atual em ref: os handlers do socket sao registrados uma vez so. */
   const currentPathRef = useRef(location.pathname);
@@ -434,76 +347,74 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     Date.now(),
   );
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
-
-  const pushNotification = useCallback(
-    (entry: {
-      title: string;
-      description: string;
-      type: AppNotificationType;
-      href?: string;
-    }) => {
-      setNotifications((prev) => {
-        const next = [
-          {
-            id: `n-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            title: entry.title,
-            description: entry.description,
-            type: entry.type,
-            href: entry.href,
-            createdAt: new Date().toISOString(),
-            read: false,
-          },
-          ...prev,
-        ].slice(0, NOTIFICATIONS_LIMIT);
-        persistNotifications(user.id, next);
-        return next;
+  /** Recarrega a central. Falha em silencio: e um painel acessorio. */
+  const refreshNotifications = useCallback(() => {
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+    void listNotifications(token)
+      .then((page) => {
+        setNotifications(page.items);
+        setUnreadCount(page.unread_count);
+      })
+      .catch(() => {
+        /* mantem o que ja estava na tela */
       });
-    },
-    [user.id],
-  );
+  }, []);
+
+  /** Ref: os handlers do socket sao registrados uma vez e nao devem re-assinar. */
+  const refreshNotificationsRef = useRef(refreshNotifications);
+  useEffect(() => {
+    refreshNotificationsRef.current = refreshNotifications;
+  }, [refreshNotifications]);
+
+  useEffect(() => {
+    refreshNotifications();
+  }, [refreshNotifications]);
 
   const markAllNotificationsRead = useCallback(() => {
-    setNotifications((prev) => {
-      if (prev.every((n) => n.read)) return prev;
-      const next = prev.map((n) => ({ ...n, read: true }));
-      persistNotifications(user.id, next);
-      return next;
-    });
-  }, [user.id]);
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+    // Otimista: a marcacao e trivialmente reversivel por um refresh.
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setUnreadCount(0);
+    void markAllNotificationsReadRequest(token)
+      .catch(() => undefined)
+      .finally(refreshNotifications);
+  }, [refreshNotifications]);
 
   const clearNotifications = useCallback(() => {
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
     setNotifications([]);
-    persistNotifications(user.id, []);
-  }, [user.id]);
+    setUnreadCount(0);
+    void clearNotificationsRequest(token)
+      .catch(() => undefined)
+      .finally(refreshNotifications);
+  }, [refreshNotifications]);
 
   const openNotification = useCallback(
-    (notification: AppNotification) => {
-      setNotifications((prev) => {
-        const next = prev.map((n) =>
-          n.id === notification.id ? { ...n, read: true } : n,
+    (notification: ApiNotification) => {
+      const token = readStoredSession()?.accessToken;
+      if (!notification.read) {
+        setNotifications((prev) =>
+          prev.map((n) =>
+            n.id === notification.id ? { ...n, read: true } : n,
+          ),
         );
-        persistNotifications(user.id, next);
-        return next;
-      });
+        setUnreadCount((count) => Math.max(0, count - 1));
+        if (token) {
+          void markNotificationRead(notification.id, token).catch(
+            () => undefined,
+          );
+        }
+      }
       if (notification.href) {
         setNotificationsOpen(false);
         navigate(notification.href);
       }
     },
-    [navigate, user.id],
+    [navigate],
   );
-
-  // Mantem as abas abertas em sincronia com o mesmo feed.
-  useEffect(() => {
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === notificationsStorageKey(user.id)) {
-        setNotifications(readStoredNotifications(user.id));
-      }
-    };
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, [user.id]);
 
   // Fecha o popover ao clicar fora ou apertar Esc.
   useEffect(() => {
@@ -618,97 +529,28 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       }
     };
 
-    const leadsHref = leadsRouteByRole[user.role];
-    const chatHref = chatRouteByRole[user.role];
+    // A notificacao ja foi gravada pela API ao emitir o evento. Aqui so
+    // recarregamos a central — o texto e o destino sao do servidor.
+    const handleNotifiableEvent = () => refreshNotificationsRef.current();
 
-    const handleVendorCalledNotification = (payload: {
-      lead_name?: string;
-    }) => {
-      pushNotification({
-        title: "🚨 Cliente na recepção",
-        description: `${payload.lead_name ?? "Um lead"} chegou e está aguardando atendimento.`,
-        type: "alert",
-        href: leadsHref,
-      });
-    };
-
-    const handleLeadCheckin = () => {
-      pushNotification({
-        title: "✅ Check-in confirmado",
-        description: "Um lead confirmou presença no evento.",
-        type: "appointment",
-        href: leadsHref,
-      });
-    };
-
-    const handleLeadUpdated = (payload: { action?: string }) => {
-      // `checkin` e `stage_changed` chegam tambem nos eventos dedicados —
-      // ignorar aqui evita a mesma notificacao duas vezes.
-      if (!payload.action || payload.action === "checkin") return;
-      if (payload.action === "stage_changed") return;
-      const label = leadUpdatedLabels[payload.action];
-      if (!label) return;
-      pushNotification({
-        title: label.title,
-        description: label.description,
-        type: payload.action.startsWith("appointment") ? "appointment" : "info",
-        href: leadsHref,
-      });
-    };
-
-    const handleStageChanged = (payload: {
-      stage_code?: string;
-      pipeline_code?: string;
-    }) => {
-      pushNotification({
-        title: "🔀 Lead mudou de etapa",
-        description: payload.stage_code
-          ? `Movido para "${payload.stage_code}"${payload.pipeline_code ? ` no funil ${payload.pipeline_code}` : ""}.`
-          : "Um lead avançou no funil.",
-        type: "info",
-        href: leadsHref,
-      });
-    };
-
-    const handleNewMessage = (payload: {
-      sender_type?: string;
-      content?: string;
-    }) => {
-      // So mensagem de lead vira notificacao: eco das proprias respostas nao.
-      if (payload.sender_type !== "lead") return;
-      // Ja estando no chat, a mensagem aparece na tela — nao vira notificacao.
-      if (chatHref && currentPathRef.current.startsWith(chatHref)) return;
-      const content = (payload.content ?? "").trim();
-      pushNotification({
-        title: "💬 Nova mensagem de lead",
-        description: content
-          ? content.length > 120
-            ? `${content.slice(0, 120)}…`
-            : content
-          : "Uma nova mensagem chegou no chat.",
-        type: "message",
-        href: chatHref,
-      });
-    };
-
+    socket.on("lead_checkin", handleNotifiableEvent);
+    socket.on("lead_updated", handleNotifiableEvent);
+    socket.on("stage_changed", handleNotifiableEvent);
+    socket.on("new_message", handleNotifiableEvent);
+    socket.on("vendor_called", handleNotifiableEvent);
     socket.on("vendor_called", handleVendorCalled);
-    socket.on("vendor_called", handleVendorCalledNotification);
-    socket.on("lead_checkin", handleLeadCheckin);
-    socket.on("lead_updated", handleLeadUpdated);
-    socket.on("stage_changed", handleStageChanged);
-    socket.on("new_message", handleNewMessage);
 
     return () => {
+      socket.off("lead_checkin", handleNotifiableEvent);
+      socket.off("lead_updated", handleNotifiableEvent);
+      socket.off("stage_changed", handleNotifiableEvent);
+      socket.off("new_message", handleNotifiableEvent);
+      socket.off("vendor_called", handleNotifiableEvent);
       socket.off("vendor_called", handleVendorCalled);
-      socket.off("vendor_called", handleVendorCalledNotification);
-      socket.off("lead_checkin", handleLeadCheckin);
-      socket.off("lead_updated", handleLeadUpdated);
-      socket.off("stage_changed", handleStageChanged);
-      socket.off("new_message", handleNewMessage);
       socket.disconnect();
       realtimeSocketRef.current = null;
     };
-  }, [user, pushNotification]);
+  }, [user]);
 
   // Loop de alerta sonoro + vibração contínua estilo ligação enquanto vendorCallAlert estiver aberto
   useEffect(() => {
@@ -1563,7 +1405,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                           </span>
                           <span className="shrink-0 text-[10px] text-zinc-400 font-mono">
                             {formatRelativeTime(
-                              n.createdAt,
+                              n.created_at,
                               notificationsClock,
                             )}
                           </span>

@@ -53,10 +53,40 @@ model User {
   score_events                 ScoreEvent[]       @relation("VendorScoreEvents")
   service_ratings              ServiceRating[]
   client                       Client?            @relation("ClientStaff", fields: [client_id], references: [id])
+  notifications                Notification[]
 
   @@index([client_id])
   @@index([client_id, approval_status])
   @@map("users")
+}
+
+enum NotificationType {
+  info
+  alert
+  appointment
+  message
+}
+
+/// Central de notificacoes. Uma linha por destinatario (fan-out na escrita):
+/// lido e limpeza sao por pessoa, entao compartilhar a linha exigiria uma
+/// tabela de leitura so para isso.
+model Notification {
+  id          String           @id @default(uuid()) @db.Uuid
+  client_id   String           @db.Uuid
+  user_id     String           @db.Uuid
+  type        NotificationType @default(info)
+  title       String           @db.VarChar(160)
+  description String           @db.VarChar(500)
+  /// Rota do painel aberta ao clicar. Nulo = notificacao sem destino.
+  href        String?          @db.VarChar(300)
+  read_at     DateTime?
+  created_at  DateTime         @default(now())
+  client      Client           @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  user        User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, created_at(sort: Desc)])
+  @@index([user_id, read_at])
+  @@map("notifications")
 }
 
 enum UserApprovalStatus {
@@ -183,6 +213,7 @@ model Client {
   vehicles                    Vehicle[]
   webhook_events              WebhookEvent[]
   whatsapp_attribution_events WhatsAppAttributionEvent[]
+  notifications               Notification[]
 
   @@index([gestor_id])
   @@map("clients")
