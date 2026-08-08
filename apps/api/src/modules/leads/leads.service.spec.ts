@@ -31,7 +31,7 @@ describe("LeadsService", () => {
     event: { findFirst: jest.Mock };
     user: { findFirst: jest.Mock; findUnique: jest.Mock };
     salesTeamMember: { findFirst: jest.Mock };
-    metaAssetSelection: { findMany: jest.Mock };
+    metaAssetSelection: { findMany: jest.Mock; findFirst: jest.Mock };
     metaLeadRoutingRule: { findMany: jest.Mock };
     metaAd: { findMany: jest.Mock };
     metaAdSet: { findMany: jest.Mock };
@@ -100,7 +100,7 @@ describe("LeadsService", () => {
       event: { findFirst: jest.fn() },
       user: { findFirst: jest.fn(), findUnique: jest.fn() },
       salesTeamMember: { findFirst: jest.fn() },
-      metaAssetSelection: { findMany: jest.fn() },
+      metaAssetSelection: { findMany: jest.fn(), findFirst: jest.fn() },
       metaLeadRoutingRule: { findMany: jest.fn() },
       metaAd: { findMany: jest.fn() },
       metaAdSet: { findMany: jest.fn() },
@@ -153,6 +153,9 @@ describe("LeadsService", () => {
         form_name: "Form - OFICIAL-copy",
       },
     ]);
+    prisma.metaAssetSelection.findFirst.mockResolvedValue({
+      phone_number_id: "phone-number-shared",
+    });
     prisma.metaLeadRoutingRule.findMany.mockResolvedValue([]);
     prisma.metaAd.findMany.mockResolvedValue([]);
     prisma.metaAdSet.findMany.mockResolvedValue([]);

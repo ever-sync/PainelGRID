@@ -16,3 +16,5 @@ Key UI/UX Rules:
    - Inputs styled with `h-11 pl-10 pr-3 rounded-2xl border border-zinc-200 dark:border-zinc-800`.
 4. **Light/Dark Themes**: Pure white (`bg-white` / `border-zinc-200`) or clean dark (`bg-[#0c0d11]` / `border-zinc-800`). NO yellow or beige backgrounds.
 5. **Compilation Verification**: ALWAYS run `npm run build` after UI edits to verify 0 JSX compilation errors.
+executar fase 2
+

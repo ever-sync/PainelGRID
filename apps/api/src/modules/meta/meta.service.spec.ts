@@ -80,6 +80,21 @@ describe("MetaService", () => {
     metaLeadForm: {
       findFirst: jest.fn(),
     },
+    conversation: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+    message: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+    },
+    whatsAppAttributionEvent: {
+      create: jest.fn(),
+    },
+    operationalIssue: {
+      upsert: jest.fn(),
+    },
   };
 
   const redis = {
@@ -96,7 +111,15 @@ describe("MetaService", () => {
 
   const realtime = {
     emitToClient: jest.fn(),
+    emitNewMessage: jest.fn(),
   };
+
+  const clientWebhook = { dispatch: jest.fn() };
+  const dispatchTracking = {
+    markProviderStatus: jest.fn().mockResolvedValue(0),
+    markReply: jest.fn().mockResolvedValue(null),
+  };
+  const whatsappContextResolver = { resolve: jest.fn() };
 
   const metaSyncQueue = {
     // `enqueueJob` envolve o add em `withTimeout`, que encadeia `.then`:
@@ -114,11 +137,9 @@ describe("MetaService", () => {
       redis as unknown as RedisService,
       config as unknown as ConfigService,
       realtime as unknown as RealtimeEventsService,
-      { dispatch: jest.fn() } as never,
-      {
-        markProviderStatus: jest.fn().mockResolvedValue(0),
-        markReply: jest.fn().mockResolvedValue(null),
-      } as never,
+      clientWebhook as never,
+      dispatchTracking as never,
+      whatsappContextResolver as never,
       metaSyncQueue as never,
     );
   });
@@ -198,6 +219,101 @@ describe("MetaService", () => {
         meta_form_id: "form-1",
       }),
     });
+  });
+
+  it("roteia a resposta pelo disparo persistido quando dois clientes compartilham o numero", async () => {
+    prisma.metaAssetSelection.findMany.mockResolvedValue([
+      {
+        meta_connection_id: "connection-a",
+        meta_connection: {
+          id: "connection-a",
+          client_id: "client-a",
+          access_token: "token-a",
+        },
+      },
+      {
+        meta_connection_id: "connection-b",
+        meta_connection: {
+          id: "connection-b",
+          client_id: "client-b",
+          access_token: "token-b",
+        },
+      },
+    ]);
+    whatsappContextResolver.resolve.mockResolvedValue({
+      authorized: true,
+      routing_reason: "provider_message_context",
+      dispatch_id: "dispatch-b",
+      phone_number_id: "shared-number",
+      client: { id: "client-b", company_name: "Cliente B" },
+      lead: { id: "lead-b" },
+      event: { id: "event-b", name: "Evento B" },
+      conversation: {
+        id: "conversation-b",
+        last_message_at: new Date("2026-08-07T15:00:00.000Z"),
+      },
+      pipeline: null,
+      stage: null,
+    });
+    prisma.message.findFirst.mockResolvedValue(null);
+    prisma.message.create.mockResolvedValue({
+      id: "message-inbound-b",
+      conversation_id: "conversation-b",
+      sender_type: "lead",
+      sender_id: null,
+      content: "Quero finalizar",
+      media_id: null,
+      media_url: null,
+      created_at: new Date("2026-08-07T15:05:00.000Z"),
+    });
+    prisma.conversation.update.mockResolvedValue({});
+    prisma.whatsAppAttributionEvent.create.mockResolvedValue({ id: "wa-1" });
+    jest.spyOn(service as any, "extractWhatsappMessagePayload").mockResolvedValue({
+      content: "Quero finalizar",
+      mediaId: null,
+      mediaUrl: null,
+    });
+
+    const processed = await (service as any).processWhatsappCloudMessagesWebhook({
+      metadata: { phone_number_id: "shared-number" },
+      contacts: [
+        { wa_id: "5511999999999", profile: { name: "Maria Souza" } },
+      ],
+      messages: [
+        {
+          id: "wamid-inbound-b",
+          from: "5511999999999",
+          timestamp: "1786115100",
+          type: "text",
+          context: { id: "wamid-template-b" },
+        },
+      ],
+    });
+
+    expect(processed).toBe(true);
+    expect(whatsappContextResolver.resolve).toHaveBeenCalledWith({
+      phoneNumberId: "shared-number",
+      customerPhone: "5511999999999",
+      providerMessageId: "wamid-template-b",
+    });
+    expect(prisma.message.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        conversation_id: "conversation-b",
+        content: "Quero finalizar",
+      }),
+    });
+    expect(clientWebhook.dispatch).toHaveBeenCalledWith(
+      "client-b",
+      "conversation.message.received",
+      expect.objectContaining({
+        client_id: "client-b",
+        event_id: "event-b",
+        lead_id: "lead-b",
+        conversation_id: "conversation-b",
+        dispatch_id: "dispatch-b",
+        routing_reason: "provider_message_context",
+      }),
+    );
   });
 
   it("enfileira a importacao de leads antigos da Meta (job pendente)", async () => {

@@ -77,6 +77,7 @@ const INSIGHTS_HISTORY_MONTHS: Record<MetaInsightLevel, number> = {
 };
 import { assertMetaGraphUrl, assertMetaMediaUrl } from "./meta-url.util";
 import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.service";
+import { WhatsappContextResolverService } from "../whatsapp-context/whatsapp-context-resolver.service";
 
 @Injectable()
 export class MetaService implements OnModuleInit {
@@ -93,6 +94,7 @@ export class MetaService implements OnModuleInit {
     private readonly realtimeEvents: RealtimeEventsService,
     private readonly clientWebhook: ClientWebhookService,
     private readonly dispatchTracking: DispatchTrackingService,
+    private readonly whatsappContextResolver: WhatsappContextResolverService,
     @InjectQueue("meta-sync") private readonly metaSyncQueue: Queue,
   ) {}
 
@@ -3345,12 +3347,12 @@ export class MetaService implements OnModuleInit {
       return false;
     }
 
-    const assetSelection = await this.db.metaAssetSelection.findFirst({
+    const assetSelections = await this.db.metaAssetSelection.findMany({
       where: { phone_number_id: phoneNumberId },
       include: { meta_connection: true },
     });
 
-    if (!assetSelection?.meta_connection) {
+    if (assetSelections.length === 0) {
       this.logger.warn(
         "Webhook WhatsApp ignorado: numero nao mapeado para cliente.",
       );
@@ -3414,6 +3416,40 @@ export class MetaService implements OnModuleInit {
       const wamid = this.readString(message.id);
 
       const occurredAt = this.resolveWhatsappTimestamp(message.timestamp);
+      const messageContext = this.readRecord(message.context);
+      const context = await this.whatsappContextResolver.resolve({
+        phoneNumberId,
+        customerPhone: from,
+        providerMessageId: messageContext
+          ? this.readString(messageContext.id)
+          : undefined,
+      });
+      if (!context.authorized) {
+        this.logger.error(
+          `Mensagem WhatsApp sem contexto autorizado (${context.reason}) para ${from} no phone_number_id ${phoneNumberId}.`,
+        );
+        await this.recordWhatsappContextIssue({
+          reason: context.reason,
+          phoneNumberId,
+          customerPhone: from,
+          providerMessageId: messageContext
+            ? this.readString(messageContext.id)
+            : undefined,
+        });
+        continue;
+      }
+
+      const assetSelection = assetSelections.find(
+        (asset) =>
+          asset.meta_connection.client_id === context.client.id,
+      );
+      if (!assetSelection?.meta_connection) {
+        this.logger.error(
+          `Contexto resolvido para o cliente ${context.client.id}, mas o numero ${phoneNumberId} nao esta vinculado a ele.`,
+        );
+        continue;
+      }
+
       const extractedMessage = await this.extractWhatsappMessagePayload(
         message,
         assetSelection.meta_connection.access_token,
@@ -3422,16 +3458,14 @@ export class MetaService implements OnModuleInit {
         continue;
       }
 
-      const lead = await this.findOrCreateWhatsappLead(
-        assetSelection.meta_connection.client_id,
-        from,
-        contactNameByWaId.get(from),
-      );
-      const conversation = await this.findOrCreateWhatsappConversation(
-        assetSelection.meta_connection.client_id,
-        lead.id,
-        occurredAt,
-      );
+      const lead = { id: context.lead.id };
+      const conversation =
+        context.conversation ??
+        (await this.findOrCreateWhatsappConversation(
+          context.client.id,
+          lead.id,
+          occurredAt,
+        ));
 
       const duplicate = wamid
         ? await this.db.message.findFirst({
@@ -3489,7 +3523,7 @@ export class MetaService implements OnModuleInit {
 
       await this.db.whatsAppAttributionEvent.create({
         data: {
-          client_id: assetSelection.meta_connection.client_id,
+          client_id: context.client.id,
           meta_connection_id: assetSelection.meta_connection_id,
           lead_id: lead.id,
           conversation_id: conversation.id,
@@ -3501,12 +3535,15 @@ export class MetaService implements OnModuleInit {
             metadata,
             message,
             contact_name: contactNameByWaId.get(from) ?? null,
+            routing_reason: context.routing_reason,
+            dispatch_id: context.dispatch_id,
+            event_id: context.event.id,
           }),
         },
       });
 
       this.realtimeEvents.emitNewMessage(
-        assetSelection.meta_connection.client_id,
+        context.client.id,
         {
           conversation_id: createdMessage.conversation_id,
           message_id: createdMessage.id,
@@ -3520,9 +3557,14 @@ export class MetaService implements OnModuleInit {
       );
 
       void this.clientWebhook.dispatch(
-        assetSelection.meta_connection.client_id,
+        context.client.id,
         "conversation.message.received",
         {
+          client_id: context.client.id,
+          event_id: context.event.id,
+          dispatch_id: context.dispatch_id,
+          phone_number_id: phoneNumberId,
+          routing_reason: context.routing_reason,
           message_id: createdMessage.id,
           conversation_id: createdMessage.conversation_id,
           lead_id: lead.id,
@@ -3539,6 +3581,56 @@ export class MetaService implements OnModuleInit {
     }
 
     return processed > 0 || processedStatuses > 0;
+  }
+
+  private async recordWhatsappContextIssue(args: {
+    reason: string;
+    phoneNumberId: string;
+    customerPhone: string;
+    providerMessageId?: string;
+  }) {
+    const phoneSuffix = this.normalizePhone(args.customerPhone).slice(-4);
+    const fingerprint = `whatsapp-context:${args.phoneNumberId}:${phoneSuffix || "unknown"}`;
+    await this.db.operationalIssue
+      .upsert({
+        where: { fingerprint },
+        create: {
+          type: "CLIENT_NOT_IDENTIFIED",
+          severity:
+            args.reason === "ambiguous_context" ? "critical" : "warning",
+          title: "Contexto do WhatsApp não identificado",
+          message: `A resposta recebida no número compartilhado não pôde ser vinculada com segurança (${args.reason}).`,
+          source: "meta-whatsapp",
+          fingerprint,
+          metadata: this.toJsonValue({
+            reason: args.reason,
+            phone_number_id: args.phoneNumberId,
+            customer_phone_suffix: phoneSuffix || null,
+            provider_message_id: args.providerMessageId ?? null,
+          }),
+        },
+        update: {
+          status: "open",
+          severity:
+            args.reason === "ambiguous_context" ? "critical" : "warning",
+          message: `A resposta recebida no número compartilhado não pôde ser vinculada com segurança (${args.reason}).`,
+          last_seen_at: new Date(),
+          resolved_at: null,
+          resolved_by: null,
+          occurrence_count: { increment: 1 },
+          metadata: this.toJsonValue({
+            reason: args.reason,
+            phone_number_id: args.phoneNumberId,
+            customer_phone_suffix: phoneSuffix || null,
+            provider_message_id: args.providerMessageId ?? null,
+          }),
+        },
+      })
+      .catch((error) => {
+        this.logger.error(
+          `Falha ao registrar exceção de contexto WhatsApp: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
   }
 
   private mapWhatsappDispatchStatus(status: string) {
@@ -3852,61 +3944,6 @@ export class MetaService implements OnModuleInit {
       legacy.find(
         (item) => this.normalizePhone(item.phone) === candidateSet.digits,
       ) ?? null
-    );
-  }
-
-  private async findOrCreateWhatsappLead(
-    clientId: string,
-    waId: string,
-    contactName?: string,
-  ): Promise<{ id: string }> {
-    const normalizedWaId = this.normalizePhone(waId);
-    const lead = await this.findLeadByPhone(clientId, normalizedWaId || waId);
-
-    if (lead) {
-      const updateData: { name?: string; phone?: string } = {};
-      if (!lead.phone && normalizedWaId) {
-        updateData.phone = `+${normalizedWaId}`;
-      }
-      if (contactName && this.shouldOverwriteLeadName(lead.name)) {
-        updateData.name = contactName;
-      }
-
-      if (Object.keys(updateData).length > 0) {
-        const updated = await this.db.lead.update({
-          where: { id: lead.id },
-          data: updateData,
-          select: { id: true },
-        });
-        return updated;
-      }
-
-      return { id: lead.id };
-    }
-
-    const fallbackSuffix =
-      normalizedWaId.slice(-4) || randomUUID().slice(0, 4).toUpperCase();
-    const created = await this.db.lead.create({
-      data: {
-        client_id: clientId,
-        name: contactName ?? `Contato WhatsApp ${fallbackSuffix}`,
-        phone: normalizedWaId ? `+${normalizedWaId}` : null,
-        source: "whatsapp",
-      },
-      select: { id: true },
-    });
-
-    return created;
-  }
-
-  private shouldOverwriteLeadName(name: string) {
-    const normalized = name.trim().toLowerCase();
-    if (!normalized) {
-      return true;
-    }
-    return (
-      normalized.startsWith("lead ") ||
-      normalized.startsWith("contato whatsapp ")
     );
   }
 

@@ -2532,15 +2532,28 @@ export class LeadsService {
         ),
       });
 
-      const chatRecorded = await this.recordAutomaticWhatsappMessage(
+      const chatRecord = await this.recordAutomaticWhatsappMessage(
         item,
         messageId,
       );
+      const whatsappAsset = await this.prisma.metaAssetSelection.findFirst({
+        where: {
+          phone_number_id: { not: null },
+          meta_connection: {
+            client_id: routing.clientId,
+            status: "connected",
+          },
+        },
+        orderBy: [{ is_primary: "desc" }, { updated_at: "desc" }],
+        select: { phone_number_id: true },
+      });
 
       await this.dispatchTracking
         .upsert(lead.client_id, {
           lead_id: lead.id,
           event_id: routing.eventId,
+          conversation_id: chatRecord.conversationId,
+          message_id: chatRecord.messageId,
           dispatch_key: `meta-lead-template:${lead.facebook_lead_id ?? lead.id}:${templateName}`,
           workflow_key: "facebook-lead-auto-template",
           dispatch_type: "lead_welcome_template",
@@ -2552,8 +2565,13 @@ export class LeadsService {
           occurred_at: new Date().toISOString(),
           metadata: {
             form_id: routing.formId,
+            client_id: routing.clientId,
+            event_id: routing.eventId,
+            lead_id: lead.id,
+            conversation_id: chatRecord.conversationId ?? null,
+            phone_number_id: whatsappAsset?.phone_number_id ?? null,
             template_language: templateLanguage,
-            chat_recorded: chatRecorded,
+            chat_recorded: chatRecord.recorded,
           },
         })
         .catch((trackingError) => {
@@ -2584,7 +2602,7 @@ export class LeadsService {
         template_name: templateName,
         template_language: templateLanguage,
         message_id: messageId,
-        chat_recorded: chatRecorded,
+        chat_recorded: chatRecord.recorded,
       };
     } catch (error) {
       const errorMessage = this.errorMessage(error);
@@ -2642,10 +2660,14 @@ export class LeadsService {
   private async recordAutomaticWhatsappMessage(
     item: AutomaticFacebookTransactionItem,
     messageId: string | null,
-  ): Promise<boolean> {
+  ): Promise<{
+    recorded: boolean;
+    conversationId?: string;
+    messageId?: string;
+  }> {
     const { lead, prepared } = item;
     const templateName = prepared.routing.whatsappTemplateName;
-    if (!messageId || !templateName) return false;
+    if (!messageId || !templateName) return { recorded: false };
 
     try {
       const result = await this.prisma.$transaction(async (tx) => {
@@ -2714,12 +2736,16 @@ export class LeadsService {
           created_at: result.message.created_at,
         });
       }
-      return true;
+      return {
+        recorded: true,
+        conversationId: result.conversation.id,
+        messageId: result.message.id,
+      };
     } catch (error) {
       this.logger.warn(
         `Template Meta enviado, mas nao foi espelhado no Chat para o lead ${lead.id}: ${this.errorMessage(error)}`,
       );
-      return false;
+      return { recorded: false };
     }
   }
 

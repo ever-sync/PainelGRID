@@ -14,6 +14,8 @@ import { AppointmentsModule } from "../appointments/appointments.module";
 import { AutomationController } from "./automation.controller";
 import { AutomationKeyGuard } from "./automation-key.guard";
 import { DispatchTrackingModule } from "../dispatch-tracking/dispatch-tracking.module";
+import { WhatsappContextModule } from "../whatsapp-context/whatsapp-context.module";
+import { RubinhoContextController } from "./rubinho-context.controller";
 
 @Module({
   imports: [
@@ -24,12 +26,14 @@ import { DispatchTrackingModule } from "../dispatch-tracking/dispatch-tracking.m
     ConversationsModule,
     AppointmentsModule,
     DispatchTrackingModule,
+    WhatsappContextModule,
   ],
   controllers: [
     IntegrationController,
     IntegrationCredentialsController,
     MetaLeadIngestionController,
     AutomationController,
+    RubinhoContextController,
   ],
   providers: [
     IntegrationKeyGuard,
