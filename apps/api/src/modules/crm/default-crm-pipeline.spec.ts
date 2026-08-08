@@ -21,15 +21,27 @@ describe("default-crm-pipeline", () => {
     );
   });
 
-  it("define exatamente 22 etapas padrao", () => {
-    expect(DEFAULT_CRM_STAGES).toHaveLength(22);
-    expect(getDefaultStageInputs(clientId)).toHaveLength(22);
+  it("define exatamente 23 etapas padrao", () => {
+    expect(DEFAULT_CRM_STAGES).toHaveLength(23);
+    expect(getDefaultStageInputs(clientId)).toHaveLength(23);
   });
 
-  it("mantem display_order unico de 1 a 22", () => {
+  it("mantem display_order unico de 1 a 23", () => {
     const orders = DEFAULT_CRM_STAGES.map((s) => s.order);
-    expect(new Set(orders).size).toBe(22);
+    expect(new Set(orders).size).toBe(23);
     expect(Math.min(...orders)).toBe(1);
-    expect(Math.max(...orders)).toBe(22);
+    expect(Math.max(...orders)).toBe(23);
+  });
+
+  it("posiciona a segunda tentativa por email logo apos a primeira tentativa", () => {
+    const firstAttempt = DEFAULT_CRM_STAGES.find(
+      (stage) => stage.suffix === "TENTATIVA_CONTATO",
+    );
+    const emailAttempt = DEFAULT_CRM_STAGES.find(
+      (stage) => stage.suffix === "TENTATIVA_2_EMAIL",
+    );
+
+    expect(emailAttempt?.name).toBe("Tentativa 2 - Email");
+    expect(emailAttempt?.order).toBe((firstAttempt?.order ?? 0) + 1);
   });
 });

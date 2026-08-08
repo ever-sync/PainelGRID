@@ -957,7 +957,7 @@ export function CRMPage() {
       try {
         let pipelines = await listCrmPipelines(selectedClient, accessToken);
 
-        // Auto-cria pipeline padrão de 18 etapas (espelho do funil de eventos) se não existir.
+        // Auto-cria o pipeline padrão atualizado se ainda não existir.
         // Os códigos são determinísticos (derivados do client_id), permitindo que integrações
         // externas (ex.: n8n/Bitrix) calculem pipeline_code e stage_code sem consultar a API.
         const defaultPipeline = pickDefaultPipeline(pipelines, selectedClient);
@@ -997,97 +997,103 @@ export function CRMPage() {
                   color: "#8B5CF6",
                 },
                 {
+                  name: "Tentativa 2 - Email",
+                  code: `${idBase}_TENTATIVA_2_EMAIL`,
+                  display_order: 5,
+                  color: "#0EA5E9",
+                },
+                {
                   name: "Em contato",
                   code: `${idBase}_EM_CONTATO`,
-                  display_order: 5,
+                  display_order: 6,
                   color: "#7C3AED",
                 },
                 {
                   name: "Pré-agendamento",
                   code: `${idBase}_PRE_AGENDAMENTO`,
-                  display_order: 6,
+                  display_order: 7,
                   color: "#6366F1",
                 },
                 {
                   name: "Presença agendada",
                   code: `${idBase}_PRESENCA_AGENDADA`,
-                  display_order: 7,
+                  display_order: 8,
                   color: "#10B981",
                 },
                 {
                   name: "TEMP",
                   code: `${idBase}_TEMP`,
-                  display_order: 8,
+                  display_order: 9,
                   color: "#06B6D4",
                 },
                 {
                   name: "Enviar confirmação",
                   code: `${idBase}_ENVIAR_CONFIRMACAO`,
-                  display_order: 9,
+                  display_order: 10,
                   color: "#3D56A2",
                 },
                 {
                   name: "Leads Agendados - Confirmados",
                   code: `${idBase}_AGENDADOS_CONFIRMADOS`,
-                  display_order: 10,
+                  display_order: 11,
                   color: "#2563EB",
                 },
                 {
                   name: "Presença reagendada",
                   code: `${idBase}_PRESENCA_REAGENDADA`,
-                  display_order: 11,
+                  display_order: 12,
                   color: "#F59E0B",
                 },
                 {
                   name: "Presença cancelada",
                   code: `${idBase}_PRESENCA_CANCELADA`,
-                  display_order: 12,
+                  display_order: 13,
                   color: "#EF4444",
                 },
                 {
                   name: "Lembrete - Ainda dá tempo!",
                   code: `${idBase}_LEMBRETE`,
-                  display_order: 13,
+                  display_order: 14,
                   color: "#22D3EE",
                 },
                 {
                   name: "Perdido na Cadência",
                   code: `${idBase}_PERDIDO_CADENCIA`,
-                  display_order: 14,
+                  display_order: 15,
                   color: "#6B7280",
                   is_final_stage: true,
                 },
                 {
                   name: "Desinteresse",
                   code: `${idBase}_DESINTERESSE`,
-                  display_order: 15,
+                  display_order: 16,
                   color: "#F97316",
                   is_final_stage: true,
                 },
                 {
                   name: "Aguardando",
                   code: `${idBase}_AGUARDANDO`,
-                  display_order: 16,
+                  display_order: 17,
                   color: "#9CA3AF",
                 },
                 {
                   name: "Presença confirmada",
                   code: `${idBase}_PRESENCA_CONFIRMADA`,
-                  display_order: 17,
+                  display_order: 18,
                   color: "#059669",
                   is_final_stage: true,
                 },
                 {
                   name: "Lead perdido",
                   code: `${idBase}_LEAD_PERDIDO`,
-                  display_order: 18,
+                  display_order: 19,
                   color: "#4B5563",
                   is_final_stage: true,
                 },
                 {
                   name: "Lead ausente",
                   code: `${idBase}_LEAD_AUSENTE`,
-                  display_order: 19,
+                  display_order: 20,
                   color: "#374151",
                   is_final_stage: true,
                 },

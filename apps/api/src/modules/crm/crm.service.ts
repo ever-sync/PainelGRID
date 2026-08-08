@@ -1172,7 +1172,7 @@ export class CrmService {
     return `${start} a ${end}/${month}`;
   }
 
-  /** Garante o funil padrão de 18 etapas (Bitrix) para um cliente existente. */
+  /** Garante o funil padrão atualizado para um cliente existente. */
   async ensureDefaultPipeline(clientId: string) {
     await this.ensureClientExists(clientId);
     return provisionDefaultCrmPipeline(this.prisma, clientId);

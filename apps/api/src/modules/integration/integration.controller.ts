@@ -362,7 +362,7 @@ export class IntegrationController {
     description:
       "Endpoint simplificado que aceita apenas o sufixo da etapa (ex: EM_CONTATO, " +
       "PRESENCA_AGENDADA) e resolve automaticamente o pipeline_code e stage_code " +
-      "completos a partir dos dados do lead. Sufixos válidos: NOVO_LEAD, TENTATIVA_CONTATO, " +
+      "completos a partir dos dados do lead. Sufixos válidos: NOVO_LEAD, TENTATIVA_CONTATO, TENTATIVA_2_EMAIL, " +
       "EM_CONTATO, PRE_AGENDAMENTO, PRESENCA_AGENDADA, ENVIAR_CONFIRMACAO, AGENDADOS_CONFIRMADOS, " +
       "PRESENCA_REAGENDADA, PRESENCA_CANCELADA, LEMBRETE, DESINTERESSE, " +
       "RECUPERACAO_VENDA, RECUPERACAO_PRESENCA, RECUPERACAO_RESPONDIDA, " +

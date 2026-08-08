@@ -9,10 +9,10 @@ export type DefaultCrmStageDef = {
   is_final_stage: boolean;
 };
 
-/** Funil padrão alinhado ao Bitrix (18 etapas) e à integração n8n. */
+/** Funil padrão alinhado às automações e à operação comercial. */
 export const DEFAULT_CRM_PIPELINE_NAME = "Funil de Vendas";
 export const DEFAULT_CRM_PIPELINE_DESCRIPTION =
-  "Pipeline padrão com 18 etapas (espelho Bitrix / automações)";
+  "Pipeline padrão com 23 etapas (CRM / automações)";
 
 export const DEFAULT_CRM_STAGES: readonly DefaultCrmStageDef[] = [
   {
@@ -30,142 +30,149 @@ export const DEFAULT_CRM_STAGES: readonly DefaultCrmStageDef[] = [
     is_final_stage: false,
   },
   {
+    suffix: "TENTATIVA_2_EMAIL",
+    name: "Tentativa 2 - Email",
+    order: 3,
+    color: "#0EA5E9",
+    is_final_stage: false,
+  },
+  {
     suffix: "LIGACAO",
     name: "Ligação",
-    order: 3,
+    order: 4,
     color: "#EC4899",
     is_final_stage: false,
   },
   {
     suffix: "EM_CONTATO",
     name: "Em Contato",
-    order: 4,
+    order: 5,
     color: "#3D56A2",
     is_final_stage: false,
   },
   {
     suffix: "PRESENCA_AGENDADA",
     name: "Presença agendada",
-    order: 5,
+    order: 6,
     color: "#FBBB49",
     is_final_stage: false,
   },
   {
     suffix: "ENVIAR_CONFIRMACAO",
     name: "Enviar confirmação",
-    order: 6,
+    order: 7,
     color: "#22D3EE",
     is_final_stage: false,
   },
   {
     suffix: "AGENDADOS_CONFIRMADOS",
     name: "Agend. confirmados",
-    order: 7,
+    order: 8,
     color: "#10B981",
     is_final_stage: false,
   },
   {
     suffix: "PRESENCA_REAGENDADA",
     name: "Presença reagendada",
-    order: 8,
+    order: 9,
     color: "#FB923C",
     is_final_stage: false,
   },
   {
     suffix: "PRESENCA_CANCELADA",
     name: "Presença cancelada",
-    order: 9,
+    order: 10,
     color: "#EF4444",
     is_final_stage: false,
   },
   {
     suffix: "LEMBRETE",
     name: "Lembrete",
-    order: 10,
+    order: 11,
     color: "#06B6D4",
     is_final_stage: false,
   },
   {
     suffix: "RECUPERACAO_VENDA",
     name: "Recuperação de venda",
-    order: 11,
+    order: 12,
     color: "#D97706",
     is_final_stage: false,
   },
   {
     suffix: "RECUPERACAO_PRESENCA",
     name: "Recuperação de presença",
-    order: 12,
+    order: 13,
     color: "#4F46E5",
     is_final_stage: false,
   },
   {
     suffix: "RECUPERACAO_RESPONDIDA",
     name: "Recuperação respondida",
-    order: 13,
+    order: 14,
     color: "#059669",
     is_final_stage: false,
   },
   {
     suffix: "DESINTERESSE",
     name: "Desinteresse",
-    order: 14,
+    order: 15,
     color: "#78716C",
     is_final_stage: true,
   },
   {
     suffix: "AGUARDANDO",
     name: "Aguardando",
-    order: 15,
+    order: 16,
     color: "#A78BFA",
     is_final_stage: false,
   },
   {
     suffix: "PRESENCA_CONFIRMADA",
     name: "Presença confirmada",
-    order: 16,
+    order: 17,
     color: "#059669",
     is_final_stage: true,
   },
   {
     suffix: "COMPRARAM",
     name: "Compraram",
-    order: 17,
+    order: 18,
     color: "#10B981",
     is_final_stage: true,
   },
   {
     suffix: "LEAD_PERDIDO",
     name: "Lead perdido",
-    order: 18,
+    order: 19,
     color: "#DC2626",
     is_final_stage: true,
   },
   {
     suffix: "LEAD_AUSENTE",
     name: "Lead ausente",
-    order: 19,
+    order: 20,
     color: "#991B1B",
     is_final_stage: true,
   },
   {
     suffix: "ATENDIMENTO_ENCERRADO",
     name: "Atendimento encerrado",
-    order: 20,
+    order: 21,
     color: "#6B7280",
     is_final_stage: true,
   },
   {
     suffix: "FEEDBACK",
     name: "Feedback",
-    order: 21,
+    order: 22,
     color: "#8B5CF6",
     is_final_stage: false,
   },
   {
     suffix: "RESPONDEU_FEEDBACK",
     name: "Respondeu feedback",
-    order: 22,
+    order: 23,
     color: "#EC4899",
     is_final_stage: true,
   },
@@ -221,7 +228,7 @@ function stageSuffixFromCode(stageCode: string, idBase: string): string | null {
 }
 
 /**
- * Garante pipeline padrão (PL_{idBase}) e as 18 etapas para o cliente.
+ * Garante pipeline padrão (PL_{idBase}) e todas as etapas para o cliente.
  * Migra leads de etapas legadas (7 etapas) quando possível e remove etapas órfãs.
  */
 export async function provisionDefaultCrmPipeline(

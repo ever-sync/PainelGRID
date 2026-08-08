@@ -12,6 +12,7 @@ export type KanbanColumn = {
 const DEFAULT_STAGE_BLUEPRINTS = [
   ["NOVO_LEAD", "Novo Lead", "#3B82F6"],
   ["TENTATIVA_CONTATO", "Tentativa de contato", "#8B5CF6"],
+  ["TENTATIVA_2_EMAIL", "Tentativa 2 - Email", "#0EA5E9"],
   ["LIGACAO", "Ligação", "#EC4899"],
   ["EM_CONTATO", "Em contato", "#7C3AED"],
   ["PRE_AGENDAMENTO", "Pré-agendamento", "#6366F1"],

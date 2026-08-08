@@ -1,20 +1,22 @@
-import { PrismaClient } from '@prisma/client';
-import { provisionDefaultCrmPipeline } from '../src/modules/crm/default-crm-pipeline';
+import { PrismaClient } from "@prisma/client";
+import { provisionDefaultCrmPipeline } from "../src/modules/crm/default-crm-pipeline";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const clients = await prisma.client.findMany({ select: { id: true, company_name: true } });
+  const clients = await prisma.client.findMany({
+    select: { id: true, company_name: true },
+  });
 
   if (clients.length === 0) {
-    console.log('[provision-crm] Nenhum cliente encontrado.');
+    console.log("[provision-crm] Nenhum cliente encontrado.");
     return;
   }
 
   for (const client of clients) {
     await provisionDefaultCrmPipeline(prisma, client.id);
     console.log(
-      `[provision-crm] Pipeline padrao (18 etapas) provisionado: ${client.company_name} (${client.id})`,
+      `[provision-crm] Pipeline padrao atualizado provisionado: ${client.company_name} (${client.id})`,
     );
   }
 
