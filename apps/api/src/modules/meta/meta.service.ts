@@ -3440,8 +3440,7 @@ export class MetaService implements OnModuleInit {
       }
 
       const assetSelection = assetSelections.find(
-        (asset) =>
-          asset.meta_connection.client_id === context.client.id,
+        (asset) => asset.meta_connection.client_id === context.client.id,
       );
       if (!assetSelection?.meta_connection) {
         this.logger.error(
@@ -3542,19 +3541,16 @@ export class MetaService implements OnModuleInit {
         },
       });
 
-      this.realtimeEvents.emitNewMessage(
-        context.client.id,
-        {
-          conversation_id: createdMessage.conversation_id,
-          message_id: createdMessage.id,
-          sender_type: createdMessage.sender_type,
-          sender_id: createdMessage.sender_id,
-          content: createdMessage.content,
-          media_id: createdMessage.media_id,
-          media_url: createdMessage.media_url,
-          created_at: createdMessage.created_at,
-        },
-      );
+      this.realtimeEvents.emitNewMessage(context.client.id, {
+        conversation_id: createdMessage.conversation_id,
+        message_id: createdMessage.id,
+        sender_type: createdMessage.sender_type,
+        sender_id: createdMessage.sender_id,
+        content: createdMessage.content,
+        media_id: createdMessage.media_id,
+        media_url: createdMessage.media_url,
+        created_at: createdMessage.created_at,
+      });
 
       void this.clientWebhook.dispatch(
         context.client.id,

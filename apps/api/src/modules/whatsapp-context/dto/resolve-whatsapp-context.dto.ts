@@ -3,7 +3,8 @@ import { IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
 export class ResolveWhatsappContextDto {
   @ApiProperty({
-    description: "phone_number_id do numero compartilhado que recebeu a mensagem",
+    description:
+      "phone_number_id do numero compartilhado que recebeu a mensagem",
   })
   @IsString()
   @MinLength(1)

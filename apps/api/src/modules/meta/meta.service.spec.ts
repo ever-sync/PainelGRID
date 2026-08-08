@@ -268,17 +268,19 @@ describe("MetaService", () => {
     });
     prisma.conversation.update.mockResolvedValue({});
     prisma.whatsAppAttributionEvent.create.mockResolvedValue({ id: "wa-1" });
-    jest.spyOn(service as any, "extractWhatsappMessagePayload").mockResolvedValue({
-      content: "Quero finalizar",
-      mediaId: null,
-      mediaUrl: null,
-    });
+    jest
+      .spyOn(service as any, "extractWhatsappMessagePayload")
+      .mockResolvedValue({
+        content: "Quero finalizar",
+        mediaId: null,
+        mediaUrl: null,
+      });
 
-    const processed = await (service as any).processWhatsappCloudMessagesWebhook({
+    const processed = await (
+      service as any
+    ).processWhatsappCloudMessagesWebhook({
       metadata: { phone_number_id: "shared-number" },
-      contacts: [
-        { wa_id: "5511999999999", profile: { name: "Maria Souza" } },
-      ],
+      contacts: [{ wa_id: "5511999999999", profile: { name: "Maria Souza" } }],
       messages: [
         {
           id: "wamid-inbound-b",

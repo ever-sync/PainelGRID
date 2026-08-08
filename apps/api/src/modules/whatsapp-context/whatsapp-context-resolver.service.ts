@@ -56,8 +56,7 @@ export class WhatsappContextResolverService {
       return this.buildAuthorized(
         selectedDispatch.client_id,
         selectedDispatch.lead_id,
-        selectedDispatch.event_id ??
-          selectedDispatch.lead.event_interest_id,
+        selectedDispatch.event_id ?? selectedDispatch.lead.event_interest_id,
         selectedDispatch.conversation_id,
         selectedDispatch.id,
         dispatch ? "provider_message_context" : "latest_template_dispatch",

@@ -1637,10 +1637,7 @@ export class LeadsService {
       automaticScheduledStage = await this.prisma.crmStage.findFirst({
         where: {
           client_id: lead.client_id,
-          code: clientIdToStageCode(
-            lead.client_id,
-            "PRESENCA_AGENDADA",
-          ),
+          code: clientIdToStageCode(lead.client_id, "PRESENCA_AGENDADA"),
         },
         select: { id: true, pipeline_id: true },
       });
