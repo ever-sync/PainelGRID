@@ -817,7 +817,7 @@ export class LeadsService {
     for (let i = 1; i < rows.length; i += 1) {
       const row = rows[i];
       const line = i + 1;
-      const name = (row[indexes.name] ?? "").trim();
+      const name = this.normalizePersonName(row[indexes.name] ?? "");
       if (!name) {
         skipped += 1;
         continue;
@@ -1077,7 +1077,7 @@ export class LeadsService {
       lead = (await this.prisma.lead.create({
         data: {
           client_id: targetClientId,
-          name: dto.name.trim(),
+          name: this.normalizePersonName(dto.name),
           email: dto.email?.toLowerCase().trim() ?? null,
           phone: normalizedPhone,
           source: dto.source,
@@ -3220,7 +3220,7 @@ export class LeadsService {
       const lead = (await tx.lead.create({
         data: {
           client_id: routing.clientId,
-          name: payload.nome.trim(),
+          name: this.normalizePersonName(payload.nome),
           email,
           phone,
           source: LeadSource.facebook_ads,
@@ -3568,7 +3568,7 @@ export class LeadsService {
       lead = (await this.prisma.lead.create({
         data: {
           client_id: dto.client_id,
-          name: dto.name.trim(),
+          name: this.normalizePersonName(dto.name),
           email,
           phone,
           source: dto.source,
@@ -4455,7 +4455,7 @@ export class LeadsService {
   ): Prisma.LeadUncheckedUpdateInput {
     const data: Prisma.LeadUncheckedUpdateInput = {};
     if (dto.name !== undefined) {
-      data.name = dto.name.trim();
+      data.name = this.normalizePersonName(dto.name);
     }
     if (dto.email !== undefined) {
       data.email = dto.email ? dto.email.toLowerCase().trim() : null;
@@ -4876,6 +4876,16 @@ export class LeadsService {
       );
     }
     return rows;
+  }
+
+  /**
+   * Nome vindo de fora chega com aspas em volta com frequencia — os
+   * formularios do Meta ja gravaram 57 leads como `"Fulano"`, e o nome
+   * aparece assim no chat, no CRM e nos relatorios. `trim()` sozinho nao
+   * resolve: so tira espaco. Aspas no meio ("Zé \"Grandão\" Silva") ficam.
+   */
+  private normalizePersonName(value: string): string {
+    return value.replace(/^[\s"'`]+/, "").replace(/[\s"'`]+$/, "");
   }
 
   private normalizeSource(value: string): Lead["source"] | null {

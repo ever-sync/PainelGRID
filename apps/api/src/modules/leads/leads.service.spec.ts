@@ -1953,4 +1953,24 @@ describe("LeadsService", () => {
       else process.env.APIBRASIL_TOKEN = previousToken;
     }
   });
+
+  describe("normalizacao de nome", () => {
+    // Os formularios do Meta ja gravaram 57 leads como `"Fulano"`, e o nome
+    // saia com aspas no chat, no CRM e nos relatorios.
+    const normalize = (value: string) =>
+      (
+        service as unknown as { normalizePersonName(v: string): string }
+      ).normalizePersonName(value);
+
+    it("remove aspas e espacos das pontas", () => {
+      expect(normalize('"Samuel Diniz"')).toBe("Samuel Diniz");
+      expect(normalize("  'Jose Osni' ")).toBe("Jose Osni");
+      expect(normalize("Camilla Siqueira")).toBe("Camilla Siqueira");
+    });
+
+    it("preserva aspas e apostrofos no meio do nome", () => {
+      expect(normalize('Ze "Grandao" Silva')).toBe('Ze "Grandao" Silva');
+      expect(normalize("Maria D'Avila")).toBe("Maria D'Avila");
+    });
+  });
 });

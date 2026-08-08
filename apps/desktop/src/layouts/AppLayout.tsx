@@ -554,11 +554,20 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     }
   }, []);
 
+  /**
+   * A conexao viva do layout. Sem isto, cada acao solta (trocar status, por
+   * exemplo) abria um socket novo que nunca era fechado.
+   */
+  const realtimeSocketRef = useRef<ReturnType<typeof connectRealtime> | null>(
+    null,
+  );
+
   useEffect(() => {
     const clientId = resolveClientId(user);
     if (!clientId) return;
 
     const socket = connectRealtime(clientId);
+    realtimeSocketRef.current = socket;
 
     const handleVendorCalled = (payload: {
       id: string;
@@ -697,6 +706,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       socket.off("stage_changed", handleStageChanged);
       socket.off("new_message", handleNewMessage);
       socket.disconnect();
+      realtimeSocketRef.current = null;
     };
   }, [user, pushNotification]);
 
@@ -745,14 +755,12 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     } catch {
       /* ignore */
     }
-    const clientId = resolveClientId(user);
-    if (clientId) {
-      const socket = connectRealtime(clientId);
-      socket.emit("vendor_status_change", {
-        vendor_id: user.id,
-        status: newStatus,
-      });
-    }
+    // Reaproveita a conexao do layout: o socket.io enfileira o emit se ainda
+    // estiver conectando, entao nao precisamos abrir outra.
+    realtimeSocketRef.current?.emit("vendor_status_change", {
+      vendor_id: user.id,
+      status: newStatus,
+    });
   };
 
   // ── Expand/Collapse Sidebar (Abrir e Fechar em todos os acessos) ──────────────

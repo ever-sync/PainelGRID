@@ -26,6 +26,9 @@ type N8nHistoryRow = {
   content: string;
 };
 
+/** Quanto a listagem espera pelo import antes de responder sem ele. */
+const N8N_SYNC_WAIT_MS = 2_000;
+
 @Injectable()
 export class ConversationsService {
   private readonly logger = new Logger(ConversationsService.name);
@@ -90,7 +93,15 @@ export class ConversationsService {
       throw new ForbiddenException("Usuario sem empresa vinculada");
     }
 
-    await this.syncN8nHistoryForClient(clientId);
+    // O import do historico do n8n roda ate 1000 mensagens por chamada e vive
+    // dentro desta requisicao. Esperamos so o comeco: se terminar rapido, as
+    // mensagens novas ja saem nesta resposta; se demorar, a lista responde e o
+    // import segue em background (a promessa fica no mapa de sync in-flight,
+    // entao a proxima chamada nao dispara outro).
+    await Promise.race([
+      this.syncN8nHistoryForClient(clientId),
+      new Promise((resolve) => setTimeout(resolve, N8N_SYNC_WAIT_MS)),
+    ]);
 
     const where: Prisma.ConversationWhereInput = clientId
       ? { client_id: clientId }
