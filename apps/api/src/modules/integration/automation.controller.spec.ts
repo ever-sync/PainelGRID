@@ -9,6 +9,8 @@ describe("AutomationController", () => {
   const leads = {
     countInitialTemplateQueue: jest.fn(),
     dispatchNextInitialWhatsappTemplate: jest.fn(),
+    countEmailAttempt2Queue: jest.fn(),
+    dispatchNextEmailAttempt2: jest.fn(),
   };
   const controller = new AutomationController(
     appointments as never,
@@ -70,5 +72,19 @@ describe("AutomationController", () => {
       processed: true,
     });
     expect(leads.dispatchNextInitialWhatsappTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  it("consulta a fila de recuperação por e-mail", async () => {
+    leads.countEmailAttempt2Queue.mockResolvedValue({ pending: 109 });
+    await expect(controller.emailAttempt2Status()).resolves.toEqual({
+      pending: 109,
+    });
+  });
+
+  it("processa somente um e-mail de recuperação", async () => {
+    leads.dispatchNextEmailAttempt2.mockResolvedValue({ processed: true });
+    await expect(controller.dispatchNextEmailAttempt2()).resolves.toEqual({
+      processed: true,
+    });
   });
 });

@@ -254,6 +254,9 @@ describe("LeadsService", () => {
       } as never,
       { upsert: jest.fn().mockResolvedValue({ id: "dispatch-1" }) } as never,
       appointmentsService as never,
+      {
+        sendCredentialRecoveryEmail: jest.fn(),
+      } as never,
     );
   });
 

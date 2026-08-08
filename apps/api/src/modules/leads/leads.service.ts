@@ -52,6 +52,7 @@ import { IntegrationPatchLeadDto } from "./dto/integration-patch-lead.dto";
 import { ReconcileLeadsDto } from "./dto/reconcile-leads.dto";
 import { UpdateLeadDto } from "./dto/update-lead.dto";
 import { RedisService } from "../../config/redis.service";
+import { MailService } from "../../mail/mail.service";
 import {
   buildLeadPhoneCandidates,
   isLeadEmailUniqueViolation,
@@ -243,6 +244,7 @@ export class LeadsService {
     private readonly redis: RedisService,
     private readonly dispatchTracking: DispatchTrackingService,
     private readonly appointmentsService: AppointmentsService,
+    private readonly mailService: MailService,
   ) {}
 
   private checkinVoucherSecret(): string {
@@ -487,6 +489,230 @@ export class LeadsService {
         to_stage: contactStage.code,
         dispatch,
       };
+    }
+
+    return { processed: false, sent: false, reason: "queue_empty" };
+  }
+
+  private async emailAttempt2Candidates() {
+    return this.prisma.lead.findMany({
+      where: {
+        deleted_at: null,
+        email: { not: null },
+        event_interest_id: { not: null },
+        crm_stage: { code: { endsWith: "_TENTATIVA_CONTATO" } },
+        event_interest: { status: "active" },
+        dispatch_events: { none: { dispatch_type: "email_attempt_2" } },
+      },
+      orderBy: [{ created_at: "asc" }, { id: "asc" }],
+      take: 1000,
+      select: {
+        id: true,
+        client_id: true,
+        name: true,
+        email: true,
+        created_at: true,
+        crm_stage_id: true,
+        crm_stage: { select: { id: true, code: true, name: true } },
+        crm_history: {
+          orderBy: { created_at: "desc" },
+          take: 1,
+          select: { created_at: true },
+        },
+        client: {
+          select: {
+            company_name: true,
+            whatsapp_number: true,
+            phone_number: true,
+          },
+        },
+        event_interest: {
+          select: { id: true, name: true, description: true },
+        },
+      },
+    });
+  }
+
+  private validRecoveryEmail(value: string | null): value is string {
+    return Boolean(
+      value && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim().toLowerCase()),
+    );
+  }
+
+  private recoveryWhatsappUrl(phone: string) {
+    return `https://wa.me/${phoneDigits(phone)}?text=${encodeURIComponent("FINALIZAR CREDENCIAMENTO")}`;
+  }
+
+  async countEmailAttempt2Queue() {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const candidates = await this.emailAttempt2Candidates();
+    const eligible = candidates.filter((lead) => {
+      const stageSince = lead.crm_history[0]?.created_at ?? lead.created_at;
+      const phone = lead.client.whatsapp_number ?? lead.client.phone_number;
+      return (
+        stageSince <= cutoff &&
+        this.validRecoveryEmail(lead.email) &&
+        Boolean(phone && phoneDigits(phone))
+      );
+    });
+    return {
+      pending: eligible.length,
+      cutoff: cutoff.toISOString(),
+      cadence_seconds: 10,
+    };
+  }
+
+  /** Envia um e-mail por execução e só muda a etapa após aceite do Resend. */
+  async dispatchNextEmailAttempt2() {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const candidates = await this.emailAttempt2Candidates();
+
+    for (const lead of candidates) {
+      const stageSince = lead.crm_history[0]?.created_at ?? lead.created_at;
+      const email = lead.email?.trim().toLowerCase() ?? null;
+      const destinationPhone =
+        lead.client.whatsapp_number ?? lead.client.phone_number;
+      const event = lead.event_interest;
+      if (
+        stageSince > cutoff ||
+        !this.validRecoveryEmail(email) ||
+        !destinationPhone ||
+        !phoneDigits(destinationPhone) ||
+        !event
+      ) {
+        continue;
+      }
+
+      const dispatchKey = `email-attempt-2:${lead.id}:${event.id}`;
+      try {
+        await this.prisma.dispatchEvent.create({
+          data: {
+            client_id: lead.client_id,
+            event_id: event.id,
+            lead_id: lead.id,
+            dispatch_key: dispatchKey,
+            workflow_key: "email-attempt-2",
+            dispatch_type: "email_attempt_2",
+            channel: "email",
+            provider: "resend",
+            status: "queued",
+            scheduled_at: new Date(),
+            metadata: { stage_since: stageSince.toISOString() },
+          },
+        });
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        ) {
+          continue;
+        }
+        throw error;
+      }
+
+      const whatsappUrl = this.recoveryWhatsappUrl(destinationPhone);
+      try {
+        const sent = await this.mailService.sendCredentialRecoveryEmail({
+          to: email,
+          leadName: lead.name,
+          eventName: event.name,
+          eventDescription: event.description,
+          clientName: lead.client.company_name,
+          whatsappUrl,
+        });
+        const targetStage = await this.prisma.crmStage.findFirst({
+          where: {
+            client_id: lead.client_id,
+            code: clientIdToStageCode(lead.client_id, "TENTATIVA_2_EMAIL"),
+          },
+          select: { id: true, code: true, name: true },
+        });
+        if (!targetStage) throw new Error("Etapa TENTATIVA_2_EMAIL ausente");
+
+        const actorId = this.config
+          .get<string>("LEADFLOW_INTEGRATION_ACTOR_USER_ID")
+          ?.trim();
+        await this.prisma.$transaction(async (tx) => {
+          await tx.dispatchEvent.update({
+            where: {
+              client_id_dispatch_key: {
+                client_id: lead.client_id,
+                dispatch_key: dispatchKey,
+              },
+            },
+            data: {
+              status: "sent",
+              sent_at: new Date(),
+              provider_message_id: sent.providerMessageId,
+              metadata: {
+                stage_since: stageSince.toISOString(),
+                subject: sent.subject,
+                whatsapp_url: whatsappUrl,
+              },
+            },
+          });
+          await tx.lead.update({
+            where: { id: lead.id },
+            data: { crm_stage_id: targetStage.id },
+          });
+          if (actorId) {
+            await tx.crmHistory.create({
+              data: {
+                lead_id: lead.id,
+                from_stage_id: lead.crm_stage_id,
+                to_stage_id: targetStage.id,
+                changed_by_user_id: actorId,
+                notes: "E-mail de recuperação enviado após 24h sem avanço",
+              },
+            });
+          }
+        });
+        await this.leadTimeline.record({
+          clientId: lead.client_id,
+          leadId: lead.id,
+          eventType: "stage_moved",
+          origin: "automation",
+          fromStageId: lead.crm_stage_id,
+          toStageId: targetStage.id,
+          fromValue: lead.crm_stage?.code ?? null,
+          toValue: targetStage.code,
+          actorId,
+          actorLabel: "Recuperação por e-mail 24h",
+          notes: "E-mail aceito pelo Resend; movido para Tentativa 2 - Email",
+        });
+        return {
+          processed: true,
+          sent: true,
+          lead_id: lead.id,
+          lead_name: lead.name,
+          client_id: lead.client_id,
+          event_id: event.id,
+          to_stage: targetStage.code,
+          provider_message_id: sent.providerMessageId,
+        };
+      } catch (error) {
+        await this.prisma.dispatchEvent.update({
+          where: {
+            client_id_dispatch_key: {
+              client_id: lead.client_id,
+              dispatch_key: dispatchKey,
+            },
+          },
+          data: {
+            status: "failed",
+            failed_at: new Date(),
+            failure_reason: (error as Error).message.slice(0, 2000),
+          },
+        });
+        return {
+          processed: true,
+          sent: false,
+          lead_id: lead.id,
+          client_id: lead.client_id,
+          event_id: event.id,
+          reason: "provider_or_stage_error",
+        };
+      }
     }
 
     return { processed: false, sent: false, reason: "queue_empty" };

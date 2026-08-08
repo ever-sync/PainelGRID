@@ -48,7 +48,7 @@ export class MailService {
     to: string;
     subject: string;
     html: string;
-  }): Promise<void> {
+  }): Promise<string | null> {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -68,6 +68,96 @@ export class MailService {
       const body = await response.text().catch(() => "");
       throw new Error(`Resend respondeu ${response.status}: ${body}`);
     }
+
+    const body = (await response.json().catch(() => null)) as {
+      id?: unknown;
+    } | null;
+    return typeof body?.id === "string" ? body.id : null;
+  }
+
+  async sendCredentialRecoveryEmail(params: {
+    to: string;
+    leadName: string;
+    eventName: string;
+    eventDescription: string | null;
+    clientName: string;
+    whatsappUrl: string;
+  }): Promise<{ providerMessageId: string | null; subject: string }> {
+    if (!this.apiKey) throw new Error("Resend nao configurado");
+
+    const subject = "IMPORTANTE: VOCÊ AINDA NÃO FINALIZOU SEU CREDENCIAMENTO";
+    const providerMessageId = await this.sendViaResend({
+      to: params.to,
+      subject,
+      html: this.buildCredentialRecoveryHtml(params),
+    });
+    this.logger.log("Email de recuperacao de credenciamento enviado");
+    return { providerMessageId, subject };
+  }
+
+  private buildCredentialRecoveryHtml(params: {
+    leadName: string;
+    eventName: string;
+    eventDescription: string | null;
+    clientName: string;
+    whatsappUrl: string;
+  }): string {
+    const escape = (value: string) =>
+      value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    const firstName = escape(
+      params.leadName.trim().split(/\s+/)[0] || params.leadName,
+    );
+    const eventName = escape(params.eventName);
+    const clientName = escape(params.clientName);
+    const whatsappUrl = escape(params.whatsappUrl);
+    const offerPattern =
+      /(desconto|taxa|entrada|financiamento|parcela|emplacamento|blindad|seminovo|fipe|transfer[eê]ncia|voucher|condi[cç][aã]o|oferta)/i;
+    const offers = (params.eventDescription ?? "")
+      .split(/\r?\n/)
+      .map((line) =>
+        line
+          .replace(/^\s*[-*•#]+\s*/, "")
+          .replace(/[*_`]/g, "")
+          .trim(),
+      )
+      .filter((line) => line.length >= 8 && line.length <= 180)
+      .filter((line) => offerPattern.test(line))
+      .filter((line) => !/obrigat[oó]rio|regra|prompt|assistente/i.test(line))
+      .slice(0, 4)
+      .map(escape);
+    const offerHtml = offers.length
+      ? `<div class="offers"><strong>Algumas condições do evento:</strong><ul>${offers
+          .map((offer) => `<li>${offer}</li>`)
+          .join("")}</ul></div>`
+      : `<div class="offers"><strong>Condições especiais estarão disponíveis durante o evento.</strong></div>`;
+
+    return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:24px 12px;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#17171b">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid #e7e7eb;border-radius:20px;overflow:hidden;box-shadow:0 8px 30px rgba(18,18,23,.07)">
+    <div style="background:#ff1838;padding:28px 34px;color:#fff">
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;opacity:.82">Atenção</div>
+      <h1 style="font-size:25px;line-height:1.2;margin:7px 0 0">Seu credenciamento ainda não foi finalizado</h1>
+    </div>
+    <div style="padding:32px 34px">
+      <p style="font-size:17px;margin:0 0 12px">Olá, <strong>${firstName}</strong>!</p>
+      <p style="font-size:15px;line-height:1.65;color:#555;margin:0 0 20px">Sua inscrição no <strong>${eventName}</strong> está quase pronta. Finalize agora para garantir sua credencial e receber as orientações do evento.</p>
+      ${offerHtml}
+      <div style="text-align:center;margin:30px 0 20px">
+        <a href="${whatsappUrl}" style="display:inline-block;background:#18a967;color:#fff;text-decoration:none;font-size:15px;font-weight:800;padding:15px 26px;border-radius:12px">FINALIZAR CREDENCIAMENTO</a>
+      </div>
+      <p style="font-size:12px;line-height:1.55;color:#8a8a94;margin:22px 0 0">Condições sujeitas à aprovação, disponibilidade e regras informadas no evento.</p>
+    </div>
+    <div style="padding:18px 34px;background:#fafafd;border-top:1px solid #eeeef2;text-align:center;color:#9a9aa4;font-size:12px">${clientName}</div>
+  </div>
+</body>
+</html>`;
   }
 
   async sendWelcome(params: {

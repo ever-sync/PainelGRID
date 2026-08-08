@@ -67,4 +67,18 @@ export class AutomationController {
   dispatchNextInitialTemplate() {
     return this.leads.dispatchNextInitialWhatsappTemplate();
   }
+
+  @Post("email-attempt-2/status")
+  @ApiOperation({
+    summary: "Consulta a fila de recuperação por e-mail após 24h",
+  })
+  emailAttempt2Status() {
+    return this.leads.countEmailAttempt2Queue();
+  }
+
+  @Post("email-attempt-2/next")
+  @ApiOperation({ summary: "Envia um e-mail de recuperação e avança a etapa" })
+  dispatchNextEmailAttempt2() {
+    return this.leads.dispatchNextEmailAttempt2();
+  }
 }
