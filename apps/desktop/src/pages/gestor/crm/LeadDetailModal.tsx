@@ -361,7 +361,9 @@ export function LeadDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-[3px]"
+      // A barra de abas do celular e fixa e cobre o rodape: sem esta folga o
+      // fim do modal (e o botao de fechar de quem rola ate embaixo) some.
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 pb-[calc(1rem+4.75rem+env(safe-area-inset-bottom))] backdrop-blur-[3px] md:pb-4"
       style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -369,7 +371,7 @@ export function LeadDetailModal({
     >
       <div
         className={clsx(
-          "flex h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] shadow-[0_32px_80px_rgba(0,0,0,0.28)]",
+          "flex h-full max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] shadow-[0_32px_80px_rgba(0,0,0,0.28)]",
           dark ? "bg-[#0f0f0f]" : "bg-white",
         )}
         onMouseDown={(e) => e.stopPropagation()}
@@ -377,7 +379,7 @@ export function LeadDetailModal({
         {/* ── Header ── */}
         <div
           className={clsx(
-            "flex shrink-0 items-start justify-between gap-4 px-6 py-5",
+            "flex shrink-0 items-start justify-between gap-3 px-4 py-4 sm:gap-4 sm:px-6 sm:py-5",
             dark ? "border-b border-[#1f1f1f]" : "border-b border-zinc-100",
           )}
         >
@@ -392,7 +394,7 @@ export function LeadDetailModal({
             </p>
             <h2
               className={clsx(
-                "mt-1 truncate text-2xl font-black tracking-tight",
+                "mt-1 truncate text-xl font-black tracking-tight sm:text-2xl",
                 dark ? "text-zinc-50" : "text-zinc-950",
               )}
             >
@@ -484,13 +486,14 @@ export function LeadDetailModal({
         {/* ── Pipeline progress bar ── */}
         <div
           className={clsx(
-            "shrink-0 px-6 py-4",
+            "shrink-0 px-4 py-3 sm:px-6 sm:py-4",
             dark
               ? "border-b border-[#1f1f1f] bg-[#080808]"
               : "border-b border-zinc-100 bg-zinc-50/60",
           )}
         >
-          <div className="flex items-center overflow-x-auto pb-1">
+          {/* A trilha rola sozinha; `min-w-0` evita que ela estique o modal. */}
+          <div className="flex min-w-0 items-center overflow-x-auto pb-1 [scrollbar-width:thin]">
             {progressStages.map((stage, idx) => {
               const isPast = idx < currentStageIndex;
               const isCurrent = idx === currentStageIndex;
@@ -578,14 +581,16 @@ export function LeadDetailModal({
         </div>
 
         {/* ── Body (left + right) ── */}
-        <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* Empilha no celular: lado a lado, a coluna fixa de 340px nao deixa
+            espaco para o painel da direita, que ficava cortado fora da tela. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
           {/* Left panel — dados do lead */}
           <aside
             className={clsx(
-              "flex w-[340px] shrink-0 flex-col overflow-y-auto",
+              "flex w-full shrink-0 flex-col lg:w-[340px] lg:overflow-y-auto",
               dark
-                ? "border-r border-[#1f1f1f] bg-[#080808]"
-                : "border-r border-zinc-100 bg-zinc-50/40",
+                ? "border-b border-[#1f1f1f] bg-[#080808] lg:border-b-0 lg:border-r"
+                : "border-b border-zinc-100 bg-zinc-50/40 lg:border-b-0 lg:border-r",
             )}
           >
             <div className="px-6 py-5">
@@ -882,7 +887,7 @@ export function LeadDetailModal({
           </aside>
 
           {/* Right panel — histórico / abas */}
-          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <main className="flex min-w-0 flex-1 flex-col lg:overflow-hidden">
             {/* Tabs */}
             <div
               className={clsx(
