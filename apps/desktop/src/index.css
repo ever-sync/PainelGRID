@@ -12,6 +12,10 @@
   }
 
   html {
+    /* `manipulation` derruba o zoom de duplo toque sem atrasar o clique. */
+    touch-action: manipulation;
+    /* Impede o iOS de reflowar a fonte ao girar o aparelho. */
+    -webkit-text-size-adjust: 100%;
     font-family:
       ui-sans-serif,
       system-ui,

@@ -883,6 +883,14 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
   const navItems = getNavItems(user);
   const profileNavItems = getProfileNavItems(user);
   const settingsPath = `/${user.role}/configuracao`;
+  /**
+   * A barra inferior carrega só o essencial do dia a dia — no gestor eram os
+   * 7 itens em duas fileiras, ocupando meia tela. O resto continua no menu
+   * do topo, que lista a navegação inteira.
+   */
+  const pickByHref = (href: string) =>
+    navItems.find((item) => item.href === href) ?? null;
+
   const mobileNavItems =
     user.role === "vendedor"
       ? [navItems[0], navItems[1], null, navItems[2], navItems[3]]
@@ -898,7 +906,13 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
               label: "Ajustes",
             },
           ]
-        : navItems;
+        : user.role === "gestor"
+          ? [
+              pickByHref("/gestor/crm"),
+              pickByHref("/gestor/dashboard"),
+              pickByHref("/gestor/chat"),
+            ]
+          : navItems;
   const handleLogout = () => {
     onLogout();
     navigate("/login");
@@ -1702,7 +1716,9 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
             "grid items-end gap-1",
             user.role === "vendedor" || user.role === "recepcao"
               ? "grid-cols-5"
-              : "grid-cols-4",
+              : user.role === "gestor"
+                ? "grid-cols-3"
+                : "grid-cols-4",
           )}
         >
           {mobileNavItems.map((item, index) =>
