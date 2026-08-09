@@ -442,10 +442,12 @@ export function StageColumn({
         "flex flex-col gap-2",
         // No modo compacto a coluna conserva a altura propria. No Kanban, ela
         // ocupa exatamente a altura do quadro para que apenas os cards rolem.
-        "h-[calc(100vh-11.5rem)] min-h-[36rem]",
+        // O piso de 36rem vale no desktop; no celular ele deixava a coluna
+        // vazia com 576px de altura, empurrando o resto da tela.
+        "h-[calc(100vh-11.5rem)] md:min-h-[36rem]",
         fillHeight
           ? "w-[272px] shrink-0 md:h-full md:max-h-full md:min-h-0"
-          : "w-full",
+          : "w-full min-w-0 max-w-full",
       )}
     >
       {/* ── Column header ── */}

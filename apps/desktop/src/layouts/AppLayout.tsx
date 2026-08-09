@@ -1176,7 +1176,11 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
           isSidebarExpanded ? "md:pl-[280px]" : "md:pl-[112px]",
           isImmersiveChatRoute
             ? "overflow-hidden p-2 md:p-0"
-            : "overflow-y-auto pt-[calc(4rem+env(safe-area-inset-top))] pb-0 md:pt-0",
+            : // `overflow-x-hidden` e o que impede uma tabela ou um quadro
+              // largo demais de arrastar a pagina inteira para o lado: sem
+              // ele, o cabecalho e a busca saiam da tela junto com o conteudo.
+              // Quem precisa rolar na horizontal ja tem o proprio scroller.
+              "overflow-y-auto overflow-x-hidden pt-[calc(4rem+env(safe-area-inset-top))] pb-0 md:pt-0",
           // Board (kanban): no desktop a pagina controla o proprio scroll interno.
           isBoardRoute && "md:overflow-hidden",
         )}

@@ -1569,7 +1569,9 @@ export function CRMPage() {
   return (
     <div
       className={clsx(
-        "flex flex-col gap-6",
+        // `min-w-0` e `max-w-full`: sem eles, uma coluna ou um card largo
+        // estica a raiz e a pagina toda passa a rolar na horizontal.
+        "flex min-w-0 max-w-full flex-col gap-6",
         // Preenche a altura util do layout (mesma faixa do sidebar fixo).
         viewMode === "kanban" && "md:h-full md:min-h-0 md:overflow-hidden",
         isDarkMode && "dashboard-dark bg-black",
@@ -1837,7 +1839,7 @@ export function CRMPage() {
       {/* Area do board: precisa ser irma do cabecalho (e nao filha dele) para
           herdar a altura util da raiz — e so assim o `flex-1`/`h-full` das
           colunas resolve e os cards ganham scroll proprio. */}
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <DndContext
           sensors={sensors}
           onDragStart={handleDragStart}
@@ -1966,8 +1968,8 @@ export function CRMPage() {
             // colunas de 272px nao cabe em tela estreita, e arrastar um card
             // para uma coluna fora da viewport e impraticavel — para trocar de
             // etapa aqui, use a trilha de etapas dentro do card.
-            <div className="flex min-h-0 flex-1 flex-col gap-3">
-              <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:thin]">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+              <div className="flex min-w-0 gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:thin]">
                 {visibleStages.map((stage) => {
                   const isActive = activeMobileStage?.id === stage.id;
                   const count = cardFiltersActive
