@@ -395,6 +395,7 @@ export function ConversationSidebar({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  className,
 }: {
   clients: Client[];
   selectedClientId: string;
@@ -412,11 +413,14 @@ export function ConversationSidebar({
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
+  /** Permite a pagina esconder a lista quando a conversa ocupa a tela. */
+  className?: string;
 }) {
   return (
     <aside
       className={clsx(
-        "flex h-full w-full lg:w-[320px] xl:w-[340px] shrink-0 min-h-0 flex-col border-r",
+        "h-full w-full lg:w-[320px] xl:w-[340px] shrink-0 min-h-0 flex-col border-r lg:flex",
+        className ?? "flex",
         dark
           ? "border-zinc-800/80 bg-[#111217]"
           : "border-zinc-200/80 bg-white",

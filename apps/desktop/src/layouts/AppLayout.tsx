@@ -1175,7 +1175,9 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
           "h-screen md:pr-4 md:py-4 transition-all duration-300",
           isSidebarExpanded ? "md:pl-[280px]" : "md:pl-[112px]",
           isImmersiveChatRoute
-            ? "overflow-hidden p-2 md:p-0"
+            ? // A barra de abas e fixa e cobre ~4.75rem do rodape: sem esta
+              // folga o campo de digitar do chat fica atras dela no celular.
+              "overflow-hidden p-2 pb-[calc(4.75rem+env(safe-area-inset-bottom))] md:p-0"
             : // `overflow-x-hidden` e o que impede uma tabela ou um quadro
               // largo demais de arrastar a pagina inteira para o lado: sem
               // ele, o cabecalho e a busca saiam da tela junto com o conteudo.

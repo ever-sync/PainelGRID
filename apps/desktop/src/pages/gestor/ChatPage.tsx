@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import type { Socket } from "socket.io-client";
 import {
+  ArrowLeft,
   CalendarDays,
   Contact,
   Folder,
@@ -179,6 +180,25 @@ function stubLead(conv: Conversation, clientId: string): Lead {
   };
 }
 
+/** Abaixo do breakpoint `lg` do Tailwind, onde o painel deixa de ter duas colunas. */
+function useIsNarrowChatViewport() {
+  const query = "(max-width: 1023px)";
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(query).matches,
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const handleChange = (event: MediaQueryListEvent) =>
+      setIsNarrow(event.matches);
+    setIsNarrow(media.matches);
+    media.addEventListener("change", handleChange);
+    return () => media.removeEventListener("change", handleChange);
+  }, []);
+
+  return isNarrow;
+}
+
 export function ChatPage() {
   const { user, gestorClientId, setGestorClientId } = useGestorClient();
   const [searchParams] = useSearchParams();
@@ -192,6 +212,15 @@ export function ChatPage() {
     user.role === "gestor" ? "" : (user.client_id ?? ""),
   );
   const [selectedId, setSelectedId] = useState("");
+  /**
+   * Abaixo de `lg` a lista e a conversa não cabem lado a lado — uma de cada
+   * vez, como em qualquer app de mensagem. Acima, as duas convivem.
+   */
+  const isNarrowChat = useIsNarrowChatViewport();
+  const isNarrowChatRef = useRef(isNarrowChat);
+  useEffect(() => {
+    isNarrowChatRef.current = isNarrowChat;
+  }, [isNarrowChat]);
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
   /** `search` com debounce — é este que vai para a API. */
@@ -671,7 +700,9 @@ export function ChatPage() {
         setConversations(mapped);
         setHasMoreConversations(mapped.length === CONVERSATIONS_PAGE_SIZE);
         setLeads(mappedLeads);
-        if (mapped[0]?.id) {
+        // No celular a lista e a primeira tela: abrir uma conversa sozinho
+        // esconderia a lista logo de cara.
+        if (mapped[0]?.id && !isNarrowChatRef.current) {
           openConversation(mapped[0].id);
         } else {
           setSelectedId("");
@@ -797,6 +828,36 @@ export function ChatPage() {
   const profileLead = selected
     ? (selectedLead ?? stubLead(selected, selected.client_id))
     : undefined;
+
+  /**
+   * Ancora a conversa na última mensagem ao abrir. Um `scrollTo` só não basta:
+   * a altura ainda muda depois do primeiro paint (imagens, áudio, fontes), e o
+   * fim da conversa escapa para baixo. Reancoramos enquanto a altura crescer.
+   */
+  useEffect(() => {
+    if (!selectedId) return;
+    const viewport = conversationScrollRef.current;
+    if (!viewport) return;
+
+    let lastHeight = -1;
+    let frame = 0;
+    const deadline = Date.now() + 1200;
+
+    const anchor = () => {
+      const current = conversationScrollRef.current;
+      if (!current) return;
+      if (current.scrollHeight !== lastHeight) {
+        lastHeight = current.scrollHeight;
+        current.scrollTop = current.scrollHeight;
+      }
+      if (Date.now() < deadline) {
+        frame = window.requestAnimationFrame(anchor);
+      }
+    };
+
+    frame = window.requestAnimationFrame(anchor);
+    return () => window.cancelAnimationFrame(frame);
+  }, [selectedId, selected?.messages.length]);
 
   useEffect(() => {
     if (!requestedLeadId) return;
@@ -1530,8 +1591,13 @@ export function ChatPage() {
           : "border-zinc-200/80 bg-white",
       )}
     >
-      <div className="flex flex-col lg:flex-row h-full min-h-0 w-full">
+      <div className="flex h-full min-h-0 w-full flex-col lg:flex-row">
         <ConversationSidebar
+          className={clsx(
+            // Uma tela de cada vez no celular: com a conversa aberta, a lista
+            // sai de cena em vez de empurrar a conversa para fora da viewport.
+            isNarrowChat && selected ? "hidden" : "flex",
+          )}
           clients={clients}
           selectedClientId={selectedClientId}
           onSelectClientId={handleSelectChatClient}
@@ -1551,10 +1617,26 @@ export function ChatPage() {
 
         <main
           className={clsx(
-            "relative flex flex-1 min-h-0 flex-col",
+            "relative min-h-0 flex-1 flex-col",
+            isNarrowChat && !selected ? "hidden" : "flex",
             isDarkMode ? "bg-[#0b0c10]" : "bg-zinc-50/50",
           )}
         >
+          {isNarrowChat && selected ? (
+            <button
+              type="button"
+              onClick={() => setSelectedId("")}
+              className={clsx(
+                "flex shrink-0 items-center gap-2 border-b px-4 py-3 text-sm font-semibold transition-colors",
+                isDarkMode
+                  ? "border-zinc-800/80 bg-[#15161b] text-zinc-200 hover:bg-zinc-800/60"
+                  : "border-zinc-100 bg-white text-zinc-700 hover:bg-zinc-50",
+              )}
+            >
+              <ArrowLeft size={18} />
+              <span className="truncate">Conversas</span>
+            </button>
+          ) : null}
           {selected && profileLead ? (
             <>
               <ChatThread
