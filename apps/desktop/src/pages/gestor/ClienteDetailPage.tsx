@@ -106,6 +106,7 @@ import {
 } from "../../services/users";
 import { listClientStaff } from "../../services/staff";
 import {
+  createLead,
   deleteLead,
   fetchAllLeads,
   listLeads,
@@ -343,6 +344,15 @@ export function ClienteDetailPage() {
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [leadProfileOpen, setLeadProfileOpen] = useState<Lead | null>(null);
   const [leadEditing, setLeadEditing] = useState<Lead | null>(null);
+  const [leadCreating, setLeadCreating] = useState(false);
+  const [leadCreateOptionsLoading, setLeadCreateOptionsLoading] =
+    useState(false);
+  const [leadCreateEventId, setLeadCreateEventId] = useState("");
+  const [leadCreatePipelineId, setLeadCreatePipelineId] = useState("");
+  const [leadCreateStageId, setLeadCreateStageId] = useState("");
+  const [leadCreatePipelines, setLeadCreatePipelines] = useState<
+    ApiCrmPipeline[]
+  >([]);
   const [leadFormName, setLeadFormName] = useState("");
   const [leadFormEmail, setLeadFormEmail] = useState("");
   const [leadFormPhone, setLeadFormPhone] = useState("");
@@ -2327,6 +2337,113 @@ export function ClienteDetailPage() {
     setLeadFormNotes(lead.notes);
     setLeadFormBirthDate(lead.birth_date?.slice(0, 10) ?? "");
     setLeadsActionMessage("");
+  }
+
+  async function openLeadCreator() {
+    const clientId = id ?? "";
+    const session = readStoredSession();
+    if (!clientId || !isUuid(clientId) || !session?.accessToken) {
+      setLeadsActionMessage("Sessão expirada.");
+      return;
+    }
+
+    setLeadFormName("");
+    setLeadFormEmail("");
+    setLeadFormPhone("");
+    setLeadFormSource("manual");
+    setLeadFormStatus("pending");
+    setLeadFormNotes("");
+    setLeadFormBirthDate("");
+    setLeadCreateEventId("");
+    setLeadCreatePipelineId("");
+    setLeadCreateStageId("");
+    setLeadsActionMessage("");
+    setLeadCreating(true);
+    setLeadCreateOptionsLoading(true);
+
+    try {
+      const [events, pipelines] = await Promise.all([
+        listEvents({ client_id: clientId }, session.accessToken),
+        listCrmPipelines(clientId, session.accessToken),
+      ]);
+      const activePipelines = pipelines.filter(
+        (pipeline) => pipeline.is_active,
+      );
+      const defaultPipeline = activePipelines[0] ?? pipelines[0];
+      const defaultStage = [...(defaultPipeline?.stages ?? [])].sort(
+        (a, b) => a.display_order - b.display_order,
+      )[0];
+
+      setLeadRoutingEvents(
+        events.map((event) => ({ id: event.id, name: event.name })),
+      );
+      setLeadCreatePipelines(
+        activePipelines.length ? activePipelines : pipelines,
+      );
+      setLeadCreatePipelineId(defaultPipeline?.id ?? "");
+      setLeadCreateStageId(defaultStage?.id ?? "");
+    } catch (error) {
+      setLeadsActionMessage(
+        getErrorMessage(error, "Não foi possível carregar eventos e funis."),
+      );
+    } finally {
+      setLeadCreateOptionsLoading(false);
+    }
+  }
+
+  function closeLeadCreator() {
+    if (leadSaving) return;
+    setLeadCreating(false);
+  }
+
+  async function handleCreateLead() {
+    const clientId = id ?? "";
+    if (!leadFormName.trim()) {
+      setLeadsActionMessage("Informe o nome do lead.");
+      return;
+    }
+    if (!leadFormPhone.trim() && !leadFormEmail.trim()) {
+      setLeadsActionMessage("Informe ao menos o telefone ou o e-mail do lead.");
+      return;
+    }
+
+    const session = readStoredSession();
+    if (!clientId || !isUuid(clientId) || !session?.accessToken) {
+      setLeadsActionMessage("Sessão expirada.");
+      return;
+    }
+
+    setLeadSaving(true);
+    setLeadsActionMessage("");
+    try {
+      const created = await createLead(
+        {
+          client_id: clientId,
+          name: leadFormName.trim(),
+          email: leadFormEmail.trim() || null,
+          phone: leadFormPhone.trim() || null,
+          source: leadFormSource,
+          event_interest_id: leadCreateEventId || null,
+          crm_pipeline_id: leadCreatePipelineId || null,
+          crm_stage_id: leadCreateStageId || null,
+          confirmation_status: leadFormStatus,
+          notes: leadFormNotes.trim() || null,
+          birth_date: leadFormBirthDate || null,
+        },
+        session.accessToken,
+      );
+      const mapped = mapApiLeadToLead(created);
+      setDetailLeads((current) => [mapped, ...(current ?? [])]);
+      setLeadCreating(false);
+      setLeadsPage(1);
+      setLeadsActionMessage("Lead criado e vinculado ao cliente com sucesso.");
+    } catch (error) {
+      setLeadsActionMessage(
+        getErrorMessage(error, "Não foi possível criar o lead."),
+      );
+    } finally {
+      setLeadSaving(false);
+    }
   }
 
   function openLeadProfile(lead: Lead) {
@@ -5109,6 +5226,13 @@ export function ClienteDetailPage() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button
+                  size="sm"
+                  icon={<Plus size={14} />}
+                  onClick={() => void openLeadCreator()}
+                >
+                  Criar lead
+                </Button>
+                <Button
                   variant="secondary"
                   size="sm"
                   icon={<RefreshCcw size={14} />}
@@ -6612,6 +6736,204 @@ export function ClienteDetailPage() {
             </div>
           </div>
         ) : null}
+      </Modal>
+
+      <Modal
+        open={leadCreating}
+        onClose={closeLeadCreator}
+        title="Criar lead"
+        size="lg"
+        dark={isDarkMode}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={closeLeadCreator}
+              isDisabled={leadSaving}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => void handleCreateLead()}
+              loading={leadSaving}
+              isDisabled={leadCreateOptionsLoading}
+            >
+              Criar lead
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="space-y-1.5 sm:col-span-2">
+            <span className="text-xs font-semibold text-gray-500">Cliente</span>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700">
+              {apiClient?.company_name ?? "Cliente selecionado"}
+            </div>
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-gray-500">
+              Nome completo
+            </span>
+            <input
+              autoFocus
+              value={leadFormName}
+              onChange={(event) => setLeadFormName(event.target.value)}
+              placeholder="Nome do lead"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-gray-500">
+              Telefone
+            </span>
+            <input
+              value={leadFormPhone}
+              onChange={(event) => setLeadFormPhone(event.target.value)}
+              placeholder="+55 (00) 00000-0000"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-gray-500">E-mail</span>
+            <input
+              type="email"
+              value={leadFormEmail}
+              onChange={(event) => setLeadFormEmail(event.target.value)}
+              placeholder="lead@email.com"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-gray-500">
+              Data de nascimento
+            </span>
+            <input
+              type="date"
+              value={leadFormBirthDate}
+              onChange={(event) => setLeadFormBirthDate(event.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </label>
+          <label className="space-y-1.5 sm:col-span-2">
+            <span className="text-xs font-semibold text-gray-500">
+              Evento de interesse
+            </span>
+            <select
+              value={leadCreateEventId}
+              onChange={(event) => setLeadCreateEventId(event.target.value)}
+              disabled={leadCreateOptionsLoading}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-50"
+            >
+              <option value="">Sem evento vinculado</option>
+              {leadRoutingEvents.map((event) => (
+                <option key={event.id} value={event.id}>
+                  {event.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-gray-500">
+              Pipeline
+            </span>
+            <select
+              value={leadCreatePipelineId}
+              onChange={(event) => {
+                const pipelineId = event.target.value;
+                const pipeline = leadCreatePipelines.find(
+                  (item) => item.id === pipelineId,
+                );
+                const firstStage = [...(pipeline?.stages ?? [])].sort(
+                  (a, b) => a.display_order - b.display_order,
+                )[0];
+                setLeadCreatePipelineId(pipelineId);
+                setLeadCreateStageId(firstStage?.id ?? "");
+              }}
+              disabled={leadCreateOptionsLoading}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-50"
+            >
+              <option value="">Sem pipeline</option>
+              {leadCreatePipelines.map((pipeline) => (
+                <option key={pipeline.id} value={pipeline.id}>
+                  {pipeline.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-gray-500">
+              Etapa inicial
+            </span>
+            <select
+              value={leadCreateStageId}
+              onChange={(event) => setLeadCreateStageId(event.target.value)}
+              disabled={leadCreateOptionsLoading || !leadCreatePipelineId}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-50"
+            >
+              <option value="">Selecione uma etapa</option>
+              {(
+                leadCreatePipelines.find(
+                  (pipeline) => pipeline.id === leadCreatePipelineId,
+                )?.stages ?? []
+              )
+                .slice()
+                .sort((a, b) => a.display_order - b.display_order)
+                .map((stage) => (
+                  <option key={stage.id} value={stage.id}>
+                    {stage.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-gray-500">Fonte</span>
+            <select
+              value={leadFormSource}
+              onChange={(event) =>
+                setLeadFormSource(event.target.value as LeadSource)
+              }
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              {LEAD_SOURCE_OPTIONS.filter(
+                (option) => option.value !== "all",
+              ).map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-gray-500">Status</span>
+            <select
+              value={leadFormStatus}
+              onChange={(event) =>
+                setLeadFormStatus(event.target.value as ConfirmationStatus)
+              }
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              {LEAD_STATUS_OPTIONS.filter(
+                (option) => option.value !== "all",
+              ).map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1.5 sm:col-span-2">
+            <span className="text-xs font-semibold text-gray-500">
+              Observações
+            </span>
+            <textarea
+              value={leadFormNotes}
+              onChange={(event) => setLeadFormNotes(event.target.value)}
+              rows={3}
+              placeholder="Informações adicionais sobre o lead"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </label>
+        </div>
       </Modal>
 
       <Modal

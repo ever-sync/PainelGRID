@@ -1952,6 +1952,11 @@ export class LeadsService {
         ? await tx.$executeRaw(Prisma.sql`
             DELETE FROM agent_chat_history
             WHERE session_id = ${id}
+              -- O Rubinho v2 usa o chat/session ID composto no formato
+              -- "rubinho-v2:<cliente>:<agente>:<lead_id>". Apagar somente o
+              -- UUID isolado deixava esse historico disponivel para uma nova
+              -- conversa criada posteriormente com o mesmo telefone.
+              OR session_id LIKE ('%:' || ${id}::text)
               OR session_id = ANY(${conversationIds}::text[])
               OR (
                 ${lead.phone ?? null}::text IS NOT NULL

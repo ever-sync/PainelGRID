@@ -316,7 +316,9 @@ export type CreateLeadBody = {
   event_interest_id?: string | null;
   crm_pipeline_id?: string | null;
   crm_stage_id?: string | null;
+  confirmation_status?: ConfirmationStatus;
   notes?: string | null;
+  birth_date?: string | null;
 };
 
 export function createLead(body: CreateLeadBody, token: string) {
