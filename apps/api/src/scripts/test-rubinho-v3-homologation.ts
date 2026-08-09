@@ -78,7 +78,8 @@ async function main() {
     systemMessage,
     /REGISTRO OBRIGATORIO DE RESPOSTAS V6 — PRIORIDADE MAXIMA/,
   );
-  assert.match(systemMessage, /nome completo do acompanhante/);
+  assert.match(systemMessage, /WAITING_COMPANION_NAMES/);
+  assert.match(systemMessage, /N acompanhante\(s\): Nome completo/);
 
   const validator = String(
     node(homologation, "VALIDADOR - ANALISAR").parameters.jsCode ?? "",
