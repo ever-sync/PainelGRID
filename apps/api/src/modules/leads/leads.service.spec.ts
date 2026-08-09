@@ -60,7 +60,7 @@ describe("LeadsService", () => {
     agentActionLog: { deleteMany: jest.Mock };
     whatsAppAttributionEvent: { deleteMany: jest.Mock };
     dispatchEvent: { deleteMany: jest.Mock };
-    operationalIssue: { deleteMany: jest.Mock };
+    operationalIssue: { deleteMany: jest.Mock; upsert: jest.Mock };
     leadTimeline: { deleteMany: jest.Mock };
     webhookEvent: { deleteMany: jest.Mock };
     $transaction: jest.Mock;
@@ -132,7 +132,7 @@ describe("LeadsService", () => {
       agentActionLog: { deleteMany: jest.fn() },
       whatsAppAttributionEvent: { deleteMany: jest.fn() },
       dispatchEvent: { deleteMany: jest.fn() },
-      operationalIssue: { deleteMany: jest.fn() },
+      operationalIssue: { deleteMany: jest.fn(), upsert: jest.fn() },
       leadTimeline: { deleteMany: jest.fn() },
       webhookEvent: { deleteMany: jest.fn() },
       $transaction: jest.fn(),

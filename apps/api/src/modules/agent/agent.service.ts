@@ -3,6 +3,7 @@ import { AppointmentStatus, EventStatus } from "@prisma/client";
 import { PrismaService } from "../../config/prisma.service";
 import { GetAgentEventsAvailabilityQueryDto } from "./dto/get-agent-events-availability-query.dto";
 import { GetAgentWhatsappContextQueryDto } from "./dto/get-agent-whatsapp-context-query.dto";
+import { deriveRubinhoConversationState } from "./rubinho-conversation-state";
 
 const ACTIVE_APPOINTMENT_STATUSES = [
   AppointmentStatus.proposed,
@@ -138,6 +139,19 @@ export class AgentService {
         created_at: this.toIsoString(message.created_at),
       }));
 
+    const previousStatePayload =
+      conversationState?.state_payload &&
+      typeof conversationState.state_payload === "object" &&
+      !Array.isArray(conversationState.state_payload)
+        ? conversationState.state_payload
+        : {};
+    const canonicalState = deriveRubinhoConversationState(lead, {
+      handoffRequired: conversationState?.handoff_required ?? false,
+      previouslyCompleted:
+        (previousStatePayload as { current_step?: unknown }).current_step ===
+        "COMPLETED",
+    });
+
     return {
       lead: {
         id: lead.id,
@@ -232,10 +246,15 @@ export class AgentService {
             last_agent_action: conversationState.last_agent_action,
             handoff_required: conversationState.handoff_required,
             handoff_reason: conversationState.handoff_reason,
-            state_payload: conversationState.state_payload,
+            state_payload: {
+              ...previousStatePayload,
+              ...canonicalState,
+              state_source: "api_persisted_lead",
+            },
             updated_at: this.toIsoString(conversationState.updated_at),
           }
         : null,
+      canonical_state: canonicalState,
       flags: {
         has_active_appointment: appointments.some((appointment) =>
           ACTIVE_APPOINTMENT_STATUSES.some(

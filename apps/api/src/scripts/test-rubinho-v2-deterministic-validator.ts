@@ -125,7 +125,24 @@ async function main() {
   assert.equal(finalized.validator_blocked, false);
   assert.match(String(finalized.output), /credencial foi confirmada/i);
 
-  console.log(JSON.stringify({ passed: 5, failed: 0 }));
+  const completedQuestion = run(code, {
+    step: "COMPLETED",
+    incoming: "Quais são as ofertas?",
+    output: "As condições incluem bônus na troca e taxa especial, conforme disponibilidade.",
+    lead: {
+      companions: "Sem acompanhantes",
+      store_visit_datetime: "2026-08-15T12:00:00.000Z",
+      description: "Carro na troca: não",
+      confirmation_status: "scheduled",
+      crm_stage_code: "CLIENTE_PRESENCA_AGENDADA",
+      active_appointment: { id: "appointment-1" },
+    },
+  });
+  assert.equal(completedQuestion.v2_expected_step, "COMPLETED");
+  assert.equal(completedQuestion.validator_blocked, false);
+  assert.match(String(completedQuestion.output), /bônus na troca/i);
+
+  console.log(JSON.stringify({ passed: 6, failed: 0 }));
 }
 
 main();

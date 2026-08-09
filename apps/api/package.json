@@ -26,6 +26,8 @@
     "db:seed": "ts-node prisma/seed.ts",
     "db:provision-crm": "ts-node prisma/provision-crm.ts",
     "db:backfill-timeline": "ts-node prisma/backfill-timeline.ts",
+    "rubinho:recover": "ts-node src/scripts/recover-rubinho-conversations.ts",
+    "rubinho:test-homologation": "ts-node src/scripts/test-rubinho-v3-homologation.ts",
     "db:studio": "prisma studio"
   },
   "prisma": {

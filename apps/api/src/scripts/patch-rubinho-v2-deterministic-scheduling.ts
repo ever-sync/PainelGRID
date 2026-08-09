@@ -6,6 +6,7 @@ type WorkflowNode = {
   position: [number, number];
   parameters: Record<string, unknown>;
   credentials?: Record<string, unknown>;
+  webhookId?: string;
 };
 
 type Workflow = {
@@ -13,20 +14,26 @@ type Workflow = {
   name: string;
   nodes: WorkflowNode[];
   connections: Record<string, unknown>;
+  settings?: Record<string, unknown>;
 };
 
 const baseUrl =
   process.env.N8N_BASE_URL ?? "https://n9n.gridlabs.digital/api/v1";
 const apiKey = process.env.N8N_API_KEY;
+const sourceId =
+  process.env.N8N_SOURCE_WORKFLOW_ID ??
+  process.env.N8N_TARGET_WORKFLOW_ID ??
+  "rQ92Kohukkw7X7ex";
 const targetId = process.env.N8N_TARGET_WORKFLOW_ID;
+const allowUpdateExisting =
+  process.env.N8N_ALLOW_UPDATE_EXISTING === "true";
 const automationSourceId =
   process.env.N8N_AUTOMATION_SOURCE_WORKFLOW_ID ?? "BFOlwmNldv2rWGnM";
 
-if (!apiKey || !targetId) {
-  throw new Error("N8N_API_KEY e N8N_TARGET_WORKFLOW_ID sao obrigatorios");
+if (!apiKey) {
+  throw new Error("N8N_API_KEY e obrigatoria");
 }
 const safeApiKey = apiKey;
-const safeTargetId = targetId;
 
 async function n8n<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -117,8 +124,10 @@ const hasDate = Boolean(lead.store_visit_datetime);
 const hasTrade = description.startsWith('carro na troca:');
 const tradeYes = description.includes('carro na troca: sim');
 const hasPlate = Boolean(lead.vehicle_plate?.trim());
+const alreadyCompleted = preStep === 'COMPLETED' || ['confirmed','checked_in','closed'].includes(String(lead.confirmation_status ?? ''));
 let postStep;
-if (!hasFullName) postStep = 'WAITING_FULL_NAME';
+if (alreadyCompleted) postStep = 'COMPLETED';
+else if (!hasFullName) postStep = 'WAITING_FULL_NAME';
 else if (!hasCompanions) postStep = 'WAITING_COMPANIONS';
 else if (!noCompanions && companionNamesPending) postStep = 'WAITING_COMPANION_NAMES';
 else if (!hasDate) postStep = 'WAITING_EVENT_DATE';
@@ -154,7 +163,7 @@ const autoSchedule = selected ? {
 if (preStep === 'WAITING_EVENT_DATE' && candidates.size > 1) {
   blocked = true;
   output = 'Você indicou mais de uma data. Qual delas você prefere?';
-} else if (!autoSchedule.should_schedule) {
+} else if (!alreadyCompleted && !autoSchedule.should_schedule) {
   const rule = expected[postStep];
   if (rule && !rule.regex.test(output)) {
     blocked = true;
@@ -214,14 +223,15 @@ return [{json:{...context,v2_conversation_id:conversation?.id??null,v2_state_upd
 
 const postStateCode = String.raw`const validated = $json;
 const lead = validated;
+const pre=$('V2 - ESTADO PRONTO').item.json.v2_state??{};
 const trade=String(lead.description??'').trim().toLowerCase(), companionsText=String(lead.companions??'').trim(), companionCount=Number(companionsText.match(/^(\d+)/)?.[1]??0), noCompanions=/sem acompanhantes?/i.test(companionsText), companionNamesPending=companionCount>0&&(!companionsText.includes(':')||/nomes? (ainda )?n[aã]o informado/i.test(companionsText));
 const hasFullName=Boolean(lead.first_name?.trim()&&lead.last_name?.trim()), hasCompanions=Boolean(companionsText), hasDate=Boolean(lead.store_visit_datetime), hasTrade=trade.startsWith('carro na troca:'), tradeYes=trade.includes('carro na troca: sim'), hasPlate=Boolean(lead.vehicle_plate?.trim());
 const completeData=hasFullName&&hasCompanions&&!companionNamesPending&&hasDate&&hasTrade&&(!tradeYes||hasPlate);
-const finalized=lead.validator_claims_final===true&&!lead.validator_blocked&&completeData&&Boolean(lead.active_appointment?.id)&&['scheduled','confirmed'].includes(lead.confirmation_status);
+const wasCompleted=pre.current_step==='COMPLETED'||['confirmed','checked_in','closed'].includes(String(lead.confirmation_status??''));
+const finalized=wasCompleted||(lead.validator_claims_final===true&&!lead.validator_blocked&&completeData&&Boolean(lead.active_appointment?.id)&&['scheduled','confirmed'].includes(lead.confirmation_status));
 let step;
 if(lead.confirmation_status==='cancelled')step='CANCELLED'; else if(finalized)step='COMPLETED'; else if(!hasFullName)step='WAITING_FULL_NAME'; else if(!hasCompanions)step='WAITING_COMPANIONS'; else if(!noCompanions&&companionNamesPending)step='WAITING_COMPANION_NAMES'; else if(!hasDate)step='WAITING_EVENT_DATE'; else if(!hasTrade)step='WAITING_TRADE_IN'; else if(tradeYes&&!hasPlate)step='WAITING_VEHICLE_PLATE'; else step='WAITING_FINAL_CONFIRMATION';
 const q={WAITING_FULL_NAME:'Qual é o seu nome completo?',WAITING_COMPANIONS:'Quantos acompanhantes você vai levar?',WAITING_COMPANION_NAMES:'Qual é o nome completo de cada acompanhante?',WAITING_EVENT_DATE:'Qual dia do evento você prefere?',WAITING_TRADE_IN:'Você pretende dar algum carro na troca?',WAITING_VEHICLE_PLATE:'Qual é a placa do veículo?',WAITING_FINAL_CONFIRMATION:'Está tudo correto?',COMPLETED:null,CANCELLED:null};
-const pre=$('V2 - ESTADO PRONTO').item.json.v2_state??{};
 const payload={version:2,current_step:step,pending_question:q[step],collected_fields:{full_name:hasFullName,companions:hasCompanions,companion_names:hasCompanions&&!companionNamesPending,event_date:hasDate,trade_in_answer:hasTrade,vehicle_plate:hasPlate,vehicle_details:!tradeYes||hasPlate},missing_fields:[...(lead.validator_missing??[]),...(companionNamesPending?['companion_names']:[])],last_customer_intent:pre.last_customer_intent??null,last_agent_action:validated.v2_qr_delivery?.status==='sent'?'checkin_notification_sent':validated.v2_qr_delivery?.status==='failed'?'checkin_notification_failed':lead.v2_auto_schedule_result==='scheduled'?'scheduled_date_reconciled':lead.validator_claims_final?'final_confirmation':step,last_tool_result:validated.v2_qr_delivery?.status??(lead.validator_blocked?'blocked':'success'),conversation_status:step,retry_count:(lead.validator_blocked||validated.v2_qr_delivery?.status==='failed')?Number(pre.retry_count??0)+1:0,last_message_id:$('V2 - NORMALIZAR ENTRADA').item.json.v2_context.message_id,updated_by:'rubinho_v2_post_turn'};
 return [{json:{...validated,v2_post_state_update:{current_intent:'credentialing',awaiting_confirmation:step==='WAITING_FINAL_CONFIRMATION',last_offered_event_id:lead.event_id??lead.event_interest_id??null,last_offered_slot:lead.store_visit_datetime??null,last_agent_action:payload.last_agent_action,handoff_required:false,state_payload:payload}}}];`;
 
@@ -237,10 +247,27 @@ const location=$('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.location;
 return [{json:{...base,store_visit_datetime:selectedAt,confirmation_status:'scheduled',crm_stage_code:String(base.crm_stage_code??'').replace(/_[^_]+$/,'_PRESENCA_AGENDADA'),active_appointment:appointment,output:'Show, você escolheu '+display+'. O endereço do evento é '+location+'. Outro ponto importante: você vai dar um carro na troca?',validator_blocked:false,v2_auto_schedule_result:'scheduled'}}];`;
 
 async function main() {
-  const [workflow, automationSource] = await Promise.all([
-    n8n<Workflow>(`/workflows/${safeTargetId}`),
+  if (targetId === sourceId && !allowUpdateExisting) {
+    throw new Error(
+      "Protecao de producao: use outro N8N_TARGET_WORKFLOW_ID ou defina N8N_ALLOW_UPDATE_EXISTING=true explicitamente",
+    );
+  }
+
+  const [sourceWorkflow, automationSource] = await Promise.all([
+    n8n<Workflow>(`/workflows/${sourceId}`),
     n8n<Workflow>(`/workflows/${automationSourceId}`),
   ]);
+  const workflow = targetId
+    ? await n8n<Workflow>(`/workflows/${targetId}`)
+    : structuredClone(sourceWorkflow);
+  if (!targetId) {
+    const suffix = new Date().toISOString().slice(0, 16).replace(/[T:]/g, "-");
+    workflow.name = `${sourceWorkflow.name} [HOMOLOG ${suffix}]`;
+  }
+  const triggerWebhookId = process.env.N8N_TRIGGER_WEBHOOK_ID;
+  if (triggerWebhookId) {
+    node(workflow, "WhatsApp Trigger").webhookId = triggerWebhookId;
+  }
   const automationKey = automationKeyFrom(automationSource);
 
   node(workflow, "VALIDADOR - ANALISAR").parameters = { jsCode: validatorCode };
@@ -266,6 +293,10 @@ async function main() {
       "Cria o agendamento, sincroniza data e evento, altera o status para scheduled e move o CRM para PRESENCA_AGENDADA em uma operação transacional e idempotente.",
       "Revalida de forma idempotente o agendamento já criado na escolha da data e libera a entrega controlada da credencial.",
     );
+  const toneMarker = "# TOM DE CONVERSA HOMOLOGADO V4";
+  if (!options.systemMessage.includes(toneMarker)) {
+    options.systemMessage += `\n\n${toneMarker}\nEstas regras V4 substituem qualquer regra de tom anterior que conflite com elas.\n- Fale como um brasileiro simpático e descontraído. Bordões como Falaa, Top, Show, Blz e Anotado aqui são opcionais: use no máximo um quando combinar com a mensagem, nunca por obrigação e nunca repita em mensagens consecutivas.\n- Evite construções artificiais como \"Top você perguntar\", \"Show sua dúvida\" e elogios automáticos a qualquer pergunta. Responda diretamente, como uma pessoa conversando no WhatsApp.\n- Use o primeiro nome do lead quando ele estiver disponível, mas não em todas as mensagens. Se não estiver, não deixe vírgula, espaço ou variável vazia no lugar do nome. Nunca escreva \"Oi, !\".\n- Durante a coleta, cada mensagem deve ter exatamente uma pergunta, sempre no final. Respostas informativas pós-credenciamento podem terminar sem pergunta quando não houver dado pendente.\n- Prefira mensagens curtas, com no máximo três frases antes da pergunta. Não repita o nome completo do evento em todas as mensagens.\n- Reconheça brevemente a resposta anterior e faça apenas a próxima pergunta pendente.\n- Se a conversa estiver COMPLETED, preserve esse estado. Responda dúvidas normalmente sem pedir nova confirmação e sem reiniciar o credenciamento.\n- Se o lead repetir uma pergunta, não copie novamente a resposta inteira. Resuma, esclareça o ponto e pergunte apenas qual condição ou modelo ele quer detalhar, se isso for útil.\n- Não transforme respostas automáticas de ausência, horário comercial ou atendimento empresarial em dados do credenciamento.\n- Não diga que uma operação foi concluída sem retorno de sucesso da ferramenta e do validador. Para QR Code, use o status real retornado pela API; não prometa envio futuro sem evidência.\n`;
+  }
 
   const finalizer = node(workflow, "finalizar_credenciamento");
   finalizer.parameters = {
@@ -378,18 +409,23 @@ async function main() {
     ],
   };
 
-  await n8n(`/workflows/${safeTargetId}`, {
-    method: "PUT",
-    body: JSON.stringify({
-      name: workflow.name,
-      nodes: workflow.nodes,
-      connections: workflow.connections,
-      settings: {},
-    }),
+  const body = JSON.stringify({
+    name: workflow.name,
+    nodes: workflow.nodes,
+    connections: workflow.connections,
+    // A API publica apenas um subconjunto das settings retornadas no GET.
+    // Usar um objeto limpo evita copiar propriedades internas/rejeitadas e
+    // mantém a cópia de homologação inativa por padrão.
+    settings: {},
   });
+  const saved = targetId
+    ? await n8n<Workflow>(`/workflows/${targetId}`, { method: "PUT", body })
+    : await n8n<Workflow>("/workflows", { method: "POST", body });
   console.log(
     JSON.stringify({
-      workflow_id: safeTargetId,
+      workflow_id: saved.id,
+      source_workflow_id: sourceId,
+      mode: targetId ? "updated-explicit-target" : "created-inactive-homologation",
       nodes: workflow.nodes.length,
       patched: true,
     }),

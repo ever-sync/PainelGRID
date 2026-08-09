@@ -21,6 +21,8 @@ export class AgentActionLogService {
       await this.conversationStateService.getRequiredConversation(
         conversationId,
       );
+    const stateBefore =
+      await this.conversationStateService.findByConversationId(conversationId);
 
     const recoveredCompanion = await this.recoverCompanionNames(
       conversation.lead_id,
@@ -41,7 +43,7 @@ export class AgentActionLogService {
       }
     }
 
-    const apiResponse = {
+    const apiResponse: Record<string, unknown> = {
       ...(dto.api_response ?? {}),
       ...(recoveredCompanion
         ? { companion_names_recovered: recoveredCompanion }
@@ -55,6 +57,17 @@ export class AgentActionLogService {
           }
         : {}),
     };
+    const normalizedStatus = dto.result_status.trim().toLowerCase();
+    const blocked =
+      ["blocked", "failed", "error"].includes(normalizedStatus) ||
+      apiResponse.validator_blocked === true;
+    const blockReason = blocked
+      ? this.resolveBlockReason(dto, apiResponse)
+      : (dto.block_reason ?? null);
+    const previousState =
+      dto.previous_state ?? this.toStateSnapshot(stateBefore);
+    const resultingState =
+      dto.resulting_state ?? previousState ?? undefined;
 
     const log = await this.prisma.agentActionLog.create({
       data: {
@@ -71,15 +84,14 @@ export class AgentActionLogService {
         action_payload: (dto.action_payload ?? {}) as Prisma.InputJsonValue,
         result_status: dto.result_status,
         error_message: dto.error_message ?? null,
-        previous_state: dto.previous_state as Prisma.InputJsonValue | undefined,
+        previous_state: previousState as Prisma.InputJsonValue | undefined,
         received_message: dto.received_message ?? null,
         next_stage: dto.next_stage ?? null,
         tool_name: dto.tool_name ?? null,
         tool_input: dto.tool_input as Prisma.InputJsonValue | undefined,
         api_response: apiResponse as Prisma.InputJsonValue,
-        resulting_state: dto.resulting_state as
-          Prisma.InputJsonValue | undefined,
-        block_reason: dto.block_reason ?? null,
+        resulting_state: resultingState as Prisma.InputJsonValue | undefined,
+        block_reason: blockReason,
       },
     });
 
@@ -98,6 +110,48 @@ export class AgentActionLogService {
     }
 
     return this.mapLog(log);
+  }
+
+  private resolveBlockReason(
+    dto: CreateAgentActionLogDto,
+    apiResponse: Record<string, unknown>,
+  ) {
+    if (dto.block_reason?.trim()) return dto.block_reason.trim();
+    if (dto.error_message?.trim()) return dto.error_message.trim();
+    if (typeof apiResponse.finalization_error === "string") {
+      return apiResponse.finalization_error;
+    }
+    const missing = apiResponse.missing_fields;
+    if (Array.isArray(missing) && missing.length > 0) {
+      return `Campos obrigatorios pendentes: ${missing.join(", ")}`;
+    }
+    const actionReason =
+      dto.action_payload && !Array.isArray(dto.action_payload)
+        ? dto.action_payload.reason
+        : undefined;
+    if (typeof actionReason === "string" && actionReason.trim()) {
+      return actionReason.trim();
+    }
+    return `Acao ${dto.decision_type} bloqueada sem retorno conclusivo da ferramenta`;
+  }
+
+  private toStateSnapshot(
+    state: Awaited<
+      ReturnType<ConversationStateService["findByConversationId"]>
+    >,
+  ): Record<string, unknown> | undefined {
+    if (!state) return undefined;
+    return {
+      current_intent: state.current_intent,
+      awaiting_confirmation: state.awaiting_confirmation,
+      last_offered_event_id: state.last_offered_event_id,
+      last_offered_slot: state.last_offered_slot?.toISOString() ?? null,
+      last_agent_action: state.last_agent_action,
+      handoff_required: state.handoff_required,
+      handoff_reason: state.handoff_reason,
+      state_payload: state.state_payload,
+      updated_at: state.updated_at.toISOString(),
+    };
   }
 
   private async recoverCompanionNames(

@@ -31,6 +31,17 @@ describe("AgentActionLogService", () => {
         client_id: clientId,
         lead_id: leadId,
       }),
+      findByConversationId: jest.fn().mockResolvedValue({
+        current_intent: "credentialing",
+        awaiting_confirmation: false,
+        last_offered_event_id: null,
+        last_offered_slot: null,
+        last_agent_action: "WAITING_COMPANIONS",
+        handoff_required: false,
+        handoff_reason: null,
+        state_payload: { current_step: "WAITING_COMPANIONS" },
+        updated_at: new Date("2026-08-08T12:00:00.000Z"),
+      }),
       upsertForConversation: jest.fn().mockResolvedValue({
         conversation_id: conversationId,
         client_id: clientId,
@@ -246,6 +257,39 @@ describe("AgentActionLogService", () => {
         data: expect.objectContaining({
           api_response: expect.objectContaining({
             qr_delivery: expect.objectContaining({ sent: true }),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("preenche motivo e snapshots quando uma acao e bloqueada", async () => {
+    prisma.agentActionLog.create.mockImplementation(({ data }: any) =>
+      Promise.resolve({
+        id: "log-blocked",
+        ...data,
+        created_at: new Date("2026-08-08T14:00:00.000Z"),
+      }),
+    );
+
+    await service.createActionLog(conversationId, {
+      trigger_type: "incoming_message",
+      decision_type: "validate_turn",
+      result_status: "blocked",
+      tool_name: "WAITING_COMPANION_NAMES",
+      api_response: { missing_fields: ["companion_names"] },
+    });
+
+    expect(prisma.agentActionLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          block_reason:
+            "Campos obrigatorios pendentes: companion_names",
+          previous_state: expect.objectContaining({
+            state_payload: { current_step: "WAITING_COMPANIONS" },
+          }),
+          resulting_state: expect.objectContaining({
+            state_payload: { current_step: "WAITING_COMPANIONS" },
           }),
         }),
       }),
