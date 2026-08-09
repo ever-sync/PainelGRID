@@ -1654,7 +1654,7 @@ export function ChatPage() {
 
               <footer
                 className={clsx(
-                  "relative p-3.5 border-t space-y-2.5",
+                  "relative border-t p-3 space-y-2.5 sm:p-3.5",
                   isDarkMode
                     ? "border-zinc-800/80 bg-[#15161b]"
                     : "border-zinc-100 bg-white",

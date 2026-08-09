@@ -697,7 +697,7 @@ export function ChatThread({
     <>
       <header
         className={clsx(
-          "flex items-center justify-between gap-3 px-6 py-4 border-b",
+          "flex items-center justify-between gap-2 border-b px-3 py-3 sm:gap-3 sm:px-6 sm:py-4",
           dark
             ? "border-zinc-800/80 bg-[#15161b]"
             : "border-zinc-100 bg-white/90",
@@ -784,14 +784,16 @@ export function ChatThread({
             type="button"
             onClick={onOpenLeadDrawer}
             className={clsx(
-              "inline-flex items-center gap-1.5 rounded-2xl border px-3.5 py-2 text-xs font-bold shadow-sm transition-all hover:scale-[1.02]",
+              "inline-flex shrink-0 items-center gap-1.5 rounded-2xl border px-2.5 py-2 text-xs font-bold shadow-sm transition-all hover:scale-[1.02] sm:px-3.5",
               dark
                 ? "border-zinc-700 bg-zinc-800/80 text-zinc-100 hover:bg-zinc-800"
                 : "border-zinc-200 bg-zinc-50 text-zinc-800 hover:bg-zinc-100",
             )}
           >
             <UserRound size={15} className="text-[#FF0636]" />
-            <span>Ficha do Lead</span>
+            {/* No celular o rotulo inteiro roubava a largura do nome do lead. */}
+            <span className="hidden sm:inline">Ficha do Lead</span>
+            <span className="sm:hidden">Ficha</span>
           </button>
         </div>
       </header>
@@ -799,7 +801,10 @@ export function ChatThread({
       <section
         ref={scrollRef}
         className={clsx(
-          "flex-1 overflow-y-auto px-4 py-5 sm:px-6",
+          // `flex-col` + `mt-auto` nas mensagens: com poucas mensagens elas
+          // encostam no campo de digitar em vez de ficarem penduradas no topo
+          // com um vazio enorme embaixo.
+          "flex flex-1 flex-col overflow-y-auto px-3 py-4 sm:px-6 sm:py-5",
           dark ? "bg-[#0b0c10]" : "bg-zinc-50/50",
         )}
       >
@@ -820,7 +825,7 @@ export function ChatThread({
           </div>
         )}
 
-        <div className="flex w-full flex-col gap-1.5">
+        <div className="mt-auto flex w-full flex-col gap-1.5">
           {visibleMessages.map((message) => (
             <MemoMessageBubble
               key={message.id}
