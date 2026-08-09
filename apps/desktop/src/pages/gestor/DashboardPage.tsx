@@ -2,12 +2,16 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import {
+  Activity,
   Bell,
+  Bot,
   CalendarDays,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  MessageCircle,
   Moon,
+  Send,
   Sparkles,
   Sun,
   Users,
@@ -23,6 +27,10 @@ import {
   type ActiveEventSummary,
 } from "../../services/events";
 import { listLeads, mapApiLeadToLead } from "../../services/leads";
+import {
+  getRubinhoThermometer,
+  type RubinhoThermometer,
+} from "../../services/operations";
 import { useGestorClient } from "../../hooks/useGestorClient";
 import {
   applyDashboardDarkEnabled,
@@ -368,6 +376,248 @@ function SectionTitle({
   );
 }
 
+function RubinhoThermometerCard({
+  data,
+  events,
+  selectedEventId,
+  onSelectEvent,
+  isDarkMode,
+  loading,
+}: {
+  data: RubinhoThermometer | null;
+  events: Event[];
+  selectedEventId: string;
+  onSelectEvent: (eventId: string) => void;
+  isDarkMode: boolean;
+  loading: boolean;
+}) {
+  const stages =
+    data?.stages.filter(
+      (stage) => !["CANCELLED", "HUMAN_HANDOFF"].includes(stage.key),
+    ) ?? [];
+  const maxStageCount = Math.max(...stages.map((stage) => stage.count), 1);
+  const updatedAt = data
+    ? new Intl.DateTimeFormat("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }).format(new Date(data.generated_at))
+    : "--:--:--";
+  const metrics = [
+    {
+      label: "Aguardando template",
+      value: data?.totals.awaiting_template ?? 0,
+      icon: Send,
+      color: "text-amber-600",
+      background: "bg-amber-50",
+    },
+    {
+      label: "Templates enviados",
+      value: data?.totals.template_sent ?? 0,
+      icon: CheckCircle2,
+      color: "text-blue-600",
+      background: "bg-blue-50",
+    },
+    {
+      label: "Responderam",
+      value: data?.totals.template_replied ?? 0,
+      icon: MessageCircle,
+      color: "text-violet-600",
+      background: "bg-violet-50",
+    },
+    {
+      label: "Agendados",
+      value: data?.totals.scheduled ?? 0,
+      icon: CalendarDays,
+      color: "text-emerald-600",
+      background: "bg-emerald-50",
+    },
+    {
+      label: "Concluídos",
+      value: data?.totals.completed ?? 0,
+      icon: Bot,
+      color: "text-[#FF0636]",
+      background: "bg-rose-50",
+    },
+  ];
+
+  return (
+    <Card className="overflow-hidden rounded-3xl" padding="lg">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Activity size={18} className="text-[#FF0636]" />
+            <h2 className="text-base font-semibold tracking-tight text-zinc-950">
+              Termômetro do Rubinho
+            </h2>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              Atualização 5s
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-zinc-500">
+            Posição atual dos leads em cada pergunta do credenciamento. Última
+            leitura às {updatedAt}.
+          </p>
+        </div>
+
+        <label className="w-full max-w-sm">
+          <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
+            Evento analisado
+          </span>
+          <div className="relative">
+            <select
+              value={selectedEventId}
+              onChange={(event) => onSelectEvent(event.target.value)}
+              className={clsx(
+                "w-full appearance-none rounded-2xl border px-4 py-2.5 pr-10 text-sm font-medium outline-none transition-colors focus:border-[#FF0636]",
+                isDarkMode
+                  ? "border-zinc-700 bg-zinc-900 text-zinc-100"
+                  : "border-zinc-200 bg-white text-zinc-950",
+              )}
+            >
+              <option value="">Todos os eventos</option>
+              {events.map((event) => (
+                <option key={event.id} value={event.id}>
+                  {event.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={16}
+              className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400"
+            />
+          </div>
+        </label>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {metrics.map((metric) => {
+          const Icon = metric.icon;
+          return (
+            <div
+              key={metric.label}
+              className={clsx(
+                "rounded-2xl border p-3.5",
+                isDarkMode
+                  ? "border-zinc-800 bg-zinc-900/60"
+                  : "border-zinc-100 bg-white",
+              )}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className={clsx(
+                    "flex h-9 w-9 items-center justify-center rounded-xl",
+                    isDarkMode ? "bg-zinc-800" : metric.background,
+                  )}
+                >
+                  <Icon size={16} className={metric.color} />
+                </span>
+                <span className="text-2xl font-black tracking-tight text-zinc-950">
+                  {loading && !data ? "–" : metric.value}
+                </span>
+              </div>
+              <p className="mt-3 text-[11px] font-semibold text-zinc-500">
+                {metric.label}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_220px]">
+        <div className="overflow-x-auto pb-2">
+          <div className="flex min-w-[900px] items-stretch gap-2">
+            {stages.map((stage, index) => (
+              <div key={stage.key} className="flex min-w-0 flex-1 items-center">
+                <div
+                  className={clsx(
+                    "flex h-full min-h-[126px] flex-1 flex-col rounded-2xl border p-3",
+                    isDarkMode
+                      ? "border-zinc-800 bg-zinc-900/60"
+                      : "border-zinc-100 bg-zinc-50/70",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-950 text-[10px] font-bold text-white">
+                      {index + 1}
+                    </span>
+                    <span className="text-xl font-black text-zinc-950">
+                      {stage.count}
+                    </span>
+                  </div>
+                  <p className="mt-3 min-h-8 text-[11px] font-semibold leading-4 text-zinc-600">
+                    {stage.short_label}
+                  </p>
+                  <div className="mt-auto h-1.5 overflow-hidden rounded-full bg-zinc-200/80">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[#FF0636] to-[#ff6b87] transition-[width] duration-500"
+                      style={{
+                        width: `${Math.max(
+                          stage.count > 0
+                            ? (stage.count / maxStageCount) * 100
+                            : 0,
+                          stage.count > 0 ? 8 : 0,
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+                {index < stages.length - 1 ? (
+                  <div className="h-px w-2 shrink-0 bg-zinc-200" />
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div
+          className={clsx(
+            "rounded-2xl border p-4",
+            isDarkMode
+              ? "border-zinc-800 bg-zinc-900/60"
+              : "border-zinc-100 bg-zinc-50",
+          )}
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
+            Conversão ao vivo
+          </p>
+          <div className="mt-4 space-y-4">
+            {[
+              ["Resposta ao template", data?.rates.template_reply ?? 0],
+              ["Resposta para agendamento", data?.rates.scheduling ?? 0],
+              ["Credenciamento concluído", data?.rates.completion ?? 0],
+            ].map(([label, value]) => (
+              <div key={String(label)}>
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-zinc-500">{label}</span>
+                  <span className="font-bold text-zinc-950">{value}%</span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-200/80">
+                  <div
+                    className="h-full rounded-full bg-[#FF0636] transition-[width] duration-500"
+                    style={{ width: `${Math.min(Number(value), 100)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          {(data?.totals.template_failed ?? 0) > 0 ||
+          (data?.totals.handoff ?? 0) > 0 ? (
+            <div className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-800">
+              {data?.totals.template_failed ?? 0} falhas de template ·{" "}
+              {data?.totals.handoff ?? 0} aguardando humano
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export function DashboardGestorPage() {
   const navigate = useNavigate();
   const { user } = useGestorClient();
@@ -558,9 +808,49 @@ export function DashboardGestorPage() {
     });
 
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
+  const [rubinhoThermometer, setRubinhoThermometer] =
+    useState<RubinhoThermometer | null>(null);
+  const [rubinhoThermometerLoading, setRubinhoThermometerLoading] =
+    useState(true);
   const [activeMetricKey, setActiveMetricKey] =
     useState<CampaignMetricKey>("totalLeads");
   const [periodDays, setPeriodDays] = useState<7 | 15 | 30>(7);
+
+  useEffect(() => {
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+    const controller = new AbortController();
+    let requestRunning = false;
+
+    const load = async () => {
+      if (requestRunning) return;
+      requestRunning = true;
+      try {
+        const data = await getRubinhoThermometer(
+          token,
+          selectedCampaignId ? { event_id: selectedCampaignId } : {},
+          controller.signal,
+        );
+        setRubinhoThermometer(data);
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          // Mantém a última leitura válida para o painel não piscar durante
+          // uma indisponibilidade curta da API.
+        }
+      } finally {
+        requestRunning = false;
+        setRubinhoThermometerLoading(false);
+      }
+    };
+
+    setRubinhoThermometerLoading(true);
+    void load();
+    const timer = window.setInterval(() => void load(), 5_000);
+    return () => {
+      window.clearInterval(timer);
+      controller.abort();
+    };
+  }, [selectedCampaignId]);
 
   const topPerformerEventId = activeEventsSummary.reduce<string | null>(
     (topId, current) => {
@@ -1126,6 +1416,17 @@ export function DashboardGestorPage() {
             </div>
           </div>
         )}
+
+        <RubinhoThermometerCard
+          data={rubinhoThermometer}
+          events={events.filter(
+            (event) => event.status === "active" || event.status === "draft",
+          )}
+          selectedEventId={selectedCampaignId}
+          onSelectEvent={setSelectedCampaignId}
+          isDarkMode={isDarkMode}
+          loading={rubinhoThermometerLoading}
+        />
 
         {/* 3. Balanced 2-Column Grid: Ranking & Engagement / Progress */}
         <div className="grid gap-6 lg:grid-cols-2">

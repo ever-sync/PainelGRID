@@ -30,6 +30,36 @@ export type OperationalDashboard = {
   issues: OperationalIssue[];
 };
 
+export type RubinhoThermometer = {
+  generated_at: string;
+  refresh_after_seconds: number;
+  filters: { client_id: string | null; event_id: string | null };
+  totals: {
+    leads: number;
+    awaiting_template: number;
+    template_sent: number;
+    template_delivered: number;
+    template_read: number;
+    template_replied: number;
+    template_failed: number;
+    scheduled: number;
+    completed: number;
+    handoff: number;
+  };
+  rates: {
+    template_reply: number;
+    scheduling: number;
+    completion: number;
+  };
+  stages: Array<{
+    key: string;
+    label: string;
+    short_label: string;
+    count: number;
+    percent_of_replies: number;
+  }>;
+};
+
 export type AgentAuditEntry = {
   id: string;
   created_at: string;
@@ -56,6 +86,20 @@ export function getOperationalDashboard(
   return httpRequest<OperationalDashboard>(
     `/operations/dashboard${query ? `?${query}` : ""}`,
     { token },
+  );
+}
+
+export function getRubinhoThermometer(
+  token: string,
+  params: { client_id?: string; event_id?: string } = {},
+  signal?: AbortSignal,
+) {
+  const query = new URLSearchParams(
+    Object.entries(params).filter(([, value]) => Boolean(value)),
+  ).toString();
+  return httpRequest<RubinhoThermometer>(
+    `/operations/rubinho-thermometer${query ? `?${query}` : ""}`,
+    { token, signal },
   );
 }
 

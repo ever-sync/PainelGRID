@@ -67,12 +67,26 @@ async function main() {
   assert.match(systemMessage, /TOM DE CONVERSA HOMOLOGADO V4/);
   assert.match(systemMessage, /Cada mensagem deve ter exatamente uma pergunta/);
   assert.match(systemMessage, /Nunca escreva \"Oi, !\"/);
+  assert.match(
+    systemMessage,
+    /TRAVA DE CONHECIMENTO DO EVENTO V5 — PRIORIDADE MAXIMA/,
+  );
+  assert.match(systemMessage, /ÚNICA fonte autorizada/);
+  assert.match(systemMessage, /NÃO possui catálogo de veículos/);
+  assert.match(systemMessage, /Quando houver dúvida.*bloqueio por padrão/);
+  assert.match(
+    systemMessage,
+    /REGISTRO OBRIGATORIO DE RESPOSTAS V6 — PRIORIDADE MAXIMA/,
+  );
+  assert.match(systemMessage, /nome completo do acompanhante/);
 
   const validator = String(
     node(homologation, "VALIDADOR - ANALISAR").parameters.jsCode ?? "",
   );
   assert.match(validator, /validator_blocked/);
   assert.match(validator, /v2_auto_schedule/);
+  assert.match(validator, /formatEventDateQuestion/);
+  assert.match(validator, /Top! Agora escolha uma data para o credenciamento/);
   node(homologation, "V2 - DATA ESCOLHIDA?");
   node(homologation, "V2 - AGENDAR DATA ESCOLHIDA");
   node(homologation, "V2 - VALIDAR AGENDAMENTO DA DATA");
@@ -89,7 +103,7 @@ async function main() {
 
   console.log(
     JSON.stringify({
-      passed: 14,
+      passed: 22,
       failed: 0,
       production_active: production.active,
       homologation_active: homologation.active,

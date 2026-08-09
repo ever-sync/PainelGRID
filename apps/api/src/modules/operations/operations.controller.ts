@@ -24,6 +24,12 @@ export class OperationsController {
   ) {
     return this.service.dashboard(user, query);
   }
+  @Get("rubinho-thermometer") rubinhoThermometer(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: Record<string, string>,
+  ) {
+    return this.service.rubinhoThermometer(user, query);
+  }
   @Get("conversations/:id/audit") audit(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id", new ParseUUIDPipe()) id: string,

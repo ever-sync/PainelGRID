@@ -384,6 +384,42 @@ describe("AppointmentsService", () => {
     expect(result).toEqual(expect.objectContaining({ sent: true }));
   });
 
+  it("nao interrompe a reconciliacao quando o lead nao possui e-mail", async () => {
+    const scheduledAt = new Date("2026-08-14T12:00:00.000Z");
+    prisma.lead.findFirst.mockResolvedValue({
+      ...lead,
+      email: null,
+      event_interest: {
+        ...event,
+        event_days: [{ start: scheduledAt.toISOString() }],
+      },
+    });
+    prisma.appointment.findFirst.mockResolvedValue({
+      ...baseAppointment,
+      scheduled_at: scheduledAt,
+      lead: { ...baseAppointment.lead, email: null },
+      event: { ...event, event_days: [{ start: scheduledAt.toISOString() }] },
+    });
+
+    const result = await service.reconcileScheduledLeadForAutomation({
+      lead_id: leadId,
+      scheduled_at: scheduledAt.toISOString(),
+      dispatch_key: `lead-scheduled-email:${leadId}:${scheduledAt.toISOString()}`,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        reconciled: true,
+        email: {
+          sent: false,
+          idempotent_replay: false,
+          reason: "Lead sem e-mail cadastrado",
+        },
+      }),
+    );
+    expect(mail.sendAppointmentWelcome).not.toHaveBeenCalled();
+  });
+
   it("bloqueia credencial por e-mail quando evento nao esta ativo", async () => {
     prisma.leadTimeline.findFirst.mockResolvedValue(null);
     prisma.appointment.findFirst.mockResolvedValue({

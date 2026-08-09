@@ -293,7 +293,7 @@ export class ConversationsService {
     let imported = 0;
     for (const historyRows of byLead.values()) {
       const { client_id: rowClientId, lead_id: leadId } = historyRows[0];
-      imported += await this.prisma.$transaction(async (tx) => {
+      const result = await this.prisma.$transaction(async (tx) => {
         const lockKey = `${rowClientId}:${leadId}:${ConversationChannel.whatsapp}`;
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
@@ -351,8 +351,46 @@ export class ConversationsService {
           }
         }
 
-        return created.count;
+        const createdMessages =
+          created.count > 0
+            ? ((await tx.message.findMany({
+                where: {
+                  external_id: {
+                    in: historyRows.map(
+                      (row) => `n8n-history:${row.history_id}`,
+                    ),
+                  },
+                },
+                select: {
+                  id: true,
+                  conversation_id: true,
+                  sender_type: true,
+                  sender_id: true,
+                  content: true,
+                  media_id: true,
+                  media_url: true,
+                  created_at: true,
+                },
+                orderBy: { created_at: "asc" },
+              })) ?? [])
+            : [];
+
+        return { count: created.count, messages: createdMessages };
       });
+
+      imported += result.count;
+      for (const message of result.messages) {
+        this.realtimeEvents.emitNewMessage(rowClientId, {
+          conversation_id: message.conversation_id,
+          message_id: message.id,
+          sender_type: message.sender_type,
+          sender_id: message.sender_id,
+          content: message.content,
+          media_id: message.media_id,
+          media_url: message.media_url,
+          created_at: message.created_at,
+        });
+      }
     }
 
     return imported;
@@ -478,6 +516,11 @@ export class ConversationsService {
       throw new NotFoundException("Conversa nao encontrada");
     }
     await this.assertConversationAccess(user, conv);
+
+    // O Rubinho ainda persiste a conversa principal na memoria do n8n.
+    // Sincronizar antes da leitura evita abrir uma thread antiga e esperar o
+    // proximo refresh da lista para enxergar as mensagens mais novas.
+    await this.syncN8nHistoryForClient(conv.client_id);
 
     return this.prisma.message.findMany({
       where: { conversation_id: conversationId },

@@ -90,6 +90,19 @@ const localParts = (value) => {
     weekday: normalize(new Intl.DateTimeFormat('pt-BR', { weekday: 'long', timeZone: 'America/Sao_Paulo' }).format(date)),
   };
 };
+const formatEventDateQuestion = () => {
+  const lines = eventDays.map((option) => {
+    const start = new Date(option.start);
+    const end = option.end ? new Date(option.end) : null;
+    const date = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' }).format(start);
+    const weekday = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', timeZone: 'America/Sao_Paulo' }).format(start);
+    const startTime = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }).format(start);
+    const endTime = end && !Number.isNaN(end.getTime()) ? new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }).format(end) : null;
+    return '• ' + date + ' (' + weekday.charAt(0).toUpperCase() + weekday.slice(1) + '), das ' + startTime + (endTime ? ' às ' + endTime : '');
+  });
+  if (!lines.length) return 'Não encontrei as datas disponíveis agora. Você pode tentar novamente?';
+  return 'Top! Agora escolha uma data para o credenciamento:\n\n' + lines.join('\n') + '\n\nQual data você prefere?';
+};
 const candidates = new Set();
 if (preStep === 'WAITING_EVENT_DATE') {
   eventDays.forEach((option, index) => {
@@ -139,7 +152,7 @@ const expected = {
   WAITING_FULL_NAME: { regex: /nome completo/i, text: 'Falaa! Pra continuar seu credenciamento, me informa seu nome completo?' },
   WAITING_COMPANIONS: { regex: /acompanhant/i, text: 'Top! Quantos acompanhantes você vai levar para o evento?' },
   WAITING_COMPANION_NAMES: { regex: /(nome.*acompanh|nome completo.*(vai|vem|com você)|quem vai)/i, text: 'Top! Qual é o nome completo de quem vai com você?' },
-  WAITING_EVENT_DATE: { regex: /(qual.*(data|dia)|data.*prefere|dia.*prefere)/i, text: 'Top! Qual data do evento você prefere?' },
+  WAITING_EVENT_DATE: { regex: /(qual.*(data|dia)|data.*prefere|dia.*prefere)/i, text: formatEventDateQuestion() },
   WAITING_TRADE_IN: { regex: /(carro.*troca|troca.*carro)/i, text: 'Show! Outro ponto importante: você vai dar um carro na troca?' },
   WAITING_VEHICLE_PLATE: { regex: /placa/i, text: 'Blz, qual é a placa do seu veículo?' },
   WAITING_FINAL_CONFIRMATION: { regex: /(tudo correto|está tudo correto|confirma.*resumo)/i, text: 'Anotado aqui. Está tudo correto?' },
@@ -165,7 +178,13 @@ if (preStep === 'WAITING_EVENT_DATE' && candidates.size > 1) {
   output = 'Você indicou mais de uma data. Qual delas você prefere?';
 } else if (!alreadyCompleted && !autoSchedule.should_schedule) {
   const rule = expected[postStep];
-  if (rule && !rule.regex.test(output)) {
+  const outputNormalized = normalize(output);
+  const containsConfiguredDate = eventDays.some((option) => {
+    const parts = localParts(option.start);
+    return outputNormalized.includes(parts.date) || outputNormalized.includes(parts.date.slice(0, 5));
+  });
+  const validForStep = rule && rule.regex.test(output) && (postStep !== 'WAITING_EVENT_DATE' || containsConfiguredDate);
+  if (rule && !validForStep) {
     blocked = true;
     output = rule.text;
   }
@@ -295,7 +314,27 @@ async function main() {
     );
   const toneMarker = "# TOM DE CONVERSA HOMOLOGADO V4";
   if (!options.systemMessage.includes(toneMarker)) {
-    options.systemMessage += `\n\n${toneMarker}\nEstas regras V4 substituem qualquer regra de tom anterior que conflite com elas.\n- Fale como um brasileiro simpático e descontraído. Bordões como Falaa, Top, Show, Blz e Anotado aqui são opcionais: use no máximo um quando combinar com a mensagem, nunca por obrigação e nunca repita em mensagens consecutivas.\n- Evite construções artificiais como \"Top você perguntar\", \"Show sua dúvida\" e elogios automáticos a qualquer pergunta. Responda diretamente, como uma pessoa conversando no WhatsApp.\n- Use o primeiro nome do lead quando ele estiver disponível, mas não em todas as mensagens. Se não estiver, não deixe vírgula, espaço ou variável vazia no lugar do nome. Nunca escreva \"Oi, !\".\n- Durante a coleta, cada mensagem deve ter exatamente uma pergunta, sempre no final. Respostas informativas pós-credenciamento podem terminar sem pergunta quando não houver dado pendente.\n- Prefira mensagens curtas, com no máximo três frases antes da pergunta. Não repita o nome completo do evento em todas as mensagens.\n- Reconheça brevemente a resposta anterior e faça apenas a próxima pergunta pendente.\n- Se a conversa estiver COMPLETED, preserve esse estado. Responda dúvidas normalmente sem pedir nova confirmação e sem reiniciar o credenciamento.\n- Se o lead repetir uma pergunta, não copie novamente a resposta inteira. Resuma, esclareça o ponto e pergunte apenas qual condição ou modelo ele quer detalhar, se isso for útil.\n- Não transforme respostas automáticas de ausência, horário comercial ou atendimento empresarial em dados do credenciamento.\n- Não diga que uma operação foi concluída sem retorno de sucesso da ferramenta e do validador. Para QR Code, use o status real retornado pela API; não prometa envio futuro sem evidência.\n`;
+    options.systemMessage += `\n\n${toneMarker}\nEstas regras V4 substituem qualquer regra de tom anterior que conflite com elas.\n- Fale como um brasileiro simpático e descontraído. Bordões como Falaa, Top, Show, Blz e Anotado aqui são opcionais: use no máximo um quando combinar com a mensagem, nunca por obrigação e nunca repita em mensagens consecutivas.\n- Evite construções artificiais como \"Top você perguntar\", \"Show sua dúvida\" e elogios automáticos a qualquer pergunta. Responda diretamente, como uma pessoa conversando no WhatsApp.\n- Use o primeiro nome do lead quando ele estiver disponível, mas não em todas as mensagens. Se não estiver, não deixe vírgula, espaço ou variável vazia no lugar do nome. Nunca escreva \"Oi, !\".\n- Durante a coleta, cada mensagem deve ter exatamente uma pergunta, sempre no final. Respostas informativas pós-credenciamento podem terminar sem pergunta quando não houver dado pendente.\n- Prefira mensagens curtas, com no máximo três frases antes da pergunta. Não repita o nome completo do evento em todas as mensagens.\n- Reconheça brevemente a resposta anterior e faça apenas a próxima pergunta pendente.\n- Se a conversa estiver COMPLETED, preserve esse estado. Responda dúvidas normalmente sem pedir nova confirmação e sem reiniciar o credenciamento.\n- Se o lead repetir uma pergunta, não copie novamente a resposta inteira. Resuma, esclareça o ponto e pergunte apenas sobre uma condição que esteja literalmente descrita no evento, se isso for útil.\n- Não transforme respostas automáticas de ausência, horário comercial ou atendimento empresarial em dados do credenciamento.\n- Não diga que uma operação foi concluída sem retorno de sucesso da ferramenta e do validador. Para QR Code, use o status real retornado pela API; não prometa envio futuro sem evidência.\n`;
+  }
+
+  const memoryMarker =
+    "# REGISTRO OBRIGATORIO DE RESPOSTAS V6 — PRIORIDADE MAXIMA";
+  if (!options.systemMessage.includes(memoryMarker)) {
+    options.systemMessage += `\n\n${memoryMarker}\nEstas regras substituem qualquer instrução conflitante sobre avanço de etapa.\n- Antes de responder, leia current_step e trate a mensagem atual como resposta da pergunta pendente. Nunca repita uma pergunta que o lead acabou de responder.\n- Em WAITING_FULL_NAME, ao receber nome e sobrenome, chame atualizar_dados_lead com first_name e last_name. Só depois avance para acompanhantes.\n- Em WAITING_COMPANIONS, interprete "minha esposa", "meu marido", "mais uma pessoa" ou equivalente como 1 acompanhante. Salve companions como "1 acompanhante, nome ainda não informado" e pergunte apenas o nome completo.\n- Em WAITING_COMPANION_NAMES, se a resposta possuir nome e sobrenome, chame atualizar_dados_lead e sobrescreva companions no formato "N acompanhante(s): Nome completo". Só depois do sucesso avance para a escolha da data.\n- Em WAITING_EVENT_DATE, sempre mostre todas as datas e horários exatos de event_days_iso antes de perguntar a preferência. Nunca pergunte apenas "qual data" sem listar as opções.\n- Se uma ferramenta falhar, não repita como se o lead não tivesse respondido. Informe brevemente que não conseguiu registrar o dado e peça somente uma nova tentativa.\n`;
+  }
+
+  const updateLeadTool = workflow.nodes.find(
+    (item) => item.name === "atualizar_dados_lead",
+  );
+  if (updateLeadTool) {
+    updateLeadTool.parameters.toolDescription =
+      "Salva imediatamente a resposta da pergunta atual. Em nome completo, envie first_name e last_name. Em acompanhantes, preserve a quantidade e grave os nomes no campo companions no formato 'N acompanhante(s): Nome completo'. Nunca envie campo vazio e nunca responda ao lead antes do sucesso desta ferramenta.";
+  }
+
+  const claimsMarker =
+    "# TRAVA DE CONHECIMENTO DO EVENTO V5 — PRIORIDADE MAXIMA";
+  if (!options.systemMessage.includes(claimsMarker)) {
+    options.systemMessage += `\n\n${claimsMarker}\nEstas regras substituem qualquer instrução anterior conflitante.\n- A descrição do evento presente no contexto é a ÚNICA fonte autorizada para ofertas, condições, modelos, versões, preços, valores, estoque, características e informações comerciais.\n- O Rubinho NÃO possui catálogo de veículos e NÃO sabe preços, valores, versões, especificações, equipamentos, estoque, autonomia, consumo, potência, prazo de entrega, parcelas, entrada ou condições que não estejam escritas literalmente na descrição do evento.\n- Nunca use conhecimento geral, memória do modelo, nome da marca, FAQ genérica, suposição ou inferência para completar uma resposta. Nada além da descrição do evento pode ser apresentado como fato.\n- Se a descrição trouxer explicitamente um modelo, valor ou condição, repita somente o que está escrito, sem calcular, comparar, extrapolar, prometer ou adicionar adjetivos.\n- Se o lead perguntar por modelo, versão, preço, valor ou detalhe que não consta literalmente na descrição, responda: \"Essa informação específica não está na descrição do evento. Por aqui eu consigo te orientar somente sobre as condições divulgadas para o evento.\" Depois retome apenas a pergunta pendente do credenciamento, se existir.\n- Nunca diga que pode explicar detalhes de um modelo ou condição ausente. Nunca convide o lead a perguntar sobre modelos específicos se a descrição não os apresentar.\n- Quando houver dúvida se uma informação está ou não na descrição, aplique bloqueio por padrão: não informe.\n`;
   }
 
   const finalizer = node(workflow, "finalizar_credenciamento");

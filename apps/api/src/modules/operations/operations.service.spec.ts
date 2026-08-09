@@ -4,6 +4,10 @@ describe("OperationsService", () => {
   const prisma = {
     operationalIssue: { upsert: jest.fn() },
     operationalHeartbeat: { upsert: jest.fn() },
+    lead: { findMany: jest.fn() },
+    dispatchEvent: { findMany: jest.fn() },
+    conversationState: { findMany: jest.fn() },
+    conversation: { findMany: jest.fn() },
   };
   let service: OperationsService;
 
@@ -45,5 +49,80 @@ describe("OperationsService", () => {
         update: expect.objectContaining({ status: "healthy" }),
       }),
     );
+  });
+
+  it("conta cada lead em uma unica pergunta e mantem respostas como KPI acumulado", async () => {
+    const sentAt = new Date("2026-08-09T12:00:00.000Z");
+    prisma.lead.findMany.mockResolvedValue([
+      {
+        id: "lead-1",
+        client_id: "client-1",
+        event_interest_id: "event-1",
+        name: "Raphael dos Santos",
+        first_name: "Raphael",
+        last_name: "dos Santos",
+        companions: null,
+        store_visit_datetime: null,
+        description: null,
+        vehicle_plate: null,
+        confirmation_status: "pending",
+        created_at: sentAt,
+        updated_at: sentAt,
+      },
+      {
+        id: "lead-2",
+        client_id: "client-1",
+        event_interest_id: "event-1",
+        name: "Lead sem resposta",
+        first_name: null,
+        last_name: null,
+        companions: null,
+        store_visit_datetime: null,
+        description: null,
+        vehicle_plate: null,
+        confirmation_status: "pending",
+        created_at: sentAt,
+        updated_at: sentAt,
+      },
+    ]);
+    prisma.dispatchEvent.findMany.mockResolvedValue([
+      {
+        lead_id: "lead-1",
+        status: "replied",
+        sent_at: sentAt,
+        delivered_at: sentAt,
+        read_at: sentAt,
+        replied_at: new Date("2026-08-09T12:01:00.000Z"),
+        failed_at: null,
+        created_at: sentAt,
+      },
+      {
+        lead_id: "lead-2",
+        status: "sent",
+        sent_at: sentAt,
+        delivered_at: null,
+        read_at: null,
+        replied_at: null,
+        failed_at: null,
+        created_at: sentAt,
+      },
+    ]);
+    prisma.conversationState.findMany.mockResolvedValue([]);
+    prisma.conversation.findMany.mockResolvedValue([]);
+
+    const result = await service.rubinhoThermometer(
+      { role: "gestor" } as never,
+      { event_id: "event-1" },
+    );
+
+    expect(result.totals.template_sent).toBe(2);
+    expect(result.totals.template_replied).toBe(1);
+    expect(
+      result.stages.find((stage) => stage.key === "WAITING_COMPANIONS")
+        ?.count,
+    ).toBe(1);
+    expect(
+      result.stages.reduce((sum, stage) => sum + stage.count, 0),
+    ).toBe(1);
   });
 });

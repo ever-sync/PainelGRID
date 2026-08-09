@@ -269,10 +269,38 @@ export class AppointmentsService {
       );
     }
 
-    const email = await this.sendEventCredentialEmailForAutomation(
-      lead.id,
-      dto.dispatch_key,
-    );
+    // O e-mail é um canal complementar. Ausência de endereço ou falha do
+    // provedor nunca pode desfazer o agendamento nem interromper o workflow do
+    // WhatsApp depois que a data já foi reconciliada com sucesso.
+    let email: {
+      sent: boolean;
+      idempotent_replay: boolean;
+      reason?: string;
+      [key: string]: unknown;
+    };
+    if (!lead.email?.trim()) {
+      email = {
+        sent: false,
+        idempotent_replay: false,
+        reason: "Lead sem e-mail cadastrado",
+      };
+    } else {
+      try {
+        email = await this.sendEventCredentialEmailForAutomation(
+          lead.id,
+          dto.dispatch_key,
+        );
+      } catch (error) {
+        email = {
+          sent: false,
+          idempotent_replay: false,
+          reason:
+            error instanceof Error
+              ? error.message
+              : "Falha desconhecida ao enviar e-mail",
+        };
+      }
+    }
 
     return {
       reconciled: true,

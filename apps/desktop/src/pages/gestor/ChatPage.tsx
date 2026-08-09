@@ -722,14 +722,14 @@ export function ChatPage() {
     };
   }, [applyIncomingMessage, handleLeadMutation, realtimeClientIds, token]);
 
-  // Polling de segurança: garante que mensagens cheguem mesmo quando o
-  // WebSocket falha (ex.: deploy serverless no Vercel não mantém conexões
-  // persistentes; rede instável; bloqueio por proxy corporativo).
-  // Intervalo conservador (30s) para não sobrecarregar a API.
+  // Polling de segurança: além de cobrir quedas do WebSocket, importa a
+  // memória do agente n8n que ainda não nasce no barramento realtime da API.
+  // Cinco segundos mantém o chat operacional enquanto essa compatibilidade
+  // com o workflow legado for necessária.
   useEffect(() => {
     if (!token) return;
 
-    const POLL_MS = 30_000;
+    const POLL_MS = 5_000;
     const interval = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
       refreshConversations();
