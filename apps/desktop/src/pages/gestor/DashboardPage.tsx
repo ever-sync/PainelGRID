@@ -396,6 +396,8 @@ function RubinhoThermometerCard({
       (stage) => !["CANCELLED", "HUMAN_HANDOFF"].includes(stage.key),
     ) ?? [];
   const maxStageCount = Math.max(...stages.map((stage) => stage.count), 1);
+  /** Base do "% do total": quantos leads estão distribuídos pelas etapas. */
+  const stageTotal = stages.reduce((sum, stage) => sum + stage.count, 0);
   const updatedAt = data
     ? new Intl.DateTimeFormat("pt-BR", {
         hour: "2-digit",
@@ -443,8 +445,8 @@ function RubinhoThermometerCard({
 
   return (
     <Card className="overflow-hidden rounded-3xl" padding="lg">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <Activity size={18} className="text-[#FF0636]" />
             <h2 className="text-base font-semibold tracking-tight text-zinc-950">
@@ -464,7 +466,7 @@ function RubinhoThermometerCard({
           </p>
         </div>
 
-        <label className="w-full max-w-sm">
+        <label className="w-full shrink-0 lg:max-w-sm">
           <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
             Evento analisado
           </span>
@@ -494,7 +496,7 @@ function RubinhoThermometerCard({
         </label>
       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         {metrics.map((metric) => {
           const Icon = metric.icon;
           return (
@@ -510,17 +512,27 @@ function RubinhoThermometerCard({
               <div className="flex items-center justify-between gap-3">
                 <span
                   className={clsx(
-                    "flex h-9 w-9 items-center justify-center rounded-xl",
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
                     isDarkMode ? "bg-zinc-800" : metric.background,
                   )}
                 >
                   <Icon size={16} className={metric.color} />
                 </span>
-                <span className="text-2xl font-black tracking-tight text-zinc-950">
+                <span
+                  className={clsx(
+                    "text-2xl font-black tracking-tight tabular-nums",
+                    isDarkMode ? "text-zinc-50" : "text-zinc-950",
+                  )}
+                >
                   {loading && !data ? "–" : metric.value}
                 </span>
               </div>
-              <p className="mt-3 text-[11px] font-semibold text-zinc-500">
+              <p
+                className={clsx(
+                  "mt-3 text-xs font-semibold",
+                  isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                )}
+              >
                 {metric.label}
               </p>
             </div>
@@ -528,31 +540,65 @@ function RubinhoThermometerCard({
         })}
       </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_220px]">
-        <div className="overflow-x-auto pb-2">
-          <div className="flex min-w-[900px] items-stretch gap-2">
-            {stages.map((stage, index) => (
-              <div key={stage.key} className="flex min-w-0 flex-1 items-center">
-                <div
+      <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px]">
+        {/* Grade que quebra em linhas: antes a faixa tinha largura minima de
+            900px e virava rolagem lateral em qualquer tela menor. */}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-8">
+          {stages.map((stage, index) => {
+            const share =
+              stageTotal > 0 ? Math.round((stage.count / stageTotal) * 100) : 0;
+            return (
+              <div
+                key={stage.key}
+                title={`${index + 1}. ${stage.short_label} — ${stage.count} lead(s)`}
+                className={clsx(
+                  "flex min-h-[120px] flex-col rounded-2xl border p-3",
+                  isDarkMode
+                    ? "border-zinc-800 bg-zinc-900/60"
+                    : "border-zinc-100 bg-zinc-50/70",
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className={clsx(
+                      "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
+                      isDarkMode
+                        ? "bg-zinc-700 text-zinc-100"
+                        : "bg-zinc-950 text-white",
+                    )}
+                  >
+                    {index + 1}
+                  </span>
+                  <span
+                    className={clsx(
+                      "text-xl font-black tabular-nums",
+                      isDarkMode ? "text-zinc-50" : "text-zinc-950",
+                    )}
+                  >
+                    {stage.count}
+                  </span>
+                </div>
+                <p
                   className={clsx(
-                    "flex h-full min-h-[126px] flex-1 flex-col rounded-2xl border p-3",
-                    isDarkMode
-                      ? "border-zinc-800 bg-zinc-900/60"
-                      : "border-zinc-100 bg-zinc-50/70",
+                    "mt-2.5 text-xs font-semibold leading-snug",
+                    isDarkMode ? "text-zinc-300" : "text-zinc-700",
                   )}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-950 text-[10px] font-bold text-white">
-                      {index + 1}
-                    </span>
-                    <span className="text-xl font-black text-zinc-950">
-                      {stage.count}
+                  {stage.short_label}
+                </p>
+                <div className="mt-auto pt-2.5">
+                  <div className="mb-1 flex items-center justify-between">
+                    {/* A barra sozinha nao dizia quanto representa do total. */}
+                    <span className="text-[10px] font-semibold tabular-nums text-zinc-400">
+                      {share}% do total
                     </span>
                   </div>
-                  <p className="mt-3 min-h-8 text-[11px] font-semibold leading-4 text-zinc-600">
-                    {stage.short_label}
-                  </p>
-                  <div className="mt-auto h-1.5 overflow-hidden rounded-full bg-zinc-200/80">
+                  <div
+                    className={clsx(
+                      "h-1.5 overflow-hidden rounded-full",
+                      isDarkMode ? "bg-zinc-800" : "bg-zinc-200/80",
+                    )}
+                  >
                     <div
                       className="h-full rounded-full bg-gradient-to-r from-[#FF0636] to-[#ff6b87] transition-[width] duration-500"
                       style={{
@@ -566,12 +612,9 @@ function RubinhoThermometerCard({
                     />
                   </div>
                 </div>
-                {index < stages.length - 1 ? (
-                  <div className="h-px w-2 shrink-0 bg-zinc-200" />
-                ) : null}
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
 
         <div
@@ -590,20 +633,61 @@ function RubinhoThermometerCard({
               ["Resposta ao template", data?.rates.template_reply ?? 0],
               ["Resposta para agendamento", data?.rates.scheduling ?? 0],
               ["Credenciamento concluído", data?.rates.completion ?? 0],
-            ].map(([label, value]) => (
-              <div key={String(label)}>
-                <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="text-zinc-500">{label}</span>
-                  <span className="font-bold text-zinc-950">{value}%</span>
-                </div>
-                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-200/80">
+            ].map(([label, value]) => {
+              const numeric = Number(value);
+              // Taxa acima de 100% existe de verdade aqui (agendados podem
+              // superar quem respondeu). A barra satura, entao marcamos o
+              // estouro em vez de mostrar uma barra cheia sem explicacao.
+              const overflow = numeric > 100;
+              return (
+                <div key={String(label)}>
+                  <div className="flex items-start justify-between gap-2 text-xs">
+                    <span
+                      className={clsx(
+                        "leading-snug",
+                        isDarkMode ? "text-zinc-400" : "text-zinc-600",
+                      )}
+                    >
+                      {label}
+                    </span>
+                    <span
+                      className={clsx(
+                        "shrink-0 font-bold tabular-nums",
+                        overflow
+                          ? "text-amber-600"
+                          : isDarkMode
+                            ? "text-zinc-50"
+                            : "text-zinc-950",
+                      )}
+                    >
+                      {numeric}%
+                    </span>
+                  </div>
                   <div
-                    className="h-full rounded-full bg-[#FF0636] transition-[width] duration-500"
-                    style={{ width: `${Math.min(Number(value), 100)}%` }}
-                  />
+                    className={clsx(
+                      "mt-1.5 h-1.5 overflow-hidden rounded-full",
+                      isDarkMode ? "bg-zinc-800" : "bg-zinc-200/80",
+                    )}
+                  >
+                    <div
+                      className={clsx(
+                        "h-full rounded-full transition-[width] duration-500",
+                        overflow
+                          ? "bg-gradient-to-r from-[#FF0636] to-amber-500"
+                          : "bg-[#FF0636]",
+                      )}
+                      style={{ width: `${Math.min(numeric, 100)}%` }}
+                    />
+                  </div>
+                  {overflow ? (
+                    <p className="mt-1 text-[10px] leading-snug text-amber-600">
+                      Acima de 100%: há mais agendados do que leads que
+                      responderam ao template.
+                    </p>
+                  ) : null}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           {(data?.totals.template_failed ?? 0) > 0 ||
           (data?.totals.handoff ?? 0) > 0 ? (
