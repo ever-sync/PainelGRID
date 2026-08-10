@@ -37,7 +37,6 @@ import { createAppointment } from "../../services/appointments";
 import { listEvents, mapApiEventToEvent } from "../../services/events";
 import { listClientStaff, mapStaffToUser } from "../../services/staff";
 import {
-  assignLeadToMe,
   checkLeadPhone,
   closeLeadAttendance,
   createLead,
@@ -134,18 +133,13 @@ export function LeadsVendedorPage() {
   const [appointmentEventId, setAppointmentEventId] = useState("");
   const [appointmentDateKey, setAppointmentDateKey] = useState("");
   const [appointmentPeriod, setAppointmentPeriod] = useState("");
+  const [showAppointmentOptions, setShowAppointmentOptions] = useState(false);
   const [note, setNote] = useState("");
   const [selectedStageId, setSelectedStageId] = useState("");
   const [stageOptions, setStageOptions] = useState<ApiCrmStage[]>([]);
   const [stageLoading, setStageLoading] = useState(false);
   const [actionError, setActionError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const [duplicateLeadIdToClaim, setDuplicateLeadIdToClaim] = useState<
-    string | null
-  >(null);
-  const [wantsAssignDuplicate, setWantsAssignDuplicate] = useState<
-    boolean | null
-  >(null);
   const [checkingPhone, setCheckingPhone] = useState(false);
   const [phoneCheckError, setPhoneCheckError] = useState("");
   const [phoneCheckRetryNonce, setPhoneCheckRetryNonce] = useState(0);
@@ -439,6 +433,11 @@ export function LeadsVendedorPage() {
     setAppointmentEventId(activeEvents[0].id);
   }, [activeEvents, appointmentEventId, leadModalOpen]);
 
+  useEffect(() => {
+    if (!leadModalOpen || appointmentPeriod) return;
+    setAppointmentPeriod(APPOINTMENT_PERIOD_OPTIONS[0].value);
+  }, [appointmentPeriod, leadModalOpen]);
+
   const appointmentDateOptions = useMemo(() => {
     if (!appointmentEventId) return [];
     const selectedEvent = events.find(
@@ -531,7 +530,6 @@ export function LeadsVendedorPage() {
     }
     if (!normalizedLeadPhone) {
       setActionError("Informe um telefone válido (ex: +5512981092776).");
-      setDuplicateLeadIdToClaim(null);
       return;
     }
     if (checkingPhone) {
@@ -547,18 +545,13 @@ export function LeadsVendedorPage() {
       return;
     }
     if (duplicatePhoneLead) {
-      if (!duplicatePhoneLead.assigned_vendor_id) {
-        setDuplicateLeadIdToClaim(duplicatePhoneLead.id);
+      if (duplicatePhoneLead.assigned_vendor_id !== vendorId) {
         setActionError(
-          'Lead já cadastrado neste evento, mas sem vendedor. Clique em "Adicionar e atribuir".',
-        );
-      } else if (duplicatePhoneLead.assigned_vendor_id !== vendorId) {
-        setDuplicateLeadIdToClaim(null);
-        setActionError(
-          `Este lead já foi cadastrado neste evento e está atribuído ao vendedor ${duplicateLeadOwnerName}.`,
+          duplicatePhoneLead.assigned_vendor_id
+            ? `Este lead já foi cadastrado neste evento e está atribuído ao vendedor ${duplicateLeadOwnerName}.`
+            : "Este lead já foi cadastrado neste evento e não pode ser assumido por outro vendedor.",
         );
       } else {
-        setDuplicateLeadIdToClaim(null);
         setActionError(
           "Este lead já foi cadastrado neste evento e está na sua carteira.",
         );
@@ -577,26 +570,19 @@ export function LeadsVendedorPage() {
         appointmentEventId,
       );
       if (check.exists && check.lead) {
-        if (!check.lead.assigned_vendor_id) {
-          setDuplicateLeadIdToClaim(check.lead.id);
+        if (check.lead.assigned_vendor_id !== vendorId) {
           setActionError(
-            'Lead já cadastrado neste evento, mas sem vendedor. Clique em "Adicionar e atribuir".',
-          );
-        } else if (check.lead.assigned_vendor_id !== vendorId) {
-          setDuplicateLeadIdToClaim(null);
-          setActionError(
-            `Este lead já foi cadastrado neste evento e está atribuído ao vendedor ${check.lead.assigned_vendor_name ?? "outro vendedor"}.`,
+            check.lead.assigned_vendor_id
+              ? `Este lead já foi cadastrado neste evento e está atribuído ao vendedor ${check.lead.assigned_vendor_name ?? "outro vendedor"}.`
+              : "Este lead já foi cadastrado neste evento e não pode ser assumido por outro vendedor.",
           );
         } else {
-          setDuplicateLeadIdToClaim(null);
           setActionError(
             "Este lead já foi cadastrado neste evento e está na sua carteira.",
           );
         }
         return;
       }
-
-      setDuplicateLeadIdToClaim(null);
 
       const row = await createLead(
         {
@@ -661,39 +647,6 @@ export function LeadsVendedorPage() {
         error instanceof Error
           ? error.message
           : "Não foi possível cadastrar o lead.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const claimDuplicateLead = async () => {
-    const t = readStoredSession()?.accessToken;
-    if (!t || !duplicateLeadIdToClaim) return;
-    setSaving(true);
-    try {
-      const row = await assignLeadToMe(duplicateLeadIdToClaim, t);
-      const mapped = mapApiLeadToLead(row);
-      setAllClientLeads((prev) =>
-        prev.some((lead) => lead.id === mapped.id)
-          ? prev.map((lead) => (lead.id === mapped.id ? mapped : lead))
-          : [mapped, ...prev],
-      );
-      setLeads((prev) =>
-        prev.some((lead) => lead.id === mapped.id) ? prev : [mapped, ...prev],
-      );
-      setLeadModalOpen(false);
-      setLeadName("");
-      setLeadPhone("");
-      setLeadEmail("");
-      setDuplicateLeadIdToClaim(null);
-      setPhoneDuplicateHint(null);
-      setActionError("");
-    } catch (error) {
-      setActionError(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível adicionar este lead.",
       );
     } finally {
       setSaving(false);
@@ -806,27 +759,9 @@ export function LeadsVendedorPage() {
     !!normalizedLeadPhone &&
     !checkingPhone &&
     !phoneCheckError &&
-    (!duplicatePhoneLead || wantsAssignDuplicate === true) &&
-    !(
-      duplicatePhoneLead?.assigned_vendor_id &&
-      duplicatePhoneLead.assigned_vendor_id !== vendorId
-    );
+    !duplicatePhoneLead;
   const canCreateNewLead =
     showCreateFields && !duplicatePhoneLead && !phoneCheckError;
-  const leadModalStep: "phone" | "checking" | "decision" | "data" =
-    !normalizedLeadPhone
-      ? "phone"
-      : checkingPhone
-        ? "checking"
-        : phoneCheckError
-          ? "checking"
-          : duplicatePhoneLead
-            ? "decision"
-            : "data";
-  const phoneStepDone = leadModalStep !== "phone";
-  const verifyStepActive =
-    leadModalStep === "checking" || leadModalStep === "decision";
-  const verifyStepDone = leadModalStep === "data";
 
   const countNew = useMemo(
     () => leads.filter(isLeadNew).length,
@@ -1205,12 +1140,11 @@ export function LeadsVendedorPage() {
         open={leadModalOpen}
         onClose={() => {
           setLeadModalOpen(false);
-          setDuplicateLeadIdToClaim(null);
-          setWantsAssignDuplicate(null);
           setActionError("");
           setAppointmentEventId("");
           setAppointmentDateKey("");
           setAppointmentPeriod("");
+          setShowAppointmentOptions(false);
         }}
         title="Cadastrar lead"
         footer={
@@ -1219,12 +1153,11 @@ export function LeadsVendedorPage() {
               variant="secondary"
               onClick={() => {
                 setLeadModalOpen(false);
-                setDuplicateLeadIdToClaim(null);
-                setWantsAssignDuplicate(null);
                 setActionError("");
                 setAppointmentEventId("");
                 setAppointmentDateKey("");
                 setAppointmentPeriod("");
+                setShowAppointmentOptions(false);
               }}
             >
               Cancelar
@@ -1243,84 +1176,15 @@ export function LeadsVendedorPage() {
                 Cadastrar e agendar
               </Button>
             ) : null}
-            {duplicateLeadIdToClaim && wantsAssignDuplicate ? (
-              <Button
-                variant="secondary"
-                onClick={() => void claimDuplicateLead()}
-                loading={saving}
-              >
-                Sim, atribuir para mim
-              </Button>
-            ) : null}
           </>
         }
       >
-        <div className="space-y-5">
-          <div className="flex items-center">
-            {(
-              [
-                {
-                  key: "phone",
-                  label: "Telefone",
-                  done: phoneStepDone,
-                  active: leadModalStep === "phone",
-                },
-                {
-                  key: "verify",
-                  label: "Verificação",
-                  done: verifyStepDone,
-                  active: verifyStepActive,
-                },
-                {
-                  key: "data",
-                  label: "Dados",
-                  done: false,
-                  active: leadModalStep === "data",
-                },
-              ] as const
-            ).map((step, idx, arr) => (
-              <div
-                key={step.key}
-                className={clsx(
-                  "flex items-center",
-                  idx < arr.length - 1 ? "flex-1" : "",
-                )}
-              >
-                <div className="flex flex-col items-center gap-1.5">
-                  <div
-                    className={clsx(
-                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-xs font-semibold transition-colors duration-200",
-                      step.done
-                        ? "border-emerald-500 bg-emerald-500 text-white"
-                        : step.active
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-muted text-muted-foreground",
-                    )}
-                  >
-                    {step.done ? <CheckCircle2 size={16} /> : idx + 1}
-                  </div>
-                  <span
-                    className={clsx(
-                      "whitespace-nowrap text-[11px] font-medium",
-                      step.active || step.done
-                        ? "text-foreground"
-                        : "text-muted-foreground",
-                    )}
-                  >
-                    {step.label}
-                  </span>
-                </div>
-                {idx < arr.length - 1 ? (
-                  <div
-                    className={clsx(
-                      "mx-2 h-0.5 flex-1 rounded-full transition-colors duration-200",
-                      step.done ? "bg-emerald-500" : "bg-border",
-                    )}
-                    style={{ marginBottom: 18 }}
-                  />
-                ) : null}
-              </div>
-            ))}
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3">
+            <p className="text-sm font-semibold text-foreground">Cadastro rápido</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Informe telefone e nome. O próximo evento e horário já vêm selecionados.
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -1330,8 +1194,6 @@ export function LeadsVendedorPage() {
               value={leadPhone}
               onChange={(e) => {
                 setLeadPhone(e.target.value);
-                setDuplicateLeadIdToClaim(null);
-                setWantsAssignDuplicate(null);
                 setActionError("");
                 setPhoneCheckError("");
               }}
@@ -1373,50 +1235,13 @@ export function LeadsVendedorPage() {
           ) : null}
 
           {duplicatePhoneLead && !checkingPhone ? (
-            duplicatePhoneLead.assigned_vendor_id ? (
-              <div className="flex items-start gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-xs text-destructive">
-                <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                {duplicatePhoneLead.assigned_vendor_id === vendorId
-                  ? "Esse lead já foi cadastrado neste evento e está na sua carteira."
-                  : `Esse lead já foi cadastrado neste evento pelo vendedor ${duplicateLeadOwnerName}.`}
-              </div>
-            ) : (
-              <div className="space-y-2.5 rounded-2xl border border-amber-300/60 bg-amber-50 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
-                <p className="text-xs text-amber-900 dark:text-amber-300">
-                  Lead já cadastrado neste evento e sem vendedor. Quer atribuir
-                  para você?
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setWantsAssignDuplicate(true);
-                      setDuplicateLeadIdToClaim(duplicatePhoneLead.id);
-                      setLeadName(duplicatePhoneLead.name ?? "");
-                      setActionError("");
-                    }}
-                  >
-                    Sim, atribuir
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => {
-                      setWantsAssignDuplicate(false);
-                      setDuplicateLeadIdToClaim(null);
-                    }}
-                  >
-                    Não
-                  </Button>
-                </div>
-              </div>
-            )
-          ) : null}
-
-          {leadModalStep === "data" ? (
-            <div className="flex items-center gap-2 rounded-2xl border border-emerald-300/60 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
-              <CheckCircle2 size={14} className="shrink-0" />
-              Telefone disponível. Complete os dados para finalizar o cadastro.
+            <div className="flex items-start gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-xs text-destructive">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              {duplicatePhoneLead.assigned_vendor_id === vendorId
+                ? "Esse lead já foi cadastrado neste evento e está na sua carteira."
+                : duplicatePhoneLead.assigned_vendor_id
+                  ? `Esse lead já foi cadastrado neste evento pelo vendedor ${duplicateLeadOwnerName}.`
+                  : "Esse lead já foi cadastrado neste evento e não pode ser assumido por outro vendedor."}
             </div>
           ) : null}
 
@@ -1446,10 +1271,34 @@ export function LeadsVendedorPage() {
                   placeholder="E-mail (opcional)"
                 />
 
-                <div className="space-y-3 border-t border-border pt-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Agendamento
-                  </p>
+                <div className="rounded-2xl border border-border bg-muted/30 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-foreground">Agendamento automático</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {activeEvents.find((event) => event.id === appointmentEventId)?.name ?? "Carregando evento"}
+                        {appointmentDateKey ? ` · ${toPtBrDateLabel(appointmentDateKey)}` : ""}
+                        {appointmentPeriod
+                          ? ` · ${APPOINTMENT_PERIOD_OPTIONS.find((p) => p.value === appointmentPeriod)?.label ?? ""}`
+                          : ""}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAppointmentOptions((value) => !value)}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:border-primary hover:text-primary"
+                    >
+                      Alterar
+                      <ChevronDown
+                        size={14}
+                        className={clsx("transition-transform", showAppointmentOptions && "rotate-180")}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {showAppointmentOptions ? (
+                  <div className="space-y-3 border-t border-border pt-3">
                   <Select
                     label="Evento"
                     value={appointmentEventId}
@@ -1510,7 +1359,8 @@ export function LeadsVendedorPage() {
                       ))}
                     </div>
                   </div>
-                </div>
+                  </div>
+                ) : null}
               </>
             ) : null}
           </div>

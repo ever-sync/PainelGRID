@@ -177,10 +177,13 @@ export class LeadsController {
   @Post(":id/assign-to-me")
   @Roles(Role.VENDEDOR)
   @ApiOperation({
-    summary: "Atribui lead sem vendedor ao vendedor autenticado",
+    summary: "Atribui lead sem vendedor e sem evento ao vendedor autenticado",
   })
   @ApiResponse({ status: 200, description: "Lead atribuído com sucesso" })
-  @ApiResponse({ status: 400, description: "Lead já possui vendedor" })
+  @ApiResponse({
+    status: 400,
+    description: "Lead já possui vendedor ou já está vinculado a um evento",
+  })
   @ApiResponse({ status: 403, description: "Sem permissão para este lead" })
   @ApiResponse({ status: 404, description: "Lead não encontrado" })
   assignToMe(

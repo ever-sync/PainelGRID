@@ -637,6 +637,29 @@ describe("LeadsService", () => {
     deleted_at: null,
   };
 
+  it("impede vendedor de assumir lead ja cadastrado no evento", async () => {
+    prisma.lead.findFirst.mockResolvedValue({
+      ...baseExistingLead,
+      event_interest_id: eventId,
+    });
+
+    await expect(
+      service.assignToMe(
+        {
+          sub: vendorId,
+          role: Role.VENDEDOR,
+          name: "Vendedor",
+          email: "vendedor@teste.com",
+          client_id: clientId,
+        },
+        baseExistingLead.id,
+      ),
+    ).rejects.toThrow(
+      "Lead ja cadastrado neste evento nao pode ser assumido pelo vendedor",
+    );
+    expect(prisma.lead.update).not.toHaveBeenCalled();
+  });
+
   it("remove definitivamente o lead e todos os registros relacionados", async () => {
     prisma.lead.findFirst.mockResolvedValue(baseExistingLead);
     prisma.conversation.findMany.mockResolvedValue([

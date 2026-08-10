@@ -1657,6 +1657,12 @@ export class LeadsService {
       throw new NotFoundException("Lead nao encontrado");
     }
 
+    if (lead.event_interest_id) {
+      throw new BadRequestException(
+        "Lead ja cadastrado neste evento nao pode ser assumido pelo vendedor",
+      );
+    }
+
     if (lead.assigned_vendor_id === user.sub) {
       return this.toResponse(lead as LeadWithRelations);
     }
