@@ -19,6 +19,7 @@ import { CurrentUser, Roles } from "../../common/decorators";
 import { Role } from "../../common/types";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { CreateEventDto } from "./dto/create-event.dto";
+import { AuditLogQueryDto } from "./dto/audit-log-query.dto";
 import { FindEventsQueryDto } from "./dto/find-events-query.dto";
 import { OperationalReportQueryDto } from "./dto/operational-report-query.dto";
 import { UpdateEventDto } from "./dto/update-event.dto";
@@ -48,6 +49,16 @@ export class EventsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.eventsService.findAll(user, query);
+  }
+
+  @Get("audit-logs")
+  @Roles(Role.GESTOR, Role.CLIENTE)
+  @ApiOperation({ summary: "Lista o histórico de auditoria por cliente ou evento" })
+  getAuditLogs(
+    @Query() query: AuditLogQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.eventsService.getAuditLogs(user, query);
   }
 
   @Get("active-summary")

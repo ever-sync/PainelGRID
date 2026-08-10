@@ -11,6 +11,7 @@ import { ClientsService } from "../clients/clients.service";
 import { CreateEventDto } from "./dto/create-event.dto";
 import { FindEventsQueryDto } from "./dto/find-events-query.dto";
 import { UpdateEventDto } from "./dto/update-event.dto";
+import { AuditLogQueryDto } from "./dto/audit-log-query.dto";
 
 type EventRow = {
   id: string;
@@ -94,6 +95,89 @@ export class EventsService {
     private readonly prisma: PrismaService,
     private readonly clientsService: ClientsService,
   ) {}
+
+  async getAuditLogs(user: AuthenticatedUser, query: AuditLogQueryDto) {
+    const clientId =
+      user.role === Role.CLIENTE ? user.client_id ?? undefined : query.client_id;
+
+    if (!clientId) {
+      throw new ForbiddenException("Selecione um cliente para consultar os logs");
+    }
+
+    if (user.role === Role.GESTOR) {
+      await this.clientsService.assertGestorOwnsClient(user.sub, clientId);
+    } else if (clientId !== user.client_id) {
+      throw new ForbiddenException("Sem permissao");
+    }
+
+    if (query.event_id) {
+      const event = await this.prisma.event.findFirst({
+        where: {
+          id: query.event_id,
+          participants: { some: { client_id: clientId } },
+        },
+        select: { id: true },
+      });
+      if (!event) throw new ForbiddenException("Evento fora do escopo do cliente");
+    }
+
+    const search = query.search?.trim();
+    const rows = await this.prisma.leadTimeline.findMany({
+      where: {
+        client_id: clientId,
+        lead: {
+          ...(query.event_id ? { event_interest_id: query.event_id } : {}),
+          ...(search
+            ? {
+                OR: [
+                  { name: { contains: search, mode: "insensitive" } },
+                  { email: { contains: search, mode: "insensitive" } },
+                  { phone: { contains: search } },
+                ],
+              }
+            : {}),
+        },
+      },
+      include: {
+        lead: {
+          select: {
+            id: true,
+            name: true,
+            event_interest: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: [{ occurred_at: "desc" }, { created_at: "desc" }],
+      take: 500,
+    });
+
+    const actionNames: Record<string, string> = {
+      created: "Lead cadastrado",
+      stage_moved: "Etapa do CRM alterada",
+      status_changed: "Status do lead alterado",
+      assigned: "Lead atribuído",
+      unassigned: "Atribuição removida",
+      tag_added: "Marcador adicionado",
+      tag_removed: "Marcador removido",
+      note: "Anotação registrada",
+      message: "Mensagem registrada",
+    };
+
+    return rows.map((row) => ({
+      id: row.id,
+      timestamp: row.occurred_at,
+      actor: row.actor_label || "Sistema",
+      role: row.origin,
+      action: actionNames[row.event_type] || row.event_type,
+      category: "lead",
+      details:
+        row.notes ||
+        [row.from_value, row.to_value].filter(Boolean).join(" → ") ||
+        `Ação realizada no lead ${row.lead.name}`,
+      lead: { id: row.lead.id, name: row.lead.name },
+      event: row.lead.event_interest,
+    }));
+  }
 
   private normalizeParticipantIds(
     dto: Pick<CreateEventDto | UpdateEventDto, "participant_client_ids">,

@@ -185,6 +185,11 @@ function getNavItems(user: User): NavItem[] {
           icon: <Trophy size={18} />,
           label: "Rel. Executivo",
         },
+        {
+          href: "/gestor/auditoria",
+          icon: <FileText size={18} />,
+          label: "Auditoria",
+        },
       ];
     case "cliente":
       return [

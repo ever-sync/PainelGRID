@@ -502,6 +502,7 @@ export default function App() {
               <Route path="/gestor/lojas" element={<LojasPage />} />
               <Route path="/gestor/cursos" element={<CursosGestorPage />} />
               <Route path="/gestor/performance" element={<PerformancePage />} />
+              <Route path="/gestor/auditoria" element={<AuditoriaPage />} />
               <Route
                 path="/gestor/configuracao"
                 element={<ConfiguracaoPage />}
