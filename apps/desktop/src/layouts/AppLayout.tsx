@@ -57,7 +57,11 @@ import {
   checkInLeadByToken,
   queryFipeData,
   closeLeadAttendance,
+  acceptVendorCall,
+  expireVendorCall,
+  getCurrentVendorAttendance,
   rejectVendorCall,
+  updateVendorStatus,
 } from "../services/leads";
 import { readStoredSession } from "../services/auth";
 import {
@@ -197,6 +201,11 @@ function getNavItems(user: User): NavItem[] {
           href: "/cliente/dashboard",
           icon: <Home size={18} />,
           label: "Início",
+        },
+        {
+          href: "/cliente/eventos",
+          icon: <Calendar size={18} />,
+          label: "Evento 360",
         },
         {
           href: "/cliente/lojas",
@@ -462,13 +471,17 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
   // ── Listener Global de Chamada de Vendedor (Pop-up Vendedor) ───────────────
   const [vendorCallAlert, setVendorCallAlert] = useState<{
     id: string;
+    attendance_id?: string;
     lead_id: string;
     lead_name: string;
     vendor_id: string;
     vendor_name: string;
     team_name?: string;
+    expires_at?: string | null;
   } | null>(null);
   const [rejectingVendorCall, setRejectingVendorCall] = useState(false);
+  const [acceptingVendorCall, setAcceptingVendorCall] = useState(false);
+  const [vendorCallSeconds, setVendorCallSeconds] = useState(30);
 
   // Solicita permissão para Web Push Notifications ao carregar o aplicativo
   useEffect(() => {
@@ -498,11 +511,13 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
 
     const handleVendorCalled = (payload: {
       id: string;
+      attendance_id?: string;
       lead_id: string;
       lead_name: string;
       vendor_id: string;
       vendor_name: string;
       team_name?: string;
+      expires_at?: string | null;
     }) => {
       // Exibe pop-up se a chamada for para o usuario logado (ou se for perfil de gestor/testes)
       const vendorIsBusy =
@@ -558,6 +573,16 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     socket.on("new_message", handleNotifiableEvent);
     socket.on("vendor_called", handleNotifiableEvent);
     socket.on("vendor_called", handleVendorCalled);
+    const handleAttendanceUpdated = (payload: {
+      vendor_id: string;
+      status: string;
+    }) => {
+      if (payload.vendor_id !== user.id) return;
+      if (["rejected", "expired", "finished"].includes(payload.status)) {
+        setVendorCallAlert(null);
+      }
+    };
+    socket.on("vendor_attendance_updated", handleAttendanceUpdated);
 
     return () => {
       socket.off("lead_checkin", handleNotifiableEvent);
@@ -566,6 +591,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       socket.off("new_message", handleNotifiableEvent);
       socket.off("vendor_called", handleNotifiableEvent);
       socket.off("vendor_called", handleVendorCalled);
+      socket.off("vendor_attendance_updated", handleAttendanceUpdated);
       socket.disconnect();
       realtimeSocketRef.current = null;
     };
@@ -597,19 +623,37 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     return () => clearInterval(interval);
   }, [vendorCallAlert]);
 
-  // ── Status do Vendedor (Online / Ausente / Offline) ────────────────────────
-  const [vendorStatus, setVendorStatusState] = useState<
-    "online" | "away" | "offline"
-  >(() => {
-    return (
-      (localStorage.getItem(`vendor_status_${user.id}`) as
-        "online" | "away" | "offline") || "online"
-    );
-  });
+  useEffect(() => {
+    if (!vendorCallAlert) return;
+    const expiresAt = vendorCallAlert.expires_at
+      ? new Date(vendorCallAlert.expires_at).getTime()
+      : Date.now() + 30_000;
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+      setVendorCallSeconds(remaining);
+      if (remaining === 0) {
+        const token = readStoredSession()?.accessToken;
+        if (token)
+          void expireVendorCall(vendorCallAlert.lead_id, token).catch(
+            () => undefined,
+          );
+        setVendorCallAlert(null);
+      }
+    };
+    tick();
+    const interval = window.setInterval(tick, 500);
+    return () => window.clearInterval(interval);
+  }, [vendorCallAlert]);
 
-  const handleUpdateVendorStatus = (
-    newStatus: "online" | "away" | "offline",
-  ) => {
+  // ── Status do Vendedor (Online / Ausente / Offline) ────────────────────────
+  const [vendorStatus, setVendorStatusState] = useState<"online" | "away">(
+    () => {
+      const saved = localStorage.getItem(`vendor_status_${user.id}`);
+      return saved === "away" || saved === "offline" ? "away" : "online";
+    },
+  );
+
+  const handleUpdateVendorStatus = (newStatus: "online" | "away") => {
     setVendorStatusState(newStatus);
     try {
       localStorage.setItem(`vendor_status_${user.id}`, newStatus);
@@ -622,6 +666,12 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       vendor_id: user.id,
       status: newStatus,
     });
+    const token = readStoredSession()?.accessToken;
+    if (token) {
+      void updateVendorStatus(newStatus, token).catch((error) => {
+        console.error("Erro ao atualizar disponibilidade:", error);
+      });
+    }
   };
 
   // ── Expand/Collapse Sidebar (Abrir e Fechar em todos os acessos) ──────────────
@@ -647,6 +697,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
 
   // ── Atendimento Ativo com Cronômetro do Vendedor ───────────────────────────
   const [activeAttendance, setActiveAttendance] = useState<{
+    attendance_id: string;
     lead_id: string;
     lead_name: string;
     vendor_id: string;
@@ -664,6 +715,45 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [showAttendanceOutcome, setShowAttendanceOutcome] = useState(false);
   const [finishingAttendance, setFinishingAttendance] = useState(false);
+
+  useEffect(() => {
+    if (user.role !== "vendedor") return;
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+    void getCurrentVendorAttendance(token)
+      .then((row) => {
+        if (!row) return;
+        const leadId = row.lead_id;
+        const leadName = row.lead_name;
+        if (row.status === "pending") {
+          setVendorCallAlert({
+            id: row.id,
+            attendance_id: row.id,
+            lead_id: leadId,
+            lead_name: leadName,
+            vendor_id: row.vendor_id,
+            vendor_name: user.name,
+            expires_at: row.expires_at,
+          });
+        } else if (row.status === "accepted") {
+          const session = {
+            attendance_id: row.id,
+            lead_id: leadId,
+            lead_name: leadName,
+            vendor_id: row.vendor_id,
+            startedAt: row.accepted_at
+              ? new Date(row.accepted_at).getTime()
+              : Date.now(),
+          };
+          setActiveAttendance(session);
+          localStorage.setItem(
+            "active_vendor_attendance",
+            JSON.stringify(session),
+          );
+        }
+      })
+      .catch(() => undefined);
+  }, [user.id, user.name, user.role]);
 
   // Timer em tempo real
   useEffect(() => {
@@ -683,21 +773,37 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     return () => clearInterval(interval);
   }, [activeAttendance]);
 
-  const handleAcceptAttendance = (call: typeof vendorCallAlert) => {
-    if (!call) return;
-    const session = {
-      lead_id: call.lead_id,
-      lead_name: call.lead_name,
-      vendor_id: call.vendor_id,
-      startedAt: Date.now(),
-    };
-    setActiveAttendance(session);
+  const handleAcceptAttendance = async (call: typeof vendorCallAlert) => {
+    if (!call || acceptingVendorCall) return;
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+    setAcceptingVendorCall(true);
     try {
-      localStorage.setItem("active_vendor_attendance", JSON.stringify(session));
-    } catch {
-      /* ignore */
+      const accepted = await acceptVendorCall(call.lead_id, token);
+      const session = {
+        attendance_id: accepted.id ?? call.attendance_id ?? call.id,
+        lead_id: call.lead_id,
+        lead_name: call.lead_name,
+        vendor_id: call.vendor_id,
+        startedAt: accepted.accepted_at
+          ? new Date(accepted.accepted_at).getTime()
+          : Date.now(),
+      };
+      setActiveAttendance(session);
+      try {
+        localStorage.setItem(
+          "active_vendor_attendance",
+          JSON.stringify(session),
+        );
+      } catch {
+        /* ignore */
+      }
+      setVendorCallAlert(null);
+    } catch (error) {
+      console.error("Erro ao aceitar atendimento:", error);
+    } finally {
+      setAcceptingVendorCall(false);
     }
-    setVendorCallAlert(null);
   };
 
   const handleRejectAttendance = async (call: typeof vendorCallAlert) => {
@@ -719,23 +825,27 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     if (!activeAttendance || finishingAttendance) return;
     setFinishingAttendance(true);
     const t = readStoredSession()?.accessToken;
-    if (t) {
-      const durationSecs = Math.max(
-        1,
-        Math.floor((Date.now() - activeAttendance.startedAt) / 1000),
+    if (!t) {
+      setFinishingAttendance(false);
+      return;
+    }
+    const durationSecs = Math.max(
+      1,
+      Math.floor((Date.now() - activeAttendance.startedAt) / 1000),
+    );
+    try {
+      await closeLeadAttendance(
+        activeAttendance.lead_id,
+        {
+          sold,
+          attendance_duration_seconds: durationSecs,
+        },
+        t,
       );
-      try {
-        await closeLeadAttendance(
-          activeAttendance.lead_id,
-          {
-            sold,
-            attendance_duration_seconds: durationSecs,
-          },
-          t,
-        );
-      } catch (err) {
-        console.error("Erro ao encerrar atendimento:", err);
-      }
+    } catch (err) {
+      console.error("Erro ao encerrar atendimento:", err);
+      setFinishingAttendance(false);
+      return;
     }
     setActiveAttendance(null);
     setShowAttendanceOutcome(false);
@@ -745,6 +855,10 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       /* ignore */
     }
     setFinishingAttendance(false);
+    setVendorStatusState("online");
+    window.alert(
+      "Atendimento finalizado. Você voltou para a fila de atendimento.",
+    );
   };
 
   const formatCronometer = (totalSeconds: number) => {
@@ -1071,7 +1185,6 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                 "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0b0b0b]",
                 vendorStatus === "online" && "bg-emerald-500",
                 vendorStatus === "away" && "bg-amber-500",
-                vendorStatus === "offline" && "bg-red-500",
               )}
             />
           )}
@@ -1105,20 +1218,6 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
             >
               <span className="h-1.5 w-1.5 rounded-full bg-black/70" />
               <span>Ausente</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleUpdateVendorStatus("offline")}
-              className={clsx(
-                "flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-extrabold transition-all",
-                vendorStatus === "offline"
-                  ? "bg-red-600 text-white shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-200",
-              )}
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-white/70" />
-              <span>Offline</span>
             </button>
           </div>
         ) : (
@@ -1667,20 +1766,6 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                         <span className="h-2 w-2 rounded-full bg-amber-500" />
                         <span>Ausente</span>
                       </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleUpdateVendorStatus("offline")}
-                        className={clsx(
-                          "flex items-center gap-2 px-2 py-1 rounded-lg text-xs font-semibold w-full text-left transition-colors",
-                          vendorStatus === "offline"
-                            ? "bg-red-500/20 text-red-300 font-bold"
-                            : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200",
-                        )}
-                      >
-                        <span className="h-2 w-2 rounded-full bg-red-500" />
-                        <span>Offline</span>
-                      </button>
                     </div>
                   </div>
                 )}
@@ -2186,7 +2271,6 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                       "absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#121212]",
                       vendorStatus === "online" && "bg-emerald-500",
                       vendorStatus === "away" && "bg-amber-500",
-                      vendorStatus === "offline" && "bg-red-500",
                     )}
                   />
                 )}
@@ -2204,7 +2288,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                 <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block">
                   Status de Atendimento
                 </span>
-                <div className="grid grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-2 gap-1.5">
                   <button
                     type="button"
                     onClick={() => handleUpdateVendorStatus("online")}
@@ -2231,20 +2315,6 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                   >
                     <span className="h-2 w-2 rounded-full bg-amber-400" />
                     <span>Ausente</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateVendorStatus("offline")}
-                    className={clsx(
-                      "flex flex-col items-center justify-center gap-1 p-2 rounded-xl text-xs font-bold transition-all",
-                      vendorStatus === "offline"
-                        ? "bg-red-600 text-white ring-2 ring-red-400"
-                        : "bg-white/5 text-zinc-400 hover:bg-white/10",
-                    )}
-                  >
-                    <span className="h-2 w-2 rounded-full bg-red-400" />
-                    <span>Offline</span>
                   </button>
                 </div>
               </div>
@@ -2394,16 +2464,22 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
               <p className="text-xs sm:text-sm text-zinc-400">
                 A recepção está chamando você para atender este cliente agora!
               </p>
+              <p className="text-sm font-bold text-amber-300">
+                {vendorCallSeconds}s para responder
+              </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => handleAcceptAttendance(vendorCallAlert)}
+                disabled={acceptingVendorCall}
+                onClick={() => void handleAcceptAttendance(vendorCallAlert)}
                 className="w-full h-14 inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 text-sm font-bold text-white shadow-lg hover:bg-emerald-500 active:scale-95 transition-all"
               >
                 <CheckCircle2 size={20} />
-                <span>Aceitar e Atender</span>
+                <span>
+                  {acceptingVendorCall ? "Aceitando..." : "Aceitar e Atender"}
+                </span>
               </button>
 
               <button

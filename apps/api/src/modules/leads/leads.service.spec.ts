@@ -30,6 +30,8 @@ describe("LeadsService", () => {
     crmHistory: { create: jest.Mock; deleteMany: jest.Mock };
     event: { findFirst: jest.Mock };
     user: { findFirst: jest.Mock; findUnique: jest.Mock };
+    vendorAttendance: { findFirst: jest.Mock; update: jest.Mock };
+    vendorAvailability: { upsert: jest.Mock };
     salesTeamMember: { findFirst: jest.Mock };
     metaAssetSelection: { findMany: jest.Mock; findFirst: jest.Mock };
     metaLeadRoutingRule: { findMany: jest.Mock };
@@ -74,6 +76,8 @@ describe("LeadsService", () => {
     emitLeadCheckin: jest.Mock;
     emitLeadUpdated: jest.Mock;
     emitVendorCalled: jest.Mock;
+    emitVendorAttendanceUpdated: jest.Mock;
+    emitVendorAvailabilityChanged: jest.Mock;
     emitNewMessage: jest.Mock;
   };
   let leadTimeline: { record: jest.Mock; originFromSource: jest.Mock };
@@ -102,6 +106,11 @@ describe("LeadsService", () => {
       crmHistory: { create: jest.fn(), deleteMany: jest.fn() },
       event: { findFirst: jest.fn() },
       user: { findFirst: jest.fn(), findUnique: jest.fn() },
+      vendorAttendance: {
+        findFirst: jest.fn(),
+        update: jest.fn(),
+      },
+      vendorAvailability: { upsert: jest.fn() },
       salesTeamMember: { findFirst: jest.fn() },
       metaAssetSelection: { findMany: jest.fn(), findFirst: jest.fn() },
       metaLeadRoutingRule: { findMany: jest.fn() },
@@ -150,6 +159,9 @@ describe("LeadsService", () => {
     prisma.crmHistory.deleteMany.mockResolvedValue({ count: 0 });
     prisma.event.findFirst.mockResolvedValue(null);
     prisma.user.findUnique.mockResolvedValue({ id: gestorId });
+    prisma.vendorAttendance.findFirst.mockResolvedValue(null);
+    prisma.vendorAttendance.update.mockResolvedValue({});
+    prisma.vendorAvailability.upsert.mockResolvedValue({});
     prisma.metaAssetSelection.findMany.mockResolvedValue([
       {
         form_id: "27515534804767924",
@@ -210,6 +222,8 @@ describe("LeadsService", () => {
       emitLeadCheckin: jest.fn(),
       emitLeadUpdated: jest.fn(),
       emitVendorCalled: jest.fn(),
+      emitVendorAttendanceUpdated: jest.fn(),
+      emitVendorAvailabilityChanged: jest.fn(),
       emitNewMessage: jest.fn(),
     };
     leadTimeline = {
@@ -247,11 +261,6 @@ describe("LeadsService", () => {
       { dispatch: jest.fn() } as never,
       metaService as never,
       leadTimeline as never,
-      {
-        client: {
-          set: jest.fn().mockResolvedValue("OK"),
-        },
-      } as never,
       { upsert: jest.fn().mockResolvedValue({ id: "dispatch-1" }) } as never,
       appointmentsService as never,
       {
@@ -1772,6 +1781,9 @@ describe("LeadsService", () => {
   });
 
   it("closeAttendance: vendedor encerra sem CPF/pulseira e move para ATENDIMENTO_ENCERRADO", async () => {
+    prisma.vendorAttendance.findFirst.mockResolvedValueOnce({
+      id: "attendance-1",
+    });
     prisma.lead.findFirst.mockResolvedValueOnce({
       ...baseExistingLead,
       crm_pipeline_id: "pipeline-1",
@@ -1829,6 +1841,9 @@ describe("LeadsService", () => {
   });
 
   it("closeAttendance: move para COMPRARAM quando o vendedor confirma a venda", async () => {
+    prisma.vendorAttendance.findFirst.mockResolvedValueOnce({
+      id: "attendance-2",
+    });
     prisma.lead.findFirst.mockResolvedValueOnce({
       ...baseExistingLead,
       crm_pipeline_id: "pipeline-1",

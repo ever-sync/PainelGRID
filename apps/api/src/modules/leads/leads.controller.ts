@@ -26,10 +26,12 @@ import { AuthenticatedUser } from "../auth/auth.types";
 import { CheckLeadPhoneDto } from "./dto/check-lead-phone.dto";
 import { CheckInByTokenDto } from "./dto/check-in-by-token.dto";
 import { CloseAttendanceDto } from "./dto/close-attendance.dto";
+import { CallVendorDto } from "./dto/call-vendor.dto";
 import { CreateLeadDto } from "./dto/create-lead.dto";
 import { FindLeadsQueryDto } from "./dto/find-leads-query.dto";
 import { ImportLeadsDto } from "./dto/import-leads.dto";
 import { UpdateLeadDto } from "./dto/update-lead.dto";
+import { UpdateVendorStatusDto } from "./dto/update-vendor-status.dto";
 import { LeadsService } from "./leads.service";
 import { spreadsheetUploadOptions } from "../../common/upload-options";
 
@@ -148,6 +150,27 @@ export class LeadsController {
     return this.leadsService.getFipeDataPublic(plate, user, eventId);
   }
 
+  @Get("vendor-availability")
+  @Roles(Role.RECEPCAO, Role.GESTOR, Role.CLIENTE, Role.VENDEDOR)
+  listVendorAvailability(@CurrentUser() user: AuthenticatedUser) {
+    return this.leadsService.listVendorAvailability(user);
+  }
+
+  @Get("vendor-attendance/current")
+  @Roles(Role.VENDEDOR)
+  currentVendorAttendance(@CurrentUser() user: AuthenticatedUser) {
+    return this.leadsService.currentVendorAttendance(user);
+  }
+
+  @Patch("vendor-status")
+  @Roles(Role.VENDEDOR)
+  updateVendorStatus(
+    @Body() dto: UpdateVendorStatusDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.leadsService.updateVendorStatus(user, dto.status);
+  }
+
   @Get(":id")
   @Roles(Role.GESTOR, Role.CLIENTE, Role.VENDEDOR, Role.RECEPCAO)
   @ApiOperation({ summary: "Busca lead por ID" })
@@ -229,9 +252,19 @@ export class LeadsController {
   @ApiResponse({ status: 404, description: "Lead não encontrado" })
   callVendor(
     @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: CallVendorDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.leadsService.callVendor(user, id);
+    return this.leadsService.callVendor(user, id, dto);
+  }
+
+  @Post(":id/accept-vendor-call")
+  @Roles(Role.VENDEDOR)
+  acceptVendorCall(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.leadsService.acceptVendorCall(user, id);
   }
 
   @Post(":id/reject-vendor-call")
@@ -244,6 +277,15 @@ export class LeadsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.leadsService.rejectVendorCall(user, id);
+  }
+
+  @Post(":id/expire-vendor-call")
+  @Roles(Role.VENDEDOR, Role.RECEPCAO, Role.GESTOR)
+  expireVendorCall(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.leadsService.expireVendorCall(user, id);
   }
 
   @Patch(":id")

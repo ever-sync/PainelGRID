@@ -332,8 +332,70 @@ export function assignLeadToMe(id: string, token: string) {
   });
 }
 
-export function notifyVendorCall(id: string, token: string) {
-  return httpRequest<{ success: boolean }>(`/leads/${id}/call-vendor`, {
+export type VendorOperationalStatus = "online" | "away" | "busy";
+
+export type VendorAvailability = {
+  id: string;
+  name: string;
+  team_name: string | null;
+  connected: boolean;
+  operational_status: VendorOperationalStatus;
+  eligible: boolean;
+  last_assigned_at: string | null;
+};
+
+export type VendorAttendance = {
+  id: string;
+  lead_id: string;
+  lead_name: string;
+  vendor_id: string;
+  vendor_name: string;
+  team_name?: string | null;
+  status: "pending" | "accepted" | "rejected" | "expired" | "finished";
+  expires_at?: string | null;
+  accepted_at?: string | null;
+};
+
+export function listVendorAvailability(token: string, clientId?: string) {
+  const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : "";
+  return httpRequest<VendorAvailability[]>(`/leads/vendor-availability${qs}`, {
+    method: "GET",
+    token,
+  });
+}
+
+export function getCurrentVendorAttendance(token: string) {
+  return httpRequest<VendorAttendance | null>(
+    "/leads/vendor-attendance/current",
+    { method: "GET", token },
+  );
+}
+
+export function updateVendorStatus(
+  status: Exclude<VendorOperationalStatus, "busy">,
+  token: string,
+) {
+  return httpRequest<VendorAvailability>("/leads/vendor-status", {
+    method: "PATCH",
+    token,
+    body: { status },
+  });
+}
+
+export function notifyVendorCall(
+  id: string,
+  token: string,
+  options: { mode: "automatic" | "manual"; vendor_id?: string },
+) {
+  return httpRequest<VendorAttendance>(`/leads/${id}/call-vendor`, {
+    method: "POST",
+    token,
+    body: options,
+  });
+}
+
+export function acceptVendorCall(id: string, token: string) {
+  return httpRequest<VendorAttendance>(`/leads/${id}/accept-vendor-call`, {
     method: "POST",
     token,
   });
@@ -342,6 +404,13 @@ export function notifyVendorCall(id: string, token: string) {
 export function rejectVendorCall(id: string, token: string) {
   return httpRequest<{ success: boolean; vendor_id: string }>(
     `/leads/${id}/reject-vendor-call`,
+    { method: "POST", token },
+  );
+}
+
+export function expireVendorCall(id: string, token: string) {
+  return httpRequest<{ success: boolean; vendor_id: string }>(
+    `/leads/${id}/expire-vendor-call`,
     { method: "POST", token },
   );
 }

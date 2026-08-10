@@ -130,4 +130,26 @@ export class RealtimeEventsService {
       userIds: vendorId ? [vendorId] : undefined,
     });
   }
+
+  emitVendorAttendanceUpdated(
+    clientId: string,
+    payload: Record<string, unknown>,
+  ) {
+    this.gateway.emitToClient(clientId, "vendor_attendance_updated", payload);
+  }
+
+  emitVendorAvailabilityChanged(
+    clientId: string,
+    payload: Record<string, unknown>,
+  ) {
+    this.gateway.emitToClient(clientId, "vendor_availability_changed", payload);
+  }
+
+  isUserOnline(clientId: string, userId: string): boolean {
+    return this.gateway.isUserOnline(clientId, userId);
+  }
+
+  getOnlineUserIds(clientId: string): string[] {
+    return this.gateway.getOnlineUserIds(clientId);
+  }
 }

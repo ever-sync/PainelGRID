@@ -163,6 +163,14 @@ export class RealtimeGateway
     this.server.to(this.room(clientId)).emit(event, payload);
   }
 
+  isUserOnline(clientId: string, userId: string): boolean {
+    return RealtimeGateway.onlineUsers.get(clientId)?.has(userId) ?? false;
+  }
+
+  getOnlineUserIds(clientId: string): string[] {
+    return Array.from(RealtimeGateway.onlineUsers.get(clientId) ?? []);
+  }
+
   private room(clientId: string) {
     return `client:${clientId}`;
   }

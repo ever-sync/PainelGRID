@@ -18,6 +18,8 @@ import {
   UserPlus2,
   CheckCircle2,
   ShoppingBag,
+  DollarSign,
+  BarChart3,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import {
@@ -32,7 +34,12 @@ import { Notice } from "../../components/ui/Notice";
 import { MissingClientScope } from "../../components/shared/MissingClientScope";
 import { readStoredSession } from "../../services/auth";
 import { listLeadHistory, type ApiCrmHistoryItem } from "../../services/crm";
-import { listEvents, mapApiEventToEvent } from "../../services/events";
+import {
+  getEventDashboardTv,
+  listEvents,
+  mapApiEventToEvent,
+  type EventDashboardTvResponse,
+} from "../../services/events";
 import { listLeads, mapApiLeadToLead, updateLead } from "../../services/leads";
 import { listSalesTeams, type SalesTeam } from "../../services/salesTeams";
 import { listClientStaff, mapStaffToUser } from "../../services/staff";
@@ -86,6 +93,15 @@ function formatDateTime(value: string | null | undefined) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatCurrency(value: number | string | null | undefined) {
+  const amount = Number(value ?? 0);
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    maximumFractionDigits: 0,
+  }).format(Number.isFinite(amount) ? amount : 0);
 }
 
 function EventLeadDetailDrawer({
@@ -461,6 +477,8 @@ export function EventosClientePage() {
   const [leadFilter, setLeadFilter] = useState<LeadVisibilityFilter>("all");
   const [assignedVendorFilter, setAssignedVendorFilter] = useState("all");
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [eventSnapshot, setEventSnapshot] =
+    useState<EventDashboardTvResponse | null>(null);
 
   const loadEventsData = useCallback(async () => {
     const token = readStoredSession()?.accessToken;
@@ -484,10 +502,11 @@ export function EventosClientePage() {
     const token = readStoredSession()?.accessToken;
     if (!clientId || !token || !selectedEventId) return;
 
-    const [teamRows, leadRows, staffRows] = await Promise.all([
+    const [teamRows, leadRows, staffRows, snapshot] = await Promise.all([
       listSalesTeams(token, selectedEventId),
       listLeads({ client_id: clientId, event_id: selectedEventId }, token),
       listClientStaff(clientId, token),
+      getEventDashboardTv(selectedEventId, token),
     ]);
 
     setTeams(teamRows);
@@ -500,6 +519,7 @@ export function EventosClientePage() {
             staffUser.role === "vendedor" && staffUser.client_id === clientId,
         ),
     );
+    setEventSnapshot(snapshot);
   }, [clientId, selectedEventId]);
 
   const refreshPage = useCallback(async () => {
@@ -527,6 +547,7 @@ export function EventosClientePage() {
     if (!selectedEventId) {
       setTeams([]);
       setEventLeads([]);
+      setEventSnapshot(null);
       return;
     }
 
@@ -738,8 +759,9 @@ export function EventosClientePage() {
       )}
     >
       <PageHeader
-        title="Eventos"
-        breadcrumbs={[{ label: "Cliente" }, { label: "Eventos" }]}
+        title="Evento 360"
+        subtitle="Tudo sobre o evento, seus times, vendedores, leads, atendimento e resultados."
+        breadcrumbs={[{ label: "Cliente" }, { label: "Evento 360" }]}
         dark={isDarkMode}
         actions={
           user.role === "gestor" ? (
@@ -872,6 +894,267 @@ export function EventosClientePage() {
           </div>
         ) : null}
       </Card>
+
+      {eventSnapshot ? (
+        <section className="space-y-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-zinc-950">
+                Visão geral do evento
+              </h2>
+              <p className="text-sm text-zinc-500">
+                Números consolidados de todas as empresas, times e vendedores
+                participantes.
+              </p>
+            </div>
+            <p className="text-xs text-zinc-400">
+              Atualizado em{" "}
+              {new Date(eventSnapshot.generated_at).toLocaleString("pt-BR")}
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            {[
+              ["Leads", eventSnapshot.funnel.leads, Users, "text-blue-500"],
+              [
+                "Agendados",
+                eventSnapshot.funnel.scheduled,
+                CalendarDays,
+                "text-indigo-500",
+              ],
+              [
+                "Confirmados",
+                eventSnapshot.funnel.confirmed,
+                CheckCircle2,
+                "text-cyan-500",
+              ],
+              [
+                "Check-ins",
+                eventSnapshot.funnel.checked_in,
+                UserPlus2,
+                "text-emerald-500",
+              ],
+              [
+                "Vendas",
+                eventSnapshot.funnel.sold,
+                ShoppingBag,
+                "text-orange-500",
+              ],
+              [
+                "Faturamento",
+                formatCurrency(eventSnapshot.cars.total_value),
+                DollarSign,
+                "text-green-600",
+              ],
+            ].map(([label, value, Icon, color]) => {
+              const MetricIcon = Icon as typeof Users;
+              return (
+                <Card
+                  key={String(label)}
+                  className="border border-zinc-100 p-4"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-zinc-500">
+                      {String(label)}
+                    </span>
+                    <MetricIcon size={16} className={String(color)} />
+                  </div>
+                  <p className="mt-2 text-2xl font-semibold text-zinc-950">
+                    {String(value)}
+                  </p>
+                </Card>
+              );
+            })}
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card className="border border-zinc-100 p-5">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-zinc-950">
+                  Conversão do evento
+                </h3>
+                <Target size={17} className="text-orange-500" />
+              </div>
+              <p className="mt-4 text-4xl font-semibold text-zinc-950">
+                {eventSnapshot.funnel.leads
+                  ? Math.round(
+                      (eventSnapshot.funnel.sold / eventSnapshot.funnel.leads) *
+                        100,
+                    )
+                  : 0}
+                %
+              </p>
+              <div className="mt-4 space-y-2 text-sm text-zinc-500">
+                <p>
+                  Comparecimento:{" "}
+                  <strong className="text-zinc-900">
+                    {eventSnapshot.funnel.scheduled
+                      ? Math.round(
+                          (eventSnapshot.funnel.checked_in /
+                            eventSnapshot.funnel.scheduled) *
+                            100,
+                        )
+                      : 0}
+                    %
+                  </strong>
+                </p>
+                <p>
+                  Conversão no salão:{" "}
+                  <strong className="text-zinc-900">
+                    {eventSnapshot.funnel.checked_in
+                      ? Math.round(
+                          (eventSnapshot.funnel.sold /
+                            eventSnapshot.funnel.checked_in) *
+                            100,
+                        )
+                      : 0}
+                    %
+                  </strong>
+                </p>
+                <p>
+                  Meta de vendas:{" "}
+                  <strong className="text-zinc-900">
+                    {eventSnapshot.event.sales_target ?? "Não definida"}
+                  </strong>
+                </p>
+              </div>
+            </Card>
+
+            <Card className="border border-zinc-100 p-5 lg:col-span-2">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-zinc-950">
+                    Ranking dos times
+                  </h3>
+                  <p className="text-xs text-zinc-500">
+                    Desempenho completo dentro do evento.
+                  </p>
+                </div>
+                <Trophy size={17} className="text-amber-500" />
+              </div>
+              <div className="space-y-2">
+                {[...eventSnapshot.teams]
+                  .sort((a, b) => b.sold - a.sold || b.points - a.points)
+                  .map((team, index) => (
+                    <div
+                      key={team.team_id}
+                      className="grid grid-cols-[28px_minmax(0,1fr)_repeat(3,auto)] items-center gap-3 rounded-2xl bg-zinc-50 px-3 py-2.5 text-sm"
+                    >
+                      <span className="font-bold text-zinc-400">
+                        {index + 1}º
+                      </span>
+                      <span className="truncate font-semibold text-zinc-900">
+                        {team.team_name}
+                      </span>
+                      <span className="text-zinc-500">
+                        {team.checked_in} check-ins
+                      </span>
+                      <span className="font-semibold text-emerald-600">
+                        {team.sold} vendas
+                      </span>
+                      <span className="font-semibold text-amber-600">
+                        {team.points} pts
+                      </span>
+                    </div>
+                  ))}
+                {!eventSnapshot.teams.length ? (
+                  <p className="text-sm text-zinc-500">
+                    Nenhum time configurado.
+                  </p>
+                ) : null}
+              </div>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+            <Card className="border border-zinc-100 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-zinc-950">
+                    Desempenho dos vendedores
+                  </h3>
+                  <p className="text-xs text-zinc-500">
+                    Todos os vendedores participantes, com time e empresa.
+                  </p>
+                </div>
+                <Users size={17} className="text-blue-500" />
+              </div>
+              <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
+                {[...eventSnapshot.vendors]
+                  .sort((a, b) => b.sold - a.sold || b.points - a.points)
+                  .map((vendor, index) => (
+                    <div
+                      key={vendor.vendor_id}
+                      className="grid gap-2 rounded-2xl border border-zinc-100 px-4 py-3 sm:grid-cols-[32px_minmax(0,1fr)_repeat(4,auto)] sm:items-center"
+                    >
+                      <span className="font-bold text-zinc-400">
+                        {index + 1}º
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-zinc-900">
+                          {vendor.vendor_name}
+                        </p>
+                        <p className="truncate text-[11px] text-zinc-400">
+                          {vendor.team_name || "Sem time"}
+                          {vendor.client_id === clientId
+                            ? " · Sua empresa"
+                            : " · Empresa participante"}
+                        </p>
+                      </div>
+                      <span className="text-xs text-zinc-500">
+                        {vendor.leads} leads
+                      </span>
+                      <span className="text-xs text-zinc-500">
+                        {vendor.scheduled} agendas
+                      </span>
+                      <span className="text-xs text-zinc-500">
+                        {vendor.checked_in} check-ins
+                      </span>
+                      <span className="text-xs font-bold text-emerald-600">
+                        {vendor.sold} vendas
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </Card>
+
+            <Card className="border border-zinc-100 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="font-semibold text-zinc-950">
+                  Veículos vendidos
+                </h3>
+                <BarChart3 size={17} className="text-violet-500" />
+              </div>
+              <p className="text-3xl font-semibold text-zinc-950">
+                {formatCurrency(eventSnapshot.cars.total_value)}
+              </p>
+              <p className="mb-4 text-xs text-zinc-500">
+                Valor total registrado no evento
+              </p>
+              <div className="space-y-2">
+                {eventSnapshot.cars.top_models
+                  .slice(0, 6)
+                  .map((model, index) => (
+                    <div
+                      key={model.model}
+                      className="flex items-center justify-between rounded-xl bg-zinc-50 px-3 py-2 text-sm"
+                    >
+                      <span className="truncate text-zinc-700">
+                        {index + 1}. {model.model}
+                      </span>
+                      <strong className="text-zinc-950">{model.count}</strong>
+                    </div>
+                  ))}
+                {!eventSnapshot.cars.top_models.length ? (
+                  <p className="text-sm text-zinc-500">
+                    Nenhum modelo registrado.
+                  </p>
+                ) : null}
+              </div>
+            </Card>
+          </div>
+        </section>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_1.9fr]">
         <Card className="space-y-4 border border-zinc-100 p-5">

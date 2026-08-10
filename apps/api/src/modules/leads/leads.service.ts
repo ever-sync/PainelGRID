@@ -15,6 +15,8 @@ import {
   Lead,
   LeadSource,
   Prisma,
+  VendorAttendanceStatus,
+  VendorOperationalStatus,
 } from "@prisma/client";
 import { readSheet } from "read-excel-file/node";
 import {
@@ -51,7 +53,7 @@ import { ImportLeadsDto } from "./dto/import-leads.dto";
 import { IntegrationPatchLeadDto } from "./dto/integration-patch-lead.dto";
 import { ReconcileLeadsDto } from "./dto/reconcile-leads.dto";
 import { UpdateLeadDto } from "./dto/update-lead.dto";
-import { RedisService } from "../../config/redis.service";
+import { CallVendorDto, VendorCallMode } from "./dto/call-vendor.dto";
 import { MailService } from "../../mail/mail.service";
 import {
   buildLeadPhoneCandidates,
@@ -241,7 +243,6 @@ export class LeadsService {
     private readonly clientWebhook: ClientWebhookService,
     private readonly metaService: MetaService,
     private readonly leadTimeline: LeadTimelineService,
-    private readonly redis: RedisService,
     private readonly dispatchTracking: DispatchTrackingService,
     private readonly appointmentsService: AppointmentsService,
     private readonly mailService: MailService,
@@ -1910,37 +1911,92 @@ export class LeadsService {
       }
     }
 
-    const updated = await this.prisma.lead.update({
-      where: { id: lead.id },
-      data: {
-        confirmation_status: ConfirmationStatus.closed,
-        crm_pipeline_id: pipelineId,
-        crm_stage_id: targetStageId,
-        ...(wristbandNumber ? { wristband_number: wristbandNumber } : {}),
-        ...(cpf ? { cpf } : {}),
-        ...(phone ? { phone } : {}),
-        ...(dto.sold ? { sold_by_vendor_id: user.sub } : {}),
-      },
-      select: leadSelect,
+    const activeAttendance = isVendor
+      ? await this.prisma.vendorAttendance.findFirst({
+          where: {
+            lead_id: lead.id,
+            vendor_id: user.sub,
+            status: VendorAttendanceStatus.accepted,
+          },
+          select: { id: true },
+        })
+      : null;
+
+    if (isVendor && !activeAttendance) {
+      throw new ConflictException(
+        "Este atendimento não está ativo para o vendedor.",
+      );
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.lead.update({
+        where: { id: lead.id },
+        data: {
+          confirmation_status: ConfirmationStatus.closed,
+          crm_pipeline_id: pipelineId,
+          crm_stage_id: targetStageId,
+          ...(wristbandNumber ? { wristband_number: wristbandNumber } : {}),
+          ...(cpf ? { cpf } : {}),
+          ...(phone ? { phone } : {}),
+          ...(dto.sold ? { sold_by_vendor_id: user.sub } : {}),
+        },
+        select: leadSelect,
+      });
+
+      if (targetStageId && targetStageId !== lead.crm_stage_id) {
+        await tx.crmHistory.create({
+          data: {
+            lead_id: lead.id,
+            from_stage_id: lead.crm_stage_id,
+            to_stage_id: targetStageId,
+            changed_by_user_id: user.sub,
+            notes: `${
+              dto.sold
+                ? "Atendimento encerrado com venda"
+                : "Atendimento encerrado sem venda"
+            }${wristbandNumber ? `. Pulseira: ${wristbandNumber}` : ""}${cpf ? `, CPF: ${cpf}` : ""}${
+              dto.attendance_duration_seconds != null
+                ? `. Duração do atendimento: ${Math.floor(dto.attendance_duration_seconds / 60)}m ${dto.attendance_duration_seconds % 60}s (${dto.attendance_duration_seconds}s)`
+                : ""
+            }`,
+          },
+        });
+      }
+
+      if (activeAttendance) {
+        await tx.vendorAttendance.update({
+          where: { id: activeAttendance.id },
+          data: {
+            status: VendorAttendanceStatus.finished,
+            sold: dto.sold,
+            finished_at: new Date(),
+          },
+        });
+        await tx.vendorAvailability.upsert({
+          where: { vendor_id: user.sub },
+          create: {
+            vendor_id: user.sub,
+            client_id: lead.client_id,
+            status: VendorOperationalStatus.online,
+          },
+          update: { status: VendorOperationalStatus.online },
+        });
+      }
+
+      return result;
     });
 
-    if (targetStageId && targetStageId !== lead.crm_stage_id) {
-      await this.prisma.crmHistory.create({
-        data: {
-          lead_id: lead.id,
-          from_stage_id: lead.crm_stage_id,
-          to_stage_id: targetStageId,
-          changed_by_user_id: user.sub,
-          notes: `${
-            dto.sold
-              ? "Atendimento encerrado com venda"
-              : "Atendimento encerrado sem venda"
-          }${wristbandNumber ? `. Pulseira: ${wristbandNumber}` : ""}${cpf ? `, CPF: ${cpf}` : ""}${
-            dto.attendance_duration_seconds != null
-              ? `. Duração do atendimento: ${Math.floor(dto.attendance_duration_seconds / 60)}m ${dto.attendance_duration_seconds % 60}s (${dto.attendance_duration_seconds}s)`
-              : ""
-          }`,
-        },
+    if (activeAttendance) {
+      this.realtimeEvents.emitVendorAttendanceUpdated(updated.client_id, {
+        attendance_id: activeAttendance.id,
+        lead_id: updated.id,
+        vendor_id: user.sub,
+        status: VendorAttendanceStatus.finished,
+        sold: dto.sold,
+      });
+      this.realtimeEvents.emitVendorAvailabilityChanged(updated.client_id, {
+        vendor_id: user.sub,
+        status: VendorOperationalStatus.online,
       });
     }
 
@@ -4406,7 +4462,128 @@ export class LeadsService {
 
     return this.toResponse(updated);
   }
-  async callVendor(user: AuthenticatedUser, leadId: string) {
+  private async expireStaleVendorAttendances(clientId: string) {
+    const stale = await this.prisma.vendorAttendance.findMany({
+      where: {
+        client_id: clientId,
+        status: VendorAttendanceStatus.pending,
+        expires_at: { lte: new Date() },
+      },
+      select: { id: true, lead_id: true, vendor_id: true },
+    });
+    if (!stale.length) return;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.vendorAttendance.updateMany({
+        where: { id: { in: stale.map((row) => row.id) }, status: "pending" },
+        data: { status: "expired", finished_at: new Date() },
+      });
+      for (const row of stale) {
+        await tx.vendorAvailability.updateMany({
+          where: { vendor_id: row.vendor_id, status: "busy" },
+          data: { status: "online" },
+        });
+        await tx.lead.updateMany({
+          where: { id: row.lead_id, assigned_vendor_id: row.vendor_id },
+          data: { assigned_vendor_id: null },
+        });
+      }
+    });
+    for (const row of stale) {
+      this.realtimeEvents.emitVendorAttendanceUpdated(clientId, {
+        attendance_id: row.id,
+        lead_id: row.lead_id,
+        vendor_id: row.vendor_id,
+        status: "expired",
+      });
+    }
+  }
+
+  async listVendorAvailability(user: AuthenticatedUser) {
+    const clientId = user.client_id;
+    if (!clientId) throw new ForbiddenException("Cliente não identificado");
+    await this.expireStaleVendorAttendances(clientId);
+    const onlineIds = new Set(this.realtimeEvents.getOnlineUserIds(clientId));
+    const vendors = await this.prisma.user.findMany({
+      where: { client_id: clientId, role: Role.VENDEDOR, is_active: true },
+      select: {
+        id: true,
+        name: true,
+        vendor_availability: true,
+        sales_team_memberships: {
+          take: 1,
+          select: { team: { select: { name: true } } },
+        },
+      },
+      orderBy: { name: "asc" },
+    });
+    return vendors.map((vendor) => {
+      const operational_status =
+        vendor.vendor_availability?.status ?? VendorOperationalStatus.online;
+      const connected = onlineIds.has(vendor.id);
+      return {
+        id: vendor.id,
+        name: vendor.name,
+        team_name: vendor.sales_team_memberships[0]?.team.name ?? null,
+        connected,
+        operational_status,
+        eligible: connected && operational_status === "online",
+        last_assigned_at: vendor.vendor_availability?.last_assigned_at ?? null,
+      };
+    });
+  }
+
+  async updateVendorStatus(user: AuthenticatedUser, status: "online" | "away") {
+    if (!user.client_id)
+      throw new ForbiddenException("Cliente não identificado");
+    const active = await this.prisma.vendorAttendance.findFirst({
+      where: {
+        vendor_id: user.sub,
+        status: { in: ["pending", "accepted"] },
+      },
+      select: { id: true },
+    });
+    if (active && status === "away") {
+      throw new ConflictException(
+        "Finalize ou recuse o atendimento atual antes de ficar ausente",
+      );
+    }
+    const availability = await this.prisma.vendorAvailability.upsert({
+      where: { vendor_id: user.sub },
+      create: { vendor_id: user.sub, client_id: user.client_id, status },
+      update: { status },
+    });
+    this.realtimeEvents.emitVendorAvailabilityChanged(user.client_id, {
+      vendor_id: user.sub,
+      status: availability.status,
+    });
+    return availability;
+  }
+
+  async currentVendorAttendance(user: AuthenticatedUser) {
+    if (!user.client_id)
+      throw new ForbiddenException("Cliente não identificado");
+    await this.expireStaleVendorAttendances(user.client_id);
+    const attendance = await this.prisma.vendorAttendance.findFirst({
+      where: {
+        client_id: user.client_id,
+        vendor_id: user.sub,
+        status: { in: ["pending", "accepted"] },
+      },
+      include: {
+        lead: { select: { id: true, name: true, phone: true } },
+        event: { select: { id: true, name: true } },
+      },
+      orderBy: { called_at: "desc" },
+    });
+    return attendance;
+  }
+
+  async callVendor(
+    user: AuthenticatedUser,
+    leadId: string,
+    dto: CallVendorDto = {},
+  ) {
     const lead = await this.prisma.lead.findFirst({
       where: { id: leadId, deleted_at: null },
       select: leadSelect,
@@ -4418,47 +4595,143 @@ export class LeadsService {
 
     await this.assertLeadAccess(user, lead);
 
-    if (!lead.assigned_vendor_id) {
-      throw new BadRequestException("Lead nao tem vendedor vinculado");
-    }
-
-    const vendor = await this.prisma.user.findFirst({
-      where: { id: lead.assigned_vendor_id },
+    await this.expireStaleVendorAttendances(lead.client_id);
+    const connectedIds = this.realtimeEvents.getOnlineUserIds(lead.client_id);
+    const requestedVendorId =
+      dto.vendor_id ??
+      (dto.mode === VendorCallMode.MANUAL ? lead.assigned_vendor_id : null);
+    const candidates = await this.prisma.user.findMany({
+      where: {
+        client_id: lead.client_id,
+        role: Role.VENDEDOR,
+        is_active: true,
+        id: requestedVendorId
+          ? requestedVendorId
+          : {
+              in: connectedIds.length
+                ? connectedIds
+                : ["00000000-0000-0000-0000-000000000000"],
+            },
+        OR: [
+          { vendor_availability: null },
+          { vendor_availability: { status: "online" } },
+        ],
+      },
       select: {
+        id: true,
         name: true,
+        vendor_availability: true,
         sales_team_memberships: {
           select: { team: { select: { name: true } } },
           take: 1,
         },
       },
+      orderBy: [
+        { vendor_availability: { last_assigned_at: "asc" } },
+        { id: "asc" },
+      ],
     });
-
-    const callPayload = {
-      id: `${lead.id}-${Date.now()}`,
-      lead_id: lead.id,
-      lead_name: lead.name,
-      vendor_id: lead.assigned_vendor_id,
-      vendor_name: vendor?.name || "Vendedor",
-      team_name: vendor?.sales_team_memberships?.[0]?.team?.name || null,
-      timestamp: new Date().toISOString(),
-    };
-
-    try {
-      await this.redis.client.set(
-        `vendor_call:${lead.client_id}:${lead.id}`,
-        JSON.stringify(callPayload),
-        "EX",
-        120, // 2 minutos
-      );
-    } catch (err: unknown) {
-      this.logger.error(
-        `Falha ao salvar chamada de vendedor no Redis: ${this.errorMessage(err)}`,
-      );
+    const vendor = candidates.find((candidate) =>
+      this.realtimeEvents.isUserOnline(lead.client_id, candidate.id),
+    );
+    if (!vendor) {
+      throw new BadRequestException("Nenhum vendedor online e disponível");
     }
 
-    this.realtimeEvents.emitVendorCalled(lead.client_id, callPayload);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 30_000);
+    let attendance;
+    try {
+      attendance = await this.prisma.$transaction(
+        async (tx) => {
+          const conflicting = await tx.vendorAttendance.findFirst({
+            where: {
+              status: { in: ["pending", "accepted"] },
+              OR: [{ lead_id: lead.id }, { vendor_id: vendor.id }],
+            },
+          });
+          if (conflicting) {
+            throw new ConflictException(
+              "Lead ou vendedor já possui atendimento ativo",
+            );
+          }
+          await tx.vendorAvailability.upsert({
+            where: { vendor_id: vendor.id },
+            create: {
+              vendor_id: vendor.id,
+              client_id: lead.client_id,
+              status: "busy",
+              last_assigned_at: now,
+            },
+            update: { status: "busy", last_assigned_at: now },
+          });
+          await tx.lead.update({
+            where: { id: lead.id },
+            data: { assigned_vendor_id: vendor.id },
+          });
+          return tx.vendorAttendance.create({
+            data: {
+              client_id: lead.client_id,
+              lead_id: lead.id,
+              vendor_id: vendor.id,
+              event_id: lead.event_interest_id,
+              expires_at: expiresAt,
+              created_by_id: user.sub,
+            },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (error instanceof ConflictException) throw error;
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        throw new ConflictException(
+          "Lead ou vendedor já possui atendimento ativo",
+        );
+      }
+      throw error;
+    }
 
-    return { success: true };
+    const callPayload = {
+      id: attendance.id,
+      attendance_id: attendance.id,
+      lead_id: lead.id,
+      lead_name: lead.name,
+      vendor_id: vendor.id,
+      vendor_name: vendor?.name || "Vendedor",
+      team_name: vendor?.sales_team_memberships?.[0]?.team?.name || null,
+      timestamp: now.toISOString(),
+      expires_at: expiresAt.toISOString(),
+    };
+
+    this.realtimeEvents.emitVendorCalled(lead.client_id, callPayload);
+    return { success: true, ...callPayload };
+  }
+
+  async acceptVendorCall(user: AuthenticatedUser, leadId: string) {
+    if (!user.client_id)
+      throw new ForbiddenException("Cliente não identificado");
+    await this.expireStaleVendorAttendances(user.client_id);
+    const attendance = await this.prisma.vendorAttendance.findFirst({
+      where: { lead_id: leadId, vendor_id: user.sub, status: "pending" },
+    });
+    if (!attendance)
+      throw new NotFoundException("Chamada expirada ou não encontrada");
+    const updated = await this.prisma.vendorAttendance.update({
+      where: { id: attendance.id },
+      data: { status: "accepted", accepted_at: new Date() },
+      include: { lead: { select: { id: true, name: true, phone: true } } },
+    });
+    this.realtimeEvents.emitVendorAttendanceUpdated(user.client_id, {
+      attendance_id: updated.id,
+      lead_id: leadId,
+      vendor_id: user.sub,
+      status: "accepted",
+    });
+    return updated;
   }
 
   async rejectVendorCall(user: AuthenticatedUser, leadId: string) {
@@ -4466,44 +4739,63 @@ export class LeadsService {
       throw new ForbiddenException("Apenas vendedor pode recusar a chamada");
     }
 
-    const lead = await this.prisma.lead.findFirst({
+    const attendance = await this.prisma.vendorAttendance.findFirst({
       where: {
-        id: leadId,
+        lead_id: leadId,
         client_id: user.client_id,
-        assigned_vendor_id: user.sub,
-        deleted_at: null,
+        vendor_id: user.sub,
+        status: { in: ["pending", "accepted"] },
       },
-      select: { id: true, client_id: true },
     });
-    if (!lead) {
+    if (!attendance) {
       throw new NotFoundException("Chamada não encontrada para este vendedor");
     }
+    await this.releaseVendorAttendance(attendance.id, "rejected");
+    return { success: true };
+  }
 
-    const vendors = await this.prisma.user.findMany({
+  async expireVendorCall(user: AuthenticatedUser, leadId: string) {
+    const attendance = await this.prisma.vendorAttendance.findFirst({
       where: {
-        client_id: lead.client_id,
-        role: Role.VENDEDOR,
-        is_active: true,
-        id: { not: user.sub },
+        lead_id: leadId,
+        status: "pending",
+        ...(user.role === Role.VENDEDOR ? { vendor_id: user.sub } : {}),
+        ...(user.client_id ? { client_id: user.client_id } : {}),
       },
-      select: { id: true },
-      orderBy: { id: "asc" },
     });
-    const nextVendor = vendors[0];
-    if (!nextVendor) {
-      throw new BadRequestException("Não há outro vendedor disponível");
-    }
+    if (!attendance) return { success: true, already_released: true };
+    await this.releaseVendorAttendance(attendance.id, "expired");
+    return { success: true };
+  }
 
-    await this.prisma.lead.update({
-      where: { id: lead.id },
-      data: { assigned_vendor_id: nextVendor.id },
+  private async releaseVendorAttendance(
+    attendanceId: string,
+    status: "rejected" | "expired",
+  ) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const attendance = await tx.vendorAttendance.update({
+        where: { id: attendanceId },
+        data: { status, finished_at: new Date() },
+      });
+      await tx.vendorAvailability.updateMany({
+        where: { vendor_id: attendance.vendor_id, status: "busy" },
+        data: { status: "online" },
+      });
+      await tx.lead.updateMany({
+        where: {
+          id: attendance.lead_id,
+          assigned_vendor_id: attendance.vendor_id,
+        },
+        data: { assigned_vendor_id: null },
+      });
+      return attendance;
     });
-
-    await this.callVendor(
-      { ...user, role: Role.RECEPCAO, client_id: lead.client_id },
-      lead.id,
-    );
-    return { success: true, vendor_id: nextVendor.id };
+    this.realtimeEvents.emitVendorAttendanceUpdated(result.client_id, {
+      attendance_id: result.id,
+      lead_id: result.lead_id,
+      vendor_id: result.vendor_id,
+      status,
+    });
   }
 
   private toResponse(lead: LeadWithRelations) {

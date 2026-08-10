@@ -32,9 +32,11 @@ import {
   checkLeadPhone,
   checkInLeadByToken,
   createLead,
+  listVendorAvailability,
   listLeads,
   mapApiLeadToLead,
   notifyVendorCall,
+  type VendorAvailability,
   updateLead,
 } from "../../services/leads";
 import { listClientStaff, mapStaffToUser } from "../../services/staff";
@@ -138,6 +140,9 @@ export function CheckinPage() {
   const [leadsState, setLeadsState] = useState<Lead[]>([]);
   const [vendorsById, setVendorsById] = useState<Record<string, string>>({});
   const [staffList, setStaffList] = useState<AuthUser[]>([]);
+  const [vendorAvailability, setVendorAvailability] = useState<
+    VendorAvailability[]
+  >([]);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [leadName, setLeadName] = useState("");
@@ -163,7 +168,8 @@ export function CheckinPage() {
   >({});
   const [scannerKey, setScannerKey] = useState(0);
   const [quickCheckinLead, setQuickCheckinLead] = useState<Lead | null>(null);
-  const [quickCheckinVendorId, setQuickCheckinVendorId] = useState("");
+  const [quickCheckinVendorId, setQuickCheckinVendorId] =
+    useState("__automatic__");
   const [quickCheckinBusy, setQuickCheckinBusy] = useState(false);
   const [quickCheckinError, setQuickCheckinError] = useState("");
 
@@ -202,6 +208,9 @@ export function CheckinPage() {
         setVendorsById({});
         setStaffList([]);
       });
+    void listVendorAvailability(t, clientId)
+      .then(setVendorAvailability)
+      .catch(() => setVendorAvailability([]));
   }, [clientId]);
 
   useEffect(() => {
@@ -231,9 +240,20 @@ export function CheckinPage() {
         }
       }
     };
+    const handleAvailabilityChange = () => {
+      const token = readStoredSession()?.accessToken;
+      if (!token) return;
+      void listVendorAvailability(token, clientId)
+        .then(setVendorAvailability)
+        .catch(() => setVendorAvailability([]));
+    };
     socket.on("vendor_status_change", handleStatusChange);
+    socket.on("vendor_availability_changed", handleAvailabilityChange);
+    socket.on("vendor_attendance_updated", handleAvailabilityChange);
     return () => {
       socket.off("vendor_status_change", handleStatusChange);
+      socket.off("vendor_availability_changed", handleAvailabilityChange);
+      socket.off("vendor_attendance_updated", handleAvailabilityChange);
       socket.disconnect();
     };
   }, [clientId]);
@@ -438,7 +458,7 @@ export function CheckinPage() {
       playBeep(880);
       triggerHapticFeedback([100, 50, 100]);
       setShowScannerModal(false);
-      setQuickCheckinVendorId(mapped.assigned_vendor_id ?? "");
+      setQuickCheckinVendorId("__automatic__");
       setQuickCheckinLead(mapped);
     } catch (err) {
       const isNetwork =
@@ -511,20 +531,6 @@ export function CheckinPage() {
     setQuickCheckinBusy(true);
     setQuickCheckinError("");
     try {
-      if (sendToQueue && !quickCheckinVendorId) {
-        throw new Error("Selecione o vendedor responsável pelo lead.");
-      }
-      if (
-        sendToQueue &&
-        quickCheckinLead.assigned_vendor_id !== quickCheckinVendorId
-      ) {
-        await updateLead(
-          quickCheckinLead.id,
-          { assigned_vendor_id: quickCheckinVendorId },
-          t,
-        );
-      }
-
       if (quickCheckinLead.confirmation_status !== "checked_in") {
         const appointmentId = quickCheckinLead.active_appointment?.id;
         if (appointmentId) {
@@ -539,7 +545,13 @@ export function CheckinPage() {
       }
 
       if (sendToQueue) {
-        await notifyVendorCall(quickCheckinLead.id, t);
+        await notifyVendorCall(
+          quickCheckinLead.id,
+          t,
+          quickCheckinVendorId === "__automatic__"
+            ? { mode: "automatic" }
+            : { mode: "manual", vendor_id: quickCheckinVendorId },
+        );
       }
 
       setQuickCheckinLead(null);
@@ -1121,7 +1133,7 @@ export function CheckinPage() {
                   disabled={isCheckedIn}
                   onClick={() => {
                     setQuickCheckinError("");
-                    setQuickCheckinVendorId(lead.assigned_vendor_id ?? "");
+                    setQuickCheckinVendorId("__automatic__");
                     setQuickCheckinLead(lead);
                   }}
                   className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs sm:text-sm font-semibold text-white transition-all hover:bg-emerald-700 active:scale-95 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
@@ -1312,7 +1324,6 @@ export function CheckinPage() {
             <Button
               onClick={() => void handleQuickCheckin(true)}
               loading={quickCheckinBusy}
-              isDisabled={!quickCheckinVendorId}
             >
               Sim
             </Button>
@@ -1330,7 +1341,7 @@ export function CheckinPage() {
             atendimento?
           </p>
           <Select
-            label="De quem é este lead? *"
+            label="Como deseja chamar?"
             value={quickCheckinVendorId}
             onChange={(event) => {
               setQuickCheckinVendorId(event.target.value);
@@ -1338,13 +1349,27 @@ export function CheckinPage() {
             }}
             dark={isDarkMode}
             options={[
-              { value: "", label: "Selecione o vendedor responsável" },
-              ...staffList.map((vendor) => ({
-                value: vendor.id,
-                label: vendor.name,
-              })),
+              {
+                value: "__automatic__",
+                label: "Próximo vendedor disponível (automático)",
+              },
+              ...vendorAvailability
+                .filter((vendor) => vendor.eligible)
+                .map((vendor) => ({
+                  value: vendor.id,
+                  label: vendor.name,
+                })),
             ]}
           />
+          <p
+            className={clsx(
+              "text-xs",
+              isDarkMode ? "text-zinc-400" : "text-zinc-500",
+            )}
+          >
+            {vendorAvailability.filter((vendor) => vendor.eligible).length}{" "}
+            vendedor(es) online e disponível(is).
+          </p>
           {quickCheckinError ? (
             <Notice tone="error" className="text-xs">
               {quickCheckinError}
