@@ -268,6 +268,7 @@ model Client {
   sales_teams                 SalesTeam[]
   score_events                ScoreEvent[]
   staff_users                 User[]                     @relation("ClientStaff")
+  stores                      Store[]
   vehicles                    Vehicle[]
   webhook_events              WebhookEvent[]
   whatsapp_attribution_events WhatsAppAttributionEvent[]
@@ -1461,6 +1462,34 @@ model Vehicle {
 
   @@index([client_id])
   @@map("vehicles")
+}
+
+model Store {
+  id             String   @id @default(uuid()) @db.Uuid
+  client_id      String   @db.Uuid
+  brand          String   @db.VarChar(100)
+  cnpj           String?  @db.VarChar(18)
+  name           String   @db.VarChar(180)
+  street         String   @default("") @db.VarChar(180)
+  number         String   @default("") @db.VarChar(30)
+  complement     String?  @db.VarChar(120)
+  neighborhood   String   @default("") @db.VarChar(120)
+  zip_code       String   @default("") @db.VarChar(10)
+  city           String   @db.VarChar(120)
+  state          String   @db.Char(2)
+  phone          String   @default("") @db.VarChar(30)
+  website        String?  @db.VarChar(500)
+  instagram      String?  @db.VarChar(150)
+  email          String?  @db.VarChar(255)
+  status         Boolean  @default(true)
+  business_hours Json     @default("{}")
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  client         Client   @relation(fields: [client_id], references: [id], onDelete: Cascade)
+
+  @@index([client_id, status])
+  @@index([client_id, name])
+  @@map("stores")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.

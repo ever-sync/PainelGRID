@@ -126,6 +126,9 @@ describe("AppointmentsService", () => {
       scoreEvent: {
         upsert: jest.fn(),
       },
+      dispatchEvent: {
+        upsert: jest.fn(),
+      },
       $transaction: jest.fn(async (callback: (tx: any) => Promise<unknown>) =>
         callback(prisma),
       ),
@@ -139,7 +142,12 @@ describe("AppointmentsService", () => {
         return undefined;
       }),
     } as any as ConfigService;
-    mail = { sendAppointmentWelcome: jest.fn() };
+    mail = {
+      sendAppointmentWelcome: jest.fn().mockResolvedValue({
+        providerMessageId: "resend-message-1",
+        subject: "Credencial do evento",
+      }),
+    };
     meta = {
       sendClientWhatsappMediaMessage: jest.fn().mockResolvedValue({
         wamid: "wamid-checkin-1",

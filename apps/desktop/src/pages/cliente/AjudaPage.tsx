@@ -25,9 +25,9 @@ const FAQ_LIST: FaqItem[] = [
       "A recepção visualiza todos os leads agendados ou que chegaram para o evento. Ao selecionar o lead, o sistema chama o vendedor vinculado através do celular com som e vibração continuada. Caso o vendedor esteja ausente ou offline, a recepção pode reatribuir o lead em 1 clique.",
   },
   {
-    question: "Como lançar uma Venda Avulsa?",
+    question: "O que a recepção pode fazer durante o evento?",
     answer:
-      "Na tela de Check-in da Recepção, basta clicar no botão verde [+ Venda Avulsa]. Em seguida, selecione o cliente pelo nome/CPF, escolha o vendedor vinculado e informe o veículo e valor.",
+      "A recepção registra a presença, realiza cadastro rápido quando permitido e envia o lead para a fila de atendimento. O registro de vendas é feito pelo vendedor responsável.",
   },
   {
     question:
@@ -75,12 +75,12 @@ export function AjudaPage() {
             Fale diretamente com nossa equipe de atendimento em tempo real.
           </p>
           <a
-            href="https://wa.me/5511999999999"
+            href="mailto:suporte@painelgrid.com.br"
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1.5 text-xs font-bold text-[#FF7A00] hover:underline pt-2"
           >
-            <span>Iniciar Conversa</span>
+            <span>Solicitar atendimento</span>
             <ExternalLink size={14} />
           </a>
         </div>
@@ -103,14 +103,13 @@ export function AjudaPage() {
             Assista aos tutoriais passo a passo sobre como operar o sistema de
             vendas.
           </p>
-          <button
-            type="button"
-            onClick={() => alert("Abrindo portal de vídeo aulas do cliente...")}
+          <a
+            href="/cliente/cursos"
             className="inline-flex items-center gap-1.5 text-xs font-bold text-[#FF7A00] hover:underline pt-2"
           >
             <span>Assistir Tutoriais</span>
             <ExternalLink size={14} />
-          </button>
+          </a>
         </div>
 
         <div

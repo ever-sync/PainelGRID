@@ -504,7 +504,18 @@ export function ConfiguracaoPage() {
       const updated = await updateEvent(
         selectedEventSettingsId,
         {
-          ...eventPermissions,
+          allow_vendor_checkin: eventPermissions.allow_vendor_checkin,
+          allow_vendor_fipe: eventPermissions.allow_vendor_fipe,
+          allow_vendor_create_sale: eventPermissions.allow_vendor_create_sale,
+          allow_vendor_edit_own_lead:
+            eventPermissions.allow_vendor_edit_own_lead,
+          allow_vendor_delete_own_lead:
+            eventPermissions.allow_vendor_delete_own_lead,
+          allow_reception_quick_create:
+            eventPermissions.allow_reception_quick_create,
+          allow_reception_edit_lead: eventPermissions.allow_reception_edit_lead,
+          allow_reception_delete_lead:
+            eventPermissions.allow_reception_delete_lead,
         },
         accessToken,
       );
@@ -1269,11 +1280,13 @@ export function ConfiguracaoPage() {
         label: "Config. evento",
         icon: <CalendarPlus size={15} />,
       });
-      tabs.push({
-        id: "acessos",
-        label: "Acessos",
-        icon: <Users size={15} />,
-      });
+      if (user.role === "gestor") {
+        tabs.push({
+          id: "acessos",
+          label: "Acessos",
+          icon: <Users size={15} />,
+        });
+      }
     }
 
     tabs.push({
@@ -2084,11 +2097,6 @@ export function ConfiguracaoPage() {
                         "Permite criar leads pelo painel da recepção.",
                       ],
                       [
-                        "allow_reception_create_sale",
-                        "Recepção pode registrar venda",
-                        "Permite criar vendas neste evento.",
-                      ],
-                      [
                         "allow_reception_edit_lead",
                         "Recepção pode alterar dados do lead",
                         "Permite editar os dados cadastrais do lead.",
@@ -2117,9 +2125,9 @@ export function ConfiguracaoPage() {
                       />
                     ))}
                     <Notice tone="info" className="md:col-span-2">
-                      Editar e apagar vendas ainda não são operações disponíveis
-                      no produto. Por isso, essas permissões permanecem
-                      desativadas até que os respectivos fluxos sejam criados.
+                      A recepção registra presença, realiza cadastro rápido e
+                      encaminha o lead para a fila. O registro de venda pertence
+                      exclusivamente ao vendedor responsável pelo atendimento.
                     </Notice>
                   </div>
 

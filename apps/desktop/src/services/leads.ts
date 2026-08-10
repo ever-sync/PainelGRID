@@ -73,6 +73,9 @@ const STAGE_CODE_TO_CRM: Record<string, CrmStage> = {
   CHECKIN: "checkin",
   VISITOU: "checkin",
   CONVERTIDO: "convertido",
+  COMPROU: "convertido",
+  VENDIDO: "convertido",
+  VENDA: "convertido",
   PERDIDO: "perdido",
 };
 
@@ -89,6 +92,9 @@ export const STAGE_NAME_TO_CRM: Record<string, CrmStage> = {
   Checkin: "checkin",
   Visitou: "checkin",
   Convertido: "convertido",
+  Comprou: "convertido",
+  Vendido: "convertido",
+  Venda: "convertido",
   Perdido: "perdido",
 };
 

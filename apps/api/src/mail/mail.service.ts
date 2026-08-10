@@ -389,7 +389,7 @@ export class MailService {
     vendorAvatarUrl: string | null;
     clientName: string;
     checkinToken?: string | null;
-  }): Promise<void> {
+  }): Promise<{ providerMessageId: string | null; subject: string }> {
     if (!this.apiKey) {
       this.logger.warn(
         "Email de boas-vindas ao evento nao enviado: Resend nao configurado",
@@ -401,8 +401,13 @@ export class MailService {
     const html = this.buildAppointmentWelcomeHtml(params);
 
     try {
-      await this.sendViaResend({ to: params.to, subject, html });
+      const providerMessageId = await this.sendViaResend({
+        to: params.to,
+        subject,
+        html,
+      });
       this.logger.log("Email de boas-vindas ao evento enviado com QR Code");
+      return { providerMessageId, subject };
     } catch (err) {
       this.logger.error(
         `Falha ao enviar email de boas-vindas ao evento: ${(err as Error).message}`,

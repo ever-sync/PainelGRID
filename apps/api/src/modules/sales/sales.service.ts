@@ -33,6 +33,11 @@ export class SalesService {
     if (!user.client_id) {
       throw new ForbiddenException("Empresa nao identificada");
     }
+    if (user.role === Role.RECEPCAO) {
+      throw new ForbiddenException(
+        "A recepção registra presença e encaminha para atendimento; vendas são registradas pelo vendedor responsável",
+      );
+    }
 
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: dto.appointment_id },
@@ -50,10 +55,8 @@ export class SalesService {
       },
     });
     if (
-      (user.role === Role.VENDEDOR &&
-        eventPermissions?.allow_vendor_create_sale === false) ||
-      (user.role === Role.RECEPCAO &&
-        eventPermissions?.allow_reception_create_sale !== true)
+      user.role === Role.VENDEDOR &&
+      eventPermissions?.allow_vendor_create_sale === false
     ) {
       throw new ForbiddenException(
         "Registro de venda não permitido para este perfil no evento",

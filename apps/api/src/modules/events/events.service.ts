@@ -98,10 +98,14 @@ export class EventsService {
 
   async getAuditLogs(user: AuthenticatedUser, query: AuditLogQueryDto) {
     const clientId =
-      user.role === Role.CLIENTE ? user.client_id ?? undefined : query.client_id;
+      user.role === Role.CLIENTE
+        ? (user.client_id ?? undefined)
+        : query.client_id;
 
     if (!clientId) {
-      throw new ForbiddenException("Selecione um cliente para consultar os logs");
+      throw new ForbiddenException(
+        "Selecione um cliente para consultar os logs",
+      );
     }
 
     if (user.role === Role.GESTOR) {
@@ -118,7 +122,8 @@ export class EventsService {
         },
         select: { id: true },
       });
-      if (!event) throw new ForbiddenException("Evento fora do escopo do cliente");
+      if (!event)
+        throw new ForbiddenException("Evento fora do escopo do cliente");
     }
 
     const search = query.search?.trim();
@@ -348,9 +353,9 @@ export class EventsService {
       allow_vendor_delete_sale: row.allow_vendor_delete_sale ?? false,
       allow_vendor_edit_own_lead: row.allow_vendor_edit_own_lead ?? true,
       allow_vendor_delete_own_lead: row.allow_vendor_delete_own_lead ?? false,
-      allow_reception_create_sale: row.allow_reception_create_sale ?? false,
-      allow_reception_edit_sale: row.allow_reception_edit_sale ?? false,
-      allow_reception_delete_sale: row.allow_reception_delete_sale ?? false,
+      allow_reception_create_sale: false,
+      allow_reception_edit_sale: false,
+      allow_reception_delete_sale: false,
       allow_reception_edit_lead: row.allow_reception_edit_lead ?? false,
       allow_reception_delete_lead: row.allow_reception_delete_lead ?? false,
       allow_reception_quick_create: row.allow_reception_quick_create ?? true,
@@ -536,9 +541,9 @@ export class EventsService {
         allow_vendor_delete_sale: dto.allow_vendor_delete_sale ?? false,
         allow_vendor_edit_own_lead: dto.allow_vendor_edit_own_lead ?? true,
         allow_vendor_delete_own_lead: dto.allow_vendor_delete_own_lead ?? false,
-        allow_reception_create_sale: dto.allow_reception_create_sale ?? false,
-        allow_reception_edit_sale: dto.allow_reception_edit_sale ?? false,
-        allow_reception_delete_sale: dto.allow_reception_delete_sale ?? false,
+        allow_reception_create_sale: false,
+        allow_reception_edit_sale: false,
+        allow_reception_delete_sale: false,
         allow_reception_edit_lead: dto.allow_reception_edit_lead ?? false,
         allow_reception_delete_lead: dto.allow_reception_delete_lead ?? false,
         allow_reception_quick_create: dto.allow_reception_quick_create ?? true,
@@ -679,9 +684,9 @@ export class EventsService {
         allow_vendor_delete_sale: dto.allow_vendor_delete_sale,
         allow_vendor_edit_own_lead: dto.allow_vendor_edit_own_lead,
         allow_vendor_delete_own_lead: dto.allow_vendor_delete_own_lead,
-        allow_reception_create_sale: dto.allow_reception_create_sale,
-        allow_reception_edit_sale: dto.allow_reception_edit_sale,
-        allow_reception_delete_sale: dto.allow_reception_delete_sale,
+        allow_reception_create_sale: false,
+        allow_reception_edit_sale: false,
+        allow_reception_delete_sale: false,
         allow_reception_edit_lead: dto.allow_reception_edit_lead,
         allow_reception_delete_lead: dto.allow_reception_delete_lead,
         allow_reception_quick_create: dto.allow_reception_quick_create,

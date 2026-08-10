@@ -1,15 +1,21 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import clsx from "clsx";
 import { Search, ArrowLeft, Copy, Mail, Phone } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import type { Lead, User } from "../../types";
 import { readDashboardDarkEnabled } from "../../lib/dashboard-dark-mode";
+import { readStoredSession } from "../../services/auth";
+import { fetchAllLeads, mapApiLeadToLead } from "../../services/leads";
+import { resolveClientId } from "../../utils/userContext";
+import { MissingClientScope } from "../../components/shared/MissingClientScope";
 
 type OutletContext = {
   user: User;
 };
 
+// Mantido temporariamente apenas como referência visual durante a migração.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const INITIAL_MOCK_LEADS: Lead[] = [
   {
     id: "lead-1",
@@ -185,9 +191,40 @@ const INITIAL_MOCK_LEADS: Lead[] = [
 export function LeadsPage() {
   const { user } = useOutletContext<OutletContext>();
   const isDarkMode = readDashboardDarkEnabled(user.id);
+  const clientId = resolveClientId(user);
 
-  const [leads] = useState<Lead[]>(INITIAL_MOCK_LEADS);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+
+  useEffect(() => {
+    const token = readStoredSession()?.accessToken;
+    if (!clientId || !token) {
+      setLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setLoading(true);
+    setLoadError("");
+    void fetchAllLeads({ client_id: clientId }, token, {
+      signal: controller.signal,
+      maxItems: 10_000,
+    })
+      .then((rows) => setLeads(rows.map(mapApiLeadToLead)))
+      .catch((reason: unknown) => {
+        if (controller.signal.aborted) return;
+        setLoadError(
+          reason instanceof Error
+            ? reason.message
+            : "Não foi possível carregar os leads.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [clientId]);
 
   // Filtros Avançados (Conforme Imagem 1)
   const [search, setSearch] = useState("");
@@ -247,6 +284,26 @@ export function LeadsPage() {
             ? lead.cpf_validated === true
             : lead.cpf_validated === false;
 
+      const matchChannel =
+        filterChannel === "todos" ? true : lead.source === filterChannel;
+      const createdAt = new Date(lead.created_at);
+      const parseDate = (value: string, endOfDay = false) => {
+        const [day, month, year] = value.split("/").map(Number);
+        if (!day || !month || !year) return null;
+        return new Date(
+          year,
+          month - 1,
+          day,
+          endOfDay ? 23 : 0,
+          endOfDay ? 59 : 0,
+          endOfDay ? 59 : 0,
+        );
+      };
+      const from = parseDate(dateFrom);
+      const to = parseDate(dateTo, true);
+      const matchDate =
+        (!from || createdAt >= from) && (!to || createdAt <= to);
+
       return (
         matchSearch &&
         matchStatus &&
@@ -256,7 +313,9 @@ export function LeadsPage() {
         matchBrand &&
         matchCity &&
         matchUf &&
-        matchCpf
+        matchCpf &&
+        matchChannel &&
+        matchDate
       );
     });
   }, [
@@ -270,7 +329,38 @@ export function LeadsPage() {
     filterCity,
     filterUf,
     filterCpfValidated,
+    filterChannel,
+    dateFrom,
+    dateTo,
   ]);
+
+  const exportCsv = () => {
+    const cell = (value: unknown) =>
+      `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const rows = filteredLeads.map((lead) => [
+      lead.name,
+      lead.phone,
+      lead.email,
+      lead.crm_stage_name ?? lead.crm_stage,
+      lead.source,
+      lead.event_interest ?? "",
+      new Date(lead.created_at).toLocaleString("pt-BR"),
+    ]);
+    const csv = [
+      ["Nome", "Telefone", "E-mail", "Etapa", "Origem", "Evento", "Cadastro"],
+      ...rows,
+    ]
+      .map((row) => row.map(cell).join(";"))
+      .join("\n");
+    const url = URL.createObjectURL(
+      new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "leads.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleCopySummary = () => {
     if (!selectedLead) return;
@@ -278,6 +368,8 @@ export function LeadsPage() {
     void navigator.clipboard.writeText(textToCopy);
     alert("Resumo do lead copiado para a área de transferência!");
   };
+
+  if (!clientId) return <MissingClientScope />;
 
   return (
     <div className="space-y-6">
@@ -527,8 +619,15 @@ export function LeadsPage() {
         <div className="space-y-4">
           <PageHeader
             title="Leads"
-            subtitle="9980 lead(s). Espelho do Bitrix mantido pelo Rubinho (somente leitura)."
+            subtitle={`${filteredLeads.length} de ${leads.length} lead(s) da sua empresa.`}
           />
+
+          {loading ? (
+            <p className="text-sm text-zinc-500">Carregando leads...</p>
+          ) : null}
+          {loadError ? (
+            <p className="text-sm font-semibold text-red-500">{loadError}</p>
+          ) : null}
 
           {/* BARRA COM OS 11 FILTROS DO TOPO (CONFORME IMAGEM 1) */}
           <div className="space-y-3">
@@ -737,7 +836,8 @@ export function LeadsPage() {
             <div className="flex items-center gap-2 pt-1">
               <button
                 type="button"
-                onClick={() => alert("Exportando planilha CSV...")}
+                onClick={exportCsv}
+                disabled={!filteredLeads.length}
                 className={clsx(
                   "h-9 px-4 rounded-full border text-xs font-semibold transition-all active:scale-95 cursor-pointer",
                   isDarkMode
@@ -750,7 +850,8 @@ export function LeadsPage() {
 
               <button
                 type="button"
-                onClick={() => alert("Exportando planilha Excel...")}
+                onClick={exportCsv}
+                disabled={!filteredLeads.length}
                 className={clsx(
                   "h-9 px-4 rounded-full border text-xs font-semibold transition-all active:scale-95 cursor-pointer",
                   isDarkMode

@@ -838,18 +838,83 @@ export class AppointmentsService {
       }),
     ]);
 
-    await this.mail.sendAppointmentWelcome({
-      to: lead.email,
-      leadName: lead.name,
-      eventName: event.name,
-      eventLocation: event.location,
-      scheduledAt: appointment.scheduled_at,
-      timezone: appointment.timezone,
-      vendorName: vendor?.name ?? null,
-      vendorAvatarUrl: vendor?.avatar_url ?? null,
-      clientName: client?.company_name ?? event.name,
-      checkinToken: lead.checkin_token || lead.id,
-    });
+    const dispatchKey = `appointment-welcome-email:${appointment.id}`;
+    try {
+      const sent = await this.mail.sendAppointmentWelcome({
+        to: lead.email,
+        leadName: lead.name,
+        eventName: event.name,
+        eventLocation: event.location,
+        scheduledAt: appointment.scheduled_at,
+        timezone: appointment.timezone,
+        vendorName: vendor?.name ?? null,
+        vendorAvatarUrl: vendor?.avatar_url ?? null,
+        clientName: client?.company_name ?? event.name,
+        checkinToken: lead.checkin_token || lead.id,
+      });
+      await this.prisma.dispatchEvent.upsert({
+        where: {
+          client_id_dispatch_key: {
+            client_id: appointment.client_id,
+            dispatch_key: dispatchKey,
+          },
+        },
+        create: {
+          client_id: appointment.client_id,
+          event_id: appointment.event_id,
+          lead_id: appointment.lead_id,
+          appointment_id: appointment.id,
+          dispatch_key: dispatchKey,
+          workflow_key: "appointment-welcome",
+          dispatch_type: "appointment_scheduled_email",
+          channel: "email",
+          provider: "resend",
+          provider_message_id: sent?.providerMessageId ?? null,
+          status: "sent",
+          sent_at: new Date(),
+          metadata: { recipient: lead.email, subject: sent?.subject },
+        },
+        update: {
+          provider_message_id: sent?.providerMessageId ?? null,
+          status: "sent",
+          sent_at: new Date(),
+          failed_at: null,
+          failure_reason: null,
+          metadata: { recipient: lead.email, subject: sent?.subject },
+        },
+      });
+    } catch (error) {
+      await this.prisma.dispatchEvent.upsert({
+        where: {
+          client_id_dispatch_key: {
+            client_id: appointment.client_id,
+            dispatch_key: dispatchKey,
+          },
+        },
+        create: {
+          client_id: appointment.client_id,
+          event_id: appointment.event_id,
+          lead_id: appointment.lead_id,
+          appointment_id: appointment.id,
+          dispatch_key: dispatchKey,
+          workflow_key: "appointment-welcome",
+          dispatch_type: "appointment_scheduled_email",
+          channel: "email",
+          provider: "resend",
+          status: "failed",
+          failed_at: new Date(),
+          failure_reason: (error as Error).message.slice(0, 2000),
+          metadata: { recipient: lead.email },
+        },
+        update: {
+          status: "failed",
+          failed_at: new Date(),
+          failure_reason: (error as Error).message.slice(0, 2000),
+          metadata: { recipient: lead.email },
+        },
+      });
+      throw error;
+    }
   }
 
   async sendEventCredentialEmailForAutomation(

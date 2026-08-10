@@ -4,7 +4,7 @@ import {
   ConfirmationStatus,
   SaleType,
 } from "@prisma/client";
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { Role } from "../../common/types";
 import { SalesService } from "./sales.service";
 
@@ -100,6 +100,23 @@ describe("SalesService", () => {
       { emitLeadUpdated: jest.fn() } as any,
       { markConversion: jest.fn().mockResolvedValue(null) } as any,
     );
+  });
+
+  it("bloqueia venda pela recepção mesmo se um evento legado estiver liberado", async () => {
+    prisma.event.findUnique.mockResolvedValue({
+      allow_vendor_create_sale: true,
+      allow_reception_create_sale: true,
+    });
+
+    await expect(
+      service.create({ ...user, role: Role.RECEPCAO } as any, {
+        appointment_id: appointmentId,
+        type: SaleType.NOVO,
+        product: "Onix",
+        value: "120000",
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.appointment.findUnique).not.toHaveBeenCalled();
   });
 
   it("permite venda sem check-in e soma compareceu mais vendeu", async () => {

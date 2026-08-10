@@ -6,12 +6,75 @@ import {
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../config/prisma.service";
 import { UpsertDispatchDto } from "./dto/upsert-dispatch.dto";
+import { AuthenticatedUser } from "../auth/auth.types";
+import { Role } from "../../common/types";
+import { ClientsService } from "../clients/clients.service";
+import { ForbiddenException } from "@nestjs/common";
 
 type DispatchStatus = NonNullable<UpsertDispatchDto["status"]>;
 
 @Injectable()
 export class DispatchTrackingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly clientsService: ClientsService,
+  ) {}
+
+  private async assertPanelAccess(user: AuthenticatedUser, clientId: string) {
+    if (user.role === Role.GESTOR) {
+      await this.clientsService.assertGestorOwnsClient(user.sub, clientId);
+      return;
+    }
+    if (user.role === Role.CLIENTE && user.client_id === clientId) return;
+    throw new ForbiddenException(
+      "Sem permissão para os disparos deste cliente",
+    );
+  }
+
+  async listEmailHistory(
+    user: AuthenticatedUser,
+    clientId: string,
+    filters: {
+      eventId?: string;
+      status?: string;
+      origin?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    },
+  ) {
+    await this.assertPanelAccess(user, clientId);
+    const createdAt = {
+      ...(filters.dateFrom ? { gte: new Date(filters.dateFrom) } : {}),
+      ...(filters.dateTo ? { lte: new Date(filters.dateTo) } : {}),
+    };
+    return this.prisma.dispatchEvent.findMany({
+      where: {
+        client_id: clientId,
+        channel: "email",
+        ...(filters.eventId ? { event_id: filters.eventId } : {}),
+        ...(filters.status ? { status: filters.status } : {}),
+        ...(filters.origin ? { dispatch_type: filters.origin } : {}),
+        ...(Object.keys(createdAt).length ? { created_at: createdAt } : {}),
+      },
+      select: {
+        id: true,
+        created_at: true,
+        sent_at: true,
+        failed_at: true,
+        dispatch_type: true,
+        workflow_key: true,
+        status: true,
+        provider: true,
+        provider_message_id: true,
+        failure_reason: true,
+        metadata: true,
+        lead: { select: { id: true, name: true, email: true } },
+        event: { select: { id: true, name: true } },
+      },
+      orderBy: { created_at: "desc" },
+      take: 500,
+    });
+  }
 
   async upsert(clientId: string, dto: UpsertDispatchDto) {
     const lead = await this.prisma.lead.findFirst({

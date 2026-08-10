@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import clsx from "clsx";
 import { Calendar as CalendarIcon } from "lucide-react";
@@ -6,6 +6,13 @@ import { PageHeader } from "../../components/shared/PageHeader";
 import { Modal } from "../../components/ui/Modal";
 import type { User } from "../../types";
 import { readDashboardDarkEnabled } from "../../lib/dashboard-dark-mode";
+import { readStoredSession } from "../../services/auth";
+import {
+  listEmailHistory,
+  type ApiEmailHistoryItem,
+} from "../../services/emailHistory";
+import { resolveClientId } from "../../utils/userContext";
+import { MissingClientScope } from "../../components/shared/MissingClientScope";
 
 type OutletContext = {
   user: User;
@@ -24,6 +31,8 @@ export type SentEmailLog = {
   bodyContent?: string;
 };
 
+// Mantido temporariamente apenas como referência do layout legado.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const INITIAL_EMAILS_LOGS: SentEmailLog[] = [
   {
     id: "e-1",
@@ -112,8 +121,11 @@ const INITIAL_EMAILS_LOGS: SentEmailLog[] = [
 export function EmailsEnviadosPage() {
   const { user } = useOutletContext<OutletContext>();
   const isDarkMode = readDashboardDarkEnabled(user.id);
+  const clientId = resolveClientId(user);
 
-  const [logs] = useState<SentEmailLog[]>(INITIAL_EMAILS_LOGS);
+  const [logs, setLogs] = useState<SentEmailLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [filterOrigin, setFilterOrigin] = useState("todas");
   const [filterStatus, setFilterStatus] = useState("todos");
   const [dateFrom, setDateFrom] = useState("");
@@ -132,16 +144,108 @@ export function EmailsEnviadosPage() {
     });
   }, [logs, filterOrigin, filterStatus]);
 
-  const handleApplyFilter = () => {
-    // Filtro aplicado com sucesso
+  const mapHistoryItem = (item: ApiEmailHistoryItem): SentEmailLog => {
+    const metadata = item.metadata ?? {};
+    const subject =
+      typeof metadata.subject === "string"
+        ? metadata.subject
+        : item.dispatch_type === "email_attempt_2"
+          ? "Recuperação de credenciamento"
+          : `Comunicação do evento ${item.event?.name ?? ""}`.trim();
+    const origin: SentEmailLog["origin"] = item.dispatch_type.includes(
+      "credential",
+    )
+      ? "checkin"
+      : item.dispatch_type.includes("scheduled")
+        ? "agendamento"
+        : "notificacao";
+    const status: SentEmailLog["status"] =
+      item.status === "failed"
+        ? "failed"
+        : item.status === "queued"
+          ? "pending"
+          : "sent";
+    return {
+      id: item.id,
+      when: new Date(
+        item.sent_at ?? item.failed_at ?? item.created_at,
+      ).toLocaleString("pt-BR"),
+      origin,
+      status,
+      recipients: item.lead.email ?? "E-mail não informado",
+      subject,
+      storeId: item.event?.name ?? "Sem evento",
+      actor: item.workflow_key,
+      error: item.failure_reason ?? "—",
+      bodyContent:
+        typeof metadata.preview === "string" ? metadata.preview : undefined,
+    };
   };
+
+  const parseDate = (value: string, endOfDay = false) => {
+    if (!value) return undefined;
+    const [day, month, year] = value.split("/").map(Number);
+    if (!day || !month || !year) return undefined;
+    return new Date(
+      year,
+      month - 1,
+      day,
+      endOfDay ? 23 : 0,
+      endOfDay ? 59 : 0,
+      endOfDay ? 59 : 0,
+    ).toISOString();
+  };
+
+  const loadHistory = useCallback(() => {
+    const token = readStoredSession()?.accessToken;
+    if (!clientId || !token) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setLoadError("");
+    void listEmailHistory(clientId, token, {
+      status: filterStatus === "todos" ? undefined : filterStatus,
+      dateFrom: parseDate(dateFrom),
+      dateTo: parseDate(dateTo, true),
+    })
+      .then((items) => setLogs(items.map(mapHistoryItem)))
+      .catch((reason: unknown) =>
+        setLoadError(
+          reason instanceof Error
+            ? reason.message
+            : "Não foi possível carregar o histórico de e-mails.",
+        ),
+      )
+      .finally(() => setLoading(false));
+  }, [clientId, dateFrom, dateTo, filterStatus]);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
+  const handleApplyFilter = () => loadHistory();
+
+  if (!clientId) return <MissingClientScope />;
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="E-mails enviados"
-        subtitle="Histórico e log completo de todos os e-mails disparados pelo sistema."
+        subtitle="Histórico dos e-mails disparados para a sua empresa."
       />
+
+      {loading ? (
+        <p className="text-sm text-zinc-500">Carregando histórico...</p>
+      ) : null}
+      {loadError ? (
+        <p className="text-sm font-semibold text-red-500">{loadError}</p>
+      ) : null}
+      {!loading && !loadError && !logs.length ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+          Nenhum e-mail foi registrado para os filtros selecionados.
+        </div>
+      ) : null}
 
       {/* PAINEL DE FILTROS DO TOPO (CONFORME IMAGEM DO USUÁRIO) */}
       <div className="space-y-3">

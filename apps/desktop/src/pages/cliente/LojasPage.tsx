@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import clsx from "clsx";
 import {
@@ -24,6 +24,16 @@ import { PageHeader } from "../../components/shared/PageHeader";
 import { Modal } from "../../components/ui/Modal";
 import type { AppOutletContext } from "../../layouts/AppLayout";
 import { readDashboardDarkEnabled } from "../../lib/dashboard-dark-mode";
+import { readStoredSession } from "../../services/auth";
+import {
+  createStore,
+  listStores,
+  updateStore,
+  type ApiStore,
+  type StorePayload,
+} from "../../services/stores";
+import { resolveClientId } from "../../utils/userContext";
+import { MissingClientScope } from "../../components/shared/MissingClientScope";
 
 export type StoreItem = {
   id: string;
@@ -48,6 +58,8 @@ export type StoreItem = {
   >;
 };
 
+// Mantido temporariamente apenas como referência do formulário legado.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const INITIAL_STORES: StoreItem[] = [
   {
     id: "1",
@@ -239,8 +251,11 @@ const DAYS_OF_WEEK = [
 export function LojasPage() {
   const { user } = useOutletContext<AppOutletContext>();
   const isDarkMode = readDashboardDarkEnabled(user.id);
+  const clientId = resolveClientId(user);
 
-  const [stores, setStores] = useState<StoreItem[]>(INITIAL_STORES);
+  const [stores, setStores] = useState<StoreItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saveError, setSaveError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("todas");
   const [viewMode, setViewMode] = useState<"list" | "form">("list");
@@ -288,6 +303,66 @@ export function LojasPage() {
   // Modal CSV
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [csvContent, setCsvContent] = useState("");
+
+  const mapStore = (row: ApiStore): StoreItem => ({
+    id: row.id,
+    brand: row.brand,
+    cnpj: row.cnpj ?? "",
+    name: row.name,
+    street: row.street,
+    number: row.number,
+    complement: row.complement ?? "",
+    neighborhood: row.neighborhood,
+    zipCode: row.zip_code,
+    city: row.city,
+    state: row.state,
+    phone: row.phone,
+    website: row.website ?? "",
+    instagram: row.instagram ?? "",
+    emailResp: row.email ?? "",
+    status: row.status ? "ativa" : "desativada",
+    businessHours: row.business_hours,
+  });
+
+  const toPayload = (store: Partial<StoreItem>): StorePayload => ({
+    client_id: clientId ?? undefined,
+    brand: store.brand,
+    cnpj: store.cnpj,
+    name: store.name,
+    street: store.street,
+    number: store.number,
+    complement: store.complement,
+    neighborhood: store.neighborhood,
+    zip_code: store.zipCode,
+    city: store.city,
+    state: store.state,
+    phone: store.phone,
+    website: store.website,
+    instagram: store.instagram,
+    email: store.emailResp,
+    status: store.status === "ativa",
+    business_hours: store.businessHours,
+  });
+
+  useEffect(() => {
+    const token = readStoredSession()?.accessToken;
+    if (!clientId || !token) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setSaveError("");
+    void listStores(clientId, token)
+      .then((rows) => setStores(rows.map(mapStore)))
+      .catch((reason: unknown) =>
+        setSaveError(
+          reason instanceof Error
+            ? reason.message
+            : "Não foi possível carregar as lojas.",
+        ),
+      )
+      .finally(() => setLoading(false));
+  }, [clientId]);
 
   const handleOpenForm = (store?: StoreItem) => {
     if (store) {
@@ -360,7 +435,7 @@ export function LojasPage() {
     }
   };
 
-  const handleSaveStore = (e: React.FormEvent) => {
+  const handleSaveStore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (
       !formData.name.trim() ||
@@ -371,41 +446,56 @@ export function LojasPage() {
       return;
     }
 
-    if (editingStore) {
-      setStores((prev) =>
-        prev.map((s) =>
-          s.id === editingStore.id
-            ? {
-                ...s,
-                ...formData,
-              }
-            : s,
-        ),
-      );
-    } else {
-      const newStore: StoreItem = {
-        id: String(Date.now()),
+    const token = readStoredSession()?.accessToken;
+    if (!clientId || !token) return;
+    setSaveError("");
+    try {
+      const draft: StoreItem = {
+        id: editingStore?.id ?? "",
         ...formData,
-        status: "ativa",
-        emailResp: "",
+        status: editingStore?.status ?? "ativa",
+        emailResp: editingStore?.emailResp ?? "",
+        businessHours: editingStore?.businessHours,
       };
-      setStores((prev) => [newStore, ...prev]);
+      const saved = editingStore
+        ? await updateStore(editingStore.id, toPayload(draft), token)
+        : await createStore(toPayload(draft), token);
+      const mapped = mapStore(saved);
+      setStores((current) =>
+        editingStore
+          ? current.map((store) => (store.id === mapped.id ? mapped : store))
+          : [mapped, ...current],
+      );
+      setViewMode("list");
+    } catch (reason) {
+      setSaveError(
+        reason instanceof Error
+          ? reason.message
+          : "Não foi possível salvar a loja.",
+      );
     }
-
-    setViewMode("list");
   };
 
-  const handleToggleStatus = (id: string) => {
-    setStores((prev) =>
-      prev.map((s) =>
-        s.id === id
-          ? {
-              ...s,
-              status: s.status === "ativa" ? "desativada" : "ativa",
-            }
-          : s,
-      ),
-    );
+  const handleToggleStatus = async (id: string) => {
+    const token = readStoredSession()?.accessToken;
+    const current = stores.find((store) => store.id === id);
+    if (!token || !current) return;
+    try {
+      const saved = await updateStore(
+        id,
+        { status: current.status !== "ativa" },
+        token,
+      );
+      setStores((rows) =>
+        rows.map((store) => (store.id === id ? mapStore(saved) : store)),
+      );
+    } catch (reason) {
+      setSaveError(
+        reason instanceof Error
+          ? reason.message
+          : "Não foi possível alterar o status.",
+      );
+    }
   };
 
   const handleOpenHoursModal = (store: StoreItem) => {
@@ -424,22 +514,32 @@ export function LojasPage() {
     setBusinessHoursState(defaultHours);
   };
 
-  const handleSaveHours = () => {
+  const handleSaveHours = async () => {
     if (!hoursModalStore) return;
-    setStores((prev) =>
-      prev.map((s) =>
-        s.id === hoursModalStore.id
-          ? {
-              ...s,
-              businessHours: businessHoursState,
-            }
-          : s,
-      ),
-    );
-    setHoursModalStore(null);
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+    try {
+      const saved = await updateStore(
+        hoursModalStore.id,
+        { business_hours: businessHoursState },
+        token,
+      );
+      setStores((rows) =>
+        rows.map((store) =>
+          store.id === hoursModalStore.id ? mapStore(saved) : store,
+        ),
+      );
+      setHoursModalStore(null);
+    } catch (reason) {
+      setSaveError(
+        reason instanceof Error
+          ? reason.message
+          : "Não foi possível salvar os horários.",
+      );
+    }
   };
 
-  const handleImportCsv = () => {
+  const handleImportCsv = async () => {
     if (!csvContent.trim()) return;
     const lines = csvContent.trim().split("\n");
     const newStores: StoreItem[] = [];
@@ -465,10 +565,23 @@ export function LojasPage() {
     });
 
     if (newStores.length > 0) {
-      setStores((prev) => [...newStores, ...prev]);
-      setShowCsvModal(false);
-      setCsvContent("");
-      alert(`${newStores.length} lojas importadas com sucesso!`);
+      const token = readStoredSession()?.accessToken;
+      if (!clientId || !token) return;
+      try {
+        const saved = await Promise.all(
+          newStores.map((store) => createStore(toPayload(store), token)),
+        );
+        setStores((prev) => [...saved.map(mapStore), ...prev]);
+        setShowCsvModal(false);
+        setCsvContent("");
+        alert(`${saved.length} lojas importadas com sucesso!`);
+      } catch (reason) {
+        setSaveError(
+          reason instanceof Error
+            ? reason.message
+            : "Não foi possível importar as lojas.",
+        );
+      }
     } else {
       alert("Nenhuma loja válida encontrada no formato CSV.");
     }
@@ -492,12 +605,21 @@ export function LojasPage() {
     });
   }, [stores, search, statusFilter]);
 
+  if (!clientId) return <MissingClientScope />;
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Lojas"
         subtitle={`${stores.length} loja(s). O agente só oferece lojas ativas.`}
       />
+
+      {loading ? (
+        <p className="text-sm text-zinc-500">Carregando lojas...</p>
+      ) : null}
+      {saveError ? (
+        <p className="text-sm font-semibold text-red-500">{saveError}</p>
+      ) : null}
 
       {/* Visão de Formulário "Nova Loja" / "Editar Loja" (Conforme Imagem 2) */}
       {viewMode === "form" ? (

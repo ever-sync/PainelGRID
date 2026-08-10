@@ -40,6 +40,7 @@ import { RequestPerformanceMiddleware } from "./modules/performance/request-perf
 import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { OperationsModule } from "./modules/operations/operations.module";
+import { StoresModule } from "./modules/stores/stores.module";
 
 const envFilePaths = getApiEnvFilePaths();
 
@@ -139,6 +140,7 @@ const envFilePaths = getApiEnvFilePaths();
     PerformanceModule,
     NotificationsModule,
     OperationsModule,
+    StoresModule,
   ],
   providers: [
     {

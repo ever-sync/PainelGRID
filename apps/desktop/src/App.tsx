@@ -148,6 +148,11 @@ const EmailsEnviadosPage = lazy(() =>
     default: module.EmailsEnviadosPage,
   })),
 );
+const CampanhasPage = lazy(() =>
+  import("./pages/cliente/CampanhasPage").then((module) => ({
+    default: module.CampanhasPage,
+  })),
+);
 const CursosClientePage = lazy(() =>
   import("./pages/cliente/CursosClientePage").then((module) => ({
     default: module.CursosClientePage,
@@ -518,10 +523,7 @@ export default function App() {
               <Route path="/cliente/lojas" element={<LojasPage />} />
               <Route path="/cliente/leads" element={<LeadsPage />} />
               <Route path="/cliente/vendedores" element={<VendedoresPage />} />
-              <Route
-                path="/cliente/campanhas"
-                element={<EmailsEnviadosPage />}
-              />
+              <Route path="/cliente/campanhas" element={<CampanhasPage />} />
               <Route path="/cliente/emails" element={<EmailsEnviadosPage />} />
               <Route path="/cliente/veiculos" element={<VeiculosPage />} />
               <Route path="/cliente/cursos" element={<CursosClientePage />} />

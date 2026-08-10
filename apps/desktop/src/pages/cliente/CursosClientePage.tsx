@@ -107,8 +107,8 @@ export function CursosClientePage() {
   return (
     <div>
       <PageHeader
-        title="Cursos"
-        breadcrumbs={[{ label: "TechStore" }, { label: "Cursos" }]}
+        title="Treinamentos"
+        breadcrumbs={[{ label: "Cliente" }, { label: "Treinamentos" }]}
       />
 
       <div className="mb-8">

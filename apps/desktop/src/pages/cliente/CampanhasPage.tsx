@@ -88,7 +88,7 @@ export function CampanhasPage() {
     >
       <PageHeader
         title="Campanhas"
-        breadcrumbs={[{ label: "TechStore" }, { label: "Campanhas" }]}
+        breadcrumbs={[{ label: "Cliente" }, { label: "Campanhas" }]}
         dark={isDarkMode}
         actions={
           <Button icon={<Plus size={16} />} onClick={() => setShowModal(true)}>

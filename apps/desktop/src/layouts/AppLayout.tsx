@@ -220,7 +220,7 @@ function getNavItems(user: User): NavItem[] {
         {
           href: "/cliente/cursos",
           icon: <BookOpen size={18} />,
-          label: "FAQ / RAG",
+          label: "Treinamentos",
         },
         {
           href: "/cliente/conversas",
@@ -235,7 +235,7 @@ function getNavItems(user: User): NavItem[] {
         {
           href: "/cliente/vendedores",
           icon: <UserCheck size={18} />,
-          label: "Usuários",
+          label: "Equipe",
         },
         {
           href: "/cliente/auditoria",
@@ -244,6 +244,11 @@ function getNavItems(user: User): NavItem[] {
         },
         {
           href: "/cliente/campanhas",
+          icon: <Mail size={18} />,
+          label: "Campanhas",
+        },
+        {
+          href: "/cliente/emails",
           icon: <Mail size={18} />,
           label: "E-mails",
         },
