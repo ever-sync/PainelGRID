@@ -25,8 +25,7 @@ const sourceId =
   process.env.N8N_TARGET_WORKFLOW_ID ??
   "rQ92Kohukkw7X7ex";
 const targetId = process.env.N8N_TARGET_WORKFLOW_ID;
-const allowUpdateExisting =
-  process.env.N8N_ALLOW_UPDATE_EXISTING === "true";
+const allowUpdateExisting = process.env.N8N_ALLOW_UPDATE_EXISTING === "true";
 const automationSourceId =
   process.env.N8N_AUTOMATION_SOURCE_WORKFLOW_ID ?? "BFOlwmNldv2rWGnM";
 
@@ -141,9 +140,9 @@ const alreadyCompleted = preStep === 'COMPLETED' || ['confirmed','checked_in','c
 let postStep;
 if (alreadyCompleted) postStep = 'COMPLETED';
 else if (!hasFullName) postStep = 'WAITING_FULL_NAME';
+else if (!hasDate) postStep = 'WAITING_EVENT_DATE';
 else if (!hasCompanions) postStep = 'WAITING_COMPANIONS';
 else if (!noCompanions && companionNamesPending) postStep = 'WAITING_COMPANION_NAMES';
-else if (!hasDate) postStep = 'WAITING_EVENT_DATE';
 else if (!hasTrade) postStep = 'WAITING_TRADE_IN';
 else if (tradeYes && !hasPlate) postStep = 'WAITING_VEHICLE_PLATE';
 else postStep = 'WAITING_FINAL_CONFIRMATION';
@@ -160,8 +159,8 @@ const expected = {
 
 const missing = [];
 if (!hasFullName) missing.push('nome completo');
-if (!hasCompanions) missing.push('acompanhantes');
 if (!hasDate) missing.push('data da visita');
+if (!hasCompanions) missing.push('acompanhantes');
 if (!hasTrade) missing.push('resposta sobre carro na troca');
 if (tradeYes && !hasPlate) missing.push('placa do veículo');
 let output = originalOutput;
@@ -228,16 +227,16 @@ if (context.flags?.handoff_required) currentStep = 'HUMAN_HANDOFF';
 else if (lead.confirmation_status === 'cancelled') currentStep = 'CANCELLED';
 else if (previous.current_step === 'COMPLETED' || ['confirmed','checked_in','closed'].includes(lead.confirmation_status)) currentStep = 'COMPLETED';
 else if (!hasFullName) currentStep = 'WAITING_FULL_NAME';
+else if (!hasDate) currentStep = 'WAITING_EVENT_DATE';
 else if (!hasCompanions) currentStep = 'WAITING_COMPANIONS';
 else if (!noCompanions && companionNamesPending) currentStep = 'WAITING_COMPANION_NAMES';
-else if (!hasDate) currentStep = 'WAITING_EVENT_DATE';
 else if (!hasTradeAnswer) currentStep = 'WAITING_TRADE_IN';
 else if (tradeYes && !hasPlate) currentStep = 'WAITING_VEHICLE_PLATE';
 else currentStep = 'WAITING_FINAL_CONFIRMATION';
 const pendingQuestions = {WAITING_FULL_NAME:'Qual é o seu nome completo?',WAITING_COMPANIONS:'Quantos acompanhantes você vai levar?',WAITING_COMPANION_NAMES:'Qual é o nome completo de cada acompanhante?',WAITING_EVENT_DATE:'Qual dia do evento você prefere?',WAITING_TRADE_IN:'Você pretende dar algum carro na troca?',WAITING_VEHICLE_PLATE:'Qual é a placa do veículo?',WAITING_FINAL_CONFIRMATION:'Está tudo correto?',COMPLETED:null,CANCELLED:null,HUMAN_HANDOFF:null};
 const collected = {full_name:hasFullName,companions:hasCompanions,companion_names:hasCompanions&&!companionNamesPending,event_date:hasDate,trade_in_answer:hasTradeAnswer,vehicle_plate:hasPlate,vehicle_details:!tradeYes||hasPlate};
 const missing=[];
-if(!hasFullName)missing.push('full_name'); if(!hasCompanions)missing.push('companions'); if(hasCompanions&&companionNamesPending)missing.push('companion_names'); if(!hasDate)missing.push('event_date'); if(!hasTradeAnswer)missing.push('trade_in_answer'); if(tradeYes&&!hasPlate)missing.push('vehicle_plate');
+if(!hasFullName)missing.push('full_name'); if(!hasDate)missing.push('event_date'); if(!hasCompanions)missing.push('companions'); if(hasCompanions&&companionNamesPending)missing.push('companion_names'); if(!hasTradeAnswer)missing.push('trade_in_answer'); if(tradeYes&&!hasPlate)missing.push('vehicle_plate');
 return [{json:{...context,v2_conversation_id:conversation?.id??null,v2_state_update:{current_intent:'credentialing',awaiting_confirmation:currentStep==='WAITING_FINAL_CONFIRMATION',last_offered_event_id:lead.event_id??lead.event_interest_id??null,last_offered_slot:lead.store_visit_datetime??null,last_agent_action:previous.last_agent_action??null,handoff_required:context.flags?.handoff_required??false,handoff_reason:context.conversation_state?.handoff_reason??null,state_payload:{version:2,current_step:currentStep,pending_question:pendingQuestions[currentStep],collected_fields:collected,missing_fields:missing,last_customer_intent:previous.last_customer_intent??null,last_agent_action:previous.last_agent_action??null,last_tool_result:previous.last_tool_result??null,conversation_status:currentStep,retry_count:Number(previous.retry_count??0),last_message_id:$('V2 - NORMALIZAR ENTRADA').item.json.v2_context.message_id,updated_by:'rubinho_v2_pre_turn'}}}}];`;
 
 const postStateCode = String.raw`const validated = $json;
@@ -249,7 +248,7 @@ const completeData=hasFullName&&hasCompanions&&!companionNamesPending&&hasDate&&
 const wasCompleted=pre.current_step==='COMPLETED'||['confirmed','checked_in','closed'].includes(String(lead.confirmation_status??''));
 const finalized=wasCompleted||(lead.validator_claims_final===true&&!lead.validator_blocked&&completeData&&Boolean(lead.active_appointment?.id)&&['scheduled','confirmed'].includes(lead.confirmation_status));
 let step;
-if(lead.confirmation_status==='cancelled')step='CANCELLED'; else if(finalized)step='COMPLETED'; else if(!hasFullName)step='WAITING_FULL_NAME'; else if(!hasCompanions)step='WAITING_COMPANIONS'; else if(!noCompanions&&companionNamesPending)step='WAITING_COMPANION_NAMES'; else if(!hasDate)step='WAITING_EVENT_DATE'; else if(!hasTrade)step='WAITING_TRADE_IN'; else if(tradeYes&&!hasPlate)step='WAITING_VEHICLE_PLATE'; else step='WAITING_FINAL_CONFIRMATION';
+if(lead.confirmation_status==='cancelled')step='CANCELLED'; else if(finalized)step='COMPLETED'; else if(!hasFullName)step='WAITING_FULL_NAME'; else if(!hasDate)step='WAITING_EVENT_DATE'; else if(!hasCompanions)step='WAITING_COMPANIONS'; else if(!noCompanions&&companionNamesPending)step='WAITING_COMPANION_NAMES'; else if(!hasTrade)step='WAITING_TRADE_IN'; else if(tradeYes&&!hasPlate)step='WAITING_VEHICLE_PLATE'; else step='WAITING_FINAL_CONFIRMATION';
 const q={WAITING_FULL_NAME:'Qual é o seu nome completo?',WAITING_COMPANIONS:'Quantos acompanhantes você vai levar?',WAITING_COMPANION_NAMES:'Qual é o nome completo de cada acompanhante?',WAITING_EVENT_DATE:'Qual dia do evento você prefere?',WAITING_TRADE_IN:'Você pretende dar algum carro na troca?',WAITING_VEHICLE_PLATE:'Qual é a placa do veículo?',WAITING_FINAL_CONFIRMATION:'Está tudo correto?',COMPLETED:null,CANCELLED:null};
 const payload={version:2,current_step:step,pending_question:q[step],collected_fields:{full_name:hasFullName,companions:hasCompanions,companion_names:hasCompanions&&!companionNamesPending,event_date:hasDate,trade_in_answer:hasTrade,vehicle_plate:hasPlate,vehicle_details:!tradeYes||hasPlate},missing_fields:[...(lead.validator_missing??[]),...(companionNamesPending?['companion_names']:[])],last_customer_intent:pre.last_customer_intent??null,last_agent_action:validated.v2_qr_delivery?.status==='sent'?'checkin_notification_sent':validated.v2_qr_delivery?.status==='failed'?'checkin_notification_failed':lead.v2_auto_schedule_result==='scheduled'?'scheduled_date_reconciled':lead.validator_claims_final?'final_confirmation':step,last_tool_result:validated.v2_qr_delivery?.status??(lead.validator_blocked?'blocked':'success'),conversation_status:step,retry_count:(lead.validator_blocked||validated.v2_qr_delivery?.status==='failed')?Number(pre.retry_count??0)+1:0,last_message_id:$('V2 - NORMALIZAR ENTRADA').item.json.v2_context.message_id,updated_by:'rubinho_v2_post_turn'};
 return [{json:{...validated,v2_post_state_update:{current_intent:'credentialing',awaiting_confirmation:step==='WAITING_FINAL_CONFIRMATION',last_offered_event_id:lead.event_id??lead.event_interest_id??null,last_offered_slot:lead.store_visit_datetime??null,last_agent_action:payload.last_agent_action,handoff_required:false,state_payload:payload}}}];`;
@@ -262,8 +261,7 @@ if(!$json.reconciled||!appointment?.id){
 const selectedAt=base.v2_auto_schedule.scheduled_at;
 const date=new Date(selectedAt);
 const display=new Intl.DateTimeFormat('pt-BR',{dateStyle:'full',timeZone:'America/Sao_Paulo'}).format(date);
-const location=$('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.location;
-return [{json:{...base,store_visit_datetime:selectedAt,confirmation_status:'scheduled',crm_stage_code:String(base.crm_stage_code??'').replace(/_[^_]+$/,'_PRESENCA_AGENDADA'),active_appointment:appointment,output:'Show, você escolheu '+display+'. O endereço do evento é '+location+'. Outro ponto importante: você vai dar um carro na troca?',validator_blocked:false,v2_auto_schedule_result:'scheduled'}}];`;
+return [{json:{...base,store_visit_datetime:selectedAt,confirmation_status:'scheduled',crm_stage_code:String(base.crm_stage_code??'').replace(/_[^_]+$/,'_PRESENCA_AGENDADA'),active_appointment:appointment,output:'Show, sua visita ficou para '+display+'. Quantos acompanhantes você vai levar para o evento?',validator_blocked:false,v2_auto_schedule_result:'scheduled'}}];`;
 
 async function main() {
   if (targetId === sourceId && !allowUpdateExisting) {
@@ -320,7 +318,25 @@ async function main() {
   const memoryMarker =
     "# REGISTRO OBRIGATORIO DE RESPOSTAS V6 — PRIORIDADE MAXIMA";
   if (!options.systemMessage.includes(memoryMarker)) {
-    options.systemMessage += `\n\n${memoryMarker}\nEstas regras substituem qualquer instrução conflitante sobre avanço de etapa.\n- Antes de responder, leia current_step e trate a mensagem atual como resposta da pergunta pendente. Nunca repita uma pergunta que o lead acabou de responder.\n- Em WAITING_FULL_NAME, ao receber nome e sobrenome, chame atualizar_dados_lead com first_name e last_name. Só depois avance para acompanhantes.\n- Em WAITING_COMPANIONS, interprete "minha esposa", "meu marido", "mais uma pessoa" ou equivalente como 1 acompanhante. Salve companions como "1 acompanhante, nome ainda não informado" e pergunte apenas o nome completo.\n- Em WAITING_COMPANION_NAMES, se a resposta possuir nome e sobrenome, chame atualizar_dados_lead e sobrescreva companions no formato "N acompanhante(s): Nome completo". Só depois do sucesso avance para a escolha da data.\n- Em WAITING_EVENT_DATE, sempre mostre todas as datas e horários exatos de event_days_iso antes de perguntar a preferência. Nunca pergunte apenas "qual data" sem listar as opções.\n- Se uma ferramenta falhar, não repita como se o lead não tivesse respondido. Informe brevemente que não conseguiu registrar o dado e peça somente uma nova tentativa.\n`;
+    options.systemMessage += `\n\n${memoryMarker}\nEstas regras substituem qualquer instrução conflitante sobre avanço de etapa.\n- Antes de responder, leia current_step e trate a mensagem atual como resposta da pergunta pendente. Nunca repita uma pergunta que o lead acabou de responder.\n- Em WAITING_FULL_NAME, ao receber nome e sobrenome, chame atualizar_dados_lead com first_name e last_name. Só depois apresente todas as datas e avance para a escolha da data.\n- Em WAITING_EVENT_DATE, sempre mostre todas as datas e horários exatos de event_days_iso antes de perguntar a preferência. Nunca pergunte apenas "qual data" sem listar as opções. Depois de registrar a escolha, avance para acompanhantes.\n- Em WAITING_COMPANIONS, interprete "minha esposa", "meu marido", "mais uma pessoa" ou equivalente como 1 acompanhante. Salve companions como "1 acompanhante, nome ainda não informado" e pergunte apenas o nome completo.\n- Em WAITING_COMPANION_NAMES, se a resposta possuir nome e sobrenome, chame atualizar_dados_lead e sobrescreva companions no formato "N acompanhante(s): Nome completo". Só depois do sucesso avance para carro na troca.\n- Se uma ferramenta falhar, não repita como se o lead não tivesse respondido. Informe brevemente que não conseguiu registrar o dado e peça somente uma nova tentativa.\n`;
+  }
+
+  const conversationOrderMarker =
+    "# ORDEM DE CONVERSA HOMOLOGADA V7 — DATA IMEDIATAMENTE APOS O NOME";
+  if (!options.systemMessage.includes(conversationOrderMarker)) {
+    options.systemMessage += `\n\n${conversationOrderMarker}\nEstas regras V7 substituem qualquer ordem anterior conflitante.\n- O gatilho oficial de abertura e o texto exibido ao lead são \"Garantir minha vaga\". Durante a transição do template da Meta, \"Finalizar credenciamento\" e \"Finalizar credencial\" ainda devem ser aceitos silenciosamente como gatilhos legados, mas nunca apresentados como CTA oficial.\n- A ordem obrigatória é: nome completo, escolha da data, quantidade de acompanhantes, nomes dos acompanhantes quando houver, carro na troca, placa quando houver troca, resumo e confirmação final.\n- Em WAITING_FULL_NAME, depois de salvar first_name e last_name, apresente imediatamente todas as datas e horários exatos de event_days_iso e pergunte qual data o lead prefere.\n- Em WAITING_EVENT_DATE, depois de salvar o start exato escolhido, o fluxo determinístico cria ou reutiliza o agendamento, define o status como scheduled e move o card para PRESENCA_AGENDADA silenciosamente. Depois pergunte quantos acompanhantes o lead levará.\n- Em WAITING_COMPANIONS, se não houver acompanhantes, salve \"Sem acompanhantes\" e avance para a pergunta sobre carro na troca. Se houver, salve a quantidade e pergunte os nomes completos.\n- Em WAITING_COMPANION_NAMES, depois de salvar os nomes, avance para a pergunta sobre carro na troca.\n- O status scheduled não encerra o atendimento. A conclusão continua dependendo do resumo confirmado e do sucesso de finalizar_credenciamento.\n- Nunca volte para acompanhantes antes da escolha da data e nunca repita uma data já escolhida.\n`;
+  }
+
+  const openingTriggerNode = workflow.nodes.find((item) =>
+    String(item.parameters?.jsCode ?? "").includes("isOpeningTrigger"),
+  );
+  if (openingTriggerNode) {
+    openingTriggerNode.parameters.jsCode = String(
+      openingTriggerNode.parameters.jsCode,
+    ).replace(
+      /\^\(finalizar credenciamento\|oi\|olá\|ola\|bom dia\|boa tarde\|boa noite\)/,
+      "^(garantir minha vaga|finalizar credenciamento|finalizar credencial|oi|olá|ola|bom dia|boa tarde|boa noite)",
+    );
   }
 
   const updateLeadTool = workflow.nodes.find(
@@ -357,6 +373,15 @@ async function main() {
     options: {},
   };
   delete finalizer.credentials;
+
+  const shouldSendQr = node(workflow, "V2 - DEVE ENVIAR QRCODE?");
+  const shouldSendQrParameters = shouldSendQr.parameters as {
+    conditions: {
+      conditions: Array<{ leftValue: string }>;
+    };
+  };
+  shouldSendQrParameters.conditions.conditions[0].leftValue =
+    "={{ $('V2 - ESTADO PRONTO').item.json.v2_state.current_step === 'WAITING_FINAL_CONFIRMATION' && $json.validator_claims_final === true && !$json.validator_blocked && ['scheduled','confirmed'].includes($json.confirmation_status) && !!$json.active_appointment?.id && !!$json.checkin_voucher }}";
 
   const additions: WorkflowNode[] = [
     {
@@ -464,7 +489,9 @@ async function main() {
     JSON.stringify({
       workflow_id: saved.id,
       source_workflow_id: sourceId,
-      mode: targetId ? "updated-explicit-target" : "created-inactive-homologation",
+      mode: targetId
+        ? "updated-explicit-target"
+        : "created-inactive-homologation",
       nodes: workflow.nodes.length,
       patched: true,
     }),

@@ -12,21 +12,65 @@ describe("deriveRubinhoConversationState", () => {
   };
 
   it.each([
-    [{ ...completeLead, first_name: null, last_name: null }, "WAITING_FULL_NAME"],
+    [
+      { ...completeLead, first_name: null, last_name: null },
+      "WAITING_FULL_NAME",
+    ],
     [{ ...completeLead, companions: null }, "WAITING_COMPANIONS"],
     [{ ...completeLead, companions: "1" }, "WAITING_COMPANION_NAMES"],
     [{ ...completeLead, store_visit_datetime: null }, "WAITING_EVENT_DATE"],
     [{ ...completeLead, description: null }, "WAITING_TRADE_IN"],
     [{ ...completeLead, vehicle_plate: null }, "WAITING_VEHICLE_PLATE"],
     [completeLead, "WAITING_FINAL_CONFIRMATION"],
-  ])("deriva a etapa exclusivamente dos dados persistidos", (lead, expected) => {
-    expect(deriveRubinhoConversationState(lead).current_step).toBe(expected);
-  });
+  ])(
+    "deriva a etapa exclusivamente dos dados persistidos",
+    (lead, expected) => {
+      expect(deriveRubinhoConversationState(lead).current_step).toBe(expected);
+    },
+  );
 
   it("considera nomes de acompanhantes persistidos", () => {
     const state = deriveRubinhoConversationState(completeLead);
     expect(state.collected_fields.companion_names).toBe(true);
     expect(state.missing_fields).not.toContain("companion_names");
+  });
+
+  it("prioriza a escolha da data imediatamente depois do nome completo", () => {
+    const state = deriveRubinhoConversationState({
+      first_name: "Raphael",
+      last_name: "dos Santos",
+      companions: null,
+      store_visit_datetime: null,
+    });
+
+    expect(state.current_step).toBe("WAITING_EVENT_DATE");
+    expect(state.missing_fields.slice(0, 2)).toEqual([
+      "event_date",
+      "companions",
+    ]);
+  });
+
+  it("pergunta acompanhantes somente depois que a data foi salva", () => {
+    const state = deriveRubinhoConversationState({
+      first_name: "Raphael",
+      last_name: "dos Santos",
+      companions: null,
+      store_visit_datetime: "2026-08-15T12:00:00.000Z",
+    });
+
+    expect(state.current_step).toBe("WAITING_COMPANIONS");
+  });
+
+  it("nao considera o atendimento concluido apenas porque o lead foi agendado", () => {
+    const state = deriveRubinhoConversationState({
+      first_name: "Raphael",
+      last_name: "dos Santos",
+      companions: null,
+      store_visit_datetime: "2026-08-15T12:00:00.000Z",
+      confirmation_status: "scheduled",
+    });
+
+    expect(state.current_step).toBe("WAITING_COMPANIONS");
   });
 
   it("nao exige placa quando a resposta de troca ainda nao existe", () => {

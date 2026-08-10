@@ -265,6 +265,11 @@ function getNavItems(user: User): NavItem[] {
           icon: <UserCheck size={18} />,
           label: "Check-in",
         },
+        {
+          href: "/recepcao/fila",
+          icon: <Users size={18} />,
+          label: "Fila",
+        },
       ];
     default:
       return [];
@@ -897,7 +902,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       : user.role === "recepcao"
         ? [
             navItems[0],
-            null,
+            navItems[1],
             null,
             null,
             {

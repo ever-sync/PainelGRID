@@ -194,7 +194,7 @@ export class LeadsController {
   }
 
   @Post(":id/close-attendance")
-  @Roles(Role.VENDEDOR, Role.GESTOR, Role.CLIENTE, Role.RECEPCAO)
+  @Roles(Role.VENDEDOR, Role.GESTOR, Role.CLIENTE)
   @ApiOperation({
     summary:
       "Encerra o atendimento do lead e move para a etapa Atendimento Encerrado",

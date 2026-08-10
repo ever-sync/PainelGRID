@@ -150,7 +150,7 @@ export class MailService {
       <p style="font-size:15px;line-height:1.65;color:#555;margin:0 0 20px">Sua inscrição no <strong>${eventName}</strong> está quase pronta. Finalize agora para garantir sua credencial e receber as orientações do evento.</p>
       ${offerHtml}
       <div style="text-align:center;margin:30px 0 20px">
-        <a href="${whatsappUrl}" style="display:inline-block;background:#18a967;color:#fff;text-decoration:none;font-size:15px;font-weight:800;padding:15px 26px;border-radius:12px">FINALIZAR CREDENCIAMENTO</a>
+        <a href="${whatsappUrl}" style="display:inline-block;background:#18a967;color:#fff;text-decoration:none;font-size:15px;font-weight:800;padding:15px 26px;border-radius:12px">GARANTIR MINHA VAGA</a>
       </div>
       <p style="font-size:12px;line-height:1.55;color:#8a8a94;margin:22px 0 0">Condições sujeitas à aprovação, disponibilidade e regras informadas no evento.</p>
     </div>

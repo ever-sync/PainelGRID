@@ -540,7 +540,7 @@ export class LeadsService {
   }
 
   private recoveryWhatsappUrl(phone: string) {
-    return `https://wa.me/${phoneDigits(phone)}?text=${encodeURIComponent("FINALIZAR CREDENCIAMENTO")}`;
+    return `https://wa.me/${phoneDigits(phone)}?text=${encodeURIComponent("GARANTIR MINHA VAGA")}`;
   }
 
   async countEmailAttempt2Queue() {
@@ -1931,35 +1931,36 @@ export class LeadsService {
 
     await this.assertLeadAccess(user, lead);
 
-    const deleted = await this.prisma.$transaction(async (tx) => {
-      const [conversations, appointments] = await Promise.all([
-        tx.conversation.findMany({
-          where: { lead_id: id },
-          select: { id: true },
-        }),
-        tx.appointment.findMany({
-          where: { lead_id: id },
-          select: { id: true },
-        }),
-      ]);
-      const conversationIds = conversations.map((item) => item.id);
-      const appointmentIds = appointments.map((item) => item.id);
+    const deleted = await this.prisma.$transaction(
+      async (tx) => {
+        const [conversations, appointments] = await Promise.all([
+          tx.conversation.findMany({
+            where: { lead_id: id },
+            select: { id: true },
+          }),
+          tx.appointment.findMany({
+            where: { lead_id: id },
+            select: { id: true },
+          }),
+        ]);
+        const conversationIds = conversations.map((item) => item.id);
+        const appointmentIds = appointments.map((item) => item.id);
 
-      // O Rubinho legado usa uma tabela do LangChain sem FK para o lead. A
-      // sessao ja foi gravada historicamente pelo telefone, pelo UUID do lead
-      // ou pelo UUID da conversa; por isso a memoria precisa ser removida
-      // explicitamente antes do lead desaparecer.
-      const [n8nHistoryTable] = await tx.$queryRaw<
-        Array<{ exists: boolean }>
-      >(Prisma.sql`
+        // O Rubinho legado usa uma tabela do LangChain sem FK para o lead. A
+        // sessao ja foi gravada historicamente pelo telefone, pelo UUID do lead
+        // ou pelo UUID da conversa; por isso a memoria precisa ser removida
+        // explicitamente antes do lead desaparecer.
+        const [n8nHistoryTable] = await tx.$queryRaw<
+          Array<{ exists: boolean }>
+        >(Prisma.sql`
         SELECT to_regclass('agent_chat_history') IS NOT NULL AS exists
       `);
-      const conversationMemoryFilter =
-        conversationIds.length > 0
-          ? Prisma.sql`OR session_id IN (${Prisma.join(conversationIds)})`
-          : Prisma.empty;
-      const n8nAgentMemory = n8nHistoryTable?.exists
-        ? await tx.$executeRaw(Prisma.sql`
+        const conversationMemoryFilter =
+          conversationIds.length > 0
+            ? Prisma.sql`OR session_id IN (${Prisma.join(conversationIds)})`
+            : Prisma.empty;
+        const n8nAgentMemory = n8nHistoryTable?.exists
+          ? await tx.$executeRaw(Prisma.sql`
             DELETE FROM agent_chat_history
             WHERE session_id = ${id}
               -- O Rubinho v2 usa o chat/session ID composto no formato
@@ -1975,93 +1976,95 @@ export class LeadsService {
                   right(regexp_replace(${lead.phone ?? ""}, '[^0-9]', '', 'g'), 11)
               )
           `)
-        : 0;
+          : 0;
 
-      // A cadeia de reagendamento possui uma FK para outro appointment. Ela
-      // precisa ser solta antes de remover os appointments do lead.
-      if (appointmentIds.length > 0) {
-        await tx.appointment.updateMany({
-          where: {
-            rescheduled_from_appointment_id: { in: appointmentIds },
-          },
-          data: { rescheduled_from_appointment_id: null },
-        });
-      }
-
-      const counts = {
-        n8n_agent_memory: Number(n8nAgentMemory),
-        operational_issues: (
-          await tx.operationalIssue.deleteMany({
+        // A cadeia de reagendamento possui uma FK para outro appointment. Ela
+        // precisa ser solta antes de remover os appointments do lead.
+        if (appointmentIds.length > 0) {
+          await tx.appointment.updateMany({
             where: {
-              OR: [
-                { lead_id: id },
-                ...(conversationIds.length > 0
-                  ? [{ conversation_id: { in: conversationIds } }]
-                  : []),
-              ],
+              rescheduled_from_appointment_id: { in: appointmentIds },
             },
-          })
-        ).count,
-        dispatch_events: (
-          await tx.dispatchEvent.deleteMany({ where: { lead_id: id } })
-        ).count,
-        score_events: (
-          await tx.scoreEvent.deleteMany({ where: { lead_id: id } })
-        ).count,
-        sales: (await tx.sale.deleteMany({ where: { lead_id: id } })).count,
-        appointments: (
-          await tx.appointment.deleteMany({ where: { lead_id: id } })
-        ).count,
-        messages:
-          conversationIds.length > 0
-            ? (
-                await tx.message.deleteMany({
-                  where: { conversation_id: { in: conversationIds } },
-                })
-              ).count
-            : 0,
-        conversation_states: (
-          await tx.conversationState.deleteMany({ where: { lead_id: id } })
-        ).count,
-        agent_action_logs: (
-          await tx.agentActionLog.deleteMany({ where: { lead_id: id } })
-        ).count,
-        whatsapp_attribution_events: (
-          await tx.whatsAppAttributionEvent.deleteMany({
-            where: {
-              OR: [
-                { lead_id: id },
-                ...(conversationIds.length > 0
-                  ? [{ conversation_id: { in: conversationIds } }]
-                  : []),
-              ],
-            },
-          })
-        ).count,
-        conversations: (
-          await tx.conversation.deleteMany({ where: { lead_id: id } })
-        ).count,
-        crm_history: (
-          await tx.crmHistory.deleteMany({ where: { lead_id: id } })
-        ).count,
-        lead_timeline: (
-          await tx.leadTimeline.deleteMany({ where: { lead_id: id } })
-        ).count,
-        meta_lead_imports: (
-          await tx.metaLeadImport.deleteMany({ where: { lead_id: id } })
-        ).count,
-      };
+            data: { rescheduled_from_appointment_id: null },
+          });
+        }
 
-      await tx.lead.delete({ where: { id } });
-      return counts;
-    }, {
-      // A exclusao definitiva limpa conversas, memoria do agente, agendamentos,
-      // auditoria e atribuicao. Em producao essa operacao pode ultrapassar o
-      // timeout padrao de 5 s do Prisma, sobretudo quando o banco esta sob carga.
-      // Mantemos uma unica transacao atomica, mas com uma janela suficiente para
-      // concluir toda a cascata sem reverter uma exclusao valida.
-      timeout: 30_000,
-    });
+        const counts = {
+          n8n_agent_memory: Number(n8nAgentMemory),
+          operational_issues: (
+            await tx.operationalIssue.deleteMany({
+              where: {
+                OR: [
+                  { lead_id: id },
+                  ...(conversationIds.length > 0
+                    ? [{ conversation_id: { in: conversationIds } }]
+                    : []),
+                ],
+              },
+            })
+          ).count,
+          dispatch_events: (
+            await tx.dispatchEvent.deleteMany({ where: { lead_id: id } })
+          ).count,
+          score_events: (
+            await tx.scoreEvent.deleteMany({ where: { lead_id: id } })
+          ).count,
+          sales: (await tx.sale.deleteMany({ where: { lead_id: id } })).count,
+          appointments: (
+            await tx.appointment.deleteMany({ where: { lead_id: id } })
+          ).count,
+          messages:
+            conversationIds.length > 0
+              ? (
+                  await tx.message.deleteMany({
+                    where: { conversation_id: { in: conversationIds } },
+                  })
+                ).count
+              : 0,
+          conversation_states: (
+            await tx.conversationState.deleteMany({ where: { lead_id: id } })
+          ).count,
+          agent_action_logs: (
+            await tx.agentActionLog.deleteMany({ where: { lead_id: id } })
+          ).count,
+          whatsapp_attribution_events: (
+            await tx.whatsAppAttributionEvent.deleteMany({
+              where: {
+                OR: [
+                  { lead_id: id },
+                  ...(conversationIds.length > 0
+                    ? [{ conversation_id: { in: conversationIds } }]
+                    : []),
+                ],
+              },
+            })
+          ).count,
+          conversations: (
+            await tx.conversation.deleteMany({ where: { lead_id: id } })
+          ).count,
+          crm_history: (
+            await tx.crmHistory.deleteMany({ where: { lead_id: id } })
+          ).count,
+          lead_timeline: (
+            await tx.leadTimeline.deleteMany({ where: { lead_id: id } })
+          ).count,
+          meta_lead_imports: (
+            await tx.metaLeadImport.deleteMany({ where: { lead_id: id } })
+          ).count,
+        };
+
+        await tx.lead.delete({ where: { id } });
+        return counts;
+      },
+      {
+        // A exclusao definitiva limpa conversas, memoria do agente, agendamentos,
+        // auditoria e atribuicao. Em producao essa operacao pode ultrapassar o
+        // timeout padrao de 5 s do Prisma, sobretudo quando o banco esta sob carga.
+        // Mantemos uma unica transacao atomica, mas com uma janela suficiente para
+        // concluir toda a cascata sem reverter uma exclusao valida.
+        timeout: 30_000,
+      },
+    );
 
     this.realtimeEvents.emitLeadUpdated(lead.client_id, {
       client_id: lead.client_id,

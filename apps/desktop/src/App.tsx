@@ -108,6 +108,11 @@ const EventTVQueuePage = lazy(() =>
     default: module.EventTVQueuePage,
   })),
 );
+const FilaRecepcaoPage = lazy(() =>
+  import("./pages/recepcao/FilaPage").then((module) => ({
+    default: module.FilaPage,
+  })),
+);
 const ChatPage = lazy(() =>
   import("./pages/gestor/ChatPage").then((module) => ({
     default: module.ChatPage,
@@ -530,6 +535,7 @@ export default function App() {
 
             <Route element={<RoleGuard allow="recepcao" />}>
               <Route path="/recepcao/checkin" element={<CheckinPage />} />
+              <Route path="/recepcao/fila" element={<FilaRecepcaoPage />} />
               <Route
                 path="/recepcao/configuracao"
                 element={<ConfiguracaoPage />}

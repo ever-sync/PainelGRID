@@ -1,8 +1,8 @@
 export const RUBINHO_STEPS = [
   "WAITING_FULL_NAME",
+  "WAITING_EVENT_DATE",
   "WAITING_COMPANIONS",
   "WAITING_COMPANION_NAMES",
-  "WAITING_EVENT_DATE",
   "WAITING_TRADE_IN",
   "WAITING_VEHICLE_PLATE",
   "WAITING_FINAL_CONFIRMATION",
@@ -36,8 +36,7 @@ export type RubinhoConversationState = {
 const QUESTIONS: Record<RubinhoStep, string | null> = {
   WAITING_FULL_NAME: "Qual é o seu nome completo?",
   WAITING_COMPANIONS: "Quantos acompanhantes você vai levar?",
-  WAITING_COMPANION_NAMES:
-    "Qual é o nome completo de cada acompanhante?",
+  WAITING_COMPANION_NAMES: "Qual é o nome completo de cada acompanhante?",
   WAITING_EVENT_DATE: "Qual dia do evento você prefere?",
   WAITING_TRADE_IN: "Você pretende dar algum carro na troca?",
   WAITING_VEHICLE_PLATE: "Qual é a placa do veículo?",
@@ -101,11 +100,11 @@ export function deriveRubinhoConversationState(
   ) {
     currentStep = "COMPLETED";
   } else if (!fullName) currentStep = "WAITING_FULL_NAME";
+  else if (!eventDate) currentStep = "WAITING_EVENT_DATE";
   else if (!companions.collected) currentStep = "WAITING_COMPANIONS";
   else if (!companions.namesCollected) {
     currentStep = "WAITING_COMPANION_NAMES";
-  } else if (!eventDate) currentStep = "WAITING_EVENT_DATE";
-  else if (!tradeAnswer) currentStep = "WAITING_TRADE_IN";
+  } else if (!tradeAnswer) currentStep = "WAITING_TRADE_IN";
   else if (tradeYes && !plate) currentStep = "WAITING_VEHICLE_PLATE";
   else currentStep = "WAITING_FINAL_CONFIRMATION";
 
@@ -120,11 +119,11 @@ export function deriveRubinhoConversationState(
   };
   const missingFields: string[] = [];
   if (!fullName) missingFields.push("full_name");
+  if (!eventDate) missingFields.push("event_date");
   if (!companions.collected) missingFields.push("companions");
   if (companions.collected && !companions.namesCollected) {
     missingFields.push("companion_names");
   }
-  if (!eventDate) missingFields.push("event_date");
   if (!tradeAnswer) missingFields.push("trade_in_answer");
   if (tradeYes && !plate) missingFields.push("vehicle_plate");
 
