@@ -42,6 +42,23 @@ export class SalesService {
     if (!appointment) {
       throw new NotFoundException("Agendamento nao encontrado");
     }
+    const eventPermissions = await this.prisma.event.findUnique({
+      where: { id: appointment.event_id },
+      select: {
+        allow_vendor_create_sale: true,
+        allow_reception_create_sale: true,
+      },
+    });
+    if (
+      (user.role === Role.VENDEDOR &&
+        eventPermissions?.allow_vendor_create_sale === false) ||
+      (user.role === Role.RECEPCAO &&
+        eventPermissions?.allow_reception_create_sale !== true)
+    ) {
+      throw new ForbiddenException(
+        "Registro de venda não permitido para este perfil no evento",
+      );
+    }
     if (appointment.client_id !== user.client_id) {
       throw new ForbiddenException("Agendamento nao pertence a esta empresa");
     }

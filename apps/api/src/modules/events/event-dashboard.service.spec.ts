@@ -152,7 +152,7 @@ describe("EventDashboardService.getTvDashboard", () => {
             scheduled: 2,
             confirmed: 1,
             checked_in: 2,
-            sold: 1,
+            sold: 2,
           },
           appointments: {
             records: 2,
@@ -162,15 +162,15 @@ describe("EventDashboardService.getTvDashboard", () => {
           },
           sales: {
             records: 1,
-            leads: 1,
+            leads: 2,
             revenue: 85000,
             average_ticket: 85000,
           },
           rates: {
             lead_to_appointment: 66.67,
             appointment_to_checkin: 100,
-            checkin_to_sale: 50,
-            lead_to_sale: 33.33,
+            checkin_to_sale: 100,
+            lead_to_sale: 66.67,
           },
           inconsistencies: {
             marked_scheduled_without_appointment: 0,

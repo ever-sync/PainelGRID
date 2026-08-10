@@ -27,6 +27,7 @@ describe("SalesService", () => {
     id: appointmentId,
     client_id: clientId,
     lead_id: leadId,
+    event_id: "88888888-8888-4888-8888-888888888888",
     created_by_type: AppointmentActorType.user,
     created_by_id: vendorId,
     status: AppointmentStatus.scheduled,
@@ -63,6 +64,12 @@ describe("SalesService", () => {
 
   beforeEach(() => {
     prisma = {
+      event: {
+        findUnique: jest.fn().mockResolvedValue({
+          allow_vendor_create_sale: true,
+          allow_reception_create_sale: false,
+        }),
+      },
       appointment: {
         findUnique: jest.fn(),
         update: jest.fn(),

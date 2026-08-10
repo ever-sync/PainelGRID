@@ -26,7 +26,7 @@ export class SalesController {
   }
 
   @Post()
-  @Roles(Role.VENDEDOR)
+  @Roles(Role.VENDEDOR, Role.RECEPCAO)
   @ApiOperation({ summary: "Cria uma nova venda" })
   @ApiResponse({ status: 201, description: "Venda criada com sucesso" })
   create(@Body() dto: CreateSaleDto, @CurrentUser() user: AuthenticatedUser) {

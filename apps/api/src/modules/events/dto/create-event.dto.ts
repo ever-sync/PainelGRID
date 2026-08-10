@@ -88,6 +88,50 @@ export class CreateEventDto {
   @IsBoolean()
   allow_vendor_fipe?: boolean;
 
+  @IsOptional()
+  @IsBoolean()
+  allow_vendor_create_sale?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allow_vendor_edit_sale?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allow_vendor_delete_sale?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allow_vendor_edit_own_lead?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allow_vendor_delete_own_lead?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allow_reception_create_sale?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allow_reception_edit_sale?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allow_reception_delete_sale?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allow_reception_edit_lead?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allow_reception_delete_lead?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  allow_reception_quick_create?: boolean;
+
   /** Valor total investido no evento (R$). */
   @IsOptional()
   @Type(() => Number)

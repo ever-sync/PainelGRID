@@ -436,23 +436,27 @@ describe("EventsService", () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it("bloqueia cliente tentando alterar permissões dos vendedores", async () => {
-      await expect(
-        service.update(
-          {
-            sub: "cliente-user",
-            role: Role.CLIENTE,
-            email: "c@x",
-            name: "C",
-            client_id: clientId,
-          } as never,
-          "evt-1",
-          { allow_vendor_checkin: false } as never,
-        ),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+    it("permite cliente participante alterar permissões do evento", async () => {
+      prisma.event.findUnique.mockResolvedValue(baseRow);
 
-      expect(prisma.event.findUnique).not.toHaveBeenCalled();
-      expect(prisma.event.update).not.toHaveBeenCalled();
+      await service.update(
+        {
+          sub: "cliente-user",
+          role: Role.CLIENTE,
+          email: "c@x",
+          name: "C",
+          client_id: clientId,
+        } as never,
+        "evt-1",
+        { allow_vendor_checkin: false } as never,
+      );
+
+      expect(prisma.event.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "evt-1" },
+          data: expect.objectContaining({ allow_vendor_checkin: false }),
+        }),
+      );
     });
   });
 

@@ -20,6 +20,17 @@ export type ApiEvent = {
   require_wristband?: boolean;
   allow_vendor_checkin?: boolean;
   allow_vendor_fipe?: boolean;
+  allow_vendor_create_sale?: boolean;
+  allow_vendor_edit_sale?: boolean;
+  allow_vendor_delete_sale?: boolean;
+  allow_vendor_edit_own_lead?: boolean;
+  allow_vendor_delete_own_lead?: boolean;
+  allow_reception_create_sale?: boolean;
+  allow_reception_edit_sale?: boolean;
+  allow_reception_delete_sale?: boolean;
+  allow_reception_edit_lead?: boolean;
+  allow_reception_delete_lead?: boolean;
+  allow_reception_quick_create?: boolean;
   total_investment?: number | null;
   paid_traffic_investment?: number | null;
   status: EventStatus;
@@ -68,6 +79,17 @@ export type CreateEventPayload = {
   require_wristband?: boolean;
   allow_vendor_checkin?: boolean;
   allow_vendor_fipe?: boolean;
+  allow_vendor_create_sale?: boolean;
+  allow_vendor_edit_sale?: boolean;
+  allow_vendor_delete_sale?: boolean;
+  allow_vendor_edit_own_lead?: boolean;
+  allow_vendor_delete_own_lead?: boolean;
+  allow_reception_create_sale?: boolean;
+  allow_reception_edit_sale?: boolean;
+  allow_reception_delete_sale?: boolean;
+  allow_reception_edit_lead?: boolean;
+  allow_reception_delete_lead?: boolean;
+  allow_reception_quick_create?: boolean;
   total_investment?: number;
   paid_traffic_investment?: number;
   status?: EventStatus;
@@ -308,6 +330,19 @@ export function mapApiEventToEvent(row: ApiEvent): Event {
     sales_target: row.sales_target ?? null,
     scheduled_target: row.scheduled_target ?? null,
     require_wristband: row.require_wristband ?? false,
+    allow_vendor_checkin: row.allow_vendor_checkin ?? true,
+    allow_vendor_fipe: row.allow_vendor_fipe ?? true,
+    allow_vendor_create_sale: row.allow_vendor_create_sale ?? true,
+    allow_vendor_edit_sale: row.allow_vendor_edit_sale ?? false,
+    allow_vendor_delete_sale: row.allow_vendor_delete_sale ?? false,
+    allow_vendor_edit_own_lead: row.allow_vendor_edit_own_lead ?? true,
+    allow_vendor_delete_own_lead: row.allow_vendor_delete_own_lead ?? false,
+    allow_reception_create_sale: row.allow_reception_create_sale ?? false,
+    allow_reception_edit_sale: row.allow_reception_edit_sale ?? false,
+    allow_reception_delete_sale: row.allow_reception_delete_sale ?? false,
+    allow_reception_edit_lead: row.allow_reception_edit_lead ?? false,
+    allow_reception_delete_lead: row.allow_reception_delete_lead ?? false,
+    allow_reception_quick_create: row.allow_reception_quick_create ?? true,
     total_investment: row.total_investment ?? null,
     paid_traffic_investment: row.paid_traffic_investment ?? null,
     status: computedStatus,

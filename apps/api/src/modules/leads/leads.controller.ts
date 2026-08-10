@@ -268,7 +268,7 @@ export class LeadsController {
   }
 
   @Delete(":id")
-  @Roles(Role.GESTOR, Role.CLIENTE, Role.VENDEDOR)
+  @Roles(Role.GESTOR, Role.CLIENTE, Role.VENDEDOR, Role.RECEPCAO)
   @ApiOperation({ summary: "Exclui lead por ID" })
   @ApiResponse({ status: 200, description: "Lead excluído com sucesso" })
   @ApiResponse({

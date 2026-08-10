@@ -119,7 +119,7 @@ describe("OperationsService", () => {
     expect(result.totals.template_replied).toBe(1);
     expect(result.totals.engaged).toBe(1);
     expect(
-      result.stages.find((stage) => stage.key === "WAITING_COMPANIONS")?.count,
+      result.stages.find((stage) => stage.key === "WAITING_EVENT_DATE")?.count,
     ).toBe(1);
     expect(result.stages.reduce((sum, stage) => sum + stage.count, 0)).toBe(1);
     expect(result.rates.scheduling).toBeLessThanOrEqual(100);

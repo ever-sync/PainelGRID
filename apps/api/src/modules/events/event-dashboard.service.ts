@@ -510,9 +510,7 @@ export class EventDashboardService {
     });
     const soldLeadIds = new Set([
       ...sales.map((sale) => sale.lead_id),
-      ...leads
-        .filter((lead) => lead.sold_by_vendor_id)
-        .map((lead) => lead.id),
+      ...leads.filter((lead) => lead.sold_by_vendor_id).map((lead) => lead.id),
     ]);
 
     const funnel = {

@@ -1218,6 +1218,22 @@ export class LeadsService {
   }
 
   async create(user: AuthenticatedUser, dto: CreateLeadDto) {
+    if (user.role === Role.RECEPCAO) {
+      if (!dto.event_interest_id) {
+        throw new ForbiddenException(
+          "Recepção só pode criar cadastro rápido dentro de um evento",
+        );
+      }
+      const eventPermission = await this.prisma.event.findUnique({
+        where: { id: dto.event_interest_id },
+        select: { allow_reception_quick_create: true },
+      });
+      if (eventPermission?.allow_reception_quick_create !== true) {
+        throw new ForbiddenException(
+          "Cadastro rápido desabilitado para a recepção neste evento",
+        );
+      }
+    }
     const assignedVendorId = user.role === Role.VENDEDOR ? user.sub : undefined;
     const vendorBinding = assignedVendorId
       ? await this.resolveVendorBinding(assignedVendorId, dto.event_interest_id)
@@ -1374,6 +1390,31 @@ export class LeadsService {
     }
 
     await this.assertLeadAccess(user, lead);
+    let receptionCanEditLead = false;
+    if (
+      (user.role === Role.VENDEDOR || user.role === Role.RECEPCAO) &&
+      lead.event_interest_id
+    ) {
+      const permissions = await this.prisma.event.findUnique({
+        where: { id: lead.event_interest_id },
+        select: {
+          allow_vendor_edit_own_lead: true,
+          allow_reception_edit_lead: true,
+        },
+      });
+      if (
+        user.role === Role.VENDEDOR &&
+        (permissions?.allow_vendor_edit_own_lead === false ||
+          lead.registered_by_id !== user.sub)
+      ) {
+        throw new ForbiddenException(
+          "Vendedor não pode alterar este lead neste evento",
+        );
+      }
+      receptionCanEditLead =
+        user.role === Role.RECEPCAO &&
+        permissions?.allow_reception_edit_lead === true;
+    }
     if (
       user.role === Role.RECEPCAO &&
       dto.assigned_vendor_id !== undefined &&
@@ -1520,7 +1561,9 @@ export class LeadsService {
       return response;
     }
 
-    const data = this.buildUpdateData(user, dto);
+    const data = receptionCanEditLead
+      ? this.buildGestorUpdateData(dto)
+      : this.buildUpdateData(user, dto);
     if (user.role !== Role.VENDEDOR && user.role !== Role.RECEPCAO) {
       await this.syncLeadVendorBinding(lead, dto, data);
     }
@@ -1950,6 +1993,38 @@ export class LeadsService {
     }
 
     await this.assertLeadAccess(user, lead);
+
+    if (user.role === Role.VENDEDOR || user.role === Role.RECEPCAO) {
+      if (!lead.event_interest_id) {
+        throw new ForbiddenException(
+          "Exclusão não permitida fora de um evento configurado",
+        );
+      }
+      const permissions = await this.prisma.event.findUnique({
+        where: { id: lead.event_interest_id },
+        select: {
+          allow_vendor_delete_own_lead: true,
+          allow_reception_delete_lead: true,
+        },
+      });
+      if (
+        user.role === Role.VENDEDOR &&
+        (permissions?.allow_vendor_delete_own_lead !== true ||
+          lead.registered_by_id !== user.sub)
+      ) {
+        throw new ForbiddenException(
+          "Vendedor não pode apagar este lead neste evento",
+        );
+      }
+      if (
+        user.role === Role.RECEPCAO &&
+        permissions?.allow_reception_delete_lead !== true
+      ) {
+        throw new ForbiddenException(
+          "Recepção não pode apagar leads neste evento",
+        );
+      }
+    }
 
     const deleted = await this.prisma.$transaction(
       async (tx) => {

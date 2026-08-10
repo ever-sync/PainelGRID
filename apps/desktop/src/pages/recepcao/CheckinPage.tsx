@@ -911,13 +911,15 @@ export function CheckinPage() {
           >
             Escanear QR
           </Button>
-          <Button
-            icon={<Plus size={16} />}
-            onClick={() => setShowModal(true)}
-            className="flex-1 sm:flex-none justify-center"
-          >
-            Cadastro Rápido
-          </Button>
+          {event?.allow_reception_quick_create !== false ? (
+            <Button
+              icon={<Plus size={16} />}
+              onClick={() => setShowModal(true)}
+              className="flex-1 sm:flex-none justify-center"
+            >
+              Cadastro Rápido
+            </Button>
+          ) : null}
         </div>
       </div>
 

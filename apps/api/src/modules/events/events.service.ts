@@ -29,6 +29,17 @@ type EventRow = {
   require_wristband: boolean;
   allow_vendor_checkin: boolean;
   allow_vendor_fipe: boolean;
+  allow_vendor_create_sale: boolean;
+  allow_vendor_edit_sale: boolean;
+  allow_vendor_delete_sale: boolean;
+  allow_vendor_edit_own_lead: boolean;
+  allow_vendor_delete_own_lead: boolean;
+  allow_reception_create_sale: boolean;
+  allow_reception_edit_sale: boolean;
+  allow_reception_delete_sale: boolean;
+  allow_reception_edit_lead: boolean;
+  allow_reception_delete_lead: boolean;
+  allow_reception_quick_create: boolean;
   total_investment: Prisma.Decimal | null;
   paid_traffic_investment: Prisma.Decimal | null;
   status: EventStatus;
@@ -248,6 +259,17 @@ export class EventsService {
       require_wristband: row.require_wristband ?? false,
       allow_vendor_checkin: row.allow_vendor_checkin ?? true,
       allow_vendor_fipe: row.allow_vendor_fipe ?? true,
+      allow_vendor_create_sale: row.allow_vendor_create_sale ?? true,
+      allow_vendor_edit_sale: row.allow_vendor_edit_sale ?? false,
+      allow_vendor_delete_sale: row.allow_vendor_delete_sale ?? false,
+      allow_vendor_edit_own_lead: row.allow_vendor_edit_own_lead ?? true,
+      allow_vendor_delete_own_lead: row.allow_vendor_delete_own_lead ?? false,
+      allow_reception_create_sale: row.allow_reception_create_sale ?? false,
+      allow_reception_edit_sale: row.allow_reception_edit_sale ?? false,
+      allow_reception_delete_sale: row.allow_reception_delete_sale ?? false,
+      allow_reception_edit_lead: row.allow_reception_edit_lead ?? false,
+      allow_reception_delete_lead: row.allow_reception_delete_lead ?? false,
+      allow_reception_quick_create: row.allow_reception_quick_create ?? true,
       total_investment:
         row.total_investment != null ? Number(row.total_investment) : null,
       paid_traffic_investment:
@@ -425,6 +447,17 @@ export class EventsService {
         require_wristband: dto.require_wristband ?? false,
         allow_vendor_checkin: dto.allow_vendor_checkin ?? true,
         allow_vendor_fipe: dto.allow_vendor_fipe ?? true,
+        allow_vendor_create_sale: dto.allow_vendor_create_sale ?? true,
+        allow_vendor_edit_sale: dto.allow_vendor_edit_sale ?? false,
+        allow_vendor_delete_sale: dto.allow_vendor_delete_sale ?? false,
+        allow_vendor_edit_own_lead: dto.allow_vendor_edit_own_lead ?? true,
+        allow_vendor_delete_own_lead: dto.allow_vendor_delete_own_lead ?? false,
+        allow_reception_create_sale: dto.allow_reception_create_sale ?? false,
+        allow_reception_edit_sale: dto.allow_reception_edit_sale ?? false,
+        allow_reception_delete_sale: dto.allow_reception_delete_sale ?? false,
+        allow_reception_edit_lead: dto.allow_reception_edit_lead ?? false,
+        allow_reception_delete_lead: dto.allow_reception_delete_lead ?? false,
+        allow_reception_quick_create: dto.allow_reception_quick_create ?? true,
         total_investment: dto.total_investment ?? null,
         paid_traffic_investment: dto.paid_traffic_investment ?? null,
         status: dto.status ?? EventStatus.draft,
@@ -452,13 +485,17 @@ export class EventsService {
   }
 
   async update(user: AuthenticatedUser, id: string, dto: UpdateEventDto) {
+    const changesPermissions = Object.keys(dto).some(
+      (key) =>
+        key.startsWith("allow_vendor_") || key.startsWith("allow_reception_"),
+    );
     if (
+      changesPermissions &&
       user.role !== Role.GESTOR &&
-      (dto.allow_vendor_checkin !== undefined ||
-        dto.allow_vendor_fipe !== undefined)
+      user.role !== Role.CLIENTE
     ) {
       throw new ForbiddenException(
-        "Apenas o gestor pode alterar permissões dos vendedores.",
+        "Apenas gestor ou cliente participante pode alterar permissões.",
       );
     }
 
@@ -487,7 +524,21 @@ export class EventsService {
         ? this.normalizeParticipantIds(dto)
         : this.getParticipantClientIds(existing);
 
-    await this.assertParticipantAccess(user, participantIds);
+    if (user.role === Role.CLIENTE) {
+      if (
+        !user.client_id ||
+        !this.eventHasParticipant(existing, user.client_id)
+      ) {
+        throw new ForbiddenException("Cliente não participa deste evento");
+      }
+      if (dto.participant_client_ids !== undefined) {
+        throw new ForbiddenException(
+          "Cliente não pode alterar os participantes do evento",
+        );
+      }
+    } else {
+      await this.assertParticipantAccess(user, participantIds);
+    }
 
     const primaryClientId = participantIds[0];
     const row = await this.prisma.event.update({
@@ -539,6 +590,17 @@ export class EventsService {
           dto.allow_vendor_fipe !== undefined
             ? dto.allow_vendor_fipe
             : undefined,
+        allow_vendor_create_sale: dto.allow_vendor_create_sale,
+        allow_vendor_edit_sale: dto.allow_vendor_edit_sale,
+        allow_vendor_delete_sale: dto.allow_vendor_delete_sale,
+        allow_vendor_edit_own_lead: dto.allow_vendor_edit_own_lead,
+        allow_vendor_delete_own_lead: dto.allow_vendor_delete_own_lead,
+        allow_reception_create_sale: dto.allow_reception_create_sale,
+        allow_reception_edit_sale: dto.allow_reception_edit_sale,
+        allow_reception_delete_sale: dto.allow_reception_delete_sale,
+        allow_reception_edit_lead: dto.allow_reception_edit_lead,
+        allow_reception_delete_lead: dto.allow_reception_delete_lead,
+        allow_reception_quick_create: dto.allow_reception_quick_create,
         total_investment:
           dto.total_investment !== undefined ? dto.total_investment : undefined,
         paid_traffic_investment:

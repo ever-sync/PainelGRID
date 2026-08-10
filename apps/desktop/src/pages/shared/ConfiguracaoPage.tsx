@@ -397,8 +397,21 @@ export function ConfiguracaoPage() {
     [],
   );
   const [selectedEventSettingsId, setSelectedEventSettingsId] = useState("");
-  const [allowVendorCheckin, setAllowVendorCheckin] = useState(true);
-  const [allowVendorFipe, setAllowVendorFipe] = useState(true);
+  const [eventPermissions, setEventPermissions] = useState({
+    allow_vendor_checkin: true,
+    allow_vendor_fipe: true,
+    allow_vendor_create_sale: true,
+    allow_vendor_edit_sale: false,
+    allow_vendor_delete_sale: false,
+    allow_vendor_edit_own_lead: true,
+    allow_vendor_delete_own_lead: false,
+    allow_reception_create_sale: false,
+    allow_reception_edit_sale: false,
+    allow_reception_delete_sale: false,
+    allow_reception_edit_lead: false,
+    allow_reception_delete_lead: false,
+    allow_reception_quick_create: true,
+  });
   const [eventSettingsLoading, setEventSettingsLoading] = useState(false);
   const [eventSettingsSaving, setEventSettingsSaving] = useState(false);
   const [eventSettingsMessage, setEventSettingsMessage] = useState("");
@@ -449,7 +462,8 @@ export function ConfiguracaoPage() {
 
   async function loadEventSettings() {
     const accessToken = readStoredSession()?.accessToken ?? "";
-    if (!accessToken || user.role !== "gestor") return;
+    if (!accessToken || (user.role !== "gestor" && user.role !== "cliente"))
+      return;
 
     setEventSettingsLoading(true);
     setEventSettingsMessage("");
@@ -490,8 +504,7 @@ export function ConfiguracaoPage() {
       const updated = await updateEvent(
         selectedEventSettingsId,
         {
-          allow_vendor_checkin: allowVendorCheckin,
-          allow_vendor_fipe: allowVendorFipe,
+          ...eventPermissions,
         },
         accessToken,
       );
@@ -505,9 +518,7 @@ export function ConfiguracaoPage() {
           updatedAt: Date.now(),
         }),
       );
-      setEventSettingsMessage(
-        "Permissões dos vendedores atualizadas com sucesso.",
-      );
+      setEventSettingsMessage("Permissões do evento atualizadas com sucesso.");
     } catch (error) {
       setEventSettingsMessage(
         error instanceof Error
@@ -927,9 +938,9 @@ export function ConfiguracaoPage() {
   }, [user.role, user.client_id]);
 
   useEffect(() => {
-    if (user.role !== "gestor") return;
+    if (user.role !== "gestor" && user.role !== "cliente") return;
     void loadEventSettings();
-  }, [user.role]);
+  }, [user.role, user.client_id]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1252,7 +1263,7 @@ export function ConfiguracaoPage() {
       tabs.push({ id: "crm", label: "CRM", icon: <KanbanSquare size={15} /> });
     }
 
-    if (user.role === "gestor") {
+    if (user.role === "gestor" || user.role === "cliente") {
       tabs.push({
         id: "evento",
         label: "Config. evento",
@@ -1318,8 +1329,32 @@ export function ConfiguracaoPage() {
 
   useEffect(() => {
     if (!selectedEventSettings) return;
-    setAllowVendorCheckin(selectedEventSettings.allow_vendor_checkin ?? true);
-    setAllowVendorFipe(selectedEventSettings.allow_vendor_fipe ?? true);
+    setEventPermissions({
+      allow_vendor_checkin: selectedEventSettings.allow_vendor_checkin ?? true,
+      allow_vendor_fipe: selectedEventSettings.allow_vendor_fipe ?? true,
+      allow_vendor_create_sale:
+        selectedEventSettings.allow_vendor_create_sale ?? true,
+      allow_vendor_edit_sale:
+        selectedEventSettings.allow_vendor_edit_sale ?? false,
+      allow_vendor_delete_sale:
+        selectedEventSettings.allow_vendor_delete_sale ?? false,
+      allow_vendor_edit_own_lead:
+        selectedEventSettings.allow_vendor_edit_own_lead ?? true,
+      allow_vendor_delete_own_lead:
+        selectedEventSettings.allow_vendor_delete_own_lead ?? false,
+      allow_reception_create_sale:
+        selectedEventSettings.allow_reception_create_sale ?? false,
+      allow_reception_edit_sale:
+        selectedEventSettings.allow_reception_edit_sale ?? false,
+      allow_reception_delete_sale:
+        selectedEventSettings.allow_reception_delete_sale ?? false,
+      allow_reception_edit_lead:
+        selectedEventSettings.allow_reception_edit_lead ?? false,
+      allow_reception_delete_lead:
+        selectedEventSettings.allow_reception_delete_lead ?? false,
+      allow_reception_quick_create:
+        selectedEventSettings.allow_reception_quick_create ?? true,
+    });
     setEventSettingsMessage("");
   }, [selectedEventSettings]);
 
@@ -1955,7 +1990,8 @@ export function ConfiguracaoPage() {
           </div>
         ) : null}
 
-        {activeTab === "evento" && user.role === "gestor" ? (
+        {activeTab === "evento" &&
+        (user.role === "gestor" || user.role === "cliente") ? (
           <div className="space-y-6">
             <Card className={sectionCardClass} padding="lg">
               <div className="flex items-center gap-2">
@@ -2004,18 +2040,87 @@ export function ConfiguracaoPage() {
                       icon={<UserCheck size={15} />}
                       title="Vendedor pode fazer check-in"
                       description="Exibe a ação Fazer check-in no menu rápido dos vendedores."
-                      checked={allowVendorCheckin}
-                      onChange={setAllowVendorCheckin}
+                      checked={eventPermissions.allow_vendor_checkin}
+                      onChange={(value) =>
+                        setEventPermissions((state) => ({
+                          ...state,
+                          allow_vendor_checkin: value,
+                        }))
+                      }
                       dark={isDarkMode}
                     />
                     <ToggleRow
                       icon={<CarFront size={15} />}
                       title="Vendedor pode consultar FIPE"
                       description="Exibe a ação Consultar Placa (FIPE) no menu rápido dos vendedores."
-                      checked={allowVendorFipe}
-                      onChange={setAllowVendorFipe}
+                      checked={eventPermissions.allow_vendor_fipe}
+                      onChange={(value) =>
+                        setEventPermissions((state) => ({
+                          ...state,
+                          allow_vendor_fipe: value,
+                        }))
+                      }
                       dark={isDarkMode}
                     />
+                    {[
+                      [
+                        "allow_vendor_create_sale",
+                        "Vendedor pode registrar venda",
+                        "Permite criar vendas neste evento.",
+                      ],
+                      [
+                        "allow_vendor_edit_own_lead",
+                        "Vendedor pode alterar os próprios leads",
+                        "Permite editar leads cadastrados e vinculados a ele.",
+                      ],
+                      [
+                        "allow_vendor_delete_own_lead",
+                        "Vendedor pode apagar os próprios leads",
+                        "Permite apagar somente leads cadastrados por ele.",
+                      ],
+                      [
+                        "allow_reception_quick_create",
+                        "Recepção pode fazer cadastro rápido",
+                        "Permite criar leads pelo painel da recepção.",
+                      ],
+                      [
+                        "allow_reception_create_sale",
+                        "Recepção pode registrar venda",
+                        "Permite criar vendas neste evento.",
+                      ],
+                      [
+                        "allow_reception_edit_lead",
+                        "Recepção pode alterar dados do lead",
+                        "Permite editar os dados cadastrais do lead.",
+                      ],
+                      [
+                        "allow_reception_delete_lead",
+                        "Recepção pode apagar leads",
+                        "Permite apagar leads deste evento.",
+                      ],
+                    ].map(([key, title, description]) => (
+                      <ToggleRow
+                        key={key}
+                        icon={<UserCog size={15} />}
+                        title={title}
+                        description={description}
+                        checked={
+                          eventPermissions[key as keyof typeof eventPermissions]
+                        }
+                        onChange={(value) =>
+                          setEventPermissions((state) => ({
+                            ...state,
+                            [key]: value,
+                          }))
+                        }
+                        dark={isDarkMode}
+                      />
+                    ))}
+                    <Notice tone="info" className="md:col-span-2">
+                      Editar e apagar vendas ainda não são operações disponíveis
+                      no produto. Por isso, essas permissões permanecem
+                      desativadas até que os respectivos fluxos sejam criados.
+                    </Notice>
                   </div>
 
                   <div className="mt-6 flex flex-wrap items-center justify-between gap-3">

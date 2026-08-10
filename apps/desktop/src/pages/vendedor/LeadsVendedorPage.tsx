@@ -1181,9 +1181,12 @@ export function LeadsVendedorPage() {
       >
         <div className="space-y-4">
           <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3">
-            <p className="text-sm font-semibold text-foreground">Cadastro rápido</p>
+            <p className="text-sm font-semibold text-foreground">
+              Cadastro rápido
+            </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Informe telefone e nome. O próximo evento e horário já vêm selecionados.
+              Informe telefone e nome. O próximo evento e horário já vêm
+              selecionados.
             </p>
           </div>
 
@@ -1274,10 +1277,16 @@ export function LeadsVendedorPage() {
                 <div className="rounded-2xl border border-border bg-muted/30 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold text-foreground">Agendamento automático</p>
+                      <p className="text-xs font-semibold text-foreground">
+                        Agendamento automático
+                      </p>
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {activeEvents.find((event) => event.id === appointmentEventId)?.name ?? "Carregando evento"}
-                        {appointmentDateKey ? ` · ${toPtBrDateLabel(appointmentDateKey)}` : ""}
+                        {activeEvents.find(
+                          (event) => event.id === appointmentEventId,
+                        )?.name ?? "Carregando evento"}
+                        {appointmentDateKey
+                          ? ` · ${toPtBrDateLabel(appointmentDateKey)}`
+                          : ""}
                         {appointmentPeriod
                           ? ` · ${APPOINTMENT_PERIOD_OPTIONS.find((p) => p.value === appointmentPeriod)?.label ?? ""}`
                           : ""}
@@ -1285,13 +1294,18 @@ export function LeadsVendedorPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setShowAppointmentOptions((value) => !value)}
+                      onClick={() =>
+                        setShowAppointmentOptions((value) => !value)
+                      }
                       className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:border-primary hover:text-primary"
                     >
                       Alterar
                       <ChevronDown
                         size={14}
-                        className={clsx("transition-transform", showAppointmentOptions && "rotate-180")}
+                        className={clsx(
+                          "transition-transform",
+                          showAppointmentOptions && "rotate-180",
+                        )}
                       />
                     </button>
                   </div>
@@ -1299,66 +1313,67 @@ export function LeadsVendedorPage() {
 
                 {showAppointmentOptions ? (
                   <div className="space-y-3 border-t border-border pt-3">
-                  <Select
-                    label="Evento"
-                    value={appointmentEventId}
-                    placeholder="Selecione um evento"
-                    onChange={(e) => {
-                      const nextId = e.target.value;
-                      setAppointmentEventId(nextId);
-                      setAppointmentDateKey("");
-                    }}
-                    options={activeEvents.map((event) => ({
-                      value: event.id,
-                      label: event.name,
-                    }))}
-                  />
-                  <Select
-                    label="Dia do evento"
-                    value={appointmentDateKey}
-                    placeholder={
-                      appointmentEventId
-                        ? "Nenhum dia configurado"
-                        : "Selecione o evento primeiro"
-                    }
-                    disabled={
-                      !appointmentEventId || appointmentDateOptions.length === 0
-                    }
-                    onChange={(e) => {
-                      const nextDateKey = e.target.value;
-                      setAppointmentDateKey(nextDateKey);
-                      const match = appointmentDateOptions.find(
-                        (item) => item.dateKey === nextDateKey,
-                      );
-                      if (match) setAppointmentEventId(match.eventId);
-                    }}
-                    options={appointmentDateOptions.map((item) => ({
-                      value: item.dateKey,
-                      label: toPtBrDateLabel(item.dateKey),
-                    }))}
-                  />
-                  <div>
-                    <p className="mb-1.5 text-sm font-medium text-foreground">
-                      Período
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {APPOINTMENT_PERIOD_OPTIONS.map((p) => (
-                        <button
-                          key={p.value}
-                          type="button"
-                          onClick={() => setAppointmentPeriod(p.value)}
-                          className={clsx(
-                            "rounded-xl border px-4 py-3 text-sm font-medium transition-colors",
-                            appointmentPeriod === p.value
-                              ? "border-[#FF0636] bg-[#FF0636] text-white"
-                              : "border-border bg-background text-foreground hover:border-[#FF0636] hover:text-[#FF0636]",
-                          )}
-                        >
-                          {p.label}
-                        </button>
-                      ))}
+                    <Select
+                      label="Evento"
+                      value={appointmentEventId}
+                      placeholder="Selecione um evento"
+                      onChange={(e) => {
+                        const nextId = e.target.value;
+                        setAppointmentEventId(nextId);
+                        setAppointmentDateKey("");
+                      }}
+                      options={activeEvents.map((event) => ({
+                        value: event.id,
+                        label: event.name,
+                      }))}
+                    />
+                    <Select
+                      label="Dia do evento"
+                      value={appointmentDateKey}
+                      placeholder={
+                        appointmentEventId
+                          ? "Nenhum dia configurado"
+                          : "Selecione o evento primeiro"
+                      }
+                      disabled={
+                        !appointmentEventId ||
+                        appointmentDateOptions.length === 0
+                      }
+                      onChange={(e) => {
+                        const nextDateKey = e.target.value;
+                        setAppointmentDateKey(nextDateKey);
+                        const match = appointmentDateOptions.find(
+                          (item) => item.dateKey === nextDateKey,
+                        );
+                        if (match) setAppointmentEventId(match.eventId);
+                      }}
+                      options={appointmentDateOptions.map((item) => ({
+                        value: item.dateKey,
+                        label: toPtBrDateLabel(item.dateKey),
+                      }))}
+                    />
+                    <div>
+                      <p className="mb-1.5 text-sm font-medium text-foreground">
+                        Período
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {APPOINTMENT_PERIOD_OPTIONS.map((p) => (
+                          <button
+                            key={p.value}
+                            type="button"
+                            onClick={() => setAppointmentPeriod(p.value)}
+                            className={clsx(
+                              "rounded-xl border px-4 py-3 text-sm font-medium transition-colors",
+                              appointmentPeriod === p.value
+                                ? "border-[#FF0636] bg-[#FF0636] text-white"
+                                : "border-border bg-background text-foreground hover:border-[#FF0636] hover:text-[#FF0636]",
+                            )}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
                   </div>
                 ) : null}
               </>
