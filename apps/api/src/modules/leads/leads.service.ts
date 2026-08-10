@@ -1954,6 +1954,10 @@ export class LeadsService {
       >(Prisma.sql`
         SELECT to_regclass('agent_chat_history') IS NOT NULL AS exists
       `);
+      const conversationMemoryFilter =
+        conversationIds.length > 0
+          ? Prisma.sql`OR session_id IN (${Prisma.join(conversationIds)})`
+          : Prisma.empty;
       const n8nAgentMemory = n8nHistoryTable?.exists
         ? await tx.$executeRaw(Prisma.sql`
             DELETE FROM agent_chat_history
@@ -1963,7 +1967,7 @@ export class LeadsService {
               -- UUID isolado deixava esse historico disponivel para uma nova
               -- conversa criada posteriormente com o mesmo telefone.
               OR session_id LIKE ('%:' || ${id}::text)
-              OR session_id = ANY(${conversationIds}::text[])
+              ${conversationMemoryFilter}
               OR (
                 ${lead.phone ?? null}::text IS NOT NULL
                 AND length(regexp_replace(${lead.phone ?? ""}, '[^0-9]', '', 'g')) >= 10
@@ -2050,6 +2054,13 @@ export class LeadsService {
 
       await tx.lead.delete({ where: { id } });
       return counts;
+    }, {
+      // A exclusao definitiva limpa conversas, memoria do agente, agendamentos,
+      // auditoria e atribuicao. Em producao essa operacao pode ultrapassar o
+      // timeout padrao de 5 s do Prisma, sobretudo quando o banco esta sob carga.
+      // Mantemos uma unica transacao atomica, mas com uma janela suficiente para
+      // concluir toda a cascata sem reverter uma exclusao valida.
+      timeout: 30_000,
     });
 
     this.realtimeEvents.emitLeadUpdated(lead.client_id, {

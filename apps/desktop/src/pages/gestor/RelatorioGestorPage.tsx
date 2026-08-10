@@ -47,7 +47,7 @@ import type {
   ExecutiveReportResponse,
   OperationalReportResponse,
 } from "../../services/events";
-import { listLeads, mapApiLeadToLead } from "../../services/leads";
+import { fetchAllLeads, mapApiLeadToLead } from "../../services/leads";
 import { listCrmPipelines, type ApiCrmStage } from "../../services/crm";
 import type { AppOutletContext } from "../../layouts/AppLayout";
 import type { Client, Event, Lead } from "../../types";
@@ -433,7 +433,9 @@ export function RelatorioGestorPage() {
     Promise.all([
       listClients(session.accessToken),
       listEvents({}, session.accessToken),
-      listLeads({ take: 500 }, session.accessToken),
+      // A API limita cada pagina a 300 itens. O relatorio percorre todas as
+      // paginas para nao perder leads nem provocar uma resposta 400.
+      fetchAllLeads({}, session.accessToken),
     ])
       .then(([apiClients, apiEvents, apiLeads]) => {
         setClients(apiClients.map(mapApiClientToClient));
