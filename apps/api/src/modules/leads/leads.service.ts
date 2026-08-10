@@ -1374,6 +1374,26 @@ export class LeadsService {
     }
 
     await this.assertLeadAccess(user, lead);
+    if (
+      user.role === Role.RECEPCAO &&
+      dto.assigned_vendor_id !== undefined &&
+      dto.assigned_vendor_id !== null
+    ) {
+      const vendor = await this.prisma.user.findFirst({
+        where: {
+          id: dto.assigned_vendor_id,
+          client_id: lead.client_id,
+          role: Role.VENDEDOR,
+          is_active: true,
+        },
+        select: { id: true },
+      });
+      if (!vendor) {
+        throw new BadRequestException(
+          "Vendedor responsável inválido para este lead",
+        );
+      }
+    }
     const targetClientId =
       user.role !== Role.VENDEDOR && user.role !== Role.RECEPCAO
         ? await this.resolveLeadTargetClientId(lead, dto)
@@ -4366,6 +4386,51 @@ export class LeadsService {
     return { success: true };
   }
 
+  async rejectVendorCall(user: AuthenticatedUser, leadId: string) {
+    if (user.role !== Role.VENDEDOR || !user.client_id) {
+      throw new ForbiddenException("Apenas vendedor pode recusar a chamada");
+    }
+
+    const lead = await this.prisma.lead.findFirst({
+      where: {
+        id: leadId,
+        client_id: user.client_id,
+        assigned_vendor_id: user.sub,
+        deleted_at: null,
+      },
+      select: { id: true, client_id: true },
+    });
+    if (!lead) {
+      throw new NotFoundException("Chamada não encontrada para este vendedor");
+    }
+
+    const vendors = await this.prisma.user.findMany({
+      where: {
+        client_id: lead.client_id,
+        role: Role.VENDEDOR,
+        is_active: true,
+        id: { not: user.sub },
+      },
+      select: { id: true },
+      orderBy: { id: "asc" },
+    });
+    const nextVendor = vendors[0];
+    if (!nextVendor) {
+      throw new BadRequestException("Não há outro vendedor disponível");
+    }
+
+    await this.prisma.lead.update({
+      where: { id: lead.id },
+      data: { assigned_vendor_id: nextVendor.id },
+    });
+
+    await this.callVendor(
+      { ...user, role: Role.RECEPCAO, client_id: lead.client_id },
+      lead.id,
+    );
+    return { success: true, vendor_id: nextVendor.id };
+  }
+
   private toResponse(lead: LeadWithRelations) {
     const handoffRequired =
       lead.conversation_states?.some((cs) => cs.handoff_required) ?? false;
@@ -4927,6 +4992,9 @@ export class LeadsService {
       if (dto.confirmation_status !== undefined) {
         data.confirmation_status = dto.confirmation_status;
       }
+      if (dto.assigned_vendor_id !== undefined) {
+        data.assigned_vendor_id = dto.assigned_vendor_id;
+      }
       return data;
     }
 
@@ -4975,14 +5043,17 @@ export class LeadsService {
   }
 
   private assertRecepcaoPatch(dto: UpdateLeadDto) {
-    const allowed: (keyof UpdateLeadDto)[] = ["confirmation_status"];
+    const allowed: (keyof UpdateLeadDto)[] = [
+      "confirmation_status",
+      "assigned_vendor_id",
+    ];
     const keys = Object.keys(dto) as (keyof UpdateLeadDto)[];
     const bad = keys.filter(
       (k) => dto[k] !== undefined && !allowed.includes(k),
     );
     if (bad.length > 0) {
       throw new BadRequestException(
-        "Recepcao so pode atualizar confirmation_status",
+        "Recepcao so pode atualizar confirmation_status e assigned_vendor_id",
       );
     }
   }

@@ -10,7 +10,7 @@ import type { User } from "./types";
 import { isNativePlatform } from "./utils/platform";
 import { isProtectedRoutePath } from "./routing/route-policy";
 
-import { RoleGuard } from "./routing/RoleGuard";
+import { RoleGuard, roleHome } from "./routing/RoleGuard";
 import {
   clearStoredSession,
   fetchMe,
@@ -259,6 +259,26 @@ function ProtectedRoute({
   return <>{children}</>;
 }
 
+function TvProtectedRoute({
+  user,
+  loading,
+  children,
+}: {
+  user: User | null;
+  loading: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <ProtectedRoute user={user} loading={loading}>
+      {user && (user.role === "gestor" || user.role === "cliente") ? (
+        children
+      ) : user ? (
+        <Navigate to={roleHome(user.role)} replace />
+      ) : null}
+    </ProtectedRoute>
+  );
+}
+
 function RouteLoadingFallback() {
   return (
     <div className="flex min-h-screen items-center justify-center text-sm text-zinc-500">
@@ -421,21 +441,21 @@ export default function App() {
           />
           <Route path="/definir-senha/:token" element={<DefinirSenhaPage />} />
 
-          {/* TV mode (fullscreen, sem AppLayout) — qualquer usuário logado */}
+          {/* TV mode (fullscreen, sem AppLayout) — somente gestor e cliente */}
           <Route
             path="/eventos/:id/tv"
             element={
-              <ProtectedRoute user={user} loading={loadingAuth}>
+              <TvProtectedRoute user={user} loading={loadingAuth}>
                 <EventTVDashboardPage />
-              </ProtectedRoute>
+              </TvProtectedRoute>
             }
           />
           <Route
             path="/eventos/:id/tv-fila"
             element={
-              <ProtectedRoute user={user} loading={loadingAuth}>
+              <TvProtectedRoute user={user} loading={loadingAuth}>
                 <EventTVQueuePage />
-              </ProtectedRoute>
+              </TvProtectedRoute>
             }
           />
 
@@ -521,6 +541,7 @@ export default function App() {
               />
               <Route path="/vendedor/leads" element={<LeadsVendedorPage />} />
               <Route path="/vendedor/vendas" element={<VendasVendedorPage />} />
+              <Route path="/vendedor/fila" element={<FilaRecepcaoPage />} />
               <Route
                 path="/vendedor/ranking"
                 element={<RankingVendedorPage />}

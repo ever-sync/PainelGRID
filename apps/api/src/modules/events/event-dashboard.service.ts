@@ -119,6 +119,7 @@ export class EventDashboardService {
       items,
       appointments,
       sales,
+      markedSoldLeads,
       checkinTimelineRows,
       markedScheduledWithoutAppointment,
     ] = await Promise.all([
@@ -178,6 +179,10 @@ export class EventDashboardService {
       this.prisma.sale.findMany({
         where: { lead: where },
         select: { id: true, lead_id: true, value: true },
+      }),
+      this.prisma.lead.findMany({
+        where: { AND: [where, { sold_by_vendor_id: { not: null } }] },
+        select: { id: true },
       }),
       this.prisma.leadTimeline.findMany({
         where: {
@@ -253,7 +258,10 @@ export class EventDashboardService {
         .map((row) => row.lead_id),
       ...checkinTimelineRows.map((row) => row.lead_id),
     ]);
-    const soldLeadIds = new Set(sales.map((row) => row.lead_id));
+    const soldLeadIds = new Set([
+      ...sales.map((row) => row.lead_id),
+      ...markedSoldLeads.map((row) => row.id),
+    ]);
     const revenue = sales.reduce(
       (sum, row) => sum.plus(row.value),
       new Prisma.Decimal(0),
@@ -371,6 +379,7 @@ export class EventDashboardService {
           id: true,
           source: true,
           assigned_vendor_id: true,
+          sold_by_vendor_id: true,
           team_id: true,
           created_at: true,
           confirmation_status: true,
@@ -499,7 +508,12 @@ export class EventDashboardService {
         noShowLeadIds.add(appointment.lead_id);
       }
     });
-    const soldLeadIds = new Set(sales.map((sale) => sale.lead_id));
+    const soldLeadIds = new Set([
+      ...sales.map((sale) => sale.lead_id),
+      ...leads
+        .filter((lead) => lead.sold_by_vendor_id)
+        .map((lead) => lead.id),
+    ]);
 
     const funnel = {
       leads: leads.length,

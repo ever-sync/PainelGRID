@@ -1,50 +1,170 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useOutletContext } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Clock, UserCheck, Users } from "lucide-react";
+import { useOutletContext } from "react-router-dom";
 import type { User } from "../../types";
+import { PageHeader } from "../../components/shared/PageHeader";
+import { Notice } from "../../components/ui/Notice";
 import { readStoredSession } from "../../services/auth";
 import { listEvents, mapApiEventToEvent } from "../../services/events";
+import { fetchAllLeads, type ApiLead } from "../../services/leads";
 import { resolveClientId } from "../../utils/userContext";
+import { useLeadRealtimeSync } from "../../hooks/useLeadRealtimeSync";
 
 type OutletContext = { user: User };
 
+function arrivalTime(lead: ApiLead) {
+  return new Date(
+    lead.confirmation_date ||
+      lead.updated_at ||
+      lead.store_visit_datetime ||
+      lead.created_at,
+  );
+}
+
 export function FilaPage() {
   const { user } = useOutletContext<OutletContext>();
-  const navigate = useNavigate();
+  const clientId = resolveClientId(user);
+  const [eventName, setEventName] = useState("");
+  const [leads, setLeads] = useState<ApiLead[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     const token = readStoredSession()?.accessToken;
-    const clientId = resolveClientId(user);
     if (!token || !clientId) {
-      setError("Não foi possível identificar a empresa da recepção.");
+      setError("Não foi possível identificar a empresa deste acesso.");
+      setLoading(false);
       return;
     }
 
-    void listEvents({ client_id: clientId }, token)
-      .then((rows) => {
-        const events = rows.map(mapApiEventToEvent);
-        const event =
-          events.find((item) => item.status === "active") ?? events[0];
-        if (!event) {
-          setError("Nenhum evento disponível para exibir a fila.");
-          return;
-        }
-        navigate(`/eventos/${event.id}/tv-fila`, { replace: true });
-      })
-      .catch((cause) => {
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : "Não foi possível carregar a fila de atendimento.",
-        );
-      });
-  }, [navigate, user]);
+    try {
+      const events = (await listEvents({ client_id: clientId }, token)).map(
+        mapApiEventToEvent,
+      );
+      const event =
+        events.find((item) => item.status === "active") ?? events[0];
+      if (!event) {
+        setError("Nenhum evento disponível para exibir a fila.");
+        setLoading(false);
+        return;
+      }
+
+      const rows = await fetchAllLeads(
+        {
+          client_id: clientId,
+          event_id: event.id,
+          confirmation_status: "checked_in",
+        },
+        token,
+      );
+      setEventName(event.name);
+      setLeads(
+        user.role === "vendedor"
+          ? rows.filter((lead) => lead.assigned_vendor_id === user.id)
+          : rows,
+      );
+      setError("");
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível carregar a fila de atendimento.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [clientId, user.id, user.role]);
+
+  useEffect(() => {
+    void load();
+    const interval = window.setInterval(() => void load(), 15_000);
+    return () => window.clearInterval(interval);
+  }, [load]);
+
+  useLeadRealtimeSync(clientId, load);
+
+  const queue = useMemo(
+    () =>
+      [...leads].sort(
+        (a, b) => arrivalTime(a).getTime() - arrivalTime(b).getTime(),
+      ),
+    [leads],
+  );
 
   return (
-    <div className="flex min-h-[50vh] items-center justify-center p-6 text-center">
-      <p className="text-sm text-zinc-500">
-        {error || "Abrindo fila de atendimento..."}
-      </p>
+    <div className="space-y-6">
+      <PageHeader
+        title="Fila de Atendimento"
+        breadcrumbs={[
+          {
+            label: user.role === "recepcao" ? "Recepção" : "Vendedor",
+          },
+          { label: "Fila" },
+        ]}
+      />
+
+      {eventName ? (
+        <div className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              Evento
+            </p>
+            <p className="font-bold text-zinc-900 dark:text-white">
+              {eventName}
+            </p>
+          </div>
+          <span className="rounded-full bg-amber-500/10 px-3 py-1 text-sm font-bold text-amber-600 dark:text-amber-400">
+            {queue.length} aguardando
+          </span>
+        </div>
+      ) : null}
+
+      {error ? <Notice tone="error">{error}</Notice> : null}
+
+      <div className="space-y-3">
+        {loading ? (
+          <p className="py-12 text-center text-sm text-zinc-500">
+            Carregando fila...
+          </p>
+        ) : queue.length === 0 && !error ? (
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-zinc-300 py-14 text-zinc-500 dark:border-zinc-700">
+            <Users size={36} />
+            <p className="text-sm font-medium">
+              {user.role === "vendedor"
+                ? "Nenhum cliente está aguardando você."
+                : "Ninguém aguardando atendimento."}
+            </p>
+          </div>
+        ) : (
+          queue.map((lead, index) => (
+            <div
+              key={lead.id}
+              className="flex items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-sm font-black text-black">
+                {index + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-bold text-zinc-900 dark:text-white">
+                  {lead.name}
+                </p>
+                <p className="mt-1 flex items-center gap-1.5 text-xs text-zinc-500">
+                  <Clock size={13} />
+                  Check-in às{" "}
+                  {arrivalTime(lead).toLocaleTimeString("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                <UserCheck size={14} />
+                Aguardando
+              </span>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }

@@ -163,6 +163,7 @@ export function CheckinPage() {
   >({});
   const [scannerKey, setScannerKey] = useState(0);
   const [quickCheckinLead, setQuickCheckinLead] = useState<Lead | null>(null);
+  const [quickCheckinVendorId, setQuickCheckinVendorId] = useState("");
   const [quickCheckinBusy, setQuickCheckinBusy] = useState(false);
   const [quickCheckinError, setQuickCheckinError] = useState("");
 
@@ -437,6 +438,8 @@ export function CheckinPage() {
       playBeep(880);
       triggerHapticFeedback([100, 50, 100]);
       setShowScannerModal(false);
+      setQuickCheckinVendorId(mapped.assigned_vendor_id ?? "");
+      setQuickCheckinLead(mapped);
     } catch (err) {
       const isNetwork =
         !navigator.onLine ||
@@ -508,6 +511,20 @@ export function CheckinPage() {
     setQuickCheckinBusy(true);
     setQuickCheckinError("");
     try {
+      if (sendToQueue && !quickCheckinVendorId) {
+        throw new Error("Selecione o vendedor responsável pelo lead.");
+      }
+      if (
+        sendToQueue &&
+        quickCheckinLead.assigned_vendor_id !== quickCheckinVendorId
+      ) {
+        await updateLead(
+          quickCheckinLead.id,
+          { assigned_vendor_id: quickCheckinVendorId },
+          t,
+        );
+      }
+
       if (quickCheckinLead.confirmation_status !== "checked_in") {
         const appointmentId = quickCheckinLead.active_appointment?.id;
         if (appointmentId) {
@@ -522,11 +539,6 @@ export function CheckinPage() {
       }
 
       if (sendToQueue) {
-        if (!quickCheckinLead.assigned_vendor_id) {
-          throw new Error(
-            "Check-in realizado, mas o lead não possui vendedor vinculado para entrar na fila.",
-          );
-        }
         await notifyVendorCall(quickCheckinLead.id, t);
       }
 
@@ -1107,6 +1119,7 @@ export function CheckinPage() {
                   disabled={isCheckedIn}
                   onClick={() => {
                     setQuickCheckinError("");
+                    setQuickCheckinVendorId(lead.assigned_vendor_id ?? "");
                     setQuickCheckinLead(lead);
                   }}
                   className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs sm:text-sm font-semibold text-white transition-all hover:bg-emerald-700 active:scale-95 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
@@ -1297,6 +1310,7 @@ export function CheckinPage() {
             <Button
               onClick={() => void handleQuickCheckin(true)}
               loading={quickCheckinBusy}
+              isDisabled={!quickCheckinVendorId}
             >
               Sim
             </Button>
@@ -1313,6 +1327,22 @@ export function CheckinPage() {
             Enviar <strong>{quickCheckinLead?.name}</strong> para a fila de
             atendimento?
           </p>
+          <Select
+            label="De quem é este lead? *"
+            value={quickCheckinVendorId}
+            onChange={(event) => {
+              setQuickCheckinVendorId(event.target.value);
+              setQuickCheckinError("");
+            }}
+            dark={isDarkMode}
+            options={[
+              { value: "", label: "Selecione o vendedor responsável" },
+              ...staffList.map((vendor) => ({
+                value: vendor.id,
+                label: vendor.name,
+              })),
+            ]}
+          />
           {quickCheckinError ? (
             <Notice tone="error" className="text-xs">
               {quickCheckinError}

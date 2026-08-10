@@ -6,6 +6,9 @@ describe("isProtectedRoutePath", () => {
     "/cliente/leads",
     "/vendedor",
     "/recepcao/checkin",
+    "/eventos/event-1/tv",
+    "/eventos/event-1/tv-fila",
+    "/eventos/event-1/tv/",
   ])("identifica a area protegida %s", (path) => {
     expect(isProtectedRoutePath(path)).toBe(true);
   });
@@ -15,7 +18,7 @@ describe("isProtectedRoutePath", () => {
     "/convite",
     "/avaliacao/token",
     "/gestoria",
-    "/eventos/event-1/tv",
+    "/eventos/event-1/tv-outra",
   ])("nao exige bootstrap de refresh na rota %s", (path) => {
     expect(isProtectedRoutePath(path)).toBe(false);
   });

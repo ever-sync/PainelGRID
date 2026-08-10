@@ -1,4 +1,5 @@
-const PROTECTED_ROUTE_PATTERN = /^\/(gestor|cliente|vendedor|recepcao)(\/|$)/;
+const PROTECTED_ROUTE_PATTERN =
+  /^\/(?:gestor|cliente|vendedor|recepcao)(?:\/|$)|^\/eventos\/[^/]+\/tv(?:-fila)?\/?$/;
 
 export function isProtectedRoutePath(path: string): boolean {
   return PROTECTED_ROUTE_PATTERN.test(path);

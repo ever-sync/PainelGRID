@@ -31,7 +31,6 @@ import {
   BellRing,
   CheckCircle2,
   Clock,
-  ShoppingBag,
   CheckSquare,
   Home,
   Store,
@@ -58,6 +57,7 @@ import {
   checkInLeadByToken,
   queryFipeData,
   closeLeadAttendance,
+  rejectVendorCall,
 } from "../services/leads";
 import { readStoredSession } from "../services/auth";
 import {
@@ -256,6 +256,11 @@ function getNavItems(user: User): NavItem[] {
           href: "/vendedor/ranking",
           icon: <Trophy size={18} />,
           label: "Ranking",
+        },
+        {
+          href: "/vendedor/fila",
+          icon: <Users size={18} />,
+          label: "Fila de Atendimento",
         },
       ];
     case "recepcao":
@@ -458,6 +463,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     vendor_name: string;
     team_name?: string;
   } | null>(null);
+  const [rejectingVendorCall, setRejectingVendorCall] = useState(false);
 
   // Solicita permissão para Web Push Notifications ao carregar o aplicativo
   useEffect(() => {
@@ -494,7 +500,10 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       team_name?: string;
     }) => {
       // Exibe pop-up se a chamada for para o usuario logado (ou se for perfil de gestor/testes)
-      if (payload.vendor_id === user.id || user.role === "gestor") {
+      const vendorIsBusy =
+        user.role === "vendedor" &&
+        Boolean(localStorage.getItem("active_vendor_attendance"));
+      if (payload.vendor_id === user.id && !vendorIsBusy) {
         setVendorCallAlert(payload);
         triggerHapticFeedback();
 
@@ -648,6 +657,8 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
   });
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [showAttendanceOutcome, setShowAttendanceOutcome] = useState(false);
+  const [finishingAttendance, setFinishingAttendance] = useState(false);
 
   // Timer em tempo real
   useEffect(() => {
@@ -684,8 +695,24 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     setVendorCallAlert(null);
   };
 
+  const handleRejectAttendance = async (call: typeof vendorCallAlert) => {
+    if (!call || rejectingVendorCall) return;
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+    setRejectingVendorCall(true);
+    try {
+      await rejectVendorCall(call.lead_id, token);
+      setVendorCallAlert(null);
+    } catch (error) {
+      console.error("Erro ao encaminhar para o próximo vendedor:", error);
+    } finally {
+      setRejectingVendorCall(false);
+    }
+  };
+
   const handleFinishActiveAttendance = async (sold: boolean) => {
-    if (!activeAttendance) return;
+    if (!activeAttendance || finishingAttendance) return;
+    setFinishingAttendance(true);
     const t = readStoredSession()?.accessToken;
     if (t) {
       const durationSecs = Math.max(
@@ -706,11 +733,13 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       }
     }
     setActiveAttendance(null);
+    setShowAttendanceOutcome(false);
     try {
       localStorage.removeItem("active_vendor_attendance");
     } catch {
       /* ignore */
     }
+    setFinishingAttendance(false);
   };
 
   const formatCronometer = (totalSeconds: number) => {
@@ -898,7 +927,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
 
   const mobileNavItems =
     user.role === "vendedor"
-      ? [navItems[0], navItems[1], null, navItems[2], navItems[3]]
+      ? [navItems[0], navItems[1], null, navItems[2], navItems[4]]
       : user.role === "recepcao"
         ? [
             navItems[0],
@@ -1149,28 +1178,43 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
               </div>
             </div>
 
-            {/* BOTÕES GIGANTES NO MEIO */}
+            {/* Ação única: o resultado é perguntado somente ao finalizar. */}
             <div className="space-y-3 pt-2">
-              {/* Botão Vender GIGANTE */}
               <button
                 type="button"
-                onClick={() => void handleFinishActiveAttendance(true)}
-                className="w-full h-16 inline-flex items-center justify-center gap-3 rounded-2xl bg-emerald-600 px-6 text-lg sm:text-xl font-black text-white shadow-[0_10px_30px_rgba(16,185,129,0.4)] hover:bg-emerald-500 active:scale-95 transition-all cursor-pointer"
+                onClick={() => setShowAttendanceOutcome(true)}
+                className="w-full h-16 inline-flex items-center justify-center gap-3 rounded-2xl bg-emerald-600 px-6 text-lg font-black text-white shadow-[0_10px_30px_rgba(16,185,129,0.35)] hover:bg-emerald-500 active:scale-95 transition-all cursor-pointer"
               >
-                <ShoppingBag size={24} />
-                <span>Vender</span>
-              </button>
-
-              {/* Botão Finalizar Atendimento GIGANTE */}
-              <button
-                type="button"
-                onClick={() => void handleFinishActiveAttendance(false)}
-                className="w-full h-14 inline-flex items-center justify-center gap-3 rounded-2xl border border-zinc-700 bg-zinc-900/90 px-6 text-base font-bold text-zinc-300 hover:bg-zinc-800 active:scale-95 transition-all cursor-pointer"
-              >
-                <CheckSquare size={20} />
+                <CheckSquare size={22} />
                 <span>Finalizar Atendimento</span>
               </button>
             </div>
+
+            {showAttendanceOutcome && (
+              <div className="rounded-3xl border border-zinc-700 bg-black/80 p-5 space-y-4">
+                <p className="text-lg font-black text-white">
+                  Vendeu para este cliente?
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    disabled={finishingAttendance}
+                    onClick={() => void handleFinishActiveAttendance(false)}
+                    className="h-12 rounded-xl border border-zinc-600 bg-zinc-900 font-bold text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+                  >
+                    Não
+                  </button>
+                  <button
+                    type="button"
+                    disabled={finishingAttendance}
+                    onClick={() => void handleFinishActiveAttendance(true)}
+                    className="h-12 rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-500 disabled:opacity-50"
+                  >
+                    {finishingAttendance ? "Salvando..." : "Sim"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2359,10 +2403,13 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
 
               <button
                 type="button"
-                onClick={() => setVendorCallAlert(null)}
+                disabled={rejectingVendorCall}
+                onClick={() => void handleRejectAttendance(vendorCallAlert)}
                 className="w-full h-14 inline-flex items-center justify-center gap-2 rounded-2xl border border-zinc-700 bg-zinc-900 px-5 text-xs sm:text-sm font-semibold text-zinc-300 hover:bg-zinc-800 active:scale-95 transition-all"
               >
-                <span>Estou Ocupado</span>
+                <span>
+                  {rejectingVendorCall ? "Encaminhando..." : "Recusar"}
+                </span>
               </button>
             </div>
           </div>

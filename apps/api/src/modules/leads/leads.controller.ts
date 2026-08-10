@@ -234,6 +234,18 @@ export class LeadsController {
     return this.leadsService.callVendor(user, id);
   }
 
+  @Post(":id/reject-vendor-call")
+  @Roles(Role.VENDEDOR)
+  @ApiOperation({
+    summary: "Recusa a chamada e encaminha o lead ao próximo vendedor",
+  })
+  rejectVendorCall(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.leadsService.rejectVendorCall(user, id);
+  }
+
   @Patch(":id")
   @Roles(Role.GESTOR, Role.CLIENTE, Role.VENDEDOR, Role.RECEPCAO)
   @ApiOperation({ summary: "Atualiza lead por ID" })

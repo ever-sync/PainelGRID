@@ -339,6 +339,13 @@ export function notifyVendorCall(id: string, token: string) {
   });
 }
 
+export function rejectVendorCall(id: string, token: string) {
+  return httpRequest<{ success: boolean; vendor_id: string }>(
+    `/leads/${id}/reject-vendor-call`,
+    { method: "POST", token },
+  );
+}
+
 export type CheckLeadPhoneResponse = {
   exists: boolean;
   lead?: {

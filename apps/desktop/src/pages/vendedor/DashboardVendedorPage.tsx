@@ -210,9 +210,7 @@ export function DashboardVendedorPage() {
             {eventRanking?.event.id ? (
               <button
                 type="button"
-                onClick={() =>
-                  navigate(`/eventos/${eventRanking.event.id}/tv-fila`)
-                }
+                onClick={() => navigate("/vendedor/fila")}
                 className={clsx(
                   "inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-xs font-bold transition-all hover:scale-105",
                   isDarkMode
