@@ -350,7 +350,12 @@ export class EventDashboardService {
         sales_target: true,
         scheduled_target: true,
         status: true,
-        participants: { select: { client_id: true } },
+        participants: {
+          select: {
+            client_id: true,
+            client: { select: { company_name: true } },
+          },
+        },
       },
     });
 
@@ -377,6 +382,7 @@ export class EventDashboardService {
         where: { event_interest_id: eventId, deleted_at: null },
         select: {
           id: true,
+          client_id: true,
           source: true,
           assigned_vendor_id: true,
           sold_by_vendor_id: true,
@@ -754,6 +760,50 @@ export class EventDashboardService {
       .sort(([left], [right]) => left - right)
       .map(([hour, count]) => ({ hour, count }));
 
+    const participantMetrics = event.participants.map((participant) => {
+      const participantLeadIds = new Set(
+        leads
+          .filter((lead) => lead.client_id === participant.client_id)
+          .map((lead) => lead.id),
+      );
+      const participantSales = sales.filter((sale) =>
+        participantLeadIds.has(sale.lead_id),
+      );
+      const participantVendorIds = new Set(
+        vendors
+          .filter((vendor) => vendor.client_id === participant.client_id)
+          .map((vendor) => vendor.id),
+      );
+
+      return {
+        client_id: participant.client_id,
+        company_name:
+          participant.client?.company_name ?? "Empresa participante",
+        vendors: participantVendorIds.size,
+        teams: teams.filter((team) =>
+          team.members.some((member) =>
+            participantVendorIds.has(member.user_id),
+          ),
+        ).length,
+        leads: participantLeadIds.size,
+        scheduled: [...participantLeadIds].filter((id) =>
+          scheduledLeadIds.has(id),
+        ).length,
+        confirmed: [...participantLeadIds].filter((id) =>
+          confirmedLeadIds.has(id),
+        ).length,
+        checked_in: [...participantLeadIds].filter((id) =>
+          checkedInLeadIds.has(id),
+        ).length,
+        sold: [...participantLeadIds].filter((id) => soldLeadIds.has(id))
+          .length,
+        revenue: participantSales.reduce(
+          (total, sale) => total + Number(sale.value ?? 0),
+          0,
+        ),
+      };
+    });
+
     // Buscar chamadas de vendedores ativas no Redis
     const activeCalls: unknown[] = [];
     for (const clientId of participantClientIds) {
@@ -790,6 +840,7 @@ export class EventDashboardService {
         scheduled_target: event.scheduled_target,
         status: event.status,
         participant_client_ids: participantClientIds,
+        participants: participantMetrics,
       },
       funnel,
       vendors: vendorRanking,

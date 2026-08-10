@@ -6,6 +6,45 @@ import { startPerformanceMonitoring } from "./performanceMonitoring";
 import { API_BASE, getBackendOrigin } from "./services/http";
 import { isNativePlatform } from "./utils/platform";
 
+const STALE_CHUNK_RECOVERY_KEY = "painelgrid:stale-chunk-recovery";
+const STALE_CHUNK_RECOVERY_WINDOW_MS = 60_000;
+
+/**
+ * Uma aba aberta durante um deploy ainda referencia os chunks da versão
+ * anterior. Quando o usuário navega para uma rota lazy, o arquivo antigo já
+ * não existe e o import dinâmico retorna 404. O Vite emite `vite:preloadError`;
+ * recarregar busca o index atual e os hashes corretos. A janela evita loop caso
+ * exista uma indisponibilidade real de rede/CDN.
+ */
+function recoverFromStaleChunk() {
+  const lastRecovery = Number(
+    window.sessionStorage.getItem(STALE_CHUNK_RECOVERY_KEY) ?? 0,
+  );
+  if (Date.now() - lastRecovery < STALE_CHUNK_RECOVERY_WINDOW_MS) return;
+
+  window.sessionStorage.setItem(
+    STALE_CHUNK_RECOVERY_KEY,
+    String(Date.now()),
+  );
+  window.location.reload();
+}
+
+window.addEventListener("vite:preloadError", (event) => {
+  event.preventDefault();
+  recoverFromStaleChunk();
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  const message =
+    event.reason instanceof Error
+      ? event.reason.message
+      : String(event.reason ?? "");
+  if (/dynamically imported module|failed to fetch.*module/i.test(message)) {
+    event.preventDefault();
+    recoverFromStaleChunk();
+  }
+});
+
 /**
  * Aquecimento da API logo no boot: abre a conexão (preconnect) e dispara um
  * health-check fire-and-forget. Reduz o cold start percebido — a API já vai

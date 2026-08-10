@@ -168,6 +168,18 @@ export type EventDashboardTvResponse = {
     scheduled_target: number | null;
     status: EventStatus;
     participant_client_ids: string[];
+    participants?: Array<{
+      client_id: string;
+      company_name: string;
+      vendors: number;
+      teams: number;
+      leads: number;
+      scheduled: number;
+      confirmed: number;
+      checked_in: number;
+      sold: number;
+      revenue: number;
+    }>;
   };
   funnel: {
     leads: number;

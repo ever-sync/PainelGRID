@@ -56,6 +56,7 @@ type OutletContext = {
 };
 
 type LeadVisibilityFilter = "all" | "pending" | "assigned" | "converted";
+type EventDataScope = "client" | "event" | "compare";
 
 const SOURCE_LABELS: Record<Lead["source"], string> = {
   facebook_ads: "Facebook Ads",
@@ -479,6 +480,8 @@ export function EventosClientePage() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [eventSnapshot, setEventSnapshot] =
     useState<EventDashboardTvResponse | null>(null);
+  const [eventDataScope, setEventDataScope] =
+    useState<EventDataScope>("client");
 
   const loadEventsData = useCallback(async () => {
     const token = readStoredSession()?.accessToken;
@@ -662,6 +665,72 @@ export function EventosClientePage() {
       { assigned: 0, scheduled: 0, checkedIn: 0, sold: 0 },
     );
   }, [teams]);
+
+  const scopedEventData = useMemo(() => {
+    if (!eventSnapshot) return null;
+    const ownParticipant = (eventSnapshot.event.participants ?? []).find(
+      (participant) => participant.client_id === clientId,
+    );
+    const vendors =
+      eventDataScope === "client"
+        ? eventSnapshot.vendors.filter(
+            (vendor) => vendor.client_id === clientId,
+          )
+        : eventSnapshot.vendors;
+
+    if (eventDataScope !== "client") {
+      return {
+        funnel: eventSnapshot.funnel,
+        revenue: Number(eventSnapshot.cars.total_value),
+        vendors,
+        teams: eventSnapshot.teams,
+      };
+    }
+
+    const teamMap = new Map<
+      string,
+      EventDashboardTvResponse["teams"][number]
+    >();
+    vendors.forEach((vendor) => {
+      if (!vendor.team_id || !vendor.team_name) return;
+      const current = teamMap.get(vendor.team_id) ?? {
+        team_id: vendor.team_id,
+        team_name: vendor.team_name,
+        logo_url: null,
+        leads: 0,
+        scheduled: 0,
+        confirmed: 0,
+        checked_in: 0,
+        sold: 0,
+        revenue: 0,
+        points: 0,
+      };
+      current.leads += vendor.leads;
+      current.scheduled += vendor.scheduled;
+      current.confirmed += vendor.confirmed;
+      current.checked_in += vendor.checked_in;
+      current.sold += vendor.sold;
+      current.revenue =
+        Number(current.revenue ?? 0) + Number(vendor.revenue ?? 0);
+      current.points += vendor.points;
+      teamMap.set(vendor.team_id, current);
+    });
+
+    return {
+      funnel: ownParticipant
+        ? {
+            leads: ownParticipant.leads,
+            scheduled: ownParticipant.scheduled,
+            confirmed: ownParticipant.confirmed,
+            checked_in: ownParticipant.checked_in,
+            sold: ownParticipant.sold,
+          }
+        : eventSnapshot.funnel,
+      revenue: ownParticipant?.revenue ?? 0,
+      vendors,
+      teams: [...teamMap.values()],
+    };
+  }, [clientId, eventDataScope, eventSnapshot]);
 
   const vendorNameById = useMemo(
     () =>
@@ -895,54 +964,82 @@ export function EventosClientePage() {
         ) : null}
       </Card>
 
-      {eventSnapshot ? (
+      {eventSnapshot && scopedEventData ? (
         <section className="space-y-4">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className="text-xl font-semibold text-zinc-950">
-                Visão geral do evento
+                {eventDataScope === "client"
+                  ? "Visão da minha empresa"
+                  : eventDataScope === "compare"
+                    ? "Comparativo das empresas"
+                    : "Visão geral do evento"}
               </h2>
               <p className="text-sm text-zinc-500">
-                Números consolidados de todas as empresas, times e vendedores
-                participantes.
+                {eventDataScope === "client"
+                  ? "Somente os resultados, times e vendedores da sua empresa."
+                  : "Números consolidados das empresas participantes do evento."}
               </p>
             </div>
-            <p className="text-xs text-zinc-400">
-              Atualizado em{" "}
-              {new Date(eventSnapshot.generated_at).toLocaleString("pt-BR")}
-            </p>
+            <div className="flex flex-col items-start gap-2 sm:items-end">
+              <div className="inline-flex rounded-full bg-zinc-100 p-1">
+                {[
+                  ["client", "Minha empresa"],
+                  ["event", "Evento inteiro"],
+                  ["compare", "Comparar participantes"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setEventDataScope(value as EventDataScope)}
+                    className={clsx(
+                      "rounded-full px-3 py-2 text-xs font-semibold transition-colors",
+                      eventDataScope === value
+                        ? "bg-zinc-950 text-white shadow-sm"
+                        : "text-zinc-500 hover:text-zinc-900",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-zinc-400">
+                Atualizado em{" "}
+                {new Date(eventSnapshot.generated_at).toLocaleString("pt-BR")}
+              </p>
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {[
-              ["Leads", eventSnapshot.funnel.leads, Users, "text-blue-500"],
+              ["Leads", scopedEventData.funnel.leads, Users, "text-blue-500"],
               [
                 "Agendados",
-                eventSnapshot.funnel.scheduled,
+                scopedEventData.funnel.scheduled,
                 CalendarDays,
                 "text-indigo-500",
               ],
               [
                 "Confirmados",
-                eventSnapshot.funnel.confirmed,
+                scopedEventData.funnel.confirmed,
                 CheckCircle2,
                 "text-cyan-500",
               ],
               [
                 "Check-ins",
-                eventSnapshot.funnel.checked_in,
+                scopedEventData.funnel.checked_in,
                 UserPlus2,
                 "text-emerald-500",
               ],
               [
                 "Vendas",
-                eventSnapshot.funnel.sold,
+                scopedEventData.funnel.sold,
                 ShoppingBag,
                 "text-orange-500",
               ],
               [
                 "Faturamento",
-                formatCurrency(eventSnapshot.cars.total_value),
+                formatCurrency(scopedEventData.revenue),
                 DollarSign,
                 "text-green-600",
               ],
@@ -967,6 +1064,69 @@ export function EventosClientePage() {
             })}
           </div>
 
+          {eventDataScope === "compare" ? (
+            <Card className="overflow-x-auto border border-zinc-100 p-5">
+              <div className="mb-4">
+                <h3 className="font-semibold text-zinc-950">
+                  Comparação por empresa participante
+                </h3>
+                <p className="text-xs text-zinc-500">
+                  Funil, estrutura comercial e resultado de cada participante.
+                </p>
+              </div>
+              <table className="w-full min-w-[900px] text-left text-sm">
+                <thead className="border-b border-zinc-100 text-[11px] uppercase tracking-wider text-zinc-400">
+                  <tr>
+                    <th className="px-3 py-3">Empresa</th>
+                    <th className="px-3 py-3">Times</th>
+                    <th className="px-3 py-3">Vendedores</th>
+                    <th className="px-3 py-3">Leads</th>
+                    <th className="px-3 py-3">Agendados</th>
+                    <th className="px-3 py-3">Check-ins</th>
+                    <th className="px-3 py-3">Vendas</th>
+                    <th className="px-3 py-3">Conversão</th>
+                    <th className="px-3 py-3">Faturamento</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100">
+                  {[...(eventSnapshot.event.participants ?? [])]
+                    .sort((a, b) => b.sold - a.sold || b.revenue - a.revenue)
+                    .map((participant) => (
+                      <tr key={participant.client_id}>
+                        <td className="px-3 py-3 font-semibold text-zinc-900">
+                          {participant.company_name}
+                          {participant.client_id === clientId ? (
+                            <span className="ml-2 rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-600">
+                              SUA EMPRESA
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-3">{participant.teams}</td>
+                        <td className="px-3 py-3">{participant.vendors}</td>
+                        <td className="px-3 py-3">{participant.leads}</td>
+                        <td className="px-3 py-3">{participant.scheduled}</td>
+                        <td className="px-3 py-3">{participant.checked_in}</td>
+                        <td className="px-3 py-3 font-bold text-emerald-600">
+                          {participant.sold}
+                        </td>
+                        <td className="px-3 py-3">
+                          {participant.leads
+                            ? Math.round(
+                                (participant.sold / participant.leads) * 100,
+                              )
+                            : 0}
+                          %
+                        </td>
+                        <td className="px-3 py-3 font-semibold">
+                          {formatCurrency(participant.revenue)}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </Card>
+          ) : null}
+
           <div className="grid gap-4 lg:grid-cols-3">
             <Card className="border border-zinc-100 p-5">
               <div className="flex items-center justify-between">
@@ -976,9 +1136,10 @@ export function EventosClientePage() {
                 <Target size={17} className="text-orange-500" />
               </div>
               <p className="mt-4 text-4xl font-semibold text-zinc-950">
-                {eventSnapshot.funnel.leads
+                {scopedEventData.funnel.leads
                   ? Math.round(
-                      (eventSnapshot.funnel.sold / eventSnapshot.funnel.leads) *
+                      (scopedEventData.funnel.sold /
+                        scopedEventData.funnel.leads) *
                         100,
                     )
                   : 0}
@@ -988,10 +1149,10 @@ export function EventosClientePage() {
                 <p>
                   Comparecimento:{" "}
                   <strong className="text-zinc-900">
-                    {eventSnapshot.funnel.scheduled
+                    {scopedEventData.funnel.scheduled
                       ? Math.round(
-                          (eventSnapshot.funnel.checked_in /
-                            eventSnapshot.funnel.scheduled) *
+                          (scopedEventData.funnel.checked_in /
+                            scopedEventData.funnel.scheduled) *
                             100,
                         )
                       : 0}
@@ -1001,10 +1162,10 @@ export function EventosClientePage() {
                 <p>
                   Conversão no salão:{" "}
                   <strong className="text-zinc-900">
-                    {eventSnapshot.funnel.checked_in
+                    {scopedEventData.funnel.checked_in
                       ? Math.round(
-                          (eventSnapshot.funnel.sold /
-                            eventSnapshot.funnel.checked_in) *
+                          (scopedEventData.funnel.sold /
+                            scopedEventData.funnel.checked_in) *
                             100,
                         )
                       : 0}
@@ -1033,7 +1194,7 @@ export function EventosClientePage() {
                 <Trophy size={17} className="text-amber-500" />
               </div>
               <div className="space-y-2">
-                {[...eventSnapshot.teams]
+                {[...scopedEventData.teams]
                   .sort((a, b) => b.sold - a.sold || b.points - a.points)
                   .map((team, index) => (
                     <div
@@ -1057,7 +1218,7 @@ export function EventosClientePage() {
                       </span>
                     </div>
                   ))}
-                {!eventSnapshot.teams.length ? (
+                {!scopedEventData.teams.length ? (
                   <p className="text-sm text-zinc-500">
                     Nenhum time configurado.
                   </p>
@@ -1080,7 +1241,7 @@ export function EventosClientePage() {
                 <Users size={17} className="text-blue-500" />
               </div>
               <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
-                {[...eventSnapshot.vendors]
+                {[...scopedEventData.vendors]
                   .sort((a, b) => b.sold - a.sold || b.points - a.points)
                   .map((vendor, index) => (
                     <div
@@ -1121,36 +1282,67 @@ export function EventosClientePage() {
             <Card className="border border-zinc-100 p-5">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="font-semibold text-zinc-950">
-                  Veículos vendidos
+                  {eventDataScope === "client"
+                    ? "Estrutura da minha empresa"
+                    : "Veículos vendidos no evento"}
                 </h3>
                 <BarChart3 size={17} className="text-violet-500" />
               </div>
-              <p className="text-3xl font-semibold text-zinc-950">
-                {formatCurrency(eventSnapshot.cars.total_value)}
-              </p>
-              <p className="mb-4 text-xs text-zinc-500">
-                Valor total registrado no evento
-              </p>
-              <div className="space-y-2">
-                {eventSnapshot.cars.top_models
-                  .slice(0, 6)
-                  .map((model, index) => (
-                    <div
-                      key={model.model}
-                      className="flex items-center justify-between rounded-xl bg-zinc-50 px-3 py-2 text-sm"
-                    >
-                      <span className="truncate text-zinc-700">
-                        {index + 1}. {model.model}
-                      </span>
-                      <strong className="text-zinc-950">{model.count}</strong>
-                    </div>
-                  ))}
-                {!eventSnapshot.cars.top_models.length ? (
-                  <p className="text-sm text-zinc-500">
-                    Nenhum modelo registrado.
+              {eventDataScope === "client" ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl bg-zinc-50 p-4">
+                    <p className="text-xs text-zinc-500">Vendedores</p>
+                    <p className="mt-1 text-2xl font-semibold text-zinc-950">
+                      {scopedEventData.vendors.length}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-zinc-50 p-4">
+                    <p className="text-xs text-zinc-500">Times</p>
+                    <p className="mt-1 text-2xl font-semibold text-zinc-950">
+                      {scopedEventData.teams.length}
+                    </p>
+                  </div>
+                  <div className="col-span-2 rounded-2xl bg-emerald-50 p-4">
+                    <p className="text-xs text-emerald-700">
+                      Faturamento da empresa
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold text-emerald-800">
+                      {formatCurrency(scopedEventData.revenue)}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-3xl font-semibold text-zinc-950">
+                    {formatCurrency(scopedEventData.revenue)}
                   </p>
-                ) : null}
-              </div>
+                  <p className="mb-4 text-xs text-zinc-500">
+                    Valor total registrado no evento
+                  </p>
+                  <div className="space-y-2">
+                    {eventSnapshot.cars.top_models
+                      .slice(0, 6)
+                      .map((model, index) => (
+                        <div
+                          key={model.model}
+                          className="flex items-center justify-between rounded-xl bg-zinc-50 px-3 py-2 text-sm"
+                        >
+                          <span className="truncate text-zinc-700">
+                            {index + 1}. {model.model}
+                          </span>
+                          <strong className="text-zinc-950">
+                            {model.count}
+                          </strong>
+                        </div>
+                      ))}
+                    {!eventSnapshot.cars.top_models.length ? (
+                      <p className="text-sm text-zinc-500">
+                        Nenhum modelo registrado.
+                      </p>
+                    ) : null}
+                  </div>
+                </>
+              )}
             </Card>
           </div>
         </section>
