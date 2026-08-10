@@ -127,7 +127,10 @@ export class OperationsService {
       return {
         generated_at: new Date().toISOString(),
         refresh_after_seconds: 5,
-        filters: { client_id: clientId ?? null, event_id: filters.event_id ?? null },
+        filters: {
+          client_id: clientId ?? null,
+          event_id: filters.event_id ?? null,
+        },
         totals: {
           leads: 0,
           awaiting_template: 0,
@@ -136,6 +139,7 @@ export class OperationsService {
           template_read: 0,
           template_replied: 0,
           template_failed: 0,
+          engaged: 0,
           scheduled: 0,
           completed: 0,
           handoff: 0,
@@ -195,7 +199,8 @@ export class OperationsService {
     }
     const latestState = new Map<string, (typeof states)[number]>();
     for (const state of states) {
-      if (!latestState.has(state.lead_id)) latestState.set(state.lead_id, state);
+      if (!latestState.has(state.lead_id))
+        latestState.set(state.lead_id, state);
     }
     const latestInbound = new Map<string, Date>();
     for (const conversation of conversations) {
@@ -214,6 +219,7 @@ export class OperationsService {
     let templateRead = 0;
     let templateReplied = 0;
     let templateFailed = 0;
+    let engaged = 0;
     let scheduled = 0;
 
     for (const lead of leads) {
@@ -221,24 +227,30 @@ export class OperationsService {
       const inboundAt = latestInbound.get(lead.id);
       const hasReply = Boolean(
         dispatch?.replied_at ||
-          (dispatch?.sent_at && inboundAt && inboundAt >= dispatch.sent_at),
+        (dispatch?.sent_at && inboundAt && inboundAt >= dispatch.sent_at),
       );
       const sent = Boolean(dispatch?.sent_at);
-      const failed = Boolean(dispatch?.failed_at || dispatch?.status === "failed");
-      if (!sent && !failed) awaitingTemplate += 1;
+      const failed = Boolean(
+        dispatch?.failed_at || dispatch?.status === "failed",
+      );
+      if (dispatch && !sent && !failed) awaitingTemplate += 1;
       if (sent) templateSent += 1;
       if (dispatch?.delivered_at) templateDelivered += 1;
       if (dispatch?.read_at) templateRead += 1;
       if (hasReply) templateReplied += 1;
       if (failed) templateFailed += 1;
-      if (["scheduled", "confirmed", "checked_in", "closed"].includes(lead.confirmation_status)) {
-        scheduled += 1;
-      }
-
       // Antes da primeira resposta o lead permanece no estágio operacional do
       // template. Depois da resposta, cada lead ocupa exatamente uma pergunta.
       if (!hasReply && dispatch) continue;
       if (!hasReply && !latestState.has(lead.id) && !inboundAt) continue;
+      engaged += 1;
+      if (
+        ["scheduled", "confirmed", "checked_in", "closed"].includes(
+          lead.confirmation_status,
+        )
+      ) {
+        scheduled += 1;
+      }
       const state = latestState.get(lead.id);
       const payload = state?.state_payload as { current_step?: unknown } | null;
       const payloadStep = payload?.current_step;
@@ -255,12 +267,17 @@ export class OperationsService {
 
     const completed = questionCounts.get("COMPLETED") ?? 0;
     const handoff = questionCounts.get("HUMAN_HANDOFF") ?? 0;
-    const repliedBase = Math.max(templateReplied, 1);
-    const sentBase = Math.max(templateSent, 1);
+    const rate = (numerator: number, denominator: number) =>
+      denominator > 0
+        ? Math.min(100, Math.round((numerator / denominator) * 1000) / 10)
+        : 0;
     return {
       generated_at: new Date().toISOString(),
       refresh_after_seconds: 5,
-      filters: { client_id: clientId ?? null, event_id: filters.event_id ?? null },
+      filters: {
+        client_id: clientId ?? null,
+        event_id: filters.event_id ?? null,
+      },
       totals: {
         leads: leads.length,
         awaiting_template: awaitingTemplate,
@@ -269,22 +286,21 @@ export class OperationsService {
         template_read: templateRead,
         template_replied: templateReplied,
         template_failed: templateFailed,
+        engaged,
         scheduled,
         completed,
         handoff,
       },
       rates: {
-        template_reply: Math.round((templateReplied / sentBase) * 1000) / 10,
-        scheduling: Math.round((scheduled / repliedBase) * 1000) / 10,
-        completion: Math.round((completed / repliedBase) * 1000) / 10,
+        template_reply: rate(templateReplied, templateSent),
+        scheduling: rate(scheduled, engaged),
+        completion: rate(completed, engaged),
       },
       stages: RUBINHO_STAGE_ORDER.map((key) => ({
         key,
         ...RUBINHO_STAGE_META[key],
         count: questionCounts.get(key) ?? 0,
-        percent_of_replies:
-          Math.round(((questionCounts.get(key) ?? 0) / repliedBase) * 1000) /
-          10,
+        percent_of_replies: rate(questionCounts.get(key) ?? 0, engaged),
       })),
     };
   }

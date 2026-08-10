@@ -26,7 +26,7 @@ import {
   getActiveEventsSummary,
   type ActiveEventSummary,
 } from "../../services/events";
-import { listLeads, mapApiLeadToLead } from "../../services/leads";
+import { fetchAllLeads, mapApiLeadToLead } from "../../services/leads";
 import {
   getRubinhoThermometer,
   type RubinhoThermometer,
@@ -407,7 +407,7 @@ function RubinhoThermometerCard({
     : "--:--:--";
   const metrics = [
     {
-      label: "Aguardando template",
+      label: "Na fila do template",
       value: data?.totals.awaiting_template ?? 0,
       icon: Send,
       color: "text-amber-600",
@@ -421,11 +421,18 @@ function RubinhoThermometerCard({
       background: "bg-blue-50",
     },
     {
-      label: "Responderam",
+      label: "Responderam ao template",
       value: data?.totals.template_replied ?? 0,
       icon: MessageCircle,
       color: "text-violet-600",
       background: "bg-violet-50",
+    },
+    {
+      label: "Em atendimento",
+      value: data?.totals.engaged ?? 0,
+      icon: Users,
+      color: "text-sky-600",
+      background: "bg-sky-50",
     },
     {
       label: "Agendados",
@@ -496,7 +503,7 @@ function RubinhoThermometerCard({
         </label>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {metrics.map((metric) => {
           const Icon = metric.icon;
           return (
@@ -631,13 +638,10 @@ function RubinhoThermometerCard({
           <div className="mt-4 space-y-4">
             {[
               ["Resposta ao template", data?.rates.template_reply ?? 0],
-              ["Resposta para agendamento", data?.rates.scheduling ?? 0],
-              ["Credenciamento concluído", data?.rates.completion ?? 0],
+              ["Atendimento para agendamento", data?.rates.scheduling ?? 0],
+              ["Atendimento concluído", data?.rates.completion ?? 0],
             ].map(([label, value]) => {
               const numeric = Number(value);
-              // Taxa acima de 100% existe de verdade aqui (agendados podem
-              // superar quem respondeu). A barra satura, entao marcamos o
-              // estouro em vez de mostrar uma barra cheia sem explicacao.
               const overflow = numeric > 100;
               return (
                 <div key={String(label)}>
@@ -681,8 +685,7 @@ function RubinhoThermometerCard({
                   </div>
                   {overflow ? (
                     <p className="mt-1 text-[10px] leading-snug text-amber-600">
-                      Acima de 100%: há mais agendados do que leads que
-                      responderam ao template.
+                      Base inconsistente. Atualize os dados operacionais.
                     </p>
                   ) : null}
                 </div>
@@ -741,7 +744,9 @@ export function DashboardGestorPage() {
           setClients([]);
           setLoadError(true);
         }),
-      listLeads({ take: 300 }, t)
+      // A API pagina em blocos de ate 200. Total e grafico diario precisam
+      // usar a colecao completa, nao apenas a primeira pagina.
+      fetchAllLeads({}, t, { maxItems: 10_000 })
         .then((rows) => setLeads(rows.map(mapApiLeadToLead)))
         .catch(() => {
           setLeads([]);

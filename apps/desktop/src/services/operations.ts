@@ -42,6 +42,7 @@ export type RubinhoThermometer = {
     template_read: number;
     template_replied: number;
     template_failed: number;
+    engaged: number;
     scheduled: number;
     completed: number;
     handoff: number;
