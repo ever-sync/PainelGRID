@@ -224,6 +224,7 @@ export type EventDashboardTvResponse = {
     vendor_name: string;
     team_id: string | null;
     team_name: string | null;
+    created_at: string;
     scheduled_at: string;
     segment: string;
   }>;

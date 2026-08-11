@@ -132,6 +132,54 @@ function formatNumber(val: number) {
   return new Intl.NumberFormat("pt-BR").format(val);
 }
 
+type OverviewBreakdownItem = { name: string; value: number };
+
+function OverviewDonut({ data }: { data: OverviewBreakdownItem[] }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  let cursor = 0;
+  const stops = data.map((item, index) => {
+    const start = cursor;
+    cursor += total ? (item.value / total) * 100 : 0;
+    return `${PIE_COLORS[index % PIE_COLORS.length]} ${start}% ${cursor}%`;
+  });
+
+  return (
+    <div className="flex min-h-[300px] flex-col items-center justify-center gap-6 sm:flex-row">
+      <div
+        className="relative h-44 w-44 shrink-0 rounded-full"
+        style={{ background: `conic-gradient(${stops.join(", ")})` }}
+        role="img"
+        aria-label={`${formatNumber(total)} agendamentos`}
+      >
+        <div className="absolute inset-7 flex flex-col items-center justify-center rounded-full bg-white dark:bg-zinc-900">
+          <strong className="text-3xl text-gray-950 dark:text-white">
+            {formatNumber(total)}
+          </strong>
+          <span className="text-[11px] text-gray-500 dark:text-zinc-400">
+            agendamentos
+          </span>
+        </div>
+      </div>
+      <div className="w-full max-w-xs space-y-2">
+        {data.map((item, index) => (
+          <div key={item.name} className="flex items-center gap-2 text-xs">
+            <span
+              className="h-3 w-3 shrink-0 rounded-full"
+              style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
+            />
+            <span className="min-w-0 flex-1 truncate text-gray-600 dark:text-zinc-300">
+              {item.name}
+            </span>
+            <strong className="text-gray-950 dark:text-white">
+              {formatNumber(item.value)}
+            </strong>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function RelatorioGestorPage() {
   const { user } = useOutletContext<AppOutletContext>();
   const [isDarkMode, setIsDarkMode] = useState(() =>
@@ -868,17 +916,23 @@ export function RelatorioGestorPage() {
   }, [overviewVendorData]);
 
   const overviewDailyData = useMemo(() => {
-    const counts = new Map<string, number>();
+    const counts = new Map<string, OverviewBreakdownItem>();
     for (const appointment of overviewSellerAppointments) {
-      const scheduledAt = appointment.scheduled_at;
-      if (!scheduledAt) continue;
-      const date = new Date(scheduledAt).toLocaleDateString("pt-BR", {
+      if (!appointment.created_at) continue;
+      const createdAt = new Date(appointment.created_at);
+      const label = createdAt.toLocaleDateString("pt-BR", {
         day: "2-digit",
         month: "2-digit",
       });
-      counts.set(date, (counts.get(date) ?? 0) + 1);
+      const key = createdAt.toISOString().slice(0, 10);
+      counts.set(key, {
+        name: label,
+        value: (counts.get(key)?.value ?? 0) + 1,
+      });
     }
-    return [...counts.entries()].map(([name, value]) => ({ name, value }));
+    return [...counts.entries()]
+      .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+      .map(([, value]) => value);
   }, [overviewSellerAppointments]);
 
   const overviewSegmentData = useMemo(() => {
@@ -1103,43 +1157,29 @@ export function RelatorioGestorPage() {
                     Comparativo dos times participantes do evento
                   </p>
                   {overviewTeamData.length ? (
-                    <DeferredContent height={300} label="Carregando equipes">
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={overviewTeamData}>
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke={chartAxisStroke}
-                            vertical={false}
-                          />
-                          <XAxis
-                            dataKey="name"
-                            tick={{ fontSize: 11, fill: chartTickFill }}
-                            stroke={chartAxisStroke}
-                          />
-                          <YAxis
-                            allowDecimals={false}
-                            tick={{ fontSize: 11, fill: chartTickFill }}
-                            stroke={chartAxisStroke}
-                          />
-                          <Tooltip
-                            contentStyle={{
-                              ...chartTooltipStyle,
-                              background: chartTooltipBg,
-                            }}
-                            formatter={(value: number | string) => [
-                              value,
-                              "Agendamentos",
-                            ]}
-                          />
-                          <Bar
-                            dataKey="value"
-                            name="Agendamentos"
-                            fill="#FF0636"
-                            radius={[8, 8, 0, 0]}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </DeferredContent>
+                    <div className="flex min-h-[300px] flex-col justify-center space-y-5 py-6">
+                      {overviewTeamData.map((team, index) => {
+                        const max = overviewTeamData[0]?.value || 1;
+                        return (
+                          <div key={team.name}>
+                            <div className="mb-2 flex items-center justify-between gap-4 text-sm">
+                              <strong className="truncate text-gray-900 dark:text-zinc-100">
+                                {index + 1}. {team.name}
+                              </strong>
+                              <span className="font-bold text-gray-950 dark:text-white">
+                                {formatNumber(team.value)}
+                              </span>
+                            </div>
+                            <div className="h-5 overflow-hidden rounded-full bg-gray-100 dark:bg-zinc-800">
+                              <div
+                                className="h-full rounded-full bg-gradient-to-r from-blue-600 to-[#FF0636]"
+                                style={{ width: `${Math.max((team.value / max) * 100, 2)}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   ) : (
                     <div className="flex h-[300px] items-center justify-center text-sm text-gray-400">
                       Nenhuma equipe com agendamentos neste evento.
@@ -1230,13 +1270,13 @@ export function RelatorioGestorPage() {
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 {[
                   {
-                    title: "Agendamentos por dia do evento",
-                    subtitle: "Distribuição diária",
+                    title: "Agendamentos por dia de criação",
+                    subtitle: "Dia em que o vendedor realizou o agendamento",
                     data: overviewDailyData,
                   },
                   {
                     title: "Agendamentos por segmento",
-                    subtitle: "Classificação informada no cadastro do lead",
+                    subtitle: "Segmento cadastrado para o vendedor",
                     data: overviewSegmentData,
                   },
                 ].map((chart) => (
@@ -1248,40 +1288,7 @@ export function RelatorioGestorPage() {
                       {chart.subtitle}
                     </p>
                     {chart.data.length ? (
-                      <DeferredContent
-                        height={300}
-                        label={`Carregando ${chart.title.toLowerCase()}`}
-                      >
-                        <ResponsiveContainer width="100%" height={300}>
-                          <PieChart>
-                            <Pie
-                              data={chart.data}
-                              dataKey="value"
-                              nameKey="name"
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={58}
-                              outerRadius={92}
-                              paddingAngle={3}
-                              label
-                            >
-                              {chart.data.map((_, index) => (
-                                <Cell
-                                  key={index}
-                                  fill={PIE_COLORS[index % PIE_COLORS.length]}
-                                />
-                              ))}
-                            </Pie>
-                            <Tooltip
-                              contentStyle={{
-                                ...chartTooltipStyle,
-                                background: chartTooltipBg,
-                              }}
-                            />
-                            <Legend />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </DeferredContent>
+                      <OverviewDonut data={chart.data} />
                     ) : (
                       <div className="flex h-[300px] items-center justify-center text-sm text-gray-400">
                         Nenhum agendamento classificado.

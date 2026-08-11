@@ -390,10 +390,6 @@ export class EventDashboardService {
           team_id: true,
           created_at: true,
           confirmation_status: true,
-          tags: true,
-          notes: true,
-          vehicle_brand: true,
-          vehicle_model: true,
         },
       }),
       this.prisma.appointment.findMany({
@@ -405,6 +401,7 @@ export class EventDashboardService {
           status: true,
           source: true,
           created_by_id: true,
+          created_at: true,
           scheduled_at: true,
           confirmed_at: true,
           completed_at: true,
@@ -449,7 +446,14 @@ export class EventDashboardService {
           client_id: { in: participantClientIds },
           is_active: true,
         },
-        select: { id: true, name: true, client_id: true, avatar_url: true },
+        select: {
+          id: true,
+          name: true,
+          client_id: true,
+          avatar_url: true,
+          vendor_category: true,
+          vendor_categories: true,
+        },
       }),
       this.prisma.scoreEvent.findMany({
         where: {
@@ -670,23 +674,17 @@ export class EventDashboardService {
         const vendorId = appointment.created_by_id as string;
         const vendor = vendors.find((item) => item.id === vendorId);
         const team = vendorTeam.get(vendorId) ?? null;
-        const lead = leadById.get(appointment.lead_id);
-        const classificationText = [
-          ...(lead?.tags ?? []),
-          lead?.notes,
-          lead?.vehicle_brand,
-          lead?.vehicle_model,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLocaleLowerCase("pt-BR");
-        const segment = /venda direta|\bvd\b/.test(classificationText)
-          ? "Venda direta"
-          : /seminovo|usado/.test(classificationText)
-            ? "Usados / seminovos"
-            : /\bnovo[s]?\b|0\s?km/.test(classificationText)
-              ? "Novos / 0 km"
-              : "Não informado";
+        const vendorCategory =
+          vendor?.vendor_category ?? vendor?.vendor_categories[0] ?? null;
+        const segment = vendorCategory
+          ? {
+              novo: "Novo",
+              semininovo: "Seminovo",
+              pdc: "PCD",
+              consorcio: "Consórcio",
+              assinatura: "Assinatura",
+            }[vendorCategory]
+          : "Não informado";
 
         return {
           appointment_id: appointment.id,
@@ -696,6 +694,7 @@ export class EventDashboardService {
           vendor_name: vendor?.name ?? "Vendedor não identificado",
           team_id: team?.team_id ?? null,
           team_name: team?.team_name ?? null,
+          created_at: appointment.created_at,
           scheduled_at: appointment.scheduled_at,
           segment,
         };
