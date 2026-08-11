@@ -216,6 +216,18 @@ export type EventDashboardTvResponse = {
     revenue?: number;
     points: number;
   }>;
+  seller_appointments?: Array<{
+    appointment_id: string;
+    lead_id: string;
+    client_id: string;
+    vendor_id: string;
+    vendor_name: string;
+    team_id: string | null;
+    team_name: string | null;
+    scheduled_at: string;
+    segment: string;
+  }>;
+  seller_appointments_rule?: "appointment_source_vendor";
   cars: {
     by_segment: Array<{ type: SaleSegment; count: number }>;
     top_models: Array<{ model: string; count: number }>;

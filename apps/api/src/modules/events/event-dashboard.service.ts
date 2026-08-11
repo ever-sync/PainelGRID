@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import {
+  AppointmentSource,
   AppointmentStatus,
   ConfirmationStatus,
   LeadSource,
@@ -389,14 +390,21 @@ export class EventDashboardService {
           team_id: true,
           created_at: true,
           confirmation_status: true,
+          tags: true,
+          notes: true,
+          vehicle_brand: true,
+          vehicle_model: true,
         },
       }),
       this.prisma.appointment.findMany({
         where: { event_id: eventId },
         select: {
           id: true,
+          client_id: true,
           lead_id: true,
           status: true,
+          source: true,
+          created_by_id: true,
           scheduled_at: true,
           confirmed_at: true,
           completed_at: true,
@@ -647,6 +655,52 @@ export class EventDashboardService {
         a.team_name.localeCompare(b.team_name),
     );
 
+    // Fonte enxuta e autoritativa do Overview: somente agendamentos criados
+    // por vendedores. Não depende do active_appointment do lead e não envia a
+    // base inteira de leads ao navegador.
+    const sellerAppointments = appointments
+      .filter(
+        (appointment) =>
+          appointment.source === AppointmentSource.vendedor &&
+          Boolean(appointment.created_by_id) &&
+          appointment.status !== AppointmentStatus.cancelled &&
+          appointment.status !== AppointmentStatus.rescheduled,
+      )
+      .map((appointment) => {
+        const vendorId = appointment.created_by_id as string;
+        const vendor = vendors.find((item) => item.id === vendorId);
+        const team = vendorTeam.get(vendorId) ?? null;
+        const lead = leadById.get(appointment.lead_id);
+        const classificationText = [
+          ...(lead?.tags ?? []),
+          lead?.notes,
+          lead?.vehicle_brand,
+          lead?.vehicle_model,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLocaleLowerCase("pt-BR");
+        const segment = /venda direta|\bvd\b/.test(classificationText)
+          ? "Venda direta"
+          : /seminovo|usado/.test(classificationText)
+            ? "Usados / seminovos"
+            : /\bnovo[s]?\b|0\s?km/.test(classificationText)
+              ? "Novos / 0 km"
+              : "Não informado";
+
+        return {
+          appointment_id: appointment.id,
+          lead_id: appointment.lead_id,
+          client_id: appointment.client_id,
+          vendor_id: vendorId,
+          vendor_name: vendor?.name ?? "Vendedor não identificado",
+          team_id: team?.team_id ?? null,
+          team_name: team?.team_name ?? null,
+          scheduled_at: appointment.scheduled_at,
+          segment,
+        };
+      });
+
     // Cars ──────────────────────────────────────────────────────────────────
     const segmentMap = new Map<SaleType, number>();
     const modelMap = new Map<string, number>();
@@ -845,6 +899,8 @@ export class EventDashboardService {
       funnel,
       vendors: vendorRanking,
       teams: teamRanking,
+      seller_appointments: sellerAppointments,
+      seller_appointments_rule: "appointment_source_vendor" as const,
       cars: {
         by_segment: carsBySegment,
         top_models: topModels,

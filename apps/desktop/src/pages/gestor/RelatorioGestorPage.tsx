@@ -191,7 +191,11 @@ export function RelatorioGestorPage() {
 
   useEffect(() => {
     const session = readStoredSession();
-    if (!session?.accessToken || selectedEventId === "all") {
+    if (
+      !session?.accessToken ||
+      selectedEventId === "all" ||
+      activeTab === "overview"
+    ) {
       setExecutiveReport(null);
       return;
     }
@@ -209,11 +213,14 @@ export function RelatorioGestorPage() {
         }
       });
     return () => controller.abort();
-  }, [selectedEventId]);
+  }, [activeTab, selectedEventId]);
 
   useEffect(() => {
     const session = readStoredSession();
-    if (!session?.accessToken) return;
+    if (!session?.accessToken || activeTab === "overview") {
+      setOperationalReport(null);
+      return;
+    }
     const controller = new AbortController();
     setOperationalReport(null);
     getOperationalReport(
@@ -233,7 +240,7 @@ export function RelatorioGestorPage() {
         }
       });
     return () => controller.abort();
-  }, [currentPage, pageSize, selectedClientId, selectedEventId]);
+  }, [activeTab, currentPage, pageSize, selectedClientId, selectedEventId]);
 
   useEffect(() => {
     const lastPage = operationalReport?.pagination.total_pages;
@@ -418,7 +425,7 @@ export function RelatorioGestorPage() {
   // Carrega pipelines e etapas reais do CRM para o cliente selecionado ou padrão
   useEffect(() => {
     const session = readStoredSession();
-    if (!session?.accessToken) return;
+    if (!session?.accessToken || activeTab === "overview") return;
 
     const clientIdToFetch =
       selectedClientId !== "all" ? selectedClientId : clients[0]?.id;
@@ -433,9 +440,9 @@ export function RelatorioGestorPage() {
       .catch((err) => {
         console.warn("Pipeline personalizado do CRM não encontrado:", err);
       });
-  }, [selectedClientId, clients]);
+  }, [activeTab, selectedClientId, clients]);
 
-  // Carrega Clientes, Eventos e Leads
+  // Carrega apenas o necessário para abrir o Overview rapidamente.
   useEffect(() => {
     const session = readStoredSession();
     if (!session?.accessToken) {
@@ -447,11 +454,8 @@ export function RelatorioGestorPage() {
     Promise.allSettled([
       listClients(session.accessToken),
       listEvents({}, session.accessToken),
-      // A API limita cada pagina a 300 itens. O relatorio percorre todas as
-      // paginas para nao perder leads nem provocar uma resposta 400.
-      fetchAllLeads({}, session.accessToken),
     ])
-      .then(([clientsResult, eventsResult, leadsResult]) => {
+      .then(([clientsResult, eventsResult]) => {
         if (clientsResult.status === "fulfilled") {
           setClients(clientsResult.value.map(mapApiClientToClient));
         } else {
@@ -493,20 +497,24 @@ export function RelatorioGestorPage() {
             eventsResult.reason,
           );
         }
-
-        if (leadsResult.status === "fulfilled") {
-          setLeads(leadsResult.value.map(mapApiLeadToLead));
-        } else {
-          console.error(
-            "Erro ao carregar leads do relatório:",
-            leadsResult.reason,
-          );
-        }
       })
       .finally(() => {
         setIsLoading(false);
       });
   }, []);
+
+  // As demais abas ainda usam a base detalhada e a carregam somente quando o
+  // usuário realmente as abre.
+  useEffect(() => {
+    if (activeTab === "overview" || leads.length > 0) return;
+    const session = readStoredSession();
+    if (!session?.accessToken) return;
+    fetchAllLeads({}, session.accessToken)
+      .then((apiLeads) => setLeads(apiLeads.map(mapApiLeadToLead)))
+      .catch((error) =>
+        console.error("Erro ao carregar leads do relatório:", error),
+      );
+  }, [activeTab, leads.length]);
 
   // Eventos filtrados com base no cliente selecionado
   const availableEvents = useMemo(() => {
@@ -807,57 +815,42 @@ export function RelatorioGestorPage() {
     return [];
   }, [tvTeams]);
 
-  const overviewSellerAppointments = useMemo(() => {
-    if (selectedEventId === "all") return [];
-    const validStatuses = new Set([
-      "scheduled",
-      "confirmed",
-      "completed",
-      "no_show",
-    ]);
-    const vendorIds = new Set(tvVendors.map((vendor) => vendor.vendor_id));
-
-    return leads.flatMap((lead) => {
-      if (selectedClientId !== "all" && lead.client_id !== selectedClientId) {
-        return [];
-      }
-      const appointment = lead.active_appointment;
-      if (
-        !appointment ||
-        appointment.event_id !== selectedEventId ||
-        !validStatuses.has(appointment.status)
-      ) {
-        return [];
-      }
-
-      const creatorVendorId =
-        appointment.created_by_type === "user" &&
-        appointment.created_by_id &&
-        vendorIds.has(appointment.created_by_id)
-          ? appointment.created_by_id
-          : null;
-      const vendorId = creatorVendorId ?? lead.assigned_vendor_id;
-      return vendorId && vendorIds.has(vendorId) ? [{ lead, vendorId }] : [];
-    });
-  }, [leads, selectedClientId, selectedEventId, tvVendors]);
+  const overviewSellerAppointments = useMemo(
+    () =>
+      (eventDashboard?.seller_appointments ?? []).filter(
+        (appointment) =>
+          selectedClientId === "all" ||
+          appointment.client_id === selectedClientId,
+      ),
+    [eventDashboard, selectedClientId],
+  );
 
   const overviewVendorData = useMemo(() => {
     const vendorDetails = new Map(
       tvVendors.map((vendor) => [vendor.vendor_id, vendor] as const),
     );
+    const appointmentDetails = new Map(
+      overviewSellerAppointments.map(
+        (appointment) => [appointment.vendor_id, appointment] as const,
+      ),
+    );
     const counts = new Map<string, number>();
     for (const appointment of overviewSellerAppointments) {
-      const vendorId = appointment.vendorId;
+      const vendorId = appointment.vendor_id;
       counts.set(vendorId, (counts.get(vendorId) ?? 0) + 1);
     }
     return [...counts.entries()]
       .map(([vendorId, value]) => {
         const vendor = vendorDetails.get(vendorId);
+        const appointment = appointmentDetails.get(vendorId);
         return {
           id: vendorId,
-          name: vendor?.vendor_name ?? "Vendedor não identificado",
-          team: vendor?.team_name ?? "Sem equipe",
-          teamId: vendor?.team_id ?? null,
+          name:
+            appointment?.vendor_name ??
+            vendor?.vendor_name ??
+            "Vendedor não identificado",
+          team: appointment?.team_name ?? vendor?.team_name ?? "Sem equipe",
+          teamId: appointment?.team_id ?? vendor?.team_id ?? null,
           value,
         };
       })
@@ -876,8 +869,8 @@ export function RelatorioGestorPage() {
 
   const overviewDailyData = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const { lead } of overviewSellerAppointments) {
-      const scheduledAt = lead.active_appointment?.scheduled_at;
+    for (const appointment of overviewSellerAppointments) {
+      const scheduledAt = appointment.scheduled_at;
       if (!scheduledAt) continue;
       const date = new Date(scheduledAt).toLocaleDateString("pt-BR", {
         day: "2-digit",
@@ -891,24 +884,11 @@ export function RelatorioGestorPage() {
   const overviewSegmentData = useMemo(() => {
     if (selectedEventId === "all") return [];
     const counts = new Map<string, number>();
-    for (const { lead } of overviewSellerAppointments) {
-      const classificationText = [
-        ...lead.tags,
-        lead.notes,
-        lead.brand_interest,
-        lead.model_interest,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLocaleLowerCase("pt-BR");
-      const segment = /venda direta|\bvd\b/.test(classificationText)
-        ? "Venda direta"
-        : /seminovo|usado/.test(classificationText)
-          ? "Usados / seminovos"
-          : /\bnovo[s]?\b|0\s?km/.test(classificationText)
-            ? "Novos / 0 km"
-            : "Não informado";
-      counts.set(segment, (counts.get(segment) ?? 0) + 1);
+    for (const appointment of overviewSellerAppointments) {
+      counts.set(
+        appointment.segment,
+        (counts.get(appointment.segment) ?? 0) + 1,
+      );
     }
 
     return [...counts.entries()]
