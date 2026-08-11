@@ -444,7 +444,6 @@ export class EventDashboardService {
         where: {
           role: "vendedor",
           client_id: { in: participantClientIds },
-          is_active: true,
         },
         select: {
           id: true,

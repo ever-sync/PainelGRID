@@ -874,15 +874,23 @@ export function RelatorioGestorPage() {
   );
 
   const overviewVendorData = useMemo(() => {
+    const visibleVendors = tvVendors.filter(
+      (vendor) =>
+        selectedClientId === "all" || vendor.client_id === selectedClientId,
+    );
     const vendorDetails = new Map(
-      tvVendors.map((vendor) => [vendor.vendor_id, vendor] as const),
+      visibleVendors.map((vendor) => [vendor.vendor_id, vendor] as const),
     );
     const appointmentDetails = new Map(
       overviewSellerAppointments.map(
         (appointment) => [appointment.vendor_id, appointment] as const,
       ),
     );
-    const counts = new Map<string, number>();
+    // Todos os vendedores vinculados ao evento entram no ranking, mesmo que
+    // ainda não tenham realizado nenhum agendamento.
+    const counts = new Map<string, number>(
+      visibleVendors.map((vendor) => [vendor.vendor_id, 0] as const),
+    );
     for (const appointment of overviewSellerAppointments) {
       const vendorId = appointment.vendor_id;
       counts.set(vendorId, (counts.get(vendorId) ?? 0) + 1);
@@ -903,7 +911,7 @@ export function RelatorioGestorPage() {
         };
       })
       .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
-  }, [overviewSellerAppointments, tvVendors]);
+  }, [overviewSellerAppointments, selectedClientId, tvVendors]);
 
   const overviewTeamData = useMemo(() => {
     const counts = new Map<string, number>();
