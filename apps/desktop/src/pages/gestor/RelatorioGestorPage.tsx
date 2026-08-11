@@ -777,24 +777,45 @@ export function RelatorioGestorPage() {
 
   const overviewSellerAppointments = useMemo(() => {
     if (selectedEventId === "all") return [];
-    const validStatuses = new Set(["scheduled", "confirmed", "completed"]);
-    return filteredLeads.filter(
-      (lead) =>
-        Boolean(lead.assigned_vendor_id) &&
-        Boolean(
-          lead.active_appointment &&
-          validStatuses.has(lead.active_appointment.status),
-        ),
-    );
-  }, [filteredLeads, selectedEventId]);
+    const validStatuses = new Set([
+      "scheduled",
+      "confirmed",
+      "completed",
+      "no_show",
+    ]);
+    const vendorIds = new Set(tvVendors.map((vendor) => vendor.vendor_id));
+
+    return leads.flatMap((lead) => {
+      if (selectedClientId !== "all" && lead.client_id !== selectedClientId) {
+        return [];
+      }
+      const appointment = lead.active_appointment;
+      if (
+        !appointment ||
+        appointment.event_id !== selectedEventId ||
+        !validStatuses.has(appointment.status)
+      ) {
+        return [];
+      }
+
+      const creatorVendorId =
+        appointment.created_by_type === "user" &&
+        appointment.created_by_id &&
+        vendorIds.has(appointment.created_by_id)
+          ? appointment.created_by_id
+          : null;
+      const vendorId = creatorVendorId ?? lead.assigned_vendor_id;
+      return vendorId && vendorIds.has(vendorId) ? [{ lead, vendorId }] : [];
+    });
+  }, [leads, selectedClientId, selectedEventId, tvVendors]);
 
   const overviewVendorData = useMemo(() => {
     const vendorDetails = new Map(
       tvVendors.map((vendor) => [vendor.vendor_id, vendor] as const),
     );
     const counts = new Map<string, number>();
-    for (const lead of overviewSellerAppointments) {
-      const vendorId = lead.assigned_vendor_id!;
+    for (const appointment of overviewSellerAppointments) {
+      const vendorId = appointment.vendorId;
       counts.set(vendorId, (counts.get(vendorId) ?? 0) + 1);
     }
     return [...counts.entries()]
@@ -823,7 +844,7 @@ export function RelatorioGestorPage() {
 
   const overviewDailyData = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const lead of overviewSellerAppointments) {
+    for (const { lead } of overviewSellerAppointments) {
       const scheduledAt = lead.active_appointment?.scheduled_at;
       if (!scheduledAt) continue;
       const date = new Date(scheduledAt).toLocaleDateString("pt-BR", {
@@ -838,7 +859,7 @@ export function RelatorioGestorPage() {
   const overviewSegmentData = useMemo(() => {
     if (selectedEventId === "all") return [];
     const counts = new Map<string, number>();
-    for (const lead of overviewSellerAppointments) {
+    for (const { lead } of overviewSellerAppointments) {
       const classificationText = [
         ...lead.tags,
         lead.notes,
