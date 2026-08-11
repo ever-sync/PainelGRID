@@ -50,16 +50,23 @@ export class AuthController {
   @Post("login")
   @ApiOperation({
     summary: "Autentica usuario",
-    description:
-      "Fluxo web: valida credenciais e dispara codigo 2FA por e-mail se necessario.",
+    description: "Fluxo web: valida as credenciais e inicia a sessao.",
   })
   @ApiResponse({
     status: 201,
-    description: "Login realizado ou codigo 2FA enviado com sucesso",
+    description: "Login realizado com sucesso",
   })
   @ApiResponse({ status: 401, description: "Credenciais invalidas" })
-  async login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  async login(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.login(dto);
+    this.setRefreshCookie(res, result.refresh_token, result.remember);
+    return {
+      user: result.user,
+      access_token: result.access_token,
+    };
   }
 
   @Public()
@@ -67,11 +74,15 @@ export class AuthController {
   @Post("mobile/login")
   @ApiOperation({
     summary: "Autentica usuario no app mobile",
-    description:
-      "Endpoint exclusivo do app nativo. Dispara codigo 2FA por e-mail.",
+    description: "Endpoint exclusivo do app nativo. Emite os tokens no corpo.",
   })
   async mobileLogin(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+    const result = await this.authService.login(dto);
+    return {
+      user: result.user,
+      access_token: result.access_token,
+      refresh_token: result.refresh_token,
+    };
   }
 
   @Public()

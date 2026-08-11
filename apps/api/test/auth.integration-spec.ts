@@ -54,11 +54,12 @@ describe("AuthController (integration)", () => {
     mockTtl.getRefreshJwtTtlSeconds.mockReturnValue(604800);
   });
 
-  it("POST /api/auth/login cria apenas desafio 2FA mesmo com header de plataforma", async () => {
+  it("POST /api/auth/login cria sessao web e refresh em cookie", async () => {
     const svcBody = {
-      requires_2fa: true,
-      temp_token: "11111111-1111-4111-8111-111111111111",
-      message: "Codigo enviado",
+      user: { id: "user-1", email: "gestor@demo.com", role: "gestor" },
+      access_token: "access-token",
+      refresh_token: "refresh-token",
+      remember: true,
     };
     const mockAuth = { login: jest.fn().mockResolvedValue(svcBody) };
     const app = await createApp(mockAuth);
@@ -69,8 +70,11 @@ describe("AuthController (integration)", () => {
       .send({ email: "gestor@demo.com", password: "senha1234" });
 
     expect(res.status).toBe(201);
-    expect(res.body).toEqual(svcBody);
-    expect(res.headers["set-cookie"]).toBeUndefined();
+    expect(res.body).toEqual({
+      user: svcBody.user,
+      access_token: "access-token",
+    });
+    expect(res.headers["set-cookie"]?.[0]).toContain("refresh-token");
     expect(mockAuth.login).toHaveBeenCalledWith(
       expect.objectContaining({
         email: "gestor@demo.com",
@@ -81,11 +85,12 @@ describe("AuthController (integration)", () => {
     await app.close();
   });
 
-  it("POST /api/auth/mobile/login cria apenas desafio 2FA", async () => {
+  it("POST /api/auth/mobile/login devolve os tokens no corpo", async () => {
     const svcBody = {
-      requires_2fa: true,
-      temp_token: "11111111-1111-4111-8111-111111111111",
-      message: "Codigo enviado",
+      user: { id: "user-1", email: "gestor@demo.com", role: "gestor" },
+      access_token: "access-token",
+      refresh_token: "refresh-token",
+      remember: true,
     };
     const mockAuth = { login: jest.fn().mockResolvedValue(svcBody) };
     const app = await createApp(mockAuth);
@@ -95,7 +100,11 @@ describe("AuthController (integration)", () => {
       .send({ email: "gestor@demo.com", password: "senha1234" });
 
     expect(res.status).toBe(201);
-    expect(res.body).toEqual(svcBody);
+    expect(res.body).toEqual({
+      user: svcBody.user,
+      access_token: "access-token",
+      refresh_token: "refresh-token",
+    });
     expect(res.headers["set-cookie"]).toBeUndefined();
 
     await app.close();

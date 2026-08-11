@@ -15,19 +15,26 @@ import {
   writeNativeRefreshToken,
 } from "./native-refresh-store";
 
-export type LoginStepResult = {
-  requires2fa: true;
-  tempToken: string;
-  message: string;
-  devCodeHint?: string;
-};
+export type LoginStepResult =
+  | {
+      requires2fa: true;
+      tempToken: string;
+      message: string;
+      devCodeHint?: string;
+    }
+  | {
+      requires2fa: false;
+      session: AuthSession;
+    };
 
-type LoginApiResponse = {
-  requires_2fa: true;
-  temp_token: string;
-  message: string;
-  dev_code_hint?: string;
-};
+type LoginApiResponse =
+  | {
+      requires_2fa: true;
+      temp_token: string;
+      message: string;
+      dev_code_hint?: string;
+    }
+  | SessionApiResponse;
 
 type SessionApiResponse = {
   user: AuthApiUserPayload;
@@ -88,11 +95,22 @@ export async function loginWithPassword(
     ),
   );
 
+  if ("requires_2fa" in result) {
+    return {
+      requires2fa: true,
+      tempToken: result.temp_token,
+      message: result.message,
+      devCodeHint: result.dev_code_hint,
+    };
+  }
+
+  if (native && result.refresh_token) {
+    await writeNativeRefreshToken(result.refresh_token);
+  }
+
   return {
-    requires2fa: true,
-    tempToken: result.temp_token,
-    message: result.message,
-    devCodeHint: result.dev_code_hint,
+    requires2fa: false,
+    session: toSession(result),
   };
 }
 

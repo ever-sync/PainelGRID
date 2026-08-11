@@ -444,44 +444,64 @@ export function RelatorioGestorPage() {
     }
 
     setIsLoading(true);
-    Promise.all([
+    Promise.allSettled([
       listClients(session.accessToken),
       listEvents({}, session.accessToken),
       // A API limita cada pagina a 300 itens. O relatorio percorre todas as
       // paginas para nao perder leads nem provocar uma resposta 400.
       fetchAllLeads({}, session.accessToken),
     ])
-      .then(([apiClients, apiEvents, apiLeads]) => {
-        setClients(apiClients.map(mapApiClientToClient));
-        setEvents(
-          apiEvents.map((e) => ({
-            id: e.id,
-            name: e.name,
-            client_id: e.client_id,
-            participant_client_ids: e.participant_client_ids ?? [e.client_id],
-            event_type: e.event_type ?? "feirao",
-            description: e.description ?? "",
-            launch_date: e.launch_date ?? e.created_at,
-            event_date: e.event_date,
-            event_end_date: e.event_end_date ?? e.event_date,
-            location: e.location ?? "",
-            capacity: e.capacity ?? 0,
-            sales_target: e.sales_target ?? 0,
-            scheduled_target: e.scheduled_target ?? 0,
-            status: e.status,
-            cover_image_url: e.cover_image_url ?? undefined,
-            image_urls: e.image_urls,
-            leads_count: e.leads_count ?? 0,
-            confirmed_count: e.confirmed_count ?? 0,
-            checkin_count: e.checkin_count ?? 0,
-            created_at: e.created_at,
-            updated_at: e.updated_at,
-          })),
-        );
-        setLeads(apiLeads.map(mapApiLeadToLead));
-      })
-      .catch((err) => {
-        console.error("Erro ao carregar dados do relatório:", err);
+      .then(([clientsResult, eventsResult, leadsResult]) => {
+        if (clientsResult.status === "fulfilled") {
+          setClients(clientsResult.value.map(mapApiClientToClient));
+        } else {
+          console.error(
+            "Erro ao carregar clientes do relatório:",
+            clientsResult.reason,
+          );
+        }
+
+        if (eventsResult.status === "fulfilled") {
+          setEvents(
+            eventsResult.value.map((e) => ({
+              id: e.id,
+              name: e.name,
+              client_id: e.client_id,
+              participant_client_ids: e.participant_client_ids ?? [e.client_id],
+              event_type: e.event_type ?? "feirao",
+              description: e.description ?? "",
+              launch_date: e.launch_date ?? e.created_at,
+              event_date: e.event_date,
+              event_end_date: e.event_end_date ?? e.event_date,
+              location: e.location ?? "",
+              capacity: e.capacity ?? 0,
+              sales_target: e.sales_target ?? 0,
+              scheduled_target: e.scheduled_target ?? 0,
+              status: e.status,
+              cover_image_url: e.cover_image_url ?? undefined,
+              image_urls: e.image_urls,
+              leads_count: e.leads_count ?? 0,
+              confirmed_count: e.confirmed_count ?? 0,
+              checkin_count: e.checkin_count ?? 0,
+              created_at: e.created_at,
+              updated_at: e.updated_at,
+            })),
+          );
+        } else {
+          console.error(
+            "Erro ao carregar eventos do relatório:",
+            eventsResult.reason,
+          );
+        }
+
+        if (leadsResult.status === "fulfilled") {
+          setLeads(leadsResult.value.map(mapApiLeadToLead));
+        } else {
+          console.error(
+            "Erro ao carregar leads do relatório:",
+            leadsResult.reason,
+          );
+        }
       })
       .finally(() => {
         setIsLoading(false);
@@ -507,6 +527,18 @@ export function RelatorioGestorPage() {
       setSelectedEventId("all");
     }
   }, [selectedClientId, availableEvents, selectedEventId]);
+
+  // O Overview é sempre individual por evento. Ao entrar na aba (ou trocar o
+  // cliente), abre o primeiro evento disponível em vez de deixar a tela vazia.
+  useEffect(() => {
+    if (
+      activeTab === "overview" &&
+      selectedEventId === "all" &&
+      availableEvents.length > 0
+    ) {
+      setSelectedEventId(availableEvents[0].id);
+    }
+  }, [activeTab, availableEvents, selectedEventId]);
 
   // Leads filtrados conforme seleções de cliente e evento
   const filteredLeads = useMemo(() => {

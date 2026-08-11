@@ -390,7 +390,7 @@ export function LeadsVendedorPage() {
         .catch(() => {
           setPhoneDuplicateHint(null);
           setPhoneCheckError(
-            "Não foi possível verificar o telefone agora. Tente novamente.",
+            "A pré-verificação está indisponível. Você pode continuar; o telefone será validado novamente ao cadastrar.",
           );
         })
         .finally(() => setCheckingPhone(false));
@@ -544,10 +544,6 @@ export function LeadsVendedorPage() {
       setActionError("Aguarde a verificação do telefone.");
       return;
     }
-    if (phoneCheckError) {
-      setActionError(phoneCheckError);
-      return;
-    }
     if (!appointmentEventId || !appointmentDateKey || !appointmentPeriod) {
       setActionError("Selecione evento, dia e período do agendamento.");
       return;
@@ -571,13 +567,16 @@ export function LeadsVendedorPage() {
     setActionError("");
     setSaving(true);
     try {
+      // A consulta antecipada melhora a experiência, mas não pode travar o
+      // cadastro em caso de indisponibilidade. O endpoint de criação repete a
+      // validação de telefone de forma autoritativa antes de persistir o lead.
       const check = await checkLeadPhone(
         normalizedLeadPhone,
         t,
         clientId ?? undefined,
         appointmentEventId,
-      );
-      if (check.exists && check.lead) {
+      ).catch(() => null);
+      if (check?.exists && check.lead) {
         if (check.lead.assigned_vendor_id !== vendorId) {
           setActionError(
             check.lead.assigned_vendor_id
@@ -767,10 +766,8 @@ export function LeadsVendedorPage() {
   const showCreateFields =
     !!normalizedLeadPhone &&
     !checkingPhone &&
-    !phoneCheckError &&
     !duplicatePhoneLead;
-  const canCreateNewLead =
-    showCreateFields && !duplicatePhoneLead && !phoneCheckError;
+  const canCreateNewLead = showCreateFields && !duplicatePhoneLead;
 
   const countNew = useMemo(
     () => leads.filter(isLeadNew).length,
@@ -1238,8 +1235,8 @@ export function LeadsVendedorPage() {
           ) : null}
 
           {phoneCheckError ? (
-            <div className="space-y-2 rounded-2xl border border-destructive/30 bg-destructive/5 px-3 py-2.5">
-              <div className="flex items-start gap-2 text-xs text-destructive">
+            <div className="space-y-2 rounded-2xl border border-amber-300/60 bg-amber-50 px-3 py-2.5 dark:border-amber-700/60 dark:bg-amber-950/20">
+              <div className="flex items-start gap-2 text-xs text-amber-800 dark:text-amber-300">
                 <AlertCircle size={14} className="mt-0.5 shrink-0" />
                 {phoneCheckError}
               </div>

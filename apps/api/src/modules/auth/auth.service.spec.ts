@@ -6,8 +6,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcryptjs";
-import { randomInt, randomUUID } from "crypto";
-import { MailService } from "../../mail/mail.service";
+import { randomUUID } from "crypto";
 import { PasswordSetupService } from "./password-setup.service";
 import { Role } from "../../common/types";
 import { RedisService } from "../../config/redis.service";
@@ -16,7 +15,6 @@ import { AuthService } from "./auth.service";
 
 jest.mock("crypto", () => ({
   ...jest.requireActual("crypto"),
-  randomInt: jest.fn(),
   randomUUID: jest.fn(),
 }));
 
@@ -61,7 +59,6 @@ describe("AuthService", () => {
     consumeTwoFactorChallenge: jest.Mock;
   };
   let configService: ConfigService;
-  let mailService: jest.Mocked<Pick<MailService, "sendTwoFactorCode">>;
 
   beforeEach(() => {
     usersService = {
@@ -90,10 +87,6 @@ describe("AuthService", () => {
       },
       consumeTwoFactorChallenge: jest.fn(),
     };
-    mailService = {
-      sendTwoFactorCode: jest.fn().mockResolvedValue(undefined),
-    };
-    (randomInt as jest.Mock).mockReturnValue(123456);
     (randomUUID as jest.Mock).mockReturnValue(
       "11111111-1111-4111-8111-111111111111",
     );
@@ -116,7 +109,6 @@ describe("AuthService", () => {
       jwtService,
       configService,
       redisService as unknown as RedisService,
-      mailService as unknown as MailService,
       {
         issueSetupToken: jest.fn(),
         peekSetupToken: jest.fn(),
@@ -130,38 +122,36 @@ describe("AuthService", () => {
     (bcrypt.compare as jest.Mock).mockReset();
     (bcrypt.hash as jest.Mock).mockReset();
     (randomUUID as jest.Mock).mockReset();
-    (randomInt as jest.Mock).mockReset();
     process.env.NODE_ENV = originalNodeEnv;
   });
 
-  it("cria desafio 2FA criptograficamente aleatorio no login valido", async () => {
+  it("emite a sessao diretamente no login valido", async () => {
     usersService.getEntityByEmail.mockResolvedValue(user);
     redisService.client.set.mockResolvedValue("OK");
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
     (randomUUID as jest.Mock).mockReturnValue(
       "11111111-1111-4111-8111-111111111111",
     );
-    (randomInt as jest.Mock).mockReturnValue(123456);
+    jwtService.signAsync
+      .mockResolvedValueOnce("access-token")
+      .mockResolvedValueOnce("refresh-token");
 
     const result = await service.login({
       email: user.email,
       password: "12345678",
     });
 
-    expect(result).toEqual({
-      requires_2fa: true,
-      temp_token: "11111111-1111-4111-8111-111111111111",
-      message: "Código de verificação enviado para o seu e-mail.",
-      dev_code_hint: "123456",
-    });
-    expect(redisService.client.set).toHaveBeenCalledWith(
-      "auth:2fa:11111111-1111-4111-8111-111111111111",
-      expect.not.stringContaining("123456"),
-      "EX",
-      600,
+    expect(result).toEqual(
+      expect.objectContaining({
+        access_token: "access-token",
+        refresh_token: "refresh-token",
+      }),
     );
-    expect(mailService.sendTwoFactorCode).toHaveBeenCalledWith(
-      expect.objectContaining({ to: user.email, code: "123456" }),
+    expect(redisService.client.set).toHaveBeenCalledWith(
+      "auth:refresh:11111111-1111-4111-8111-111111111111",
+      user.id,
+      "EX",
+      expect.any(Number),
     );
     expect(redisService.client.del).toHaveBeenCalledWith(
       `auth:login-fail:${user.email}`,
