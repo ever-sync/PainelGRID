@@ -1395,13 +1395,25 @@ export function RelatorioGestorPage() {
                   )}
                 </Card>
 
-                <Card>
-                  <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">
-                    Meta total de agendamentos
-                  </h3>
-                  <div className="flex min-h-[300px] flex-col items-center justify-center text-center">
+                <Card className="relative overflow-hidden bg-gradient-to-br from-white via-white to-rose-50/70 dark:from-zinc-900 dark:via-zinc-900 dark:to-rose-950/20">
+                  <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-rose-200/30 blur-3xl dark:bg-rose-900/20" />
+                  <div className="relative">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">
+                          Progresso da meta
+                        </h3>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">
+                          Objetivo geral de agendamentos do evento
+                        </p>
+                      </div>
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-[#FF0636] dark:bg-rose-950/60">
+                        <Target size={20} />
+                      </div>
+                    </div>
+                  <div className="flex min-h-[220px] flex-col items-center justify-center py-5 text-center">
                     <div
-                      className="relative flex h-44 w-44 items-center justify-center rounded-full bg-[conic-gradient(#FF0636_var(--progress),#e5e7eb_0)] p-4 dark:bg-[conic-gradient(#FF0636_var(--progress),#27272a_0)]"
+                      className="relative flex h-40 w-40 items-center justify-center rounded-full bg-[conic-gradient(#FF0636_var(--progress),#e5e7eb_0)] p-3.5 shadow-[0_12px_35px_rgba(255,6,54,0.12)] dark:bg-[conic-gradient(#FF0636_var(--progress),#27272a_0)]"
                       style={
                         {
                           "--progress": `${Math.min(overviewTargetPercent, 100)}%`,
@@ -1409,29 +1421,46 @@ export function RelatorioGestorPage() {
                       }
                     >
                       <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-white dark:bg-zinc-900">
-                        <strong className="text-3xl text-gray-950 dark:text-white">
+                        <strong className="text-4xl font-black tracking-tight text-gray-950 dark:text-white">
                           {overviewTargetPercent}%
                         </strong>
-                        <span className="text-xs text-gray-500 dark:text-zinc-400">
-                          da meta
+                        <span className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400 dark:text-zinc-500">
+                          concluído
                         </span>
                       </div>
                     </div>
-                    <p className="mt-5 text-sm font-bold text-gray-900 dark:text-zinc-100">
-                      {formatNumber(overviewScheduled)} de{" "}
-                      {formatNumber(overviewTarget)}
-                    </p>
                     {overviewTargetPerVendor > 0 && overviewVendorData.length > 0 ? (
-                      <p className="mt-1 text-xs font-medium text-gray-600 dark:text-zinc-300">
-                        {formatNumber(overviewTargetPerVendor)} por vendedor ×{" "}
+                      <div className="mt-4 rounded-full border border-rose-100 bg-white/90 px-4 py-2 text-[11px] font-semibold text-gray-600 shadow-sm dark:border-rose-900/40 dark:bg-zinc-900/90 dark:text-zinc-300">
+                        {formatNumber(overviewTargetPerVendor)} agendamentos por vendedor
+                        <span className="mx-2 text-rose-300">×</span>
                         {formatNumber(overviewVendorData.length)} vendedores
-                      </p>
+                      </div>
                     ) : null}
-                    <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">
-                      {overviewTarget > 0
-                        ? `${formatNumber(Math.max(overviewTarget - overviewScheduled, 0))} agendamentos restantes`
-                        : "Defina a meta de agendamentos na configuração do evento"}
+                  </div>
+                  <div className="grid grid-cols-3 divide-x divide-gray-200 rounded-2xl border border-gray-100 bg-white/80 px-2 py-3 shadow-sm dark:divide-zinc-700 dark:border-zinc-800 dark:bg-zinc-800/50">
+                    {[
+                      { label: "Realizados", value: overviewScheduled },
+                      { label: "Meta total", value: overviewTarget },
+                      {
+                        label: "Faltam",
+                        value: Math.max(overviewTarget - overviewScheduled, 0),
+                      },
+                    ].map((item) => (
+                      <div key={item.label} className="px-1 text-center">
+                        <strong className="block text-lg font-black tabular-nums text-gray-950 dark:text-white">
+                          {formatNumber(item.value)}
+                        </strong>
+                        <span className="text-[9px] font-bold uppercase tracking-wide text-gray-400 dark:text-zinc-500">
+                          {item.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {overviewTarget === 0 ? (
+                    <p className="mt-3 text-center text-xs text-gray-500 dark:text-zinc-400">
+                      Defina a meta por vendedor na configuração do evento.
                     </p>
+                  ) : null}
                   </div>
                 </Card>
               </div>
