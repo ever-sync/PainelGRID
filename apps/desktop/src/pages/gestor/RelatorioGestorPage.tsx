@@ -967,7 +967,8 @@ export function RelatorioGestorPage() {
   }, [overviewSellerAppointments, selectedEventId]);
 
   const overviewScheduled = overviewSellerAppointments.length;
-  const overviewTarget = eventDashboard?.event.scheduled_target ?? 0;
+  const overviewTargetPerVendor = eventDashboard?.event.scheduled_target ?? 0;
+  const overviewTarget = overviewTargetPerVendor * overviewVendorData.length;
   const overviewTargetPercent =
     overviewTarget > 0
       ? Math.round((overviewScheduled / overviewTarget) * 100)
@@ -1222,7 +1223,7 @@ export function RelatorioGestorPage() {
 
                 <Card>
                   <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">
-                    Meta de agendamentos
+                    Meta total de agendamentos
                   </h3>
                   <div className="flex min-h-[300px] flex-col items-center justify-center text-center">
                     <div
@@ -1246,6 +1247,12 @@ export function RelatorioGestorPage() {
                       {formatNumber(overviewScheduled)} de{" "}
                       {formatNumber(overviewTarget)}
                     </p>
+                    {overviewTargetPerVendor > 0 && overviewVendorData.length > 0 ? (
+                      <p className="mt-1 text-xs font-medium text-gray-600 dark:text-zinc-300">
+                        {formatNumber(overviewTargetPerVendor)} por vendedor ×{" "}
+                        {formatNumber(overviewVendorData.length)} vendedores
+                      </p>
+                    ) : null}
                     <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">
                       {overviewTarget > 0
                         ? `${formatNumber(Math.max(overviewTarget - overviewScheduled, 0))} agendamentos restantes`
