@@ -164,7 +164,9 @@ export class AppointmentsService {
     );
 
     if (!result.idempotent_replay) {
-      await this.dispatchTracking
+      // A atribuição é telemetria posterior ao commit. Não deve aumentar o
+      // tempo percebido pelo vendedor nem impedir a resposta já persistida.
+      void this.dispatchTracking
         .markConversion({
           leadId: dto.lead_id,
           type: "appointment",

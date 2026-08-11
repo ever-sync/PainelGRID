@@ -51,6 +51,7 @@ import {
 import { listPipelineStages, type ApiCrmStage } from "../../services/crm";
 import { useLeadRealtimeSync } from "../../hooks/useLeadRealtimeSync";
 import {
+  brazilianPhoneValidationError,
   normalizeBrPhoneToE164,
   phoneDigitsForCompare,
 } from "../../utils/phone";
@@ -239,6 +240,10 @@ export function LeadsVendedorPage() {
   ]);
   const normalizedLeadPhone = useMemo(
     () => normalizeBrPhoneToE164(leadPhone),
+    [leadPhone],
+  );
+  const leadPhoneValidationError = useMemo(
+    () => (leadPhone.trim() ? brazilianPhoneValidationError(leadPhone) : ""),
     [leadPhone],
   );
   const duplicatePhoneLead = useMemo(() => {
@@ -528,8 +533,11 @@ export function LeadsVendedorPage() {
       setActionError("Informe o nome do lead.");
       return;
     }
-    if (!normalizedLeadPhone) {
-      setActionError("Informe um telefone válido (ex: +5512981092776).");
+    if (leadPhoneValidationError || !normalizedLeadPhone) {
+      setActionError(
+        leadPhoneValidationError ||
+          "Informe um telefone válido (ex: +5512981092776).",
+      );
       return;
     }
     if (checkingPhone) {
@@ -634,14 +642,15 @@ export function LeadsVendedorPage() {
       setAppointmentEventId("");
       setAppointmentDateKey("");
       setAppointmentPeriod("");
-      await refreshLeads();
-      await refreshScore();
       setSuccessMessage(
         next.email
           ? `Lead cadastrado! Agendamento confirmado para ${next.name} e QR Code de credenciamento enviado por e-mail (${next.email}).`
           : `Lead cadastrado! Pré-agendamento confirmado com sucesso para ${next.name}.`,
       );
       setTimeout(() => setSuccessMessage(""), 5000);
+      // O agendamento já foi persistido. Atualizações de carteira e pontuação
+      // não devem manter o modal travado depois da confirmação ao vendedor.
+      void Promise.all([refreshLeads(), refreshScore()]).catch(() => undefined);
     } catch (error) {
       setActionError(
         error instanceof Error
@@ -1203,10 +1212,21 @@ export function LeadsVendedorPage() {
               placeholder="(12) 98109-2776"
               autoFocus
             />
-            <p className="text-xs text-muted-foreground">
-              {normalizedLeadPhone
-                ? `Será salvo como ${normalizedLeadPhone}`
-                : "Digite o telefone primeiro para verificarmos se o lead já existe."}
+            <p
+              className={clsx(
+                "text-xs",
+                leadPhone.replace(/\D/g, "").length >= 10 &&
+                  leadPhoneValidationError
+                  ? "text-destructive"
+                  : "text-muted-foreground",
+              )}
+            >
+              {leadPhone.replace(/\D/g, "").length >= 10 &&
+              leadPhoneValidationError
+                ? leadPhoneValidationError
+                : normalizedLeadPhone
+                  ? `Será salvo como ${normalizedLeadPhone}`
+                  : "Digite o telefone primeiro para verificarmos se o lead já existe."}
             </p>
           </div>
 

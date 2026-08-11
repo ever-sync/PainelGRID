@@ -22,10 +22,7 @@ function recoverFromStaleChunk() {
   );
   if (Date.now() - lastRecovery < STALE_CHUNK_RECOVERY_WINDOW_MS) return;
 
-  window.sessionStorage.setItem(
-    STALE_CHUNK_RECOVERY_KEY,
-    String(Date.now()),
-  );
+  window.sessionStorage.setItem(STALE_CHUNK_RECOVERY_KEY, String(Date.now()));
   window.location.reload();
 }
 
@@ -52,6 +49,9 @@ window.addEventListener("unhandledrejection", (event) => {
  */
 function warmUpApi() {
   if (typeof document === "undefined") return;
+  // O warm-up só ajuda em produção. No Vite local ele pode atingir o Nest
+  // durante uma recompilação e gerar um 500 transitório no console.
+  if (import.meta.env.DEV) return;
 
   const origin = getBackendOrigin();
   if (origin) {

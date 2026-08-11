@@ -31,7 +31,11 @@ function normalizeApiBaseUrl(raw: string): string {
 function resolvePerformanceEndpoint(): string {
   const configured = import.meta.env.VITE_PERFORMANCE_ENDPOINT?.trim();
   if (configured) return configured;
-  if (import.meta.env.DEV) return "/api/performance/web-vitals";
+  // Em desenvolvimento o backend pode estar recompilando ou ainda iniciando.
+  // Não envie telemetria automaticamente: evita uma sequência de 500 no
+  // console sem perder métricas de produção. Para testar localmente, basta
+  // configurar VITE_PERFORMANCE_ENDPOINT explicitamente.
+  if (import.meta.env.DEV) return "";
 
   const apiUrl = import.meta.env.VITE_API_URL?.trim();
   return apiUrl ? `${normalizeApiBaseUrl(apiUrl)}/performance/web-vitals` : "";

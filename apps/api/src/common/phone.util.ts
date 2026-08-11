@@ -1,3 +1,26 @@
+const VALID_BRAZILIAN_AREA_CODES = new Set([
+  11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 27, 28, 31, 32, 33, 34, 35,
+  37, 38, 41, 42, 43, 44, 45, 46, 47, 48, 49, 51, 53, 54, 55, 61, 62, 63, 64,
+  65, 66, 67, 68, 69, 71, 73, 74, 75, 77, 79, 81, 82, 83, 84, 85, 86, 87, 88,
+  89, 91, 92, 93, 94, 95, 96, 97, 98, 99,
+]);
+
+export function isValidBrazilianPhone(raw: string): boolean {
+  const digits = raw?.replace(/\D/g, "") ?? "";
+  const local =
+    (digits.length === 12 || digits.length === 13) && digits.startsWith("55")
+      ? digits.slice(2)
+      : digits;
+  if (local.length !== 10 && local.length !== 11) return false;
+  if (!VALID_BRAZILIAN_AREA_CODES.has(Number(local.slice(0, 2)))) return false;
+  if (/^(\d)\1+$/.test(local)) return false;
+  const subscriber = local.slice(2);
+  if (/^(\d)\1+$/.test(subscriber)) return false;
+  return subscriber.length === 9
+    ? /^9/.test(subscriber)
+    : /^[2-5]/.test(subscriber);
+}
+
 /**
  * Normaliza números de telefone brasileiros para o formato E.164: +55XXXXXXXXXXX
  *

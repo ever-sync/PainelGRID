@@ -29,7 +29,11 @@ import {
   decryptCheckinToken,
   generateRawCheckinToken,
 } from "../../common/utils/crypto.util";
-import { normalizeBrazilianPhone, phoneDigits } from "../../common/phone.util";
+import {
+  isValidBrazilianPhone,
+  normalizeBrazilianPhone,
+  phoneDigits,
+} from "../../common/phone.util";
 import { generateQrPngBuffer } from "../../common/qrcode.util";
 import { Role } from "../../common/types";
 import { PrismaService } from "../../config/prisma.service";
@@ -1157,6 +1161,9 @@ export class LeadsService {
     requestedClientId?: string,
     eventId?: string,
   ) {
+    if (!isValidBrazilianPhone(phone)) {
+      throw new BadRequestException("Informe um telefone brasileiro válido");
+    }
     const normalized = normalizeBrazilianPhone(phone.trim());
     let clientId: string | null = null;
     if (user.role === Role.GESTOR) {
@@ -1219,6 +1226,9 @@ export class LeadsService {
   }
 
   async create(user: AuthenticatedUser, dto: CreateLeadDto) {
+    if (dto.phone?.trim() && !isValidBrazilianPhone(dto.phone)) {
+      throw new BadRequestException("Informe um telefone brasileiro válido");
+    }
     if (user.role === Role.RECEPCAO) {
       if (!dto.event_interest_id) {
         throw new ForbiddenException(
