@@ -254,6 +254,94 @@ function OverviewMetricCard({
   );
 }
 
+type OverviewTeamItem = {
+  name: string;
+  value: number;
+  logoUrl: string | null;
+};
+
+function OverviewTeamBattle({ teams }: { teams: OverviewTeamItem[] }) {
+  const [left, right] = teams;
+  if (!left || !right) return null;
+  const total = left.value + right.value;
+  const leftPercent = total ? (left.value / total) * 100 : 50;
+
+  const Team = ({
+    team,
+    side,
+  }: {
+    team: OverviewTeamItem;
+    side: "left" | "right";
+  }) => (
+    <div className="flex min-w-0 flex-1 flex-col items-center text-center">
+      <div
+        className={clsx(
+          "flex h-24 w-24 items-center justify-center overflow-hidden rounded-[24px] border-2 bg-white p-2 shadow-xl md:h-28 md:w-28",
+          side === "left"
+            ? "border-blue-400 shadow-blue-950/40"
+            : "border-rose-400 shadow-rose-950/40",
+        )}
+      >
+        {team.logoUrl ? (
+          <img
+            src={team.logoUrl}
+            alt={`Logo da equipe ${team.name}`}
+            className="h-full w-full object-contain"
+          />
+        ) : (
+          <Shield
+            size={42}
+            className={side === "left" ? "text-blue-500" : "text-rose-500"}
+          />
+        )}
+      </div>
+      <p className="mt-3 max-w-[220px] text-sm font-black uppercase tracking-wide text-white md:text-base">
+        {team.name}
+      </p>
+      <strong
+        className={clsx(
+          "mt-1 text-5xl font-black tabular-nums md:text-6xl",
+          side === "left" ? "text-blue-400" : "text-rose-400",
+        )}
+      >
+        {formatNumber(team.value)}
+      </strong>
+      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+        agendamentos
+      </span>
+    </div>
+  );
+
+  return (
+    <div className="team-battle relative mt-5 overflow-hidden rounded-[28px] bg-[radial-gradient(circle_at_center,#1e3a5f_0%,#0f172a_52%,#020617_100%)] px-5 py-7 shadow-inner md:px-10">
+      <div className="absolute left-0 top-0 h-1 w-1/2 bg-blue-500" />
+      <div className="absolute right-0 top-0 h-1 w-1/2 bg-rose-500" />
+      <div className="relative flex items-center justify-between gap-3 md:gap-8">
+        <Team team={left} side="left" />
+        <div className="flex shrink-0 flex-col items-center">
+          <div className="flex h-14 w-14 rotate-[-6deg] items-center justify-center rounded-2xl border border-amber-300/60 bg-gradient-to-br from-amber-300 to-orange-500 text-xl font-black italic text-slate-950 shadow-[0_0_30px_rgba(251,191,36,0.35)] md:h-16 md:w-16 md:text-2xl">
+            VS
+          </div>
+          <span className="mt-3 whitespace-nowrap text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">
+            Head to head
+          </span>
+        </div>
+        <Team team={right} side="right" />
+      </div>
+      <div className="mt-6">
+        <div className="mb-2 flex justify-between text-[10px] font-bold text-slate-300">
+          <span>{Math.round(leftPercent)}%</span>
+          <span>{Math.round(100 - leftPercent)}%</span>
+        </div>
+        <div className="flex h-3 overflow-hidden rounded-full bg-slate-800 ring-1 ring-white/10">
+          <div className="bg-gradient-to-r from-blue-600 to-cyan-400" style={{ width: `${leftPercent}%` }} />
+          <div className="bg-gradient-to-r from-orange-400 to-rose-600" style={{ width: `${100 - leftPercent}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function RelatorioGestorPage() {
   const { user } = useOutletContext<AppOutletContext>();
   const [isDarkMode, setIsDarkMode] = useState(() =>
@@ -1257,7 +1345,9 @@ export function RelatorioGestorPage() {
                   <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">
                     Comparativo dos times participantes do evento
                   </p>
-                  {overviewTeamData.length ? (
+                  {overviewTeamData.length === 2 ? (
+                    <OverviewTeamBattle teams={overviewTeamData} />
+                  ) : overviewTeamData.length ? (
                     <div className="flex min-h-[300px] flex-col justify-center space-y-5 py-6">
                       {overviewTeamData.map((team, index) => {
                         const max = overviewTeamData[0]?.value || 1;
