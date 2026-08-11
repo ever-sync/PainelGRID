@@ -30,6 +30,7 @@ import {
   UserCheck,
   Trophy,
   Shield,
+  Printer,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { StatsCard } from "../../components/shared/StatsCard";
@@ -146,9 +147,9 @@ function OverviewDonut({ data }: { data: OverviewBreakdownItem[] }) {
   });
 
   return (
-    <div className="flex min-h-[300px] flex-col items-center justify-center gap-6 sm:flex-row">
+    <div className="overview-donut grid min-h-[300px] grid-cols-1 items-center gap-8 py-5 md:grid-cols-[220px_minmax(0,1fr)]">
       <div
-        className="relative h-44 w-44 shrink-0 rounded-full"
+        className="relative mx-auto h-44 w-44 shrink-0 rounded-full"
         style={{ background: `conic-gradient(${stops.join(", ")})` }}
         role="img"
         aria-label={`${formatNumber(total)} agendamentos`}
@@ -162,17 +163,25 @@ function OverviewDonut({ data }: { data: OverviewBreakdownItem[] }) {
           </span>
         </div>
       </div>
-      <div className="w-full max-w-xs space-y-2">
+      <div className="grid w-full grid-cols-1 gap-2 2xl:grid-cols-2">
         {data.map((item, index) => (
-          <div key={item.name} className="flex items-center gap-2 text-xs">
+          <div
+            key={item.name}
+            className="flex min-w-0 items-center gap-3 rounded-xl border border-gray-100 bg-gray-50/80 px-3 py-2.5 text-xs dark:border-zinc-800 dark:bg-zinc-800/60"
+          >
             <span
-              className="h-3 w-3 shrink-0 rounded-full"
+              className="h-3.5 w-3.5 shrink-0 rounded-full ring-4 ring-white dark:ring-zinc-900"
               style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
             />
-            <span className="min-w-0 flex-1 truncate text-gray-600 dark:text-zinc-300">
-              {item.name}
-            </span>
-            <strong className="text-gray-950 dark:text-white">
+            <div className="min-w-0 flex-1">
+              <p className="break-words font-semibold text-gray-700 dark:text-zinc-200">
+                {item.name}
+              </p>
+              <p className="mt-0.5 text-[10px] text-gray-400 dark:text-zinc-500">
+                {total ? Math.round((item.value / total) * 100) : 0}% do total
+              </p>
+            </div>
+            <strong className="rounded-lg bg-white px-2 py-1 text-sm tabular-nums text-gray-950 shadow-sm dark:bg-zinc-900 dark:text-white">
               {formatNumber(item.value)}
             </strong>
           </div>
@@ -1178,20 +1187,31 @@ export function RelatorioGestorPage() {
                 <ChevronDown size={14} />
               </div>
             </div>
+            {activeTab === "overview" && selectedEventId !== "all" ? (
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="no-print inline-flex items-center gap-2 rounded-xl bg-[#FF0636] px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#d90530]"
+              >
+                <Printer size={15} /> Gerar PDF
+              </button>
+            ) : null}
           </div>
         }
       />
 
       {/* Abas Internas abaixo do Título e Seletores */}
-      <Tabs
-        tabs={RELATORIO_TABS}
-        active={activeTab}
-        onChange={(tab) => setActiveTab(tab as RelatorioTab)}
-      />
+      <div className="no-print">
+        <Tabs
+          tabs={RELATORIO_TABS}
+          active={activeTab}
+          onChange={(tab) => setActiveTab(tab as RelatorioTab)}
+        />
+      </div>
 
       {/* ── OVERVIEW DE AGENDAMENTOS ── */}
       {activeTab === "overview" && (
-        <div className="space-y-6">
+        <div className="overview-report space-y-6">
           {selectedEventId === "all" ? (
             <Card className="py-14 text-center">
               <Calendar size={32} className="mx-auto text-[#FF0636]" />

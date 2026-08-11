@@ -467,7 +467,27 @@
     border-color: #e4e4e7 !important;
   }
 
+  .overview-report {
+    margin: 0 !important;
+    background: #fff !important;
+    color: #111827 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .overview-report > *,
+  .overview-report .overview-donut {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .overview-report .overview-donut {
+    grid-template-columns: 180px minmax(0, 1fr) !important;
+    min-height: 240px !important;
+  }
+
   @page {
-    margin: 14mm;
+    margin: 10mm;
+    size: A4 landscape;
   }
 }
