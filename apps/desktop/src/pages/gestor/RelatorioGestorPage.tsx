@@ -2,6 +2,7 @@ import {
   lazy,
   type ComponentType,
   type CSSProperties,
+  type ReactNode,
   useEffect,
   useMemo,
   useState,
@@ -176,6 +177,69 @@ function OverviewDonut({ data }: { data: OverviewBreakdownItem[] }) {
             </strong>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function OverviewMetricCard({
+  title,
+  value,
+  subtitle,
+  icon,
+  tone,
+}: {
+  title: string;
+  value: string;
+  subtitle: string;
+  icon: ReactNode;
+  tone: "blue" | "amber" | "emerald";
+}) {
+  const styles = {
+    blue: {
+      card: "from-blue-50 via-white to-white dark:from-blue-950/40 dark:via-zinc-900 dark:to-zinc-900",
+      icon: "bg-blue-600 text-white shadow-blue-200 dark:shadow-none",
+      accent: "bg-blue-500",
+      glow: "bg-blue-300/30",
+    },
+    amber: {
+      card: "from-amber-50 via-white to-white dark:from-amber-950/40 dark:via-zinc-900 dark:to-zinc-900",
+      icon: "bg-amber-500 text-white shadow-amber-200 dark:shadow-none",
+      accent: "bg-amber-400",
+      glow: "bg-amber-300/30",
+    },
+    emerald: {
+      card: "from-emerald-50 via-white to-white dark:from-emerald-950/40 dark:via-zinc-900 dark:to-zinc-900",
+      icon: "bg-emerald-600 text-white shadow-emerald-200 dark:shadow-none",
+      accent: "bg-emerald-500",
+      glow: "bg-emerald-300/30",
+    },
+  }[tone];
+
+  return (
+    <div
+      className={clsx(
+        "relative min-h-[155px] overflow-hidden rounded-[26px] border border-gray-200/80 bg-gradient-to-br p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)] dark:border-zinc-800",
+        styles.card,
+      )}
+    >
+      <div className={clsx("absolute -right-8 -top-10 h-32 w-32 rounded-full blur-2xl", styles.glow)} />
+      <div className={clsx("absolute inset-x-6 top-0 h-1 rounded-b-full", styles.accent)} />
+      <div className="relative flex h-full items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-gray-500 dark:text-zinc-400">
+            {title}
+          </p>
+          <p className="mt-3 text-4xl font-black tracking-tight text-gray-950 dark:text-white md:text-5xl">
+            {value}
+          </p>
+          <p className="mt-2 truncate text-xs text-gray-500 dark:text-zinc-400">
+            {subtitle}
+          </p>
+        </div>
+        <div className={clsx("flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-lg", styles.icon)}>
+          {icon}
+        </div>
       </div>
     </div>
   );
@@ -1142,26 +1206,26 @@ export function RelatorioGestorPage() {
           ) : (
             <>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <StatsCard
+                <OverviewMetricCard
                   title="Total de agendamentos"
                   value={formatNumber(overviewScheduled)}
-                  icon={<Calendar size={20} />}
                   subtitle={eventDashboard?.event.name ?? "Evento selecionado"}
-                  iconColor="bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
+                  icon={<Calendar size={22} />}
+                  tone="blue"
                 />
-                <StatsCard
+                <OverviewMetricCard
                   title="Equipes participantes"
                   value={formatNumber(overviewTeamData.length)}
-                  icon={<Shield size={20} />}
                   subtitle="Com vendedores vinculados"
-                  iconColor="bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400"
+                  icon={<Shield size={22} />}
+                  tone="amber"
                 />
-                <StatsCard
+                <OverviewMetricCard
                   title="Vendedores no evento"
                   value={formatNumber(overviewVendorData.length)}
-                  icon={<UserCheck size={20} />}
                   subtitle="Ranking por agendamentos"
-                  iconColor="bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
+                  icon={<UserCheck size={22} />}
+                  tone="emerald"
                 />
               </div>
 
