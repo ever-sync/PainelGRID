@@ -384,6 +384,7 @@ export function ConversationSidebar({
   selectedClientId,
   onSelectClientId,
   allowAllClients = false,
+  hideClientSelector = false,
   search,
   onSearchChange,
   viewFilter,
@@ -401,6 +402,8 @@ export function ConversationSidebar({
   selectedClientId: string;
   onSelectClientId: (clientId: string) => void;
   allowAllClients?: boolean;
+  /** No painel do cliente a empresa já vem do login e não deve ser trocada. */
+  hideClientSelector?: boolean;
   search: string;
   onSearchChange: (value: string) => void;
   viewFilter: ViewFilter;
@@ -450,7 +453,7 @@ export function ConversationSidebar({
       </div>
 
       <div className="space-y-3 p-4">
-        {clients.length > 0 && (
+        {!hideClientSelector && clients.length > 0 && (
           <div
             className={clsx(
               "rounded-2xl border px-3.5 py-2 transition-all",

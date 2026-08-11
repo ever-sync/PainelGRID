@@ -1,6 +1,7 @@
 import {
   lazy,
   type ComponentType,
+  type CSSProperties,
   useEffect,
   useMemo,
   useState,
@@ -64,9 +65,14 @@ import {
   readDashboardDarkEnabled,
 } from "../../lib/dashboard-dark-mode";
 type RelatorioTab =
-  "visao_geral" | "evento" | "campanhas" | "campanha_x_evento";
+  "overview" | "visao_geral" | "evento" | "campanhas" | "campanha_x_evento";
 
 const RELATORIO_TABS = [
+  {
+    id: "overview",
+    label: "Overview",
+    icon: <BarChart3 size={16} />,
+  },
   {
     id: "visao_geral",
     label: "Visão Geral",
@@ -132,7 +138,7 @@ export function RelatorioGestorPage() {
     readDashboardDarkEnabled(user.id),
   );
 
-  const [activeTab, setActiveTab] = useState<RelatorioTab>("visao_geral");
+  const [activeTab, setActiveTab] = useState<RelatorioTab>("overview");
   const [clients, setClients] = useState<Client[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -146,7 +152,10 @@ export function RelatorioGestorPage() {
   const [exportError, setExportError] = useState<string | null>(null);
 
   // Filtros seletores superiores do lado direito
-  const [selectedClientId, setSelectedClientId] = useState<string>("all");
+  const isClientView = user.role === "cliente";
+  const [selectedClientId, setSelectedClientId] = useState<string>(() =>
+    user.role === "cliente" && user.client_id ? user.client_id : "all",
+  );
   const [selectedEventId, setSelectedEventId] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
@@ -156,21 +165,26 @@ export function RelatorioGestorPage() {
     EventDashboardTvResponse["vendors"]
   >([]);
   const [tvTeams, setTvTeams] = useState<EventDashboardTvResponse["teams"]>([]);
+  const [eventDashboard, setEventDashboard] =
+    useState<EventDashboardTvResponse | null>(null);
 
   useEffect(() => {
     const session = readStoredSession();
     if (!session?.accessToken || selectedEventId === "all") {
       setTvVendors([]);
       setTvTeams([]);
+      setEventDashboard(null);
       return;
     }
 
     getEventDashboardTv(selectedEventId, session.accessToken)
       .then((tvData) => {
+        setEventDashboard(tvData);
         if (tvData?.vendors) setTvVendors(tvData.vendors);
         if (tvData?.teams) setTvTeams(tvData.teams);
       })
       .catch((err) => {
+        setEventDashboard(null);
         console.warn("Snapshot do Modo TV não disponível para o evento:", err);
       });
   }, [selectedEventId]);
@@ -453,6 +467,7 @@ export function RelatorioGestorPage() {
             location: e.location ?? "",
             capacity: e.capacity ?? 0,
             sales_target: e.sales_target ?? 0,
+            scheduled_target: e.scheduled_target ?? 0,
             status: e.status,
             cover_image_url: e.cover_image_url ?? undefined,
             image_urls: e.image_urls,
@@ -760,6 +775,101 @@ export function RelatorioGestorPage() {
     return [];
   }, [tvTeams]);
 
+  const overviewSellerAppointments = useMemo(() => {
+    if (selectedEventId === "all") return [];
+    const validStatuses = new Set(["scheduled", "confirmed", "completed"]);
+    return filteredLeads.filter(
+      (lead) =>
+        Boolean(lead.assigned_vendor_id) &&
+        Boolean(
+          lead.active_appointment &&
+          validStatuses.has(lead.active_appointment.status),
+        ),
+    );
+  }, [filteredLeads, selectedEventId]);
+
+  const overviewVendorData = useMemo(() => {
+    const vendorDetails = new Map(
+      tvVendors.map((vendor) => [vendor.vendor_id, vendor] as const),
+    );
+    const counts = new Map<string, number>();
+    for (const lead of overviewSellerAppointments) {
+      const vendorId = lead.assigned_vendor_id!;
+      counts.set(vendorId, (counts.get(vendorId) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([vendorId, value]) => {
+        const vendor = vendorDetails.get(vendorId);
+        return {
+          id: vendorId,
+          name: vendor?.vendor_name ?? "Vendedor não identificado",
+          team: vendor?.team_name ?? "Sem equipe",
+          teamId: vendor?.team_id ?? null,
+          value,
+        };
+      })
+      .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
+  }, [overviewSellerAppointments, tvVendors]);
+
+  const overviewTeamData = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const vendor of overviewVendorData) {
+      counts.set(vendor.team, (counts.get(vendor.team) ?? 0) + vendor.value);
+    }
+    return [...counts.entries()]
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
+  }, [overviewVendorData]);
+
+  const overviewDailyData = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const lead of overviewSellerAppointments) {
+      const scheduledAt = lead.active_appointment?.scheduled_at;
+      if (!scheduledAt) continue;
+      const date = new Date(scheduledAt).toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+      });
+      counts.set(date, (counts.get(date) ?? 0) + 1);
+    }
+    return [...counts.entries()].map(([name, value]) => ({ name, value }));
+  }, [overviewSellerAppointments]);
+
+  const overviewSegmentData = useMemo(() => {
+    if (selectedEventId === "all") return [];
+    const counts = new Map<string, number>();
+    for (const lead of overviewSellerAppointments) {
+      const classificationText = [
+        ...lead.tags,
+        lead.notes,
+        lead.brand_interest,
+        lead.model_interest,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase("pt-BR");
+      const segment = /venda direta|\bvd\b/.test(classificationText)
+        ? "Venda direta"
+        : /seminovo|usado/.test(classificationText)
+          ? "Usados / seminovos"
+          : /\bnovo[s]?\b|0\s?km/.test(classificationText)
+            ? "Novos / 0 km"
+            : "Não informado";
+      counts.set(segment, (counts.get(segment) ?? 0) + 1);
+    }
+
+    return [...counts.entries()]
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [overviewSellerAppointments, selectedEventId]);
+
+  const overviewScheduled = overviewSellerAppointments.length;
+  const overviewTarget = eventDashboard?.event.scheduled_target ?? 0;
+  const overviewTargetPercent =
+    overviewTarget > 0
+      ? Math.round((overviewScheduled / overviewTarget) * 100)
+      : 0;
+
   // Dados para a Aba de Cruzamento: Campanha x Evento
   const campaignEventCrossData = useMemo(() => {
     if (!executiveReport || selectedEventId === "all") return [];
@@ -837,37 +947,42 @@ export function RelatorioGestorPage() {
       {/* PageHeader com seletores superiores no lado direito */}
       <PageHeader
         title="Relatório de Desempenho"
-        breadcrumbs={[{ label: "Gestor" }, { label: "Relatórios" }]}
+        breadcrumbs={[
+          { label: isClientView ? "Cliente" : "Gestor" },
+          { label: "Relatórios" },
+        ]}
         subtitle="Análise consolidada de leads, eventos e campanhas"
         dark={isDarkMode}
         actions={
           <div className="flex flex-wrap items-center gap-3">
             {/* Seletor de Cliente */}
-            <div className="relative min-w-[200px]">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                <Building2 size={15} />
+            {!isClientView ? (
+              <div className="relative min-w-[200px]">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                  <Building2 size={15} />
+                </div>
+                <select
+                  value={selectedClientId}
+                  onChange={(e) => setSelectedClientId(e.target.value)}
+                  className={clsx(
+                    "w-full pl-9 pr-8 py-2 rounded-xl text-xs font-semibold appearance-none border cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#FF0636] transition-all shadow-sm",
+                    isDarkMode
+                      ? "bg-zinc-900 border-zinc-700 text-zinc-100 hover:border-zinc-600"
+                      : "bg-white border-gray-200 text-gray-800 hover:border-gray-300",
+                  )}
+                >
+                  <option value="all">Todos os Clientes</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.company_name}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-gray-400">
+                  <ChevronDown size={14} />
+                </div>
               </div>
-              <select
-                value={selectedClientId}
-                onChange={(e) => setSelectedClientId(e.target.value)}
-                className={clsx(
-                  "w-full pl-9 pr-8 py-2 rounded-xl text-xs font-semibold appearance-none border cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#FF0636] transition-all shadow-sm",
-                  isDarkMode
-                    ? "bg-zinc-900 border-zinc-700 text-zinc-100 hover:border-zinc-600"
-                    : "bg-white border-gray-200 text-gray-800 hover:border-gray-300",
-                )}
-              >
-                <option value="all">Todos os Clientes</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.company_name}
-                  </option>
-                ))}
-              </select>
-              <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-gray-400">
-                <ChevronDown size={14} />
-              </div>
-            </div>
+            ) : null}
 
             {/* Seletor de Evento */}
             <div className="relative min-w-[200px]">
@@ -905,6 +1020,247 @@ export function RelatorioGestorPage() {
         active={activeTab}
         onChange={(tab) => setActiveTab(tab as RelatorioTab)}
       />
+
+      {/* ── OVERVIEW DE AGENDAMENTOS ── */}
+      {activeTab === "overview" && (
+        <div className="space-y-6">
+          {selectedEventId === "all" ? (
+            <Card className="py-14 text-center">
+              <Calendar size={32} className="mx-auto text-[#FF0636]" />
+              <h3 className="mt-3 text-base font-bold text-gray-900 dark:text-zinc-100">
+                Selecione um evento para abrir o Overview
+              </h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">
+                Os totais por equipe, vendedor, dia, segmento e meta são
+                calculados individualmente por evento.
+              </p>
+            </Card>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <StatsCard
+                  title="Total de agendamentos"
+                  value={formatNumber(overviewScheduled)}
+                  icon={<Calendar size={20} />}
+                  subtitle={eventDashboard?.event.name ?? "Evento selecionado"}
+                  iconColor="bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
+                />
+                <StatsCard
+                  title="Equipes participantes"
+                  value={formatNumber(overviewTeamData.length)}
+                  icon={<Shield size={20} />}
+                  subtitle="Com vendedores vinculados"
+                  iconColor="bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400"
+                />
+                <StatsCard
+                  title="Vendedores no evento"
+                  value={formatNumber(overviewVendorData.length)}
+                  icon={<UserCheck size={20} />}
+                  subtitle="Ranking por agendamentos"
+                  iconColor="bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                <Card className="lg:col-span-2">
+                  <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">
+                    Total de agendamentos por equipe
+                  </h3>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">
+                    Comparativo dos times participantes do evento
+                  </p>
+                  {overviewTeamData.length ? (
+                    <DeferredContent height={300} label="Carregando equipes">
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={overviewTeamData}>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke={chartAxisStroke}
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="name"
+                            tick={{ fontSize: 11, fill: chartTickFill }}
+                            stroke={chartAxisStroke}
+                          />
+                          <YAxis
+                            allowDecimals={false}
+                            tick={{ fontSize: 11, fill: chartTickFill }}
+                            stroke={chartAxisStroke}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              ...chartTooltipStyle,
+                              background: chartTooltipBg,
+                            }}
+                            formatter={(value: number | string) => [
+                              value,
+                              "Agendamentos",
+                            ]}
+                          />
+                          <Bar
+                            dataKey="value"
+                            name="Agendamentos"
+                            fill="#FF0636"
+                            radius={[8, 8, 0, 0]}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </DeferredContent>
+                  ) : (
+                    <div className="flex h-[300px] items-center justify-center text-sm text-gray-400">
+                      Nenhuma equipe com agendamentos neste evento.
+                    </div>
+                  )}
+                </Card>
+
+                <Card>
+                  <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">
+                    Meta de agendamentos
+                  </h3>
+                  <div className="flex min-h-[300px] flex-col items-center justify-center text-center">
+                    <div
+                      className="relative flex h-44 w-44 items-center justify-center rounded-full bg-[conic-gradient(#FF0636_var(--progress),#e5e7eb_0)] p-4 dark:bg-[conic-gradient(#FF0636_var(--progress),#27272a_0)]"
+                      style={
+                        {
+                          "--progress": `${Math.min(overviewTargetPercent, 100)}%`,
+                        } as CSSProperties
+                      }
+                    >
+                      <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-white dark:bg-zinc-900">
+                        <strong className="text-3xl text-gray-950 dark:text-white">
+                          {overviewTargetPercent}%
+                        </strong>
+                        <span className="text-xs text-gray-500 dark:text-zinc-400">
+                          da meta
+                        </span>
+                      </div>
+                    </div>
+                    <p className="mt-5 text-sm font-bold text-gray-900 dark:text-zinc-100">
+                      {formatNumber(overviewScheduled)} de{" "}
+                      {formatNumber(overviewTarget)}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">
+                      {overviewTarget > 0
+                        ? `${formatNumber(Math.max(overviewTarget - overviewScheduled, 0))} agendamentos restantes`
+                        : "Defina a meta de agendamentos na configuração do evento"}
+                    </p>
+                  </div>
+                </Card>
+              </div>
+
+              <Card>
+                <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">
+                  Agendamentos entre os vendedores
+                </h3>
+                <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">
+                  Ranking individual com identificação da equipe
+                </p>
+                <div className="mt-5 max-h-[520px] space-y-2 overflow-y-auto pr-1">
+                  {overviewVendorData.map((vendor, index) => {
+                    const max = overviewVendorData[0]?.value || 1;
+                    return (
+                      <div
+                        key={`${vendor.name}-${index}`}
+                        className="grid grid-cols-[minmax(130px,240px)_1fr_auto] items-center gap-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-bold text-gray-900 dark:text-zinc-100">
+                            {index + 1}. {vendor.name}
+                          </p>
+                          <p className="truncate text-[10px] text-gray-500 dark:text-zinc-400">
+                            {vendor.team}
+                          </p>
+                        </div>
+                        <div className="h-3 overflow-hidden rounded-full bg-gray-100 dark:bg-zinc-800">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-amber-400 to-[#FF0636]"
+                            style={{
+                              width: `${Math.max((vendor.value / max) * 100, vendor.value ? 2 : 0)}%`,
+                            }}
+                          />
+                        </div>
+                        <strong className="w-10 text-right text-sm text-gray-950 dark:text-white">
+                          {vendor.value}
+                        </strong>
+                      </div>
+                    );
+                  })}
+                  {!overviewVendorData.length ? (
+                    <p className="py-12 text-center text-sm text-gray-400">
+                      Nenhum vendedor com agendamentos neste evento.
+                    </p>
+                  ) : null}
+                </div>
+              </Card>
+
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                {[
+                  {
+                    title: "Agendamentos por dia do evento",
+                    subtitle: "Distribuição diária",
+                    data: overviewDailyData,
+                  },
+                  {
+                    title: "Agendamentos por segmento",
+                    subtitle: "Classificação informada no cadastro do lead",
+                    data: overviewSegmentData,
+                  },
+                ].map((chart) => (
+                  <Card key={chart.title}>
+                    <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">
+                      {chart.title}
+                    </h3>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">
+                      {chart.subtitle}
+                    </p>
+                    {chart.data.length ? (
+                      <DeferredContent
+                        height={300}
+                        label={`Carregando ${chart.title.toLowerCase()}`}
+                      >
+                        <ResponsiveContainer width="100%" height={300}>
+                          <PieChart>
+                            <Pie
+                              data={chart.data}
+                              dataKey="value"
+                              nameKey="name"
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={58}
+                              outerRadius={92}
+                              paddingAngle={3}
+                              label
+                            >
+                              {chart.data.map((_, index) => (
+                                <Cell
+                                  key={index}
+                                  fill={PIE_COLORS[index % PIE_COLORS.length]}
+                                />
+                              ))}
+                            </Pie>
+                            <Tooltip
+                              contentStyle={{
+                                ...chartTooltipStyle,
+                                background: chartTooltipBg,
+                              }}
+                            />
+                            <Legend />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </DeferredContent>
+                    ) : (
+                      <div className="flex h-[300px] items-center justify-center text-sm text-gray-400">
+                        Nenhum agendamento classificado.
+                      </div>
+                    )}
+                  </Card>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* ── ABA 1: VISÃO GERAL ── */}
       {activeTab === "visao_geral" && (

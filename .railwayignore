@@ -1,0 +1,22 @@
+# Dependencias e artefatos gerados localmente
+node_modules/
+**/node_modules/
+**/dist/
+coverage/
+.git/
+
+# Projetos nativos nao participam do build do painel web
+apps/desktop/ios/
+apps/desktop/android/
+
+# Bundles locais/legados da API; o Railway recompila a partir de src
+apps/api/api/
+
+# Materiais de design e arquivos temporarios fora do runtime
+logo/
+logo-times/
+scratch/
+docs/
+e2e/
+*.log
+.DS_Store

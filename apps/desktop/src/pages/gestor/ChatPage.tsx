@@ -199,7 +199,7 @@ function useIsNarrowChatViewport() {
   return isNarrow;
 }
 
-export function ChatPage() {
+export function ChatPage({ clientMode = false }: { clientMode?: boolean }) {
   const { user, gestorClientId, setGestorClientId } = useGestorClient();
   const [searchParams] = useSearchParams();
   const [isDarkMode, setIsDarkMode] = useState(() =>
@@ -268,6 +268,7 @@ export function ChatPage() {
   const requestedLeadId = searchParams.get("lead_id") ?? "";
   const effectiveClientId =
     user.role === "gestor" ? selectedClientId : (user.client_id ?? "");
+  const isClientExperience = clientMode || user.role === "cliente";
 
   const token = readStoredSession()?.accessToken;
 
@@ -1577,7 +1578,9 @@ export function ChatPage() {
   if (!clients.length) {
     return (
       <div className="flex min-h-[320px] items-center justify-center text-zinc-500">
-        Nenhum cliente cadastrado. Crie um cliente para iniciar conversas.
+        {isClientExperience
+          ? "As conversas da sua empresa ainda não estão disponíveis."
+          : "Nenhum cliente cadastrado. Crie um cliente para iniciar conversas."}
       </div>
     );
   }
@@ -1602,6 +1605,7 @@ export function ChatPage() {
           selectedClientId={selectedClientId}
           onSelectClientId={handleSelectChatClient}
           allowAllClients={user.role === "gestor"}
+          hideClientSelector={isClientExperience}
           search={search}
           onSearchChange={setSearch}
           viewFilter={viewFilter}

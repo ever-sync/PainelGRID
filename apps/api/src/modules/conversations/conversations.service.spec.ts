@@ -298,6 +298,22 @@ describe("ConversationsService", () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
+    it("CLIENTE: bloqueia a consulta de conversas de outra empresa", async () => {
+      await expect(
+        service.findAll(
+          {
+            sub: "c1",
+            role: Role.CLIENTE,
+            email: "cliente@x",
+            name: "Cliente",
+            client_id: "outro-cliente",
+          } as any,
+          { client_id: clientId } as any,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.conversation.findMany).not.toHaveBeenCalled();
+    });
+
     it("usa string vazia como last_message quando sem mensagens", async () => {
       prisma.conversation.findMany.mockResolvedValue([
         { ...baseRow, messages: [], state: null },

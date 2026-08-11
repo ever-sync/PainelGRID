@@ -158,6 +158,11 @@ const CursosClientePage = lazy(() =>
     default: module.CursosClientePage,
   })),
 );
+const FaqRagPage = lazy(() =>
+  import("./pages/cliente/FaqRagPage").then((module) => ({
+    default: module.FaqRagPage,
+  })),
+);
 const VeiculosPage = lazy(() =>
   import("./pages/cliente/VeiculosPage").then((module) => ({
     default: module.VeiculosPage,
@@ -520,6 +525,10 @@ export default function App() {
                 element={<DashboardClientePage />}
               />
               <Route path="/cliente/eventos" element={<ClienteEventosPage />} />
+              <Route
+                path="/cliente/relatorio"
+                element={<RelatorioGestorPage />}
+              />
               <Route path="/cliente/lojas" element={<LojasPage />} />
               <Route path="/cliente/leads" element={<LeadsPage />} />
               <Route path="/cliente/vendedores" element={<VendedoresPage />} />
@@ -527,7 +536,7 @@ export default function App() {
               <Route path="/cliente/emails" element={<EmailsEnviadosPage />} />
               <Route path="/cliente/veiculos" element={<VeiculosPage />} />
               <Route path="/cliente/cursos" element={<CursosClientePage />} />
-              <Route path="/cliente/faq-rag" element={<CursosClientePage />} />
+              <Route path="/cliente/faq-rag" element={<FaqRagPage />} />
               <Route path="/cliente/conversas" element={<ConversasPage />} />
               <Route path="/cliente/auditoria" element={<AuditoriaPage />} />
               <Route path="/cliente/ajuda" element={<AjudaPage />} />

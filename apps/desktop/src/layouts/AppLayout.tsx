@@ -208,6 +208,11 @@ function getNavItems(user: User): NavItem[] {
           label: "Evento 360",
         },
         {
+          href: "/cliente/relatorio",
+          icon: <BarChart3 size={18} />,
+          label: "Relatório",
+        },
+        {
           href: "/cliente/lojas",
           icon: <Store size={18} />,
           label: "Lojas",
@@ -221,6 +226,11 @@ function getNavItems(user: User): NavItem[] {
           href: "/cliente/cursos",
           icon: <BookOpen size={18} />,
           label: "Treinamentos",
+        },
+        {
+          href: "/cliente/faq-rag",
+          icon: <FileText size={18} />,
+          label: "FAQ / RAG",
         },
         {
           href: "/cliente/conversas",

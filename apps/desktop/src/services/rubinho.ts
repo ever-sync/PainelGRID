@@ -118,6 +118,19 @@ export function deleteRubinhoFaq(faqId: string, token: string) {
   });
 }
 
+export function updateRubinhoFaq(
+  faqId: string,
+  question: string,
+  answer: string,
+  token: string,
+) {
+  return httpRequest<RubinhoFaq>(`/rubinho/faqs/${faqId}`, {
+    method: "PATCH",
+    token,
+    body: { question, answer },
+  });
+}
+
 // Documents CRUD
 export function addRubinhoDocument(
   agentId: string,
@@ -136,5 +149,18 @@ export function deleteRubinhoDocument(docId: string, token: string) {
   return httpRequest<{ success: boolean }>(`/rubinho/documents/${docId}`, {
     method: "DELETE",
     token,
+  });
+}
+
+export function updateRubinhoDocument(
+  docId: string,
+  title: string,
+  content: string,
+  token: string,
+) {
+  return httpRequest<RubinhoDocument>(`/rubinho/documents/${docId}`, {
+    method: "PATCH",
+    token,
+    body: { title, content },
   });
 }

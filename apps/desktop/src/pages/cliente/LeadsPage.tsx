@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import clsx from "clsx";
 import { Search, ArrowLeft, Copy, Mail, Phone } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
@@ -9,6 +9,7 @@ import { readStoredSession } from "../../services/auth";
 import { fetchAllLeads, mapApiLeadToLead } from "../../services/leads";
 import { resolveClientId } from "../../utils/userContext";
 import { MissingClientScope } from "../../components/shared/MissingClientScope";
+import { pushToast } from "../../components/ui/Toast";
 
 type OutletContext = {
   user: User;
@@ -190,6 +191,7 @@ const INITIAL_MOCK_LEADS: Lead[] = [
 
 export function LeadsPage() {
   const { user } = useOutletContext<OutletContext>();
+  const navigate = useNavigate();
   const isDarkMode = readDashboardDarkEnabled(user.id);
   const clientId = resolveClientId(user);
 
@@ -248,7 +250,9 @@ export function LeadsPage() {
         (lead.cpf && lead.cpf.includes(search));
 
       const matchStatus =
-        filterStatus === "todos" ? true : lead.crm_stage === filterStatus;
+        filterStatus === "todos"
+          ? true
+          : (lead.crm_stage_name || lead.crm_stage) === filterStatus;
 
       const matchEngagement =
         filterEngagement === "todos"
@@ -334,6 +338,48 @@ export function LeadsPage() {
     dateTo,
   ]);
 
+  const storeOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(leads.map((lead) => lead.store_name?.trim()).filter(Boolean)),
+      ).sort((a, b) => a!.localeCompare(b!, "pt-BR")) as string[],
+    [leads],
+  );
+  const statusOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          leads
+            .map((lead) => lead.crm_stage_name || lead.crm_stage)
+            .filter(Boolean),
+        ),
+      ).sort((a, b) => a!.localeCompare(b!, "pt-BR")) as string[],
+    [leads],
+  );
+  const brandOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          leads.map((lead) => lead.brand_interest?.trim()).filter(Boolean),
+        ),
+      ).sort((a, b) => a!.localeCompare(b!, "pt-BR")) as string[],
+    [leads],
+  );
+  const channelOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(leads.map((lead) => lead.source?.trim()).filter(Boolean)),
+      ).sort((a, b) => a!.localeCompare(b!, "pt-BR")) as string[],
+    [leads],
+  );
+  const stateOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(leads.map((lead) => lead.state?.trim()).filter(Boolean)),
+      ).sort() as string[],
+    [leads],
+  );
+
   const exportCsv = () => {
     const cell = (value: unknown) =>
       `"${String(value ?? "").replace(/"/g, '""')}"`;
@@ -362,11 +408,18 @@ export function LeadsPage() {
     URL.revokeObjectURL(url);
   };
 
-  const handleCopySummary = () => {
+  const handleCopySummary = async () => {
     if (!selectedLead) return;
-    const textToCopy = `Resumo IA - ${selectedLead.name}\nStatus IA: ${selectedLead.ai_status || "Em atendimento"}\nResumo: ${selectedLead.ai_summary || selectedLead.notes}`;
-    void navigator.clipboard.writeText(textToCopy);
-    alert("Resumo do lead copiado para a área de transferência!");
+    const textToCopy = `Resumo IA - ${selectedLead.name}\nStatus IA: ${selectedLead.ai_status || "Não informado"}\nResumo: ${selectedLead.ai_summary || selectedLead.notes || "Não informado"}`;
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      pushToast({ message: "Resumo do lead copiado.", type: "success" });
+    } catch {
+      pushToast({
+        message: "Não foi possível copiar o resumo.",
+        type: "error",
+      });
+    }
   };
 
   if (!clientId) return <MissingClientScope />;
@@ -400,14 +453,18 @@ export function LeadsPage() {
             </h1>
             <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                {selectedLead.crm_stage || "encaminhado"}
+                {selectedLead.crm_stage_name ||
+                  selectedLead.crm_stage ||
+                  "Sem etapa"}
               </span>
               <span>·</span>
               <span>
-                engajamento {selectedLead.engagement_level || "medio"}
+                engajamento {selectedLead.engagement_level || "não informado"}
               </span>
               <span>·</span>
-              <span>sentimento {selectedLead.sentiment || "positivo"}</span>
+              <span>
+                sentimento {selectedLead.sentiment || "não informado"}
+              </span>
             </div>
           </div>
 
@@ -415,7 +472,11 @@ export function LeadsPage() {
           <div className="flex flex-wrap gap-2 pt-2">
             <button
               type="button"
-              onClick={() => alert("Abrindo tela de conversas do lead...")}
+              onClick={() =>
+                navigate(
+                  `/cliente/conversas?client_id=${encodeURIComponent(clientId)}&lead_id=${encodeURIComponent(selectedLead.id)}`,
+                )
+              }
               className={clsx(
                 "h-10 px-4 rounded-full border text-xs font-bold transition-all active:scale-95 cursor-pointer",
                 isDarkMode
@@ -424,19 +485,6 @@ export function LeadsPage() {
               )}
             >
               Ver conversa
-            </button>
-
-            <button
-              type="button"
-              onClick={() => alert("Abrindo card do lead no Bitrix CRM...")}
-              className={clsx(
-                "h-10 px-4 rounded-full border text-xs font-bold transition-all active:scale-95 cursor-pointer",
-                isDarkMode
-                  ? "border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
-                  : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100",
-              )}
-            >
-              Card no Bitrix
             </button>
 
             <a
@@ -456,7 +504,7 @@ export function LeadsPage() {
 
             <button
               type="button"
-              onClick={handleCopySummary}
+              onClick={() => void handleCopySummary()}
               className={clsx(
                 "h-10 px-4 rounded-full border text-xs font-bold transition-all active:scale-95 inline-flex items-center gap-1.5 cursor-pointer",
                 isDarkMode
@@ -468,19 +516,20 @@ export function LeadsPage() {
               <span>Copiar resumo</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => alert("Abrindo caixa de envio de e-mail...")}
-              className={clsx(
-                "h-10 px-4 rounded-full border text-xs font-bold transition-all active:scale-95 inline-flex items-center gap-1.5 cursor-pointer",
-                isDarkMode
-                  ? "border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
-                  : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100",
-              )}
-            >
-              <Mail size={14} />
-              <span>Enviar por e-mail</span>
-            </button>
+            {selectedLead.email ? (
+              <a
+                href={`mailto:${selectedLead.email}`}
+                className={clsx(
+                  "h-10 px-4 rounded-full border text-xs font-bold transition-all active:scale-95 inline-flex items-center gap-1.5 cursor-pointer",
+                  isDarkMode
+                    ? "border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100",
+                )}
+              >
+                <Mail size={14} />
+                <span>Enviar por e-mail</span>
+              </a>
+            ) : null}
           </div>
 
           {/* GRID COM AS 4 SEÇÕES DE INFORMAÇÃO DO LEAD (CONFORME IMAGEM 2) */}
@@ -500,18 +549,28 @@ export function LeadsPage() {
                 <p className="flex items-center gap-2">
                   <span>CPF:</span>
                   <span className="font-mono">
-                    {selectedLead.cpf || "***.***.**8-43"}
+                    {selectedLead.cpf || "Não informado"}
                   </span>
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                    validado
-                  </span>
+                  {selectedLead.cpf ? (
+                    <span
+                      className={clsx(
+                        "inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold",
+                        selectedLead.cpf_validated
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                          : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+                      )}
+                    >
+                      {selectedLead.cpf_validated ? "validado" : "não validado"}
+                    </span>
+                  ) : null}
                 </p>
 
                 <p>
                   <span>Cidade: </span>
                   <span className="font-semibold">
-                    {selectedLead.city || "São Paulo"}/
-                    {selectedLead.state || "SP"}
+                    {[selectedLead.city, selectedLead.state]
+                      .filter(Boolean)
+                      .join("/") || "Não informado"}
                   </span>
                 </p>
 
@@ -533,28 +592,28 @@ export function LeadsPage() {
                 <p>
                   <span>Marcas: </span>
                   <span className="font-semibold">
-                    {selectedLead.brand_interest || "Volkswagen"}
+                    {selectedLead.brand_interest || "Não informado"}
                   </span>
                 </p>
 
                 <p>
                   <span>Modelo: </span>
                   <span className="font-semibold">
-                    {selectedLead.model_interest || "T-Cross 2026"}
+                    {selectedLead.model_interest || "Não informado"}
                   </span>
                 </p>
 
                 <p>
                   <span>Loja: </span>
                   <span className="font-semibold">
-                    {selectedLead.store_name || "Alta Volkswagen | Saude"}
+                    {selectedLead.store_name || "Não informada"}
                   </span>
                 </p>
 
                 <p>
                   <span>Preferência de visita: </span>
                   <span className="font-semibold">
-                    {selectedLead.store_visit_datetime || "23/07 às 10:30"}
+                    {selectedLead.store_visit_datetime || "Não informada"}
                   </span>
                 </p>
               </div>
@@ -566,7 +625,7 @@ export function LeadsPage() {
                 Troca (veículo atual)
               </h3>
               <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-                {selectedLead.trade_vehicle || "new fiesta 2017"}
+                {selectedLead.trade_vehicle || "Não informado"}
               </p>
             </div>
 
@@ -576,9 +635,7 @@ export function LeadsPage() {
                 Atendimento (IA)
               </h3>
               <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-                Status IA:{" "}
-                {selectedLead.ai_status ||
-                  "Lead interessado, aguardando visita à loja para simulação"}
+                Status IA: {selectedLead.ai_status || "Não informado"}
               </p>
 
               {/* Caixa de Texto do Resumo IA */}
@@ -591,7 +648,8 @@ export function LeadsPage() {
                 )}
               >
                 {selectedLead.ai_summary ||
-                  "O lead deseja realizar uma simulação de financiamento para um veículo. O agente explicou que a simulação pode ser feita na loja Alta Volkswagen, com opções pelo programa Move Brasil ou pelo Santander, e orientou sobre os documentos necessários para agilizar o atendimento. O lead está na etapa inicial de interesse, buscando informações para avançar na negociação."}
+                  selectedLead.notes ||
+                  "Ainda não há resumo de atendimento para este lead."}
               </div>
 
               {/* Rodapé de Datas */}
@@ -666,10 +724,11 @@ export function LeadsPage() {
                 )}
               >
                 <option value="todos">status: todos</option>
-                <option value="encaminhado">encaminhado</option>
-                <option value="aberto">aberto</option>
-                <option value="agendado">agendado</option>
-                <option value="convertido">convertido</option>
+                {statusOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
               </select>
 
               <select
@@ -715,10 +774,11 @@ export function LeadsPage() {
                 )}
               >
                 <option value="todas">loja</option>
-                <option value="Alta Volkswagen">Alta Volkswagen | Saude</option>
-                <option value="Original BYD">Original BYD | Pacaembu</option>
-                <option value="R Point">R Point Renault</option>
-                <option value="Green">Green Volkswagen</option>
+                {storeOptions.map((store) => (
+                  <option key={store} value={store}>
+                    {store}
+                  </option>
+                ))}
               </select>
 
               <select
@@ -732,9 +792,11 @@ export function LeadsPage() {
                 )}
               >
                 <option value="todos">canal</option>
-                <option value="77586">77586</option>
-                <option value="whatsapp">WhatsApp Direct</option>
-                <option value="web">Web Chat</option>
+                {channelOptions.map((channel) => (
+                  <option key={channel} value={channel}>
+                    {channel}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -751,10 +813,11 @@ export function LeadsPage() {
                 )}
               >
                 <option value="todas">marca de interesse</option>
-                <option value="Volkswagen">Volkswagen</option>
-                <option value="BYD">BYD</option>
-                <option value="Renault">Renault</option>
-                <option value="Chevrolet">Chevrolet (GM)</option>
+                {brandOptions.map((brand) => (
+                  <option key={brand} value={brand}>
+                    {brand}
+                  </option>
+                ))}
               </select>
 
               <input
@@ -781,10 +844,11 @@ export function LeadsPage() {
                 )}
               >
                 <option value="todas">UF</option>
-                <option value="SP">SP</option>
-                <option value="RJ">RJ</option>
-                <option value="MG">MG</option>
-                <option value="MA">MA</option>
+                {stateOptions.map((state) => (
+                  <option key={state} value={state}>
+                    {state}
+                  </option>
+                ))}
               </select>
 
               <select
@@ -846,20 +910,6 @@ export function LeadsPage() {
                 )}
               >
                 Exportar CSV
-              </button>
-
-              <button
-                type="button"
-                onClick={exportCsv}
-                disabled={!filteredLeads.length}
-                className={clsx(
-                  "h-9 px-4 rounded-full border text-xs font-semibold transition-all active:scale-95 cursor-pointer",
-                  isDarkMode
-                    ? "border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
-                    : "border-zinc-200 bg-zinc-100 text-zinc-700 hover:bg-zinc-200",
-                )}
-              >
-                Exportar Excel
               </button>
             </div>
           </div>
@@ -933,7 +983,7 @@ export function LeadsPage() {
                       </div>
                     </td>
                     <td className="py-4 px-4 font-mono text-xs text-zinc-500">
-                      {lead.channel_code || "77586"}
+                      {lead.channel_code || lead.source || "—"}
                     </td>
                     <td className="py-4 px-4 font-mono text-xs text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
                       <span className="flex items-center gap-1.5">
@@ -943,20 +993,20 @@ export function LeadsPage() {
                     </td>
                     <td className="py-4 px-4">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                        {lead.crm_stage || "encaminhado"}
+                        {lead.crm_stage_name || lead.crm_stage || "Sem etapa"}
                       </span>
                     </td>
                     <td className="py-4 px-4 text-zinc-600 dark:text-zinc-400">
-                      {lead.engagement_level || "medio"}
+                      {lead.engagement_level || "—"}
                     </td>
                     <td className="py-4 px-4 text-zinc-600 dark:text-zinc-400">
-                      {lead.sentiment || "positivo"}
+                      {lead.sentiment || "—"}
                     </td>
                     <td className="py-4 px-4 font-medium text-zinc-800 dark:text-zinc-200">
-                      {lead.model_interest || "T-Cross 2026"}
+                      {lead.model_interest || "—"}
                     </td>
                     <td className="py-4 px-4 text-zinc-600 dark:text-zinc-400">
-                      {lead.store_name || "Alta Volkswagen | Saude"}
+                      {lead.store_name || "—"}
                     </td>
                     <td className="py-4 px-4 text-zinc-500 dark:text-zinc-400 font-mono text-xs whitespace-nowrap">
                       {new Date(lead.updated_at).toLocaleDateString("pt-BR", {
