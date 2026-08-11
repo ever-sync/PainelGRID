@@ -1210,7 +1210,8 @@ export function RelatorioGestorPage() {
       )}
     >
       {/* PageHeader com seletores superiores no lado direito */}
-      <PageHeader
+      <div className="no-print">
+        <PageHeader
         title="Relatório de Desempenho"
         breadcrumbs={[
           { label: isClientView ? "Cliente" : "Gestor" },
@@ -1286,7 +1287,8 @@ export function RelatorioGestorPage() {
             ) : null}
           </div>
         }
-      />
+        />
+      </div>
 
       {/* Abas Internas abaixo do Título e Seletores */}
       <div className="no-print">

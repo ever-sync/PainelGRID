@@ -442,7 +442,8 @@
 @media print {
   /* Esconde toda a moldura do app: sidebar, navs, botões marcados no-print */
   aside,
-  header nav,
+  header,
+  nav,
   .no-print {
     display: none !important;
   }
@@ -451,6 +452,22 @@
   html,
   body {
     background: #fff !important;
+  }
+
+  /* O PDF do Overview contém somente o relatório, sem o recuo e a moldura
+     usados pela sidebar do aplicativo. */
+  body:has(.overview-report) main {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body:has(.overview-report) main > div {
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   .exec-report {
