@@ -33,6 +33,7 @@ import {
 import { PageHeader } from "../../components/shared/PageHeader";
 import { StatsCard } from "../../components/shared/StatsCard";
 import { DeferredContent } from "../../components/shared/DeferredContent";
+import { mediaUrl } from "../../components/tv/shared";
 import { Card } from "../../components/ui/Card";
 import { Tabs } from "../../components/ui/Tabs";
 import { readStoredSession } from "../../services/auth";
@@ -915,13 +916,20 @@ export function RelatorioGestorPage() {
 
   const overviewTeamData = useMemo(() => {
     const counts = new Map<string, number>();
+    const teamDetails = new Map(
+      tvTeams.map((team) => [team.team_name, team] as const),
+    );
     for (const vendor of overviewVendorData) {
       counts.set(vendor.team, (counts.get(vendor.team) ?? 0) + vendor.value);
     }
     return [...counts.entries()]
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, value]) => ({
+        name,
+        value,
+        logoUrl: mediaUrl(teamDetails.get(name)?.logo_url),
+      }))
       .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
-  }, [overviewVendorData]);
+  }, [overviewVendorData, tvTeams]);
 
   const overviewDailyData = useMemo(() => {
     const counts = new Map<string, OverviewBreakdownItem>();
@@ -1169,20 +1177,37 @@ export function RelatorioGestorPage() {
                       {overviewTeamData.map((team, index) => {
                         const max = overviewTeamData[0]?.value || 1;
                         return (
-                          <div key={team.name}>
-                            <div className="mb-2 flex items-center justify-between gap-4 text-sm">
-                              <strong className="truncate text-gray-900 dark:text-zinc-100">
-                                {index + 1}. {team.name}
-                              </strong>
-                              <span className="font-bold text-gray-950 dark:text-white">
-                                {formatNumber(team.value)}
-                              </span>
+                          <div
+                            key={team.name}
+                            className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-4"
+                          >
+                            <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border border-gray-200 bg-white p-1 shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
+                              {team.logoUrl ? (
+                                <img
+                                  src={team.logoUrl}
+                                  alt={`Logo da equipe ${team.name}`}
+                                  className="h-full w-full object-contain"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <Shield size={28} className="text-gray-300 dark:text-zinc-500" />
+                              )}
                             </div>
-                            <div className="h-5 overflow-hidden rounded-full bg-gray-100 dark:bg-zinc-800">
-                              <div
-                                className="h-full rounded-full bg-gradient-to-r from-blue-600 to-[#FF0636]"
-                                style={{ width: `${Math.max((team.value / max) * 100, 2)}%` }}
-                              />
+                            <div className="min-w-0">
+                              <div className="mb-2 flex items-center justify-between gap-4 text-sm">
+                                <strong className="truncate text-gray-900 dark:text-zinc-100">
+                                  {index + 1}. {team.name}
+                                </strong>
+                                <span className="font-bold text-gray-950 dark:text-white">
+                                  {formatNumber(team.value)}
+                                </span>
+                              </div>
+                              <div className="h-5 overflow-hidden rounded-full bg-gray-100 dark:bg-zinc-800">
+                                <div
+                                  className="h-full rounded-full bg-gradient-to-r from-blue-600 to-[#FF0636]"
+                                  style={{ width: `${Math.max((team.value / max) * 100, 2)}%` }}
+                                />
+                              </div>
                             </div>
                           </div>
                         );
