@@ -451,16 +451,29 @@
   /* Fundo branco e conteúdo em largura total */
   html,
   body {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
     background: #fff !important;
+  }
+
+  body:has(.overview-report) #root,
+  body:has(.overview-report) div:has(> main) {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   /* O PDF do Overview contém somente o relatório, sem o recuo e a moldura
      usados pela sidebar do aplicativo. */
   body:has(.overview-report) main {
-    position: absolute !important;
-    inset: 0 auto auto 0 !important;
+    position: static !important;
     width: 100% !important;
+    height: auto !important;
     min-height: 0 !important;
+    overflow: visible !important;
     margin: 0 !important;
     padding: 0 !important;
   }
@@ -485,6 +498,11 @@
   }
 
   .overview-report {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
     margin: 0 !important;
     background: #fff !important;
     color: #111827 !important;
