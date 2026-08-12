@@ -438,9 +438,9 @@
     }
   }
 }
-/* O Overview é exportado em uma folha A4 horizontal. O nome de página
-   impede que o tamanho dependa do viewport que abriu o diálogo de impressão. */
-@page overview-a4 {
+/* Regra global: o Chrome não aplica de forma consistente tamanhos declarados
+   somente em uma @page nomeada e acaba abrindo o preview em retrato. */
+@page {
   size: A4 landscape;
   margin: 10mm;
 }
@@ -505,7 +505,6 @@
   }
 
   .overview-report {
-    page: overview-a4;
     display: block !important;
     box-sizing: border-box !important;
     width: 277mm !important;
@@ -522,6 +521,13 @@
 
   .overview-report > *,
   .overview-report .overview-donut {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  /* Mantém somente os cards individuais inteiros. Permitir que as linhas do
+     relatório fluam evita páginas quase vazias no preview. */
+  .overview-report > .grid > * {
     break-inside: avoid;
     page-break-inside: avoid;
   }
