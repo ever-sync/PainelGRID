@@ -61,9 +61,11 @@ import {
 } from "../../services/events";
 import {
   fetchAllLeads,
+  getLead,
   mapApiLeadToLead,
   updateLead,
 } from "../../services/leads";
+import { rescheduleAppointment } from "../../services/appointments";
 import {
   addTeamMember,
   createSalesTeam,
@@ -196,6 +198,29 @@ function formatDateTimeInput(value: string | null | undefined) {
   return value ? new Date(value).toISOString().slice(0, 16) : "";
 }
 
+function formatEventDayOption(day: { start: string; end: string }) {
+  const start = new Date(day.start);
+  const end = new Date(day.end);
+  if (Number.isNaN(start.getTime())) return day.start;
+
+  const date = new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "America/Sao_Paulo",
+  }).format(start);
+  const time = new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  });
+
+  return `${date}, das ${time.format(start)}${
+    !Number.isNaN(end.getTime()) ? ` às ${time.format(end)}` : ""
+  }`;
+}
+
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
@@ -293,6 +318,7 @@ export function EventDetailPage() {
   const [leadDrawerName, setLeadDrawerName] = useState("");
   const [leadDrawerEmail, setLeadDrawerEmail] = useState("");
   const [leadDrawerPhone, setLeadDrawerPhone] = useState("");
+  const [leadDrawerScheduledAt, setLeadDrawerScheduledAt] = useState("");
   const [leadDrawerSaving, setLeadDrawerSaving] = useState(false);
   const [leadDrawerMessage, setLeadDrawerMessage] = useState("");
   const [leadHistory, setLeadHistory] = useState<ApiCrmHistoryItem[]>([]);
@@ -827,6 +853,14 @@ export function EventDetailPage() {
     setLeadDrawerName(lead.name ?? "");
     setLeadDrawerEmail(lead.email ?? "");
     setLeadDrawerPhone(lead.phone ?? "");
+    const scheduledAt =
+      lead.active_appointment?.scheduled_at ??
+      lead.store_visit_datetime ??
+      "";
+    const matchingDay = (event?.event_days ?? []).find(
+      (day) => Date.parse(day.start) === Date.parse(scheduledAt),
+    );
+    setLeadDrawerScheduledAt(matchingDay?.start ?? scheduledAt);
     setLeadDrawerMessage("");
     setLeadDrawerOpen(true);
   }
@@ -879,10 +913,32 @@ export function EventDetailPage() {
       return;
     }
 
+    const configuredDays = event?.event_days ?? [];
+    const selectedEventDay = configuredDays.find(
+      (day) =>
+        day.start === leadDrawerScheduledAt ||
+        Date.parse(day.start) === Date.parse(leadDrawerScheduledAt),
+    );
+    const activeAppointment = selectedLead.active_appointment;
+    const activeAt = activeAppointment
+      ? Date.parse(activeAppointment.scheduled_at)
+      : Number.NaN;
+    const selectedAt = selectedEventDay
+      ? Date.parse(selectedEventDay.start)
+      : Number.NaN;
+    const dateChanged = Boolean(
+      activeAppointment && selectedEventDay && activeAt !== selectedAt,
+    );
+
+    if (activeAppointment && configuredDays.length > 0 && !selectedEventDay) {
+      setLeadDrawerMessage("Selecione uma data válida cadastrada no evento.");
+      return;
+    }
+
     setLeadDrawerSaving(true);
     setLeadDrawerMessage("");
     try {
-      const updated = await updateLead(
+      await updateLead(
         selectedLead.id,
         {
           name: normalizedName,
@@ -897,7 +953,23 @@ export function EventDetailPage() {
         session.accessToken,
       );
 
-      const mapped = mapApiLeadToLead(updated);
+      if (dateChanged && activeAppointment && selectedEventDay) {
+        await rescheduleAppointment(
+          session.accessToken,
+          activeAppointment.id,
+          {
+            scheduled_at: selectedEventDay.start,
+            timezone: "America/Sao_Paulo",
+            notes: "Data alterada pelo gestor na ficha do lead.",
+          },
+        );
+      }
+
+      const [freshLead, history] = await Promise.all([
+        getLead(selectedLead.id, session.accessToken),
+        listLeadHistory(selectedLead.id, session.accessToken),
+      ]);
+      const mapped = mapApiLeadToLead(freshLead);
       setEventLeads((current) =>
         current.map((lead) => (lead.id === mapped.id ? mapped : lead)),
       );
@@ -907,8 +979,23 @@ export function EventDetailPage() {
       setLeadDrawerName(mapped.name ?? "");
       setLeadDrawerEmail(mapped.email ?? "");
       setLeadDrawerPhone(mapped.phone ?? "");
+      setLeadHistory(history);
+      const refreshedScheduledAt =
+        mapped.active_appointment?.scheduled_at ??
+        mapped.store_visit_datetime ??
+        "";
+      const refreshedDay = (event?.event_days ?? []).find(
+        (day) => Date.parse(day.start) === Date.parse(refreshedScheduledAt),
+      );
+      setLeadDrawerScheduledAt(
+        refreshedDay?.start ?? refreshedScheduledAt,
+      );
       setLeadDrawerMode("view");
-      setLeadDrawerMessage("Lead atualizado com sucesso.");
+      setLeadDrawerMessage(
+        dateChanged
+          ? "Lead e data do evento atualizados com sucesso."
+          : "Lead atualizado com sucesso.",
+      );
       setTimeout(() => setLeadDrawerMessage(""), 3000);
     } catch (quickLeadError) {
       setLeadDrawerMessage(
@@ -3359,14 +3446,38 @@ export function EventDetailPage() {
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
                       Agendamento ativo
                     </p>
-                    <div className="mt-3 space-y-2 text-sm text-zinc-500">
-                      <p>
-                        {formatDateTime(
-                          selectedLead.active_appointment.scheduled_at,
-                        )}
-                      </p>
-                      <p>Status: {selectedLead.active_appointment.status}</p>
-                    </div>
+                    {leadDrawerMode === "edit" &&
+                    (event?.event_days?.length ?? 0) > 0 ? (
+                      <div className="mt-3 space-y-2">
+                        <Select
+                          id="lead-event-date"
+                          label="Data do evento"
+                          value={leadDrawerScheduledAt}
+                          disabled={leadDrawerSaving}
+                          onValueChange={setLeadDrawerScheduledAt}
+                          options={(event?.event_days ?? []).map((day) => ({
+                            value: day.start,
+                            label: formatEventDayOption(day),
+                          }))}
+                        />
+                        <p className="text-xs text-zinc-500">
+                          A alteração será registrada como reagendamento e
+                          manterá o histórico do lead.
+                        </p>
+                        <p className="text-sm text-zinc-500">
+                          Status atual: {selectedLead.active_appointment.status}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="mt-3 space-y-2 text-sm text-zinc-500">
+                        <p>
+                          {formatDateTime(
+                            selectedLead.active_appointment.scheduled_at,
+                          )}
+                        </p>
+                        <p>Status: {selectedLead.active_appointment.status}</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

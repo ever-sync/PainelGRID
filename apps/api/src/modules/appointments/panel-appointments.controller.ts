@@ -10,6 +10,7 @@ import { Role } from "../../common/types";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { AppointmentsService } from "./appointments.service";
 import { CreateAppointmentDto } from "./dto/create-appointment.dto";
+import { RescheduleAppointmentDto } from "./dto/reschedule-appointment.dto";
 
 @ApiTags("appointments")
 @ApiBearerAuth()
@@ -37,5 +38,17 @@ export class PanelAppointmentsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.appointmentsService.checkInByReception(user, id);
+  }
+
+  @Post(":id/reschedule")
+  @Roles(Role.GESTOR)
+  @ApiOperation({ summary: "Reagenda uma visita pelas datas validas do evento" })
+  @ApiResponse({ status: 201, description: "Agendamento reagendado com sucesso" })
+  reschedule(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: RescheduleAppointmentDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.appointmentsService.rescheduleForManager(user, id, dto);
   }
 }

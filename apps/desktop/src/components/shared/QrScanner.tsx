@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { Camera, CameraOff, AlertCircle, Zap, ZapOff } from "lucide-react";
 import { triggerHapticFeedback } from "../../utils/haptics";
 import { createAudioContext } from "../../utils/audioContext";
@@ -48,7 +48,10 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
 
   useEffect(() => {
     let disposed = false;
-    const html5QrCode = new Html5Qrcode(readerId);
+    const html5QrCode = new Html5Qrcode(readerId, {
+      formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+      verbose: false,
+    });
     qrRef.current = html5QrCode;
 
     const startScanning = async () => {
@@ -58,9 +61,9 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
         await html5QrCode.start(
           { facingMode: "environment" },
           {
-            fps: 10,
+            fps: 15,
             qrbox: (width, height) => {
-              const size = Math.min(width, height) * 0.7;
+              const size = Math.floor(Math.min(width, height) * 0.85);
               return { width: size, height: size };
             },
           },

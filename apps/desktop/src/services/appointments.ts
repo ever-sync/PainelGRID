@@ -50,3 +50,31 @@ export function checkInAppointment(token: string, appointmentId: string) {
     token,
   });
 }
+
+export type RescheduleAppointmentResponse = {
+  rescheduled: boolean;
+  from_appointment_id: string;
+  to_appointment_id: string;
+  lead_id: string;
+  scheduled_at: string;
+  idempotent_replay?: boolean;
+};
+
+export function rescheduleAppointment(
+  token: string,
+  appointmentId: string,
+  body: {
+    scheduled_at: string;
+    timezone?: string;
+    notes?: string;
+  },
+) {
+  return httpRequest<RescheduleAppointmentResponse>(
+    `/appointments/${appointmentId}/reschedule`,
+    {
+      method: "POST",
+      token,
+      body,
+    },
+  );
+}

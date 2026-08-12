@@ -755,6 +755,25 @@ export class AppointmentsService {
     return this.checkInAppointment(appointment);
   }
 
+  async rescheduleForManager(
+    user: AuthenticatedUser,
+    appointmentId: string,
+    dto: RescheduleAppointmentDto,
+  ) {
+    if (user.role !== Role.GESTOR || !user.client_id) {
+      throw new BadRequestException(
+        "Apenas gestor pode reagendar visitas pelo painel",
+      );
+    }
+
+    const appointment = await this.getAppointmentOrFail(appointmentId);
+    if (appointment.client_id !== user.client_id) {
+      throw new BadRequestException("Agendamento nao pertence a esta empresa");
+    }
+
+    return this.reschedule(appointmentId, dto);
+  }
+
   private async createInternal(
     lead: Awaited<ReturnType<PrismaService["lead"]["findUnique"]>>,
     event: Awaited<ReturnType<PrismaService["event"]["findUnique"]>>,
@@ -876,7 +895,9 @@ export class AppointmentsService {
         vendorName: vendor?.name ?? null,
         vendorAvatarUrl: vendor?.avatar_url ?? null,
         clientName: client?.company_name ?? event.name,
-        checkinToken: lead.checkin_token || lead.id,
+        checkinToken: lead.checkin_token
+          ? decryptCheckinToken(lead.checkin_token, this.checkinVoucherSecret())
+          : lead.id,
       });
       await this.prisma.dispatchEvent.upsert({
         where: {
@@ -1049,7 +1070,10 @@ export class AppointmentsService {
         vendorName: vendor?.name ?? null,
         vendorAvatarUrl: vendor?.avatar_url ?? null,
         clientName: client?.company_name ?? lead.event_interest.name,
-        checkinToken,
+        checkinToken: decryptCheckinToken(
+          checkinToken,
+          this.checkinVoucherSecret(),
+        ),
       });
       timelineContext = {
         clientId: lead.client_id,
@@ -1175,6 +1199,31 @@ export class AppointmentsService {
       );
     }
 
+    const scheduledAt = new Date(dto.scheduled_at);
+    if (Number.isNaN(scheduledAt.getTime())) {
+      throw new BadRequestException("Data de reagendamento invalida");
+    }
+
+    const eventDays = Array.isArray(appointment.event.event_days)
+      ? appointment.event.event_days
+      : [];
+    const validEventDay = eventDays.some((day) => {
+      if (!day || typeof day !== "object" || Array.isArray(day)) return false;
+      const start = (day as Record<string, unknown>).start;
+      if (typeof start !== "string") return false;
+      const parsedStart = new Date(start);
+      return (
+        !Number.isNaN(parsedStart.getTime()) &&
+        parsedStart.getTime() === scheduledAt.getTime()
+      );
+    });
+
+    if (eventDays.length > 0 && !validEventDay) {
+      throw new BadRequestException(
+        "Data escolhida nao pertence aos dias cadastrados do evento",
+      );
+    }
+
     await this.assertNoDuplicateActiveAppointment(
       appointment.lead_id,
       appointment.event_id,
@@ -1186,7 +1235,6 @@ export class AppointmentsService {
       appointment.id,
     );
 
-    const scheduledAt = new Date(dto.scheduled_at);
     const newAppointment = await this.prisma.$transaction(async (tx) => {
       await tx.appointment.update({
         where: { id: appointment.id },

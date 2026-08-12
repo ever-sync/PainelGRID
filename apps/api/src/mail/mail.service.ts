@@ -516,15 +516,17 @@ export class MailService {
     const checkinToken =
       p.checkinToken?.trim() ||
       `CHK-${firstName.toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const checkinUrl = `${this.frontendUrl.replace(/\/+$/, "")}/recepcao/checkin?v=${encodeURIComponent(checkinToken)}`;
-    const qrCodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(checkinUrl)}`;
+    // O QR carrega somente o token curto. Incluir a URL e o token criptografado
+    // deixava a matriz densa demais para a câmera da recepção reconhecer em
+    // telas de celular. O leitor e a API aceitam o token bruto diretamente.
+    const qrCodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=24&ecc=M&data=${encodeURIComponent(checkinToken)}`;
 
     const qrCodeBlock = `
         <div style="background:#ffffff; border:2px dashed #FF0636; border-radius:18px; padding:24px 20px; margin:24px 0; text-align:center;">
           <p style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:#FF0636; margin:0 0 12px 0;">
             🎟️ SEU QR CODE DE CREDENCIAMENTO RÁPIDO
           </p>
-          <img src="${qrCodeApiUrl}" alt="QR Code Check-in" width="200" height="200" style="border-radius:12px; border:1px solid #eee; display:block; margin:0 auto 12px; max-width:200px;" />
+          <img src="${qrCodeApiUrl}" alt="QR Code Check-in" width="260" height="260" style="border-radius:12px; border:1px solid #eee; display:block; margin:0 auto 12px; width:260px; height:260px; max-width:100%; image-rendering:pixelated;" />
           <p style="font-size:14px; font-weight:700; color:#111; font-family:monospace; margin:0 0 4px 0;">
             Código: ${checkinToken}
           </p>
