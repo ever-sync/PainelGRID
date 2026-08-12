@@ -154,8 +154,8 @@ export function CheckinPage() {
   const [createError, setCreateError] = useState("");
   const [createBusy, setCreateBusy] = useState(false);
   const [, setInviteToken] = useState("");
-  const [, setTokenHint] = useState("");
-  const [, setTokenBusy] = useState(false);
+  const [tokenHint, setTokenHint] = useState("");
+  const [tokenBusy, setTokenBusy] = useState(false);
   const [scannedToken, setScannedToken] = useState("");
   const [activeTab, setActiveTab] = useState<
     "all" | "expected" | "arrived" | "absent"
@@ -509,6 +509,7 @@ export function CheckinPage() {
         setShowScannerModal(false);
       } else {
         setTokenHint("Código inválido ou convite de outra empresa.");
+        setScannerKey((key) => key + 1);
       }
     } finally {
       setTokenBusy(false);
@@ -1297,9 +1298,28 @@ export function CheckinPage() {
                 }}
                 onClose={() => setShowScannerModal(false)}
               />
-              {scannedToken && (
-                <p className="mt-2 text-xs text-center">{scannedToken}</p>
-              )}
+              {tokenBusy ? (
+                <p className="mt-2 text-center text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                  Validando convite...
+                </p>
+              ) : null}
+              {tokenHint ? (
+                <Notice
+                  tone={
+                    tokenHint.startsWith("Check-in realizado")
+                      ? "success"
+                      : "error"
+                  }
+                  className="mt-2 text-xs"
+                >
+                  {tokenHint}
+                </Notice>
+              ) : null}
+              {scannedToken && !tokenBusy && !tokenHint ? (
+                <p className="mt-2 text-center text-xs text-zinc-500">
+                  QR Code identificado.
+                </p>
+              ) : null}
             </div>
           )}
         </div>

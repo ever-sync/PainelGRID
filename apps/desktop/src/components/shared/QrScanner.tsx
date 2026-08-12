@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { Camera, CameraOff, AlertCircle, Zap, ZapOff } from "lucide-react";
 import { triggerHapticFeedback } from "../../utils/haptics";
@@ -34,13 +34,21 @@ function playBeep() {
 
 export function QrScanner({ onScan, onClose }: QrScannerProps) {
   const qrRef = useRef<Html5Qrcode | null>(null);
+  const onScanRef = useRef(onScan);
+  const decodedRef = useRef(false);
+  const readerId = `qr-reader-${useId().replace(/:/g, "")}`;
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
 
   useEffect(() => {
-    const html5QrCode = new Html5Qrcode("qr-reader-element");
+    onScanRef.current = onScan;
+  }, [onScan]);
+
+  useEffect(() => {
+    let disposed = false;
+    const html5QrCode = new Html5Qrcode(readerId);
     qrRef.current = html5QrCode;
 
     const startScanning = async () => {
@@ -57,6 +65,8 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
             },
           },
           (decodedText) => {
+            if (decodedRef.current || disposed) return;
+            decodedRef.current = true;
             playBeep();
             triggerHapticFeedback(150);
             // Stop scanning on first successful match
@@ -64,14 +74,14 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
               html5QrCode
                 .stop()
                 .then(() => {
-                  onScan(decodedText);
+                  if (!disposed) onScanRef.current(decodedText);
                 })
                 .catch((err) => {
                   console.error("Erro ao parar camera apos scan", err);
-                  onScan(decodedText);
+                  if (!disposed) onScanRef.current(decodedText);
                 });
             } else {
-              onScan(decodedText);
+              onScanRef.current(decodedText);
             }
           },
           () => {
@@ -103,18 +113,21 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
     void startScanning();
 
     return () => {
-      if (qrRef.current && qrRef.current.isScanning) {
-        void qrRef.current
+      disposed = true;
+      const scanner = qrRef.current;
+      qrRef.current = null;
+      if (scanner?.isScanning) {
+        void scanner
           .stop()
           .then(() => {
-            qrRef.current?.clear();
+            scanner.clear();
           })
           .catch((err) => {
             console.error("Erro ao parar camera no cleanup", err);
           });
-      }
+      } else scanner?.clear();
     };
-  }, [onScan]);
+  }, [readerId]);
 
   const toggleTorch = async () => {
     if (!qrRef.current || !hasTorch) return;
@@ -158,7 +171,7 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
           </div>
         ) : (
           <>
-            <div id="qr-reader-element" className="w-full h-full" />
+            <div id={readerId} className="w-full h-full" />
 
             {hasTorch && !loading && (
               <button

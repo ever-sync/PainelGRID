@@ -1338,7 +1338,7 @@ export function RelatorioGestorPage() {
             </Card>
           ) : (
             <>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="overview-metrics grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <OverviewMetricCard
                   title="Total de agendamentos"
                   value={formatNumber(overviewScheduled)}
@@ -1362,7 +1362,7 @@ export function RelatorioGestorPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+              <div className="overview-summary grid grid-cols-1 gap-6 lg:grid-cols-3">
                 <Card className="lg:col-span-2">
                   <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">
                     Total de agendamentos por equipe
@@ -1500,7 +1500,7 @@ export function RelatorioGestorPage() {
                 </Card>
               </div>
 
-              <Card>
+              <Card className="overview-vendors">
                 <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">
                   Agendamentos entre os vendedores
                 </h3>
@@ -1545,7 +1545,7 @@ export function RelatorioGestorPage() {
                 </div>
               </Card>
 
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div className="overview-breakdowns grid grid-cols-1 gap-6 lg:grid-cols-2">
                 {[
                   {
                     title: "Agendamentos por dia de criação",
