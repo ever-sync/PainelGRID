@@ -31,9 +31,6 @@ import {
   Trophy,
   Shield,
   Printer,
-  Bot,
-  UserRound,
-  Swords,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { StatsCard } from "../../components/shared/StatsCard";
@@ -361,116 +358,6 @@ function OverviewTeamBattle({ teams }: { teams: OverviewTeamItem[] }) {
             style={{ width: `${100 - leftPercent}%` }}
           />
         </div>
-      </div>
-    </div>
-  );
-}
-
-function RubinhoVersusCard({
-  title,
-  metricLabel,
-  rubinhoValue,
-  sellerValue,
-  manualValue,
-  rubinhoImageUrl,
-}: {
-  title: string;
-  metricLabel: string;
-  rubinhoValue: number;
-  sellerValue: number;
-  manualValue: number;
-  rubinhoImageUrl?: string | null;
-}) {
-  const duelTotal = rubinhoValue + sellerValue;
-  const rubinhoPercent = duelTotal ? (rubinhoValue / duelTotal) * 100 : 50;
-  const winner =
-    rubinhoValue === sellerValue
-      ? "Empate técnico"
-      : rubinhoValue > sellerValue
-        ? "Rubinho lidera"
-        : "Vendedores lideram";
-
-  return (
-    <div className="relative overflow-hidden rounded-[28px] border border-slate-700/70 bg-[radial-gradient(circle_at_50%_0%,#312e81_0%,#111827_47%,#020617_100%)] p-5 text-white shadow-[0_18px_55px_rgba(15,23,42,0.28)] md:p-6">
-      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-violet-500 via-amber-300 to-cyan-400" />
-      <div className="relative flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-violet-300">
-            Duelo de performance
-          </p>
-          <h3 className="mt-1 text-lg font-black tracking-tight">{title}</h3>
-        </div>
-        <div className="rounded-xl border border-white/10 bg-white/5 p-2 text-amber-300">
-          <Swords size={20} />
-        </div>
-      </div>
-
-      <div className="relative mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <div className="flex min-w-0 flex-col items-center text-center">
-          <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl border-2 border-violet-400 bg-violet-500/15 shadow-[0_0_28px_rgba(139,92,246,0.28)]">
-            {rubinhoImageUrl ? (
-              <img
-                src={rubinhoImageUrl}
-                alt="Rubinho"
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <Bot size={40} className="text-violet-300" />
-            )}
-          </div>
-          <strong className="mt-3 text-sm font-black uppercase tracking-wide">
-            Rubinho
-          </strong>
-          <span className="mt-1 text-4xl font-black tabular-nums text-violet-300">
-            {formatNumber(rubinhoValue)}
-          </span>
-        </div>
-
-        <div className="flex flex-col items-center">
-          <div className="flex h-14 w-14 -rotate-6 items-center justify-center rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-200 to-orange-500 text-xl font-black italic text-slate-950 shadow-[0_0_30px_rgba(251,191,36,0.3)]">
-            VS
-          </div>
-          <span className="mt-2 max-w-[92px] text-center text-[9px] font-bold uppercase tracking-[0.13em] text-slate-400">
-            {winner}
-          </span>
-        </div>
-
-        <div className="flex min-w-0 flex-col items-center text-center">
-          <div className="flex h-20 w-20 items-center justify-center rounded-3xl border-2 border-cyan-400 bg-cyan-500/15 shadow-[0_0_28px_rgba(34,211,238,0.2)]">
-            <UserRound size={40} className="text-cyan-300" />
-          </div>
-          <strong className="mt-3 text-sm font-black uppercase tracking-wide">
-            Vendedores
-          </strong>
-          <span className="mt-1 text-4xl font-black tabular-nums text-cyan-300">
-            {formatNumber(sellerValue)}
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-5">
-        <div className="mb-2 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
-          <span>{Math.round(rubinhoPercent)}%</span>
-          <span>{metricLabel}</span>
-          <span>{Math.round(100 - rubinhoPercent)}%</span>
-        </div>
-        <div className="flex h-3 overflow-hidden rounded-full bg-slate-800 ring-1 ring-white/10">
-          <div
-            className="bg-gradient-to-r from-fuchsia-600 to-violet-400"
-            style={{ width: `${rubinhoPercent}%` }}
-          />
-          <div
-            className="bg-gradient-to-r from-cyan-400 to-blue-600"
-            style={{ width: `${100 - rubinhoPercent}%` }}
-          />
-        </div>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-slate-300">
-        <span>Humano/manual sem responsável</span>
-        <strong className="tabular-nums text-white">
-          {formatNumber(manualValue)}
-        </strong>
       </div>
     </div>
   );
@@ -1471,47 +1358,6 @@ export function RelatorioGestorPage() {
                   tone="emerald"
                 />
               </div>
-
-              {executiveReport?.rubinho.appointment_ownership ? (
-                <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-                  <RubinhoVersusCard
-                    title="Rubinho vs Vendedores"
-                    metricLabel="Agendamentos"
-                    rubinhoValue={
-                      executiveReport.rubinho.appointment_ownership.rubinho
-                        .appointments
-                    }
-                    sellerValue={
-                      executiveReport.rubinho.appointment_ownership.seller
-                        .appointments
-                    }
-                    manualValue={
-                      executiveReport.rubinho.appointment_ownership.human_manual
-                        .appointments
-                    }
-                  />
-                  <RubinhoVersusCard
-                    title="Rubinho vs Vendedores"
-                    metricLabel="Vendas"
-                    rubinhoValue={
-                      executiveReport.rubinho.appointment_ownership.rubinho
-                        .sales
-                    }
-                    sellerValue={
-                      executiveReport.rubinho.appointment_ownership.seller.sales
-                    }
-                    manualValue={
-                      executiveReport.rubinho.appointment_ownership.human_manual
-                        .sales
-                    }
-                  />
-                </div>
-              ) : (
-                <Card className="text-sm text-gray-500 dark:text-zinc-400">
-                  Carregando a atribuição de agendamentos e vendas por
-                  responsável…
-                </Card>
-              )}
 
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 <Card className="lg:col-span-2">
