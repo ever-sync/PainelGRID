@@ -86,6 +86,11 @@ export class MetaService implements OnModuleInit {
   private readonly oauthSessionTtlSeconds = 60 * 30;
   /** Teto de paginas da Graph API por listagem — evita varredura infinita e trunca de forma observavel. */
   private readonly maxGraphPages = 100;
+  /** Estrutura publica do template; parametros do lead nunca entram neste cache. */
+  private readonly whatsappTemplateCache = new Map<
+    string,
+    { expiresAt: number; template: MetaWhatsappMessageTemplateSummary | null }
+  >();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -1958,6 +1963,72 @@ export class MetaService implements OnModuleInit {
     );
 
     return response.messages?.[0]?.id ?? null;
+  }
+
+  /**
+   * Gera uma fotografia textual do template exatamente com os parametros usados
+   * no disparo. O resultado e persistido no Chat para que o historico nao dependa
+   * da versao atual do template na Meta.
+   */
+  async renderClientWhatsappTemplate(args: {
+    clientId: string;
+    templateName: string;
+    language: string;
+    parameters: string[];
+  }): Promise<string | null> {
+    const selectedAsset = await this.getClientPrimaryWhatsappChannel(
+      args.clientId,
+    );
+    if (!selectedAsset.waba_id) return null;
+
+    const cacheKey = `${selectedAsset.waba_id}:${args.templateName}:${args.language}`;
+    const cached = this.whatsappTemplateCache.get(cacheKey);
+    let template =
+      cached && cached.expiresAt > Date.now() ? cached.template : undefined;
+    if (template === undefined) {
+      const templates =
+        await this.graphGetAll<MetaWhatsappMessageTemplateSummary>(
+          `${selectedAsset.waba_id}/message_templates`,
+          selectedAsset.meta_connection.access_token,
+          {
+            fields: "id,name,status,category,language,components",
+            limit: 100,
+          },
+        );
+      template =
+        templates.find(
+          (candidate) =>
+            candidate.name === args.templateName &&
+            candidate.language === args.language,
+        ) ?? null;
+      this.whatsappTemplateCache.set(cacheKey, {
+        expiresAt: Date.now() + 5 * 60 * 1000,
+        template,
+      });
+    }
+    if (!template) return null;
+
+    const interpolate = (value?: string) => {
+      if (!value) return null;
+      return value.replace(/\{\{\s*(\d+)\s*\}\}/g, (_match, rawIndex) => {
+        const index = Number(rawIndex) - 1;
+        return args.parameters[index] ?? `{{${rawIndex}}}`;
+      });
+    };
+    const lines: string[] = [];
+    for (const component of template.components ?? []) {
+      const type = component.type?.toUpperCase();
+      if (type === "HEADER" || type === "BODY" || type === "FOOTER") {
+        const text = interpolate(component.text);
+        if (text) lines.push(text);
+      }
+      if (type === "BUTTONS") {
+        for (const button of component.buttons ?? []) {
+          if (button.text) lines.push(`[${button.text}]`);
+        }
+      }
+    }
+    return lines.length > 0 ? lines.join("\n\n") : null;
   }
 
   async sendClientWhatsappMediaMessage(args: {

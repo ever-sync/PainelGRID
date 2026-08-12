@@ -585,7 +585,9 @@ describe("EventDashboardService.getExecutiveReport attribution", () => {
       metaCampaignAssignment: {
         findMany: jest
           .fn()
-          .mockResolvedValue([{ meta_campaign_id: "campaign-1" }]),
+          .mockResolvedValue([
+            { meta_campaign_id: "campaign-1", campaign_name: null },
+          ]),
       },
       metaDailyInsight: {
         findMany: jest.fn().mockResolvedValue([
@@ -640,6 +642,7 @@ describe("EventDashboardService.getExecutiveReport attribution", () => {
 
     expect(result.attribution_by_level.campaigns[0]).toMatchObject({
       entity_id: "campaign-1",
+      name: "Campanha 1",
       leads: 1,
       scheduled: 1,
       checked_in: 1,

@@ -53,6 +53,11 @@ export interface MetaWhatsappTemplateComponent {
   type?: string;
   format?: string;
   text?: string;
+  buttons?: Array<{
+    type?: string;
+    text?: string;
+    url?: string;
+  }>;
 }
 
 export interface MetaWhatsappMessageTemplateSummary {

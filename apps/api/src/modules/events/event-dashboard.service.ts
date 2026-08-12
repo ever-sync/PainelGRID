@@ -1099,6 +1099,7 @@ export class EventDashboardService {
         select: {
           id: true,
           confirmation_status: true,
+          description: true,
           vehicle_plate: true,
           vehicle_brand: true,
           vehicle_model: true,
@@ -1174,7 +1175,7 @@ export class EventDashboardService {
       }),
       this.prisma.metaCampaignAssignment.findMany({
         where: { event_id: eventId, client_id: { in: clientIds } },
-        select: { meta_campaign_id: true },
+        select: { meta_campaign_id: true, campaign_name: true },
       }),
       this.prisma.serviceRating.groupBy({
         by: ["vendor_id"],
@@ -1251,8 +1252,20 @@ export class EventDashboardService {
       if (status === ConfirmationStatus.checked_in) checkedInIds.add(leadId);
     }
 
+    const cleanEntityName = (value: string | null | undefined) => {
+      const normalized = value?.trim();
+      return normalized ? normalized : null;
+    };
     const campaignName = new Map<string, string>();
-    for (const c of metaCampaigns) campaignName.set(c.meta_campaign_id, c.name);
+    for (const c of metaCampaigns) {
+      const name = cleanEntityName(c.name);
+      if (name) campaignName.set(c.meta_campaign_id, name);
+    }
+    const assignedCampaignName = new Map<string, string>();
+    for (const assignment of campaignAssignments) {
+      const name = cleanEntityName(assignment.campaign_name);
+      if (name) assignedCampaignName.set(assignment.meta_campaign_id, name);
+    }
     const adSetName = new Map<string, string>();
     for (const adSet of metaAdSets)
       adSetName.set(adSet.meta_ad_set_id, adSet.name);
@@ -1285,6 +1298,9 @@ export class EventDashboardService {
       reach: number;
       conversations: number;
       cpl: number;
+      meta_cpl: number;
+      system_cpl: number;
+      reach_aggregation: "sum_daily_not_deduplicated";
       cost_per_conversation: number;
       cost_per_scheduled: number;
       cost_per_sale: number;
@@ -1304,12 +1320,19 @@ export class EventDashboardService {
       adSetId: string | null,
     ): Attr => {
       const map = attributionMaps[level];
+      const fallbackName =
+        level === "campaign"
+          ? "Campanha sem nome"
+          : level === "adset"
+            ? "Conjunto sem nome"
+            : "Anuncio sem nome";
+      const resolvedName = cleanEntityName(name) ?? fallbackName;
       let a = map.get(entityId);
       if (!a) {
         a = {
           level,
           entity_id: entityId,
-          name,
+          name: resolvedName,
           meta_campaign_id: campaignId,
           meta_ad_set_id: adSetId,
           leads: 0,
@@ -1323,6 +1346,9 @@ export class EventDashboardService {
           reach: 0,
           conversations: 0,
           cpl: 0,
+          meta_cpl: 0,
+          system_cpl: 0,
+          reach_aggregation: "sum_daily_not_deduplicated",
           cost_per_conversation: 0,
           cost_per_scheduled: 0,
           cost_per_sale: 0,
@@ -1330,6 +1356,10 @@ export class EventDashboardService {
           roi_percent: 0,
         };
         map.set(entityId, a);
+      } else if (a.name === fallbackName && resolvedName !== fallbackName) {
+        // A linha pode nascer apenas do vinculo pelo ID. Quando o import ou o
+        // sync trouxer o nome real depois, substitua o rotulo provisório.
+        a.name = resolvedName;
       }
       return a;
     };
@@ -1344,7 +1374,9 @@ export class EventDashboardService {
       ensureAttr(
         "campaign",
         campaignId,
-        campaignName.get(campaignId) ?? "Campanha sem nome",
+        campaignName.get(campaignId) ??
+          assignedCampaignName.get(campaignId) ??
+          "Campanha sem nome",
         campaignId,
         null,
       );
@@ -1382,8 +1414,9 @@ export class EventDashboardService {
           ensureAttr(
             "campaign",
             entry.meta_campaign_id,
-            entry.meta_campaign_name ??
+            cleanEntityName(entry.meta_campaign_name) ??
               campaignName.get(entry.meta_campaign_id) ??
+              assignedCampaignName.get(entry.meta_campaign_id) ??
               "Campanha sem nome",
             entry.meta_campaign_id,
             null,
@@ -1523,6 +1556,9 @@ export class EventDashboardService {
           reach: row.reach,
           conversations: row.conversations,
           cpl: row.leads > 0 ? round2(row.spend / row.leads) : 0,
+          system_cpl: row.leads > 0 ? round2(row.spend / row.leads) : 0,
+          meta_cpl: row.meta_leads > 0 ? round2(row.spend / row.meta_leads) : 0,
+          reach_aggregation: "sum_daily_not_deduplicated" as const,
           cost_per_conversation:
             row.conversations > 0 ? round2(row.spend / row.conversations) : 0,
           cost_per_scheduled:
@@ -1560,28 +1596,6 @@ export class EventDashboardService {
     // As categorias abaixo sao mutuamente exclusivas. A precedencia evita
     // atribuir a mesma jornada mais de uma vez:
     // recuperado > originado > influenciado > humano/manual.
-    const agentAppointments = appointments.filter(
-      (appointment) =>
-        appointment.source === "n8n_ai_agent" ||
-        appointment.created_by_type === "external_agent",
-    );
-    const agentAppointmentLeadIds = new Set(
-      agentAppointments.map((appointment) => appointment.lead_id),
-    );
-    const agentCompletedLeadIds = new Set(
-      agentAppointments
-        .filter(
-          (appointment) =>
-            appointment.status === AppointmentStatus.completed ||
-            Boolean(appointment.completed_at),
-        )
-        .map((appointment) => appointment.lead_id),
-    );
-    const agentSales = sales.filter((sale) =>
-      agentAppointmentLeadIds.has(sale.lead_id),
-    );
-    const agentSoldLeadIds = new Set(agentSales.map((sale) => sale.lead_id));
-
     const [rubinhoMessages, dispatches, agentLogCount] = await Promise.all([
       this.prisma.message.findMany({
         where: {
@@ -1797,24 +1811,38 @@ export class EventDashboardService {
       rule: "appointment_creator" as const,
     };
 
-    const agentRevenue = agentSales.reduce(
-      (sum, sale) => sum + Number(sale.value),
-      0,
-    );
+    const rubinhoConversationIds = [
+      ...new Set(rubinhoMessages.map((message) => message.conversation_id)),
+    ];
+    const rubinhoConversations = rubinhoConversationIds.length
+      ? await this.prisma.conversation.findMany({
+          where: { id: { in: rubinhoConversationIds } },
+          select: {
+            messages: {
+              orderBy: { created_at: "asc" },
+              take: 1,
+              select: { author_type: true },
+            },
+          },
+        })
+      : [];
+    const conversationsInitiatedByRubinho = rubinhoConversations.filter(
+      (conversation) => conversation.messages[0]?.author_type === "rubinho",
+    ).length;
+    const rubinhoOwned = appointmentOwnership.rubinho;
     const rubinho = {
       mensagens: rubinhoMessages.length,
-      conversas_iniciadas: new Set(
-        rubinhoMessages.map((message) => message.conversation_id),
-      ).size,
-      credenciamentos: agentAppointmentLeadIds.size,
-      agendamentos: agentAppointments.length,
-      comparecimentos: agentCompletedLeadIds.size,
+      conversas_iniciadas: conversationsInitiatedByRubinho,
+      conversas_com_atuacao: rubinhoConversationIds.length,
+      credenciamentos: rubinhoOwned.leads,
+      agendamentos: rubinhoOwned.appointments,
+      comparecimentos: rubinhoOwned.checked_in,
       taxa_comparecimento:
-        agentAppointmentLeadIds.size > 0
-          ? (agentCompletedLeadIds.size / agentAppointmentLeadIds.size) * 100
+        rubinhoOwned.appointments > 0
+          ? (rubinhoOwned.checked_in / rubinhoOwned.appointments) * 100
           : 0,
-      vendas_originadas: agentSoldLeadIds.size,
-      receita_influenciada: Math.round(agentRevenue * 100) / 100,
+      vendas_originadas: rubinhoOwned.sales,
+      receita_influenciada: rubinhoOwned.revenue,
       acoes_ia: agentLogCount,
       attribution_method: "agent_created_appointment" as const,
       attribution_breakdown: attributionBreakdown,
@@ -1830,19 +1858,23 @@ export class EventDashboardService {
     });
     const history = await Promise.all(
       historyEvents.map(async (ev) => {
-        const [hLeads, hSales] = await Promise.all([
+        const [hLeads, hAppointments, hSales] = await Promise.all([
           this.prisma.lead.findMany({
             where: { event_interest_id: ev.id, deleted_at: null },
-            select: { confirmation_status: true },
+            select: { id: true, confirmation_status: true },
+          }),
+          this.prisma.appointment.findMany({
+            where: { event_id: ev.id },
+            select: { lead_id: true, status: true, completed_at: true },
           }),
           this.prisma.sale.findMany({
             where: { appointment: { event_id: ev.id } },
             select: { value: true },
           }),
         ]);
-        let scheduled = 0;
-        let confirmed = 0;
-        let checkedIn = 0;
+        const scheduledLeadIds = new Set<string>();
+        const confirmedLeadIds = new Set<string>();
+        const checkedInLeadIds = new Set<string>();
         for (const l of hLeads) {
           const s = l.confirmation_status;
           if (
@@ -1850,13 +1882,36 @@ export class EventDashboardService {
             s === ConfirmationStatus.confirmed ||
             s === ConfirmationStatus.checked_in
           )
-            scheduled += 1;
+            scheduledLeadIds.add(l.id);
           if (
             s === ConfirmationStatus.confirmed ||
             s === ConfirmationStatus.checked_in
           )
-            confirmed += 1;
-          if (s === ConfirmationStatus.checked_in) checkedIn += 1;
+            confirmedLeadIds.add(l.id);
+          if (s === ConfirmationStatus.checked_in) checkedInLeadIds.add(l.id);
+        }
+        for (const appointment of hAppointments) {
+          if (
+            appointment.status === AppointmentStatus.scheduled ||
+            appointment.status === AppointmentStatus.confirmed ||
+            appointment.status === AppointmentStatus.completed ||
+            appointment.status === AppointmentStatus.no_show ||
+            appointment.status === AppointmentStatus.rescheduled
+          ) {
+            scheduledLeadIds.add(appointment.lead_id);
+          }
+          if (
+            appointment.status === AppointmentStatus.confirmed ||
+            appointment.status === AppointmentStatus.completed
+          ) {
+            confirmedLeadIds.add(appointment.lead_id);
+          }
+          if (
+            appointment.status === AppointmentStatus.completed ||
+            appointment.completed_at
+          ) {
+            checkedInLeadIds.add(appointment.lead_id);
+          }
         }
         const revenue = hSales.reduce((sum, s) => sum + Number(s.value), 0);
         return {
@@ -1864,9 +1919,9 @@ export class EventDashboardService {
           name: ev.name,
           event_date: ev.event_date,
           leads: hLeads.length,
-          scheduled,
-          confirmed,
-          checked_in: checkedIn,
+          scheduled: scheduledLeadIds.size,
+          confirmed: confirmedLeadIds.size,
+          checked_in: checkedInLeadIds.size,
           sold: hSales.length,
           revenue: Math.round(revenue * 100) / 100,
         };
@@ -1955,16 +2010,24 @@ export class EventDashboardService {
         lead.vehicle_year ||
         lead.vehicle_fipe_value,
     );
+    const confirmedTradeInVehicles = identifiedVehicles.filter((lead) =>
+      (lead.description ?? "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .includes("carro na troca: sim"),
+    );
     const fipeByLead = new Map<string, number>();
     for (const lead of identifiedVehicles) {
       const value = parseFipeValue(lead.vehicle_fipe_value);
       if (value !== null) fipeByLead.set(lead.id, value);
     }
     const countVehicleField = (
+      population: typeof identifiedVehicles,
       read: (lead: (typeof leads)[number]) => string | null,
     ) => {
       const counts = new Map<string, number>();
-      for (const lead of identifiedVehicles) {
+      for (const lead of population) {
         const value = read(lead)?.trim();
         if (!value) continue;
         counts.set(value, (counts.get(value) ?? 0) + 1);
@@ -1998,8 +2061,16 @@ export class EventDashboardService {
         max: Number.POSITIVE_INFINITY,
       },
     ];
+    const confirmedTradeInIds = new Set(
+      confirmedTradeInVehicles.map((lead) => lead.id),
+    );
+    const confirmedTradeInFipeByLead = new Map(
+      [...fipeByLead.entries()].filter(([leadId]) =>
+        confirmedTradeInIds.has(leadId),
+      ),
+    );
     const fipeRanges = ranges.map((range) => {
-      const leadIds = [...fipeByLead.entries()]
+      const leadIds = [...confirmedTradeInFipeByLead.entries()]
         .filter(([, value]) => value >= range.min && value < range.max)
         .map(([leadId]) => leadId);
       const sold = leadIds.filter((leadId) => soldLeadIds.has(leadId)).length;
@@ -2012,7 +2083,7 @@ export class EventDashboardService {
           leadIds.length > 0 ? round2((sold / leadIds.length) * 100) : 0,
       };
     });
-    const fipeValues = [...fipeByLead.values()];
+    const fipeValues = [...confirmedTradeInFipeByLead.values()];
     const soldWithVehicle = identifiedVehicles.filter((lead) =>
       soldLeadIds.has(lead.id),
     ).length;
@@ -2025,6 +2096,7 @@ export class EventDashboardService {
       coverage: {
         total_leads: leads.length,
         identified_vehicles: identifiedVehicles.length,
+        confirmed_trade_in: confirmedTradeInVehicles.length,
         with_fipe_value: fipeByLead.size,
         vehicle_percent:
           leads.length > 0
@@ -2044,9 +2116,18 @@ export class EventDashboardService {
                   fipeValues.length,
               )
             : 0,
-        by_brand: countVehicleField((lead) => lead.vehicle_brand),
-        by_model: countVehicleField((lead) => lead.vehicle_model),
-        by_year: countVehicleField((lead) => lead.vehicle_year),
+        by_brand: countVehicleField(
+          confirmedTradeInVehicles,
+          (lead) => lead.vehicle_brand,
+        ),
+        by_model: countVehicleField(
+          confirmedTradeInVehicles,
+          (lead) => lead.vehicle_model,
+        ),
+        by_year: countVehicleField(
+          confirmedTradeInVehicles,
+          (lead) => lead.vehicle_year,
+        ),
         by_fipe_range: fipeRanges,
       },
       conversion: {
@@ -2197,6 +2278,13 @@ export class EventDashboardService {
           ...(campaignStarts.some((start) => start < reportFrom)
             ? [
                 "Há campanhas iniciadas antes da janela; o gasto anterior não foi incluído.",
+              ]
+            : []),
+          "Alcance Meta é a soma diária informada pela plataforma e não representa pessoas únicas no período inteiro.",
+          ...(eventLeadIds.size > 0 &&
+          attributedLeadCount / eventLeadIds.size < 0.8
+            ? [
+                `A cobertura de atribuição Meta é de ${round2((attributedLeadCount / eventLeadIds.size) * 100)}%; decisões por campanha devem considerar os leads sem origem atribuída.`,
               ]
             : []),
         ],

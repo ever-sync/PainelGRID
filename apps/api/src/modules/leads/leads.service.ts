@@ -3243,19 +3243,35 @@ export class LeadsService {
     const templateName = routing.whatsappTemplateName;
     const templateLanguage = routing.whatsappTemplateLanguage;
     try {
+      const templateParameters = routing.whatsappTemplateParameterKeys.map(
+        (key) => this.resolveAutomaticWhatsappTemplateParameter(key, item),
+      );
       const messageId = await this.metaService.sendClientWhatsappTemplate({
         clientId: routing.clientId,
         to: lead.phone,
         templateName,
         language: templateLanguage,
-        parameters: routing.whatsappTemplateParameterKeys.map((key) =>
-          this.resolveAutomaticWhatsappTemplateParameter(key, item),
-        ),
+        parameters: templateParameters,
+      });
+
+      const renderedTemplate = await (
+        this.metaService.renderClientWhatsappTemplate?.({
+          clientId: routing.clientId,
+          templateName,
+          language: templateLanguage,
+          parameters: templateParameters,
+        }) ?? Promise.resolve(null)
+      ).catch((previewError) => {
+        this.logger.warn(
+          `Template ${templateName} enviado, mas a previa nao foi carregada: ${this.errorMessage(previewError)}`,
+        );
+        return null;
       });
 
       const chatRecord = await this.recordAutomaticWhatsappMessage(
         item,
         messageId,
+        renderedTemplate,
       );
       const whatsappAsset = await this.prisma.metaAssetSelection.findFirst({
         where: {
@@ -3381,6 +3397,7 @@ export class LeadsService {
   private async recordAutomaticWhatsappMessage(
     item: AutomaticFacebookTransactionItem,
     messageId: string | null,
+    renderedTemplate: string | null = null,
   ): Promise<{
     recorded: boolean;
     conversationId?: string;
@@ -3430,7 +3447,7 @@ export class LeadsService {
             conversation_id: conversation.id,
             sender_type: "user",
             sender_id: null,
-            content: `Template WhatsApp enviado: ${templateName}`,
+            content: renderedTemplate ?? `Template WhatsApp: ${templateName}`,
             external_id: messageId,
             author_type: "template",
             origin: "meta_template",
@@ -3451,10 +3468,15 @@ export class LeadsService {
           message_id: result.message.id,
           sender_type: "user",
           sender_id: null,
+          author_type: "template",
+          origin: "meta_template",
+          workflow_key: "facebook-lead-auto-template",
+          template_name: templateName,
           content: result.message.content,
           media_id: null,
           media_url: null,
           created_at: result.message.created_at,
+          send_status: "sent",
         });
       }
       return {

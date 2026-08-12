@@ -266,6 +266,17 @@ export interface Message {
   timestamp: string;
   /** Só mensagens próprias (vendor); omitido ou `sent` = mostrar conferido ao servidor */
   send_status?: MessageSendStatus;
+  delivery?: {
+    status: string;
+    sent_at: string | null;
+    delivered_at: string | null;
+    read_at: string | null;
+    failed_at: string | null;
+    failure_code: string | null;
+    failure_reason: string | null;
+    provider_message_id: string | null;
+    metadata: unknown;
+  } | null;
 }
 
 export type ApiMessageAuthorType =

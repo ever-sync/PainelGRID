@@ -7,10 +7,22 @@ export type RealtimeNewMessageEvent = {
   message_id: string;
   sender_type: "lead" | "user" | "system";
   sender_id: string | null;
+  author_type?:
+    | "lead"
+    | "rubinho"
+    | "human"
+    | "system"
+    | "automation"
+    | "template"
+    | "legacy_unknown";
+  origin?: string;
+  workflow_key?: string | null;
+  template_name?: string | null;
   content: string;
   media_id?: string | null;
   media_url?: string | null;
   created_at: string;
+  send_status?: "sending" | "sent" | "delivered" | "read" | "failed";
 };
 
 export type RealtimeLeadEvent = {

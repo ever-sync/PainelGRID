@@ -43,6 +43,18 @@ export type ApiMessage = {
   media_id?: string | null;
   media_url?: string | null;
   created_at: string;
+  send_status?: "sending" | "sent" | "delivered" | "read" | "failed";
+  delivery?: {
+    status: string;
+    sent_at: string | null;
+    delivered_at: string | null;
+    read_at: string | null;
+    failed_at: string | null;
+    failure_code: string | null;
+    failure_reason: string | null;
+    provider_message_id: string | null;
+    metadata: unknown;
+  } | null;
 };
 
 export type ApiAgentActionLog = AgentActionLog;
@@ -152,6 +164,8 @@ export function mapApiMessagesToMessages(messages: ApiMessage[]): Message[] {
     media_id: m.media_id ?? null,
     media_url: m.media_url ?? null,
     timestamp: m.created_at,
+    send_status: m.send_status,
+    delivery: m.delivery,
   }));
 }
 

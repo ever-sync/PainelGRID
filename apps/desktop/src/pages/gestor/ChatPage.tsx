@@ -503,11 +503,16 @@ export function ChatPage({ clientMode = false }: { clientMode?: boolean }) {
       const incoming: Message = {
         id: event.message_id,
         sender,
+        author_type: event.author_type,
+        origin: event.origin,
+        workflow_key: event.workflow_key,
+        template_name: event.template_name,
         text: event.content,
         media_id: event.media_id ?? null,
         media_url: event.media_url ?? null,
         timestamp: event.created_at,
-        send_status: sender === "vendor" ? "sent" : undefined,
+        send_status:
+          event.send_status ?? (sender === "vendor" ? "sent" : undefined),
       };
 
       let shouldRefresh = false;

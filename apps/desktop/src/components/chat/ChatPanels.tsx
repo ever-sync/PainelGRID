@@ -281,7 +281,18 @@ function MessageBubble({
 }) {
   const isVendor = message.sender === "vendor";
   const isSystem = message.sender === "system";
+  const isTemplate = message.author_type === "template";
   const outboundStatus = message.send_status ?? "sent";
+  const deliveryLabel =
+    outboundStatus === "read"
+      ? "Lido"
+      : outboundStatus === "delivered"
+        ? "Entregue"
+        : outboundStatus === "failed"
+          ? "Falhou"
+          : outboundStatus === "sending"
+            ? "Enviando"
+            : "Aceito pela Meta";
 
   if (isSystem) {
     return (
@@ -314,6 +325,35 @@ function MessageBubble({
               : "rounded-2xl rounded-tl-xs bg-zinc-100 text-zinc-900 border border-zinc-200/60",
         )}
       >
+        {isTemplate && (
+          <div
+            className={clsx(
+              "mb-2 border-b pb-2",
+              isVendor ? "border-white/25" : "border-zinc-300/60",
+            )}
+          >
+            <div className="text-[10px] font-bold uppercase tracking-[0.16em] opacity-75">
+              Template WhatsApp
+            </div>
+            {message.template_name && (
+              <div className="mt-0.5 text-xs font-semibold break-all">
+                {message.template_name}
+              </div>
+            )}
+            <div
+              className={clsx(
+                "mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold",
+                outboundStatus === "failed"
+                  ? "bg-red-950/25 text-red-100"
+                  : isVendor
+                    ? "bg-white/20 text-white"
+                    : "bg-zinc-200 text-zinc-700",
+              )}
+            >
+              {deliveryLabel}
+            </div>
+          </div>
+        )}
         {((!message.media_url && !message.media_id) ||
           !isMediaPlaceholder(message.text)) && (
           <p className="whitespace-pre-line break-words font-medium">
@@ -356,7 +396,11 @@ function MessageBubble({
               outboundStatus === "read") && (
               <span
                 title={
-                  outboundStatus === "read" ? "Lida pelo cliente" : "Entregue"
+                  outboundStatus === "read"
+                    ? "Lida pelo cliente"
+                    : outboundStatus === "delivered"
+                      ? "Entregue no WhatsApp"
+                      : "Aceita pela Meta; entrega ainda não confirmada"
                 }
               >
                 <CheckCheck
@@ -372,6 +416,13 @@ function MessageBubble({
               </span>
             )}
         </div>
+        {isVendor &&
+          outboundStatus === "failed" &&
+          message.delivery?.failure_reason && (
+            <div className="mt-1 text-[10px] font-semibold text-white/90">
+              Falha: {message.delivery.failure_reason}
+            </div>
+          )}
       </article>
     </div>
   );
