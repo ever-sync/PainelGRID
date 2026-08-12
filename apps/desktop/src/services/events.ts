@@ -401,6 +401,9 @@ export type ExecutiveAttributionRow = {
   reach: number;
   conversations: number;
   cpl: number;
+  meta_cpl?: number;
+  system_cpl?: number;
+  reach_aggregation?: "sum_daily_not_deduplicated";
   cost_per_conversation: number;
   cost_per_scheduled: number;
   cost_per_sale: number;
@@ -446,6 +449,7 @@ export type ExecutiveReportResponse = {
     coverage: {
       total_leads: number;
       identified_vehicles: number;
+      confirmed_trade_in: number;
       with_fipe_value: number;
       vehicle_percent: number;
       fipe_percent: number;
@@ -496,6 +500,7 @@ export type ExecutiveReportResponse = {
   rubinho: {
     mensagens: number;
     conversas_iniciadas: number;
+    conversas_com_atuacao?: number;
     credenciamentos: number;
     agendamentos: number;
     comparecimentos: number;

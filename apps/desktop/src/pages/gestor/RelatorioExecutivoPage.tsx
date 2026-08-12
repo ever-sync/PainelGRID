@@ -9,6 +9,8 @@ import {
   Filter,
   Sparkles,
   Clock,
+  Swords,
+  UserRound,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import type { AppOutletContext } from "../../layouts/AppLayout";
@@ -1349,6 +1351,98 @@ function CampaignsToCrm({
   );
 }
 
+function ExecutiveVersusCard({
+  title,
+  metricLabel,
+  rubinhoValue,
+  sellerValue,
+}: {
+  title: string;
+  metricLabel: string;
+  rubinhoValue: number;
+  sellerValue: number;
+}) {
+  const total = rubinhoValue + sellerValue;
+  const rubinhoPercent = total ? (rubinhoValue / total) * 100 : 50;
+  const sellerPercent = total ? 100 - rubinhoPercent : 50;
+
+  return (
+    <div className="relative overflow-hidden rounded-[28px] border border-slate-700/70 bg-[radial-gradient(circle_at_50%_0%,#263b63_0%,#111827_48%,#020617_100%)] p-6 text-white shadow-[0_18px_55px_rgba(15,23,42,0.28)]">
+      <div className="absolute inset-x-0 top-0 flex h-1">
+        <span className="w-1/2 bg-violet-500" />
+        <span className="w-1/2 bg-cyan-400" />
+      </div>
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+            Rubinho vs vendedores
+          </p>
+          <h3 className="mt-1 text-lg font-black">{title}</h3>
+        </div>
+        <Swords size={20} className="text-amber-300" />
+      </div>
+
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-center">
+        <div className="flex flex-col items-center">
+          <div className="flex h-20 w-20 items-center justify-center rounded-3xl border-2 border-violet-400 bg-violet-500/15 shadow-[0_0_28px_rgba(139,92,246,0.28)]">
+            <Bot size={42} className="text-violet-300" />
+          </div>
+          <strong className="mt-3 text-sm font-black uppercase tracking-wide">
+            Rubinho
+          </strong>
+          <span className="mt-1 text-5xl font-black tabular-nums text-violet-300">
+            {formatNumber(rubinhoValue)}
+          </span>
+          <span className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+            {metricLabel}
+          </span>
+        </div>
+
+        <div className="flex flex-col items-center">
+          <div className="flex h-16 w-16 -rotate-6 items-center justify-center rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-200 to-orange-500 text-2xl font-black italic text-slate-950 shadow-[0_0_30px_rgba(251,191,36,0.3)]">
+            VS
+          </div>
+          <span className="mt-3 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">
+            Head to head
+          </span>
+        </div>
+
+        <div className="flex flex-col items-center">
+          <div className="flex h-20 w-20 items-center justify-center rounded-3xl border-2 border-cyan-400 bg-cyan-500/15 shadow-[0_0_28px_rgba(34,211,238,0.2)]">
+            <UserRound size={42} className="text-cyan-300" />
+          </div>
+          <strong className="mt-3 text-sm font-black uppercase tracking-wide">
+            Vendedores
+          </strong>
+          <span className="mt-1 text-5xl font-black tabular-nums text-cyan-300">
+            {formatNumber(sellerValue)}
+          </span>
+          <span className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+            {metricLabel}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <div className="mb-2 flex justify-between text-[11px] font-bold text-slate-300">
+          <span>{Math.round(rubinhoPercent)}%</span>
+          <span>{Math.round(sellerPercent)}%</span>
+        </div>
+        <div className="flex h-3 overflow-hidden rounded-full bg-slate-800 ring-1 ring-white/10">
+          <div
+            className="bg-gradient-to-r from-fuchsia-600 to-violet-400"
+            style={{ width: `${rubinhoPercent}%` }}
+          />
+          <div
+            className="bg-gradient-to-r from-cyan-400 to-blue-600"
+            style={{ width: `${sellerPercent}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RubinhoPerformance({
   report,
   isDark,
@@ -1449,6 +1543,22 @@ function RubinhoPerformance({
           isDark={isDark}
         />
       </div>
+      {ownership && (
+        <div className="mt-7 grid gap-5 xl:grid-cols-2">
+          <ExecutiveVersusCard
+            title="Disputa de agendamentos"
+            metricLabel="Agendamentos"
+            rubinhoValue={ownership.rubinho.appointments}
+            sellerValue={ownership.seller.appointments}
+          />
+          <ExecutiveVersusCard
+            title="Disputa de vendas"
+            metricLabel="Vendas"
+            rubinhoValue={ownership.rubinho.sales}
+            sellerValue={ownership.seller.sales}
+          />
+        </div>
+      )}
       {ownershipCards.length > 0 && (
         <div className="mt-6 grid gap-3 md:grid-cols-3">
           {ownershipCards.map((item) => (
