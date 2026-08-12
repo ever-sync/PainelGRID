@@ -438,7 +438,14 @@
     }
   }
 }
-/* ── Impressão do Relatório Executivo (window.print / Salvar como PDF) ── */
+/* O Overview é exportado em uma folha A4 horizontal. O nome de página
+   impede que o tamanho dependa do viewport que abriu o diálogo de impressão. */
+@page overview-a4 {
+  size: A4 landscape;
+  margin: 10mm;
+}
+
+/* ── Impressão dos relatórios (window.print / Salvar como PDF) ── */
 @media print {
   /* Esconde toda a moldura do app: sidebar, navs, botões marcados no-print */
   aside,
@@ -498,8 +505,11 @@
   }
 
   .overview-report {
+    page: overview-a4;
     display: block !important;
-    width: 100% !important;
+    box-sizing: border-box !important;
+    width: 277mm !important;
+    max-width: 277mm !important;
     height: auto !important;
     min-height: 0 !important;
     overflow: visible !important;
@@ -521,8 +531,4 @@
     min-height: 240px !important;
   }
 
-  @page {
-    margin: 10mm;
-    size: A4 landscape;
-  }
 }
