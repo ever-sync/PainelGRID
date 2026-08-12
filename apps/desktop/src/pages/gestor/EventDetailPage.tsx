@@ -8,6 +8,7 @@ import {
   CalendarDays,
   Clock3,
   Download,
+  Eye,
   ImageIcon,
   MapPin,
   Mail,
@@ -86,6 +87,7 @@ import type { ConfirmationStatus, LeadSource } from "../../types";
 
 type EventDetailTab = "dados" | "leads" | "time" | "configuracoes";
 type LeadDrawerTab = "historico" | "dados";
+type LeadDrawerMode = "view" | "edit";
 
 type EventDeleteAction =
   | {
@@ -284,9 +286,13 @@ export function EventDetailPage() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [leadDrawerTab, setLeadDrawerTab] =
     useState<LeadDrawerTab>("historico");
+  const [leadDrawerMode, setLeadDrawerMode] = useState<LeadDrawerMode>("view");
   const [leadDrawerStatus, setLeadDrawerStatus] =
     useState<ConfirmationStatus>("pending");
   const [leadDrawerVendorId, setLeadDrawerVendorId] = useState("");
+  const [leadDrawerName, setLeadDrawerName] = useState("");
+  const [leadDrawerEmail, setLeadDrawerEmail] = useState("");
+  const [leadDrawerPhone, setLeadDrawerPhone] = useState("");
   const [leadDrawerSaving, setLeadDrawerSaving] = useState(false);
   const [leadDrawerMessage, setLeadDrawerMessage] = useState("");
   const [leadHistory, setLeadHistory] = useState<ApiCrmHistoryItem[]>([]);
@@ -809,11 +815,18 @@ export function EventDetailPage() {
     setEventDeleteAction({ kind: "participant", client: participant });
   }
 
-  function openLeadDrawer(lead: Lead) {
+  function openLeadDrawer(
+    lead: Lead,
+    options: { tab?: LeadDrawerTab; mode?: LeadDrawerMode } = {},
+  ) {
     setSelectedLead(lead);
-    setLeadDrawerTab("historico");
+    setLeadDrawerTab(options.tab ?? "dados");
+    setLeadDrawerMode(options.mode ?? "view");
     setLeadDrawerStatus(lead.confirmation_status);
     setLeadDrawerVendorId(lead.assigned_vendor_id ?? "");
+    setLeadDrawerName(lead.name ?? "");
+    setLeadDrawerEmail(lead.email ?? "");
+    setLeadDrawerPhone(lead.phone ?? "");
     setLeadDrawerMessage("");
     setLeadDrawerOpen(true);
   }
@@ -860,12 +873,21 @@ export function EventDetailPage() {
     const session = readStoredSession();
     if (!session?.accessToken) return;
 
+    const normalizedName = leadDrawerName.trim();
+    if (!normalizedName) {
+      setLeadDrawerMessage("Informe o nome do lead.");
+      return;
+    }
+
     setLeadDrawerSaving(true);
     setLeadDrawerMessage("");
     try {
       const updated = await updateLead(
         selectedLead.id,
         {
+          name: normalizedName,
+          email: leadDrawerEmail.trim() || null,
+          phone: leadDrawerPhone.trim() || null,
           confirmation_status: leadDrawerStatus,
           assigned_vendor_id:
             leadDrawerVendorId && leadDrawerVendorId !== "none"
@@ -882,6 +904,10 @@ export function EventDetailPage() {
       setSelectedLead(mapped);
       setLeadDrawerStatus(mapped.confirmation_status);
       setLeadDrawerVendorId(mapped.assigned_vendor_id ?? "");
+      setLeadDrawerName(mapped.name ?? "");
+      setLeadDrawerEmail(mapped.email ?? "");
+      setLeadDrawerPhone(mapped.phone ?? "");
+      setLeadDrawerMode("view");
       setLeadDrawerMessage("Lead atualizado com sucesso.");
       setTimeout(() => setLeadDrawerMessage(""), 3000);
     } catch (quickLeadError) {
@@ -1939,7 +1965,9 @@ export function EventDetailPage() {
                               ? "hover:bg-[#0b0b0b]"
                               : "hover:bg-zinc-50",
                           )}
-                          onClick={() => openLeadDrawer(lead)}
+                          onClick={() =>
+                            openLeadDrawer(lead, { tab: "dados", mode: "view" })
+                          }
                         >
                           <td className="px-4 py-3">
                             <div className="space-y-1">
@@ -1985,14 +2013,37 @@ export function EventDetailPage() {
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                icon={<MessageSquareMore size={14} />}
+                                icon={<Eye size={14} />}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  openLeadDrawer(lead);
+                                  openLeadDrawer(lead, {
+                                    tab: "dados",
+                                    mode: "view",
+                                  });
                                 }}
                               >
-                                Abrir
+                                Visualizar
                               </Button>
+                              <button
+                                type="button"
+                                aria-label={`Editar ${lead.name}`}
+                                title="Editar lead"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openLeadDrawer(lead, {
+                                    tab: "dados",
+                                    mode: "edit",
+                                  });
+                                }}
+                                className={clsx(
+                                  "inline-flex h-9 w-9 items-center justify-center rounded-xl border transition-colors",
+                                  isDarkMode
+                                    ? "border-zinc-700 text-zinc-300 hover:border-[#FF0636] hover:bg-[#FF0636]/10 hover:text-[#FF0636]"
+                                    : "border-zinc-200 text-zinc-600 hover:border-[#FF0636] hover:bg-red-50 hover:text-[#FF0636]",
+                                )}
+                              >
+                                <Pencil size={15} />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -3116,6 +3167,7 @@ export function EventDetailPage() {
                     label="Status do lead"
                     dark={isDarkMode}
                     value={leadDrawerStatus}
+                    disabled={leadDrawerMode !== "edit"}
                     onChange={(e) =>
                       setLeadDrawerStatus(e.target.value as ConfirmationStatus)
                     }
@@ -3125,6 +3177,7 @@ export function EventDetailPage() {
                     label="Vendedor"
                     dark={isDarkMode}
                     value={leadDrawerVendorId}
+                    disabled={leadDrawerMode !== "edit"}
                     onChange={(e) => setLeadDrawerVendorId(e.target.value)}
                     options={vendorFilterOptions}
                   />
@@ -3142,16 +3195,47 @@ export function EventDetailPage() {
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
                       Contato
                     </p>
-                    <div className="mt-3 space-y-2 text-sm">
-                      <div className="flex items-center gap-2 text-zinc-500">
-                        <Mail size={14} />
-                        <span>{selectedLead.email || "Sem e-mail"}</span>
+                    {leadDrawerMode === "edit" ? (
+                      <div className="mt-3 space-y-3">
+                        <Input
+                          label="Nome"
+                          value={leadDrawerName}
+                          onChange={(event) =>
+                            setLeadDrawerName(event.target.value)
+                          }
+                        />
+                        <Input
+                          label="E-mail"
+                          type="email"
+                          value={leadDrawerEmail}
+                          onChange={(event) =>
+                            setLeadDrawerEmail(event.target.value)
+                          }
+                        />
+                        <Input
+                          label="Telefone"
+                          value={leadDrawerPhone}
+                          onChange={(event) =>
+                            setLeadDrawerPhone(event.target.value)
+                          }
+                        />
                       </div>
-                      <div className="flex items-center gap-2 text-zinc-500">
-                        <Phone size={14} />
-                        <span>{selectedLead.phone || "Sem telefone"}</span>
+                    ) : (
+                      <div className="mt-3 space-y-2 text-sm">
+                        <div className="flex items-center gap-2 text-zinc-500">
+                          <UserRound size={14} />
+                          <span>{selectedLead.name || "Sem nome"}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-zinc-500">
+                          <Mail size={14} />
+                          <span>{selectedLead.email || "Sem e-mail"}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-zinc-500">
+                          <Phone size={14} />
+                          <span>{selectedLead.phone || "Sem telefone"}</span>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                   <div
                     className={clsx(
@@ -3289,14 +3373,28 @@ export function EventDetailPage() {
             )}
 
             <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                loading={leadDrawerSaving}
-                onClick={() => void handleSaveLeadQuickActions()}
-                icon={<Pencil size={16} />}
-              >
-                Salvar alterações
-              </Button>
+              {leadDrawerMode === "edit" ? (
+                <Button
+                  type="button"
+                  loading={leadDrawerSaving}
+                  onClick={() => void handleSaveLeadQuickActions()}
+                  icon={<Pencil size={16} />}
+                >
+                  Salvar alterações
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setLeadDrawerMode("edit");
+                    setLeadDrawerTab("dados");
+                  }}
+                  icon={<Pencil size={16} />}
+                >
+                  Editar lead
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="secondary"
