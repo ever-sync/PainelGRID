@@ -18,6 +18,8 @@ import {
   Radio,
   ChevronDown,
   ChevronUp,
+  ArrowRight,
+  ShieldCheck,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Modal } from "../../components/ui/Modal";
@@ -289,6 +291,8 @@ export function RelatorioExecutivoPage() {
       ) : (
         <>
           <ExecutiveSummary report={report} isDark={isDark} panel={panel} />
+
+          <ImpactProof report={report} isDark={isDark} panel={panel} />
 
           {report.narrative.length > 0 && (
             <div className={panel}>
@@ -1060,6 +1064,265 @@ function ExecutiveSummary({
   );
 }
 
+function ImpactProof({
+  report,
+  isDark,
+  panel,
+}: {
+  report: ReportModel;
+  isDark: boolean;
+  panel: string;
+}) {
+  const { funnel } = report;
+  const costPerScheduled = funnel.scheduled
+    ? report.investimento / funnel.scheduled
+    : 0;
+  const costPerCheckin = funnel.checked_in
+    ? report.investimento / funnel.checked_in
+    : 0;
+  const costPerSale = funnel.sold ? report.investimento / funnel.sold : 0;
+  const attributedLeadPercent = report.coverage
+    ? pct(report.coverage.attributed_leads, report.coverage.total_leads)
+    : 0;
+  const attributedSalePercent = report.coverage
+    ? pct(report.coverage.attributed_sold, report.coverage.total_sold)
+    : 0;
+  const auditReady = report.attrReal && Boolean(report.coverage);
+  const openLeads = Math.max(0, funnel.leads - funnel.scheduled);
+  const pendingVisits = Math.max(0, funnel.scheduled - funnel.checked_in);
+  const attendedWithoutSale = Math.max(0, funnel.checked_in - funnel.sold);
+  const steps = [
+    { label: "Leads", value: funnel.leads, rate: null },
+    {
+      label: "Agendados",
+      value: funnel.scheduled,
+      rate: pct(funnel.scheduled, funnel.leads),
+    },
+    {
+      label: "Compareceram",
+      value: funnel.checked_in,
+      rate: pct(funnel.checked_in, funnel.scheduled),
+    },
+    {
+      label: "Vendas",
+      value: funnel.sold,
+      rate: pct(funnel.sold, funnel.checked_in),
+    },
+  ];
+
+  return (
+    <section className={clsx(panel, "overflow-hidden")}>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <ShieldCheck size={18} className="text-emerald-500" />
+            <span
+              className={clsx(
+                "text-[10px] font-black uppercase tracking-[0.2em]",
+                isDark ? "text-zinc-400" : "text-zinc-500",
+              )}
+            >
+              Impacto comprovado do evento
+            </span>
+          </div>
+          <h2
+            className={clsx(
+              "mt-2 text-xl font-black tracking-tight md:text-2xl",
+              isDark ? "text-white" : "text-zinc-950",
+            )}
+          >
+            Da mídia à venda, sem números inventados
+          </h2>
+        </div>
+        <span
+          className={clsx(
+            "w-fit rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em]",
+            auditReady
+              ? "bg-emerald-500/10 text-emerald-500"
+              : "bg-amber-500/10 text-amber-500",
+          )}
+        >
+          {auditReady ? "Dados auditáveis" : "Cobertura parcial"}
+        </span>
+      </div>
+
+      <div
+        className={clsx(
+          "mt-5 rounded-2xl border px-4 py-4 text-sm font-semibold md:px-5 md:text-base",
+          isDark
+            ? "border-zinc-800 bg-zinc-950/65 text-zinc-200"
+            : "border-zinc-200 bg-zinc-50 text-zinc-700",
+        )}
+      >
+        <span className="font-black">
+          {formatCurrency(report.investimento)}
+        </span>{" "}
+        investidos geraram <strong>{formatNumber(funnel.leads)} leads</strong>,{" "}
+        <strong>{formatNumber(funnel.scheduled)} agendamentos</strong>,{" "}
+        <strong>{formatNumber(funnel.checked_in)} comparecimentos</strong> e{" "}
+        <strong>{formatNumber(funnel.sold)} vendas</strong>, totalizando{" "}
+        <strong className="text-emerald-500">
+          {formatCurrency(report.faturamento)} em faturamento
+        </strong>
+        .
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          ["Custo por agendamento", costPerScheduled],
+          ["Custo por comparecimento", costPerCheckin],
+          ["Custo por venda", costPerSale],
+        ].map(([label, value]) => (
+          <div
+            key={String(label)}
+            className={clsx(
+              "rounded-2xl border p-4",
+              isDark
+                ? "border-zinc-800 bg-zinc-900/60"
+                : "border-zinc-200 bg-white",
+            )}
+          >
+            <p
+              className={
+                isDark ? "text-xs text-zinc-500" : "text-xs text-zinc-400"
+              }
+            >
+              {label}
+            </p>
+            <p className="mt-1 text-xl font-black tabular-nums">
+              {formatCurrency(Number(value))}
+            </p>
+          </div>
+        ))}
+        <div
+          className={clsx(
+            "rounded-2xl border p-4",
+            isDark
+              ? "border-emerald-500/20 bg-emerald-500/5"
+              : "border-emerald-200 bg-emerald-50/60",
+          )}
+        >
+          <p className="text-xs text-emerald-600">Retorno por R$ 1 investido</p>
+          <p className="mt-1 text-xl font-black tabular-nums text-emerald-500">
+            {formatCurrency(report.retornoPorReal, 2)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-4 xl:grid-cols-[1.5fr_1fr]">
+        <div
+          className={clsx(
+            "rounded-2xl border p-4",
+            isDark ? "border-zinc-800" : "border-zinc-200",
+          )}
+        >
+          <p className="text-xs font-black uppercase tracking-[0.15em] text-zinc-500">
+            Funil auditável
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] md:items-center">
+            {steps.map((step, index) => (
+              <div key={step.label} className="contents">
+                <div>
+                  <p className="text-2xl font-black tabular-nums">
+                    {formatNumber(step.value)}
+                  </p>
+                  <p className="text-xs text-zinc-500">{step.label}</p>
+                  {step.rate !== null && (
+                    <p className="mt-1 text-[10px] font-bold text-[#FF0636]">
+                      {formatNumber(step.rate)}% da etapa anterior
+                    </p>
+                  )}
+                </div>
+                {index < steps.length - 1 && (
+                  <ArrowRight
+                    size={18}
+                    className="hidden text-zinc-400 md:block"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div
+          className={clsx(
+            "rounded-2xl border p-4",
+            isDark ? "border-zinc-800" : "border-zinc-200",
+          )}
+        >
+          <p className="text-xs font-black uppercase tracking-[0.15em] text-zinc-500">
+            Cobertura da prova
+          </p>
+          <div className="mt-3 space-y-3 text-sm">
+            <CoverageLine
+              label="Leads com campanha identificada"
+              value={attributedLeadPercent}
+              isDark={isDark}
+            />
+            <CoverageLine
+              label="Vendas com campanha identificada"
+              value={attributedSalePercent}
+              isDark={isDark}
+            />
+            <CoverageLine
+              label="Vendas vinculadas a vendedor"
+              value={report.commercialRevenueCoverage?.vendor_percent ?? 0}
+              isDark={isDark}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div
+        className={clsx(
+          "mt-4 flex flex-wrap gap-x-6 gap-y-2 rounded-2xl px-4 py-3 text-xs",
+          isDark ? "bg-zinc-900/60 text-zinc-400" : "bg-zinc-100 text-zinc-600",
+        )}
+      >
+        <strong className={isDark ? "text-zinc-200" : "text-zinc-800"}>
+          Oportunidade ainda aberta
+        </strong>
+        <span>{formatNumber(openLeads)} leads sem agendamento</span>
+        <span>{formatNumber(pendingVisits)} agendados sem check-in</span>
+        <span>{formatNumber(attendedWithoutSale)} atendidos sem venda</span>
+      </div>
+    </section>
+  );
+}
+
+function CoverageLine({
+  label,
+  value,
+  isDark,
+}: {
+  label: string;
+  value: number;
+  isDark: boolean;
+}) {
+  const normalized = clamp(value);
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <span className={isDark ? "text-zinc-400" : "text-zinc-600"}>
+          {label}
+        </span>
+        <strong className="tabular-nums">{formatNumber(normalized)}%</strong>
+      </div>
+      <div
+        className={clsx(
+          "mt-1.5 h-1.5 overflow-hidden rounded-full",
+          isDark ? "bg-zinc-800" : "bg-zinc-200",
+        )}
+      >
+        <div
+          className="h-full rounded-full bg-emerald-500"
+          style={{ width: `${normalized}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function tableClasses(isDark: boolean) {
   return {
     wrap: "overflow-x-auto",
@@ -1580,11 +1843,15 @@ function ExecutiveVersusCard({
         <div className="flex flex-col items-center">
           <div
             className={clsx(
-              "flex h-20 w-20 items-center justify-center rounded-3xl border-2 border-[#FF0636] shadow-[0_0_28px_rgba(255,6,54,0.2)]",
+              "flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl border-2 border-[#FF0636] shadow-[0_0_28px_rgba(255,6,54,0.2)]",
               isDark ? "bg-[#FF0636]/15" : "bg-red-50",
             )}
           >
-            <Bot size={42} className="text-[#FF0636]" />
+            <img
+              src="/rubinho-avatar.png"
+              alt="Rubinho"
+              className="h-full w-full object-cover"
+            />
           </div>
           <strong className="mt-3 text-sm font-black uppercase tracking-wide">
             Rubinho
