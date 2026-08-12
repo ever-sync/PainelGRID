@@ -1101,6 +1101,9 @@ export function RelatorioGestorPage() {
       tvTeams.map((team) => [team.team_name, team] as const),
     );
     for (const vendor of overviewVendorData) {
+      // Vendedores sem equipe continuam no ranking individual e nos totais do
+      // evento, mas não representam uma equipe participante.
+      if (!vendor.teamId) continue;
       counts.set(vendor.team, (counts.get(vendor.team) ?? 0) + vendor.value);
     }
     return [...counts.entries()]
