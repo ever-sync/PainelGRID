@@ -9,6 +9,7 @@ import {
 import { BadRequestException, ConflictException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createHash } from "crypto";
+import { Role } from "../../common/types";
 import { AppointmentsService } from "./appointments.service";
 
 describe("AppointmentsService", () => {
@@ -267,6 +268,41 @@ describe("AppointmentsService", () => {
           code: "2222222222224222_PRESENCA_AGENDADA",
         }),
       }),
+    );
+  });
+
+  it("dispara a credencial completa automaticamente ao agendar pelo vendedor", async () => {
+    prisma.lead.findFirst.mockResolvedValue({
+      ...lead,
+      assigned_vendor_id: "user-vendor-1",
+    });
+    jest.spyOn(service, "create").mockResolvedValue({
+      ...baseAppointment,
+      idempotent_replay: false,
+    } as any);
+    const delivery = jest
+      .spyOn(service, "sendCheckinNotification")
+      .mockResolvedValue({ sent: true } as any);
+
+    await service.createForVendor(
+      {
+        sub: "user-vendor-1",
+        email: "vendedor@example.com",
+        name: "Vendedor",
+        role: Role.VENDEDOR,
+        client_id: clientId,
+      },
+      {
+        lead_id: leadId,
+        event_id: eventId,
+        scheduled_at: "2026-04-24T14:00:00-03:00",
+      },
+    );
+
+    expect(delivery).toHaveBeenCalledWith(
+      appointmentId,
+      `vendor-credential:${appointmentId}`,
+      { allowIncompleteCredential: true },
     );
   });
 
@@ -740,6 +776,42 @@ describe("AppointmentsService", () => {
       service.sendCheckinNotification(appointmentId, "qr-incomplete"),
     ).rejects.toThrow("nome dos acompanhantes");
     expect(meta.sendClientWhatsappMediaMessage).not.toHaveBeenCalled();
+  });
+
+  it("permite ao agendamento do vendedor entregar QR mesmo sem qualificacao do Rubinho", async () => {
+    prisma.appointment.findUnique.mockResolvedValue({
+      ...baseAppointment,
+      lead: {
+        ...baseAppointment.lead,
+        name: "Cliente do vendedor",
+        email: null,
+        phone: "+5511999999999",
+        checkin_token: "0123456789abcdef01234567",
+        companions: null,
+        description: null,
+      },
+      event: {
+        ...event,
+        name: "Evento Teste",
+        location: "Sao Paulo",
+      },
+    });
+    prisma.apiIdempotencyRequest.findUnique.mockResolvedValue(null);
+    prisma.apiIdempotencyRequest.create.mockResolvedValue({
+      id: "idem-vendor-credential",
+    });
+    prisma.apiIdempotencyRequest.upsert.mockResolvedValue({
+      id: "idem-vendor-credential",
+    });
+
+    const result = await service.sendCheckinNotification(
+      appointmentId,
+      `vendor-credential:${appointmentId}`,
+      { allowIncompleteCredential: true },
+    );
+
+    expect(meta.sendClientWhatsappMediaMessage).toHaveBeenCalledTimes(1);
+    expect(result).toEqual(expect.objectContaining({ sent: true }));
   });
 
   it("reproduz o resultado do envio sem disparar QR novamente", async () => {

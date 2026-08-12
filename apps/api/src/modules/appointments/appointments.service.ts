@@ -12,6 +12,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -71,8 +72,14 @@ type AppointmentRecord = Prisma.AppointmentGetPayload<{
   };
 }>;
 
+type CredentialDeliveryOptions = {
+  allowIncompleteCredential?: boolean;
+};
+
 @Injectable()
 export class AppointmentsService {
+  private readonly logger = new Logger(AppointmentsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
@@ -349,7 +356,11 @@ export class AppointmentsService {
     return result;
   }
 
-  async sendCheckinNotification(id: string, idempotencyKey?: string) {
+  async sendCheckinNotification(
+    id: string,
+    idempotencyKey?: string,
+    options: CredentialDeliveryOptions = {},
+  ) {
     const appointment = await this.getAppointmentOrFail(id);
     if (
       appointment.status !== AppointmentStatus.scheduled &&
@@ -365,7 +376,9 @@ export class AppointmentsService {
       );
     }
 
-    this.assertCredentialReady(appointment);
+    if (!options.allowIncompleteCredential) {
+      this.assertCredentialReady(appointment);
+    }
 
     if (!appointment.lead.checkin_token) {
       const encryptedToken = encryptCheckinToken(
@@ -711,6 +724,21 @@ export class AppointmentsService {
     };
 
     const result = await this.create(payload);
+
+    if (!result.idempotent_replay) {
+      void this.sendCheckinNotification(
+        result.id,
+        `vendor-credential:${result.id}`,
+        { allowIncompleteCredential: true },
+      ).catch((error: unknown) => {
+        this.logger.error(
+          `Falha ao entregar credencial do agendamento ${result.id}: ${
+            error instanceof Error ? error.message : "erro desconhecido"
+          }`,
+        );
+      });
+    }
+
     return { ...result, score_awarded: true };
   }
 
@@ -803,10 +831,6 @@ export class AppointmentsService {
       appointment.lead_id,
       "appointment_created",
     );
-
-    if (isVendorCreated) {
-      void this.sendAppointmentWelcomeEmail(appointment).catch(() => undefined);
-    }
 
     return {
       ...this.toAppointmentResponse(appointment),
