@@ -53,7 +53,9 @@ export class EventsController {
 
   @Get("audit-logs")
   @Roles(Role.GESTOR, Role.CLIENTE)
-  @ApiOperation({ summary: "Lista o histórico de auditoria por cliente ou evento" })
+  @ApiOperation({
+    summary: "Lista o histórico de auditoria por cliente ou evento",
+  })
   getAuditLogs(
     @Query() query: AuditLogQueryDto,
     @CurrentUser() user: AuthenticatedUser,

@@ -283,8 +283,7 @@ describe("AgentActionLogService", () => {
     expect(prisma.agentActionLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          block_reason:
-            "Campos obrigatorios pendentes: companion_names",
+          block_reason: "Campos obrigatorios pendentes: companion_names",
           previous_state: expect.objectContaining({
             state_payload: { current_step: "WAITING_COMPANIONS" },
           }),

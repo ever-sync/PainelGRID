@@ -55,9 +55,7 @@ function looksLikeName(value: string, leadName: string | null) {
   ) {
     return false;
   }
-  return (
-    normalizedLower !== leadName?.trim().toLocaleLowerCase("pt-BR")
-  );
+  return normalizedLower !== leadName?.trim().toLocaleLowerCase("pt-BR");
 }
 
 async function main() {

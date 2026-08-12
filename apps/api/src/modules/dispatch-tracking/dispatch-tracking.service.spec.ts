@@ -16,11 +16,17 @@ describe("DispatchTrackingService", () => {
       findMany: jest.fn(),
     },
   };
+  const clientsService = {
+    assertGestorOwnsClient: jest.fn(),
+  };
   let service: DispatchTrackingService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new DispatchTrackingService(prisma as never);
+    service = new DispatchTrackingService(
+      prisma as never,
+      clientsService as never,
+    );
   });
 
   it("registra envio idempotente por cliente e chave", async () => {

@@ -23,7 +23,9 @@ const expectedProductionActive =
 const expectedHomologationActive =
   process.env.N8N_EXPECT_HOMOLOGATION_ACTIVE === "true";
 if (!apiKey || !homologationId) {
-  throw new Error("N8N_API_KEY e N8N_HOMOLOGATION_WORKFLOW_ID sao obrigatorios");
+  throw new Error(
+    "N8N_API_KEY e N8N_HOMOLOGATION_WORKFLOW_ID sao obrigatorios",
+  );
 }
 
 async function getWorkflow(id: string) {
@@ -60,9 +62,11 @@ async function main() {
   assert.match(homologation.name, /HOMOLOG/);
 
   const systemMessage = String(
-    (node(homologation, "AI Agent1").parameters.options as {
-      systemMessage?: string;
-    })?.systemMessage ?? "",
+    (
+      node(homologation, "AI Agent1").parameters.options as {
+        systemMessage?: string;
+      }
+    )?.systemMessage ?? "",
   );
   assert.match(systemMessage, /TOM DE CONVERSA HOMOLOGADO V4/);
   assert.match(systemMessage, /Cada mensagem deve ter exatamente uma pergunta/);

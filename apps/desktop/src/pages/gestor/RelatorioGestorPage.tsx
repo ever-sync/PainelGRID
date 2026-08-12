@@ -31,6 +31,9 @@ import {
   Trophy,
   Shield,
   Printer,
+  Bot,
+  UserRound,
+  Swords,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { StatsCard } from "../../components/shared/StatsCard";
@@ -232,8 +235,18 @@ function OverviewMetricCard({
         styles.card,
       )}
     >
-      <div className={clsx("absolute -right-8 -top-10 h-32 w-32 rounded-full blur-2xl", styles.glow)} />
-      <div className={clsx("absolute inset-x-6 top-0 h-1 rounded-b-full", styles.accent)} />
+      <div
+        className={clsx(
+          "absolute -right-8 -top-10 h-32 w-32 rounded-full blur-2xl",
+          styles.glow,
+        )}
+      />
+      <div
+        className={clsx(
+          "absolute inset-x-6 top-0 h-1 rounded-b-full",
+          styles.accent,
+        )}
+      />
       <div className="relative flex h-full items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs font-bold uppercase tracking-[0.12em] text-gray-500 dark:text-zinc-400">
@@ -246,7 +259,12 @@ function OverviewMetricCard({
             {subtitle}
           </p>
         </div>
-        <div className={clsx("flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-lg", styles.icon)}>
+        <div
+          className={clsx(
+            "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-lg",
+            styles.icon,
+          )}
+        >
           {icon}
         </div>
       </div>
@@ -334,9 +352,125 @@ function OverviewTeamBattle({ teams }: { teams: OverviewTeamItem[] }) {
           <span>{Math.round(100 - leftPercent)}%</span>
         </div>
         <div className="flex h-3 overflow-hidden rounded-full bg-slate-800 ring-1 ring-white/10">
-          <div className="bg-gradient-to-r from-blue-600 to-cyan-400" style={{ width: `${leftPercent}%` }} />
-          <div className="bg-gradient-to-r from-orange-400 to-rose-600" style={{ width: `${100 - leftPercent}%` }} />
+          <div
+            className="bg-gradient-to-r from-blue-600 to-cyan-400"
+            style={{ width: `${leftPercent}%` }}
+          />
+          <div
+            className="bg-gradient-to-r from-orange-400 to-rose-600"
+            style={{ width: `${100 - leftPercent}%` }}
+          />
         </div>
+      </div>
+    </div>
+  );
+}
+
+function RubinhoVersusCard({
+  title,
+  metricLabel,
+  rubinhoValue,
+  sellerValue,
+  manualValue,
+  rubinhoImageUrl,
+}: {
+  title: string;
+  metricLabel: string;
+  rubinhoValue: number;
+  sellerValue: number;
+  manualValue: number;
+  rubinhoImageUrl?: string | null;
+}) {
+  const duelTotal = rubinhoValue + sellerValue;
+  const rubinhoPercent = duelTotal ? (rubinhoValue / duelTotal) * 100 : 50;
+  const winner =
+    rubinhoValue === sellerValue
+      ? "Empate técnico"
+      : rubinhoValue > sellerValue
+        ? "Rubinho lidera"
+        : "Vendedores lideram";
+
+  return (
+    <div className="relative overflow-hidden rounded-[28px] border border-slate-700/70 bg-[radial-gradient(circle_at_50%_0%,#312e81_0%,#111827_47%,#020617_100%)] p-5 text-white shadow-[0_18px_55px_rgba(15,23,42,0.28)] md:p-6">
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-violet-500 via-amber-300 to-cyan-400" />
+      <div className="relative flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-violet-300">
+            Duelo de performance
+          </p>
+          <h3 className="mt-1 text-lg font-black tracking-tight">{title}</h3>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/5 p-2 text-amber-300">
+          <Swords size={20} />
+        </div>
+      </div>
+
+      <div className="relative mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div className="flex min-w-0 flex-col items-center text-center">
+          <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl border-2 border-violet-400 bg-violet-500/15 shadow-[0_0_28px_rgba(139,92,246,0.28)]">
+            {rubinhoImageUrl ? (
+              <img
+                src={rubinhoImageUrl}
+                alt="Rubinho"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <Bot size={40} className="text-violet-300" />
+            )}
+          </div>
+          <strong className="mt-3 text-sm font-black uppercase tracking-wide">
+            Rubinho
+          </strong>
+          <span className="mt-1 text-4xl font-black tabular-nums text-violet-300">
+            {formatNumber(rubinhoValue)}
+          </span>
+        </div>
+
+        <div className="flex flex-col items-center">
+          <div className="flex h-14 w-14 -rotate-6 items-center justify-center rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-200 to-orange-500 text-xl font-black italic text-slate-950 shadow-[0_0_30px_rgba(251,191,36,0.3)]">
+            VS
+          </div>
+          <span className="mt-2 max-w-[92px] text-center text-[9px] font-bold uppercase tracking-[0.13em] text-slate-400">
+            {winner}
+          </span>
+        </div>
+
+        <div className="flex min-w-0 flex-col items-center text-center">
+          <div className="flex h-20 w-20 items-center justify-center rounded-3xl border-2 border-cyan-400 bg-cyan-500/15 shadow-[0_0_28px_rgba(34,211,238,0.2)]">
+            <UserRound size={40} className="text-cyan-300" />
+          </div>
+          <strong className="mt-3 text-sm font-black uppercase tracking-wide">
+            Vendedores
+          </strong>
+          <span className="mt-1 text-4xl font-black tabular-nums text-cyan-300">
+            {formatNumber(sellerValue)}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <div className="mb-2 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          <span>{Math.round(rubinhoPercent)}%</span>
+          <span>{metricLabel}</span>
+          <span>{Math.round(100 - rubinhoPercent)}%</span>
+        </div>
+        <div className="flex h-3 overflow-hidden rounded-full bg-slate-800 ring-1 ring-white/10">
+          <div
+            className="bg-gradient-to-r from-fuchsia-600 to-violet-400"
+            style={{ width: `${rubinhoPercent}%` }}
+          />
+          <div
+            className="bg-gradient-to-r from-cyan-400 to-blue-600"
+            style={{ width: `${100 - rubinhoPercent}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-slate-300">
+        <span>Humano/manual sem responsável</span>
+        <strong className="tabular-nums text-white">
+          {formatNumber(manualValue)}
+        </strong>
       </div>
     </div>
   );
@@ -401,11 +535,7 @@ export function RelatorioGestorPage() {
 
   useEffect(() => {
     const session = readStoredSession();
-    if (
-      !session?.accessToken ||
-      selectedEventId === "all" ||
-      activeTab === "overview"
-    ) {
+    if (!session?.accessToken || selectedEventId === "all") {
       setExecutiveReport(null);
       return;
     }
@@ -423,7 +553,7 @@ export function RelatorioGestorPage() {
         }
       });
     return () => controller.abort();
-  }, [activeTab, selectedEventId]);
+  }, [selectedEventId]);
 
   useEffect(() => {
     const session = readStoredSession();
@@ -563,7 +693,8 @@ export function RelatorioGestorPage() {
       valorInvestido: row.spend,
       quantidadeLeads: row.leads,
       metaLeads: row.meta_leads,
-      custoPorLead: row.cpl,
+      custoPorLead: row.system_cpl ?? row.cpl,
+      custoPorLeadMeta: row.meta_cpl ?? 0,
       impressoes: row.impressions,
       numeroConversas: row.conversations,
       custoConversasIniciadas: row.cost_per_conversation,
@@ -604,6 +735,7 @@ export function RelatorioGestorPage() {
     });
 
     const cplMedio = leadsCount > 0 ? investido / leadsCount : 0;
+    const metaCplMedio = metaLeadsCount > 0 ? investido / metaLeadsCount : 0;
 
     return {
       investido,
@@ -612,6 +744,7 @@ export function RelatorioGestorPage() {
       conversasCount,
       impressoesCount,
       cplMedio,
+      metaCplMedio,
     };
   }, [campaignTreeData]);
 
@@ -1212,24 +1345,52 @@ export function RelatorioGestorPage() {
       {/* PageHeader com seletores superiores no lado direito */}
       <div className="no-print">
         <PageHeader
-        title="Relatório de Desempenho"
-        breadcrumbs={[
-          { label: isClientView ? "Cliente" : "Gestor" },
-          { label: "Relatórios" },
-        ]}
-        subtitle="Análise consolidada de leads, eventos e campanhas"
-        dark={isDarkMode}
-        actions={
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Seletor de Cliente */}
-            {!isClientView ? (
+          title="Relatório de Desempenho"
+          breadcrumbs={[
+            { label: isClientView ? "Cliente" : "Gestor" },
+            { label: "Relatórios" },
+          ]}
+          subtitle="Análise consolidada de leads, eventos e campanhas"
+          dark={isDarkMode}
+          actions={
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Seletor de Cliente */}
+              {!isClientView ? (
+                <div className="relative min-w-[200px]">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                    <Building2 size={15} />
+                  </div>
+                  <select
+                    value={selectedClientId}
+                    onChange={(e) => setSelectedClientId(e.target.value)}
+                    className={clsx(
+                      "w-full pl-9 pr-8 py-2 rounded-xl text-xs font-semibold appearance-none border cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#FF0636] transition-all shadow-sm",
+                      isDarkMode
+                        ? "bg-zinc-900 border-zinc-700 text-zinc-100 hover:border-zinc-600"
+                        : "bg-white border-gray-200 text-gray-800 hover:border-gray-300",
+                    )}
+                  >
+                    <option value="all">Todos os Clientes</option>
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.company_name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-gray-400">
+                    <ChevronDown size={14} />
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Seletor de Evento */}
               <div className="relative min-w-[200px]">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                  <Building2 size={15} />
+                  <Calendar size={15} />
                 </div>
                 <select
-                  value={selectedClientId}
-                  onChange={(e) => setSelectedClientId(e.target.value)}
+                  value={selectedEventId}
+                  onChange={(e) => setSelectedEventId(e.target.value)}
                   className={clsx(
                     "w-full pl-9 pr-8 py-2 rounded-xl text-xs font-semibold appearance-none border cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#FF0636] transition-all shadow-sm",
                     isDarkMode
@@ -1237,10 +1398,10 @@ export function RelatorioGestorPage() {
                       : "bg-white border-gray-200 text-gray-800 hover:border-gray-300",
                   )}
                 >
-                  <option value="all">Todos os Clientes</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.company_name}
+                  <option value="all">Todos os Eventos</option>
+                  {availableEvents.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.name}
                     </option>
                   ))}
                 </select>
@@ -1248,45 +1409,17 @@ export function RelatorioGestorPage() {
                   <ChevronDown size={14} />
                 </div>
               </div>
-            ) : null}
-
-            {/* Seletor de Evento */}
-            <div className="relative min-w-[200px]">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                <Calendar size={15} />
-              </div>
-              <select
-                value={selectedEventId}
-                onChange={(e) => setSelectedEventId(e.target.value)}
-                className={clsx(
-                  "w-full pl-9 pr-8 py-2 rounded-xl text-xs font-semibold appearance-none border cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#FF0636] transition-all shadow-sm",
-                  isDarkMode
-                    ? "bg-zinc-900 border-zinc-700 text-zinc-100 hover:border-zinc-600"
-                    : "bg-white border-gray-200 text-gray-800 hover:border-gray-300",
-                )}
-              >
-                <option value="all">Todos os Eventos</option>
-                {availableEvents.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.name}
-                  </option>
-                ))}
-              </select>
-              <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-gray-400">
-                <ChevronDown size={14} />
-              </div>
+              {activeTab === "overview" && selectedEventId !== "all" ? (
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="no-print inline-flex items-center gap-2 rounded-xl bg-[#FF0636] px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#d90530]"
+                >
+                  <Printer size={15} /> Gerar PDF
+                </button>
+              ) : null}
             </div>
-            {activeTab === "overview" && selectedEventId !== "all" ? (
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="no-print inline-flex items-center gap-2 rounded-xl bg-[#FF0636] px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#d90530]"
-              >
-                <Printer size={15} /> Gerar PDF
-              </button>
-            ) : null}
-          </div>
-        }
+          }
         />
       </div>
 
@@ -1339,6 +1472,47 @@ export function RelatorioGestorPage() {
                 />
               </div>
 
+              {executiveReport?.rubinho.appointment_ownership ? (
+                <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+                  <RubinhoVersusCard
+                    title="Rubinho vs Vendedores"
+                    metricLabel="Agendamentos"
+                    rubinhoValue={
+                      executiveReport.rubinho.appointment_ownership.rubinho
+                        .appointments
+                    }
+                    sellerValue={
+                      executiveReport.rubinho.appointment_ownership.seller
+                        .appointments
+                    }
+                    manualValue={
+                      executiveReport.rubinho.appointment_ownership.human_manual
+                        .appointments
+                    }
+                  />
+                  <RubinhoVersusCard
+                    title="Rubinho vs Vendedores"
+                    metricLabel="Vendas"
+                    rubinhoValue={
+                      executiveReport.rubinho.appointment_ownership.rubinho
+                        .sales
+                    }
+                    sellerValue={
+                      executiveReport.rubinho.appointment_ownership.seller.sales
+                    }
+                    manualValue={
+                      executiveReport.rubinho.appointment_ownership.human_manual
+                        .sales
+                    }
+                  />
+                </div>
+              ) : (
+                <Card className="text-sm text-gray-500 dark:text-zinc-400">
+                  Carregando a atribuição de agendamentos e vendas por
+                  responsável…
+                </Card>
+              )}
+
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 <Card className="lg:col-span-2">
                   <h3 className="text-base font-bold text-gray-900 dark:text-zinc-100">
@@ -1367,7 +1541,10 @@ export function RelatorioGestorPage() {
                                   loading="lazy"
                                 />
                               ) : (
-                                <Shield size={28} className="text-gray-300 dark:text-zinc-500" />
+                                <Shield
+                                  size={28}
+                                  className="text-gray-300 dark:text-zinc-500"
+                                />
                               )}
                             </div>
                             <div className="min-w-0">
@@ -1382,7 +1559,9 @@ export function RelatorioGestorPage() {
                               <div className="h-5 overflow-hidden rounded-full bg-gray-100 dark:bg-zinc-800">
                                 <div
                                   className="h-full rounded-full bg-gradient-to-r from-blue-600 to-[#FF0636]"
-                                  style={{ width: `${Math.max((team.value / max) * 100, 2)}%` }}
+                                  style={{
+                                    width: `${Math.max((team.value / max) * 100, 2)}%`,
+                                  }}
                                 />
                               </div>
                             </div>
@@ -1413,56 +1592,61 @@ export function RelatorioGestorPage() {
                         <Target size={20} />
                       </div>
                     </div>
-                  <div className="flex min-h-[220px] flex-col items-center justify-center py-5 text-center">
-                    <div
-                      className="relative flex h-40 w-40 items-center justify-center rounded-full bg-[conic-gradient(#FF0636_var(--progress),#e5e7eb_0)] p-3.5 shadow-[0_12px_35px_rgba(255,6,54,0.12)] dark:bg-[conic-gradient(#FF0636_var(--progress),#27272a_0)]"
-                      style={
-                        {
-                          "--progress": `${Math.min(overviewTargetPercent, 100)}%`,
-                        } as CSSProperties
-                      }
-                    >
-                      <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-white dark:bg-zinc-900">
-                        <strong className="text-4xl font-black tracking-tight text-gray-950 dark:text-white">
-                          {overviewTargetPercent}%
-                        </strong>
-                        <span className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400 dark:text-zinc-500">
-                          concluído
-                        </span>
+                    <div className="flex min-h-[220px] flex-col items-center justify-center py-5 text-center">
+                      <div
+                        className="relative flex h-40 w-40 items-center justify-center rounded-full bg-[conic-gradient(#FF0636_var(--progress),#e5e7eb_0)] p-3.5 shadow-[0_12px_35px_rgba(255,6,54,0.12)] dark:bg-[conic-gradient(#FF0636_var(--progress),#27272a_0)]"
+                        style={
+                          {
+                            "--progress": `${Math.min(overviewTargetPercent, 100)}%`,
+                          } as CSSProperties
+                        }
+                      >
+                        <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-white dark:bg-zinc-900">
+                          <strong className="text-4xl font-black tracking-tight text-gray-950 dark:text-white">
+                            {overviewTargetPercent}%
+                          </strong>
+                          <span className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400 dark:text-zinc-500">
+                            concluído
+                          </span>
+                        </div>
                       </div>
+                      {overviewTargetPerVendor > 0 &&
+                      overviewVendorData.length > 0 ? (
+                        <div className="mt-4 rounded-full border border-rose-100 bg-white/90 px-4 py-2 text-[11px] font-semibold text-gray-600 shadow-sm dark:border-rose-900/40 dark:bg-zinc-900/90 dark:text-zinc-300">
+                          {formatNumber(overviewTargetPerVendor)} agendamentos
+                          por vendedor
+                          <span className="mx-2 text-rose-300">×</span>
+                          {formatNumber(overviewVendorData.length)} vendedores
+                        </div>
+                      ) : null}
                     </div>
-                    {overviewTargetPerVendor > 0 && overviewVendorData.length > 0 ? (
-                      <div className="mt-4 rounded-full border border-rose-100 bg-white/90 px-4 py-2 text-[11px] font-semibold text-gray-600 shadow-sm dark:border-rose-900/40 dark:bg-zinc-900/90 dark:text-zinc-300">
-                        {formatNumber(overviewTargetPerVendor)} agendamentos por vendedor
-                        <span className="mx-2 text-rose-300">×</span>
-                        {formatNumber(overviewVendorData.length)} vendedores
-                      </div>
+                    <div className="grid grid-cols-3 divide-x divide-gray-200 rounded-2xl border border-gray-100 bg-white/80 px-2 py-3 shadow-sm dark:divide-zinc-700 dark:border-zinc-800 dark:bg-zinc-800/50">
+                      {[
+                        { label: "Realizados", value: overviewScheduled },
+                        { label: "Meta total", value: overviewTarget },
+                        {
+                          label: "Faltam",
+                          value: Math.max(
+                            overviewTarget - overviewScheduled,
+                            0,
+                          ),
+                        },
+                      ].map((item) => (
+                        <div key={item.label} className="px-1 text-center">
+                          <strong className="block text-lg font-black tabular-nums text-gray-950 dark:text-white">
+                            {formatNumber(item.value)}
+                          </strong>
+                          <span className="text-[9px] font-bold uppercase tracking-wide text-gray-400 dark:text-zinc-500">
+                            {item.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    {overviewTarget === 0 ? (
+                      <p className="mt-3 text-center text-xs text-gray-500 dark:text-zinc-400">
+                        Defina a meta por vendedor na configuração do evento.
+                      </p>
                     ) : null}
-                  </div>
-                  <div className="grid grid-cols-3 divide-x divide-gray-200 rounded-2xl border border-gray-100 bg-white/80 px-2 py-3 shadow-sm dark:divide-zinc-700 dark:border-zinc-800 dark:bg-zinc-800/50">
-                    {[
-                      { label: "Realizados", value: overviewScheduled },
-                      { label: "Meta total", value: overviewTarget },
-                      {
-                        label: "Faltam",
-                        value: Math.max(overviewTarget - overviewScheduled, 0),
-                      },
-                    ].map((item) => (
-                      <div key={item.label} className="px-1 text-center">
-                        <strong className="block text-lg font-black tabular-nums text-gray-950 dark:text-white">
-                          {formatNumber(item.value)}
-                        </strong>
-                        <span className="text-[9px] font-bold uppercase tracking-wide text-gray-400 dark:text-zinc-500">
-                          {item.label}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  {overviewTarget === 0 ? (
-                    <p className="mt-3 text-center text-xs text-gray-500 dark:text-zinc-400">
-                      Defina a meta por vendedor na configuração do evento.
-                    </p>
-                  ) : null}
                   </div>
                 </Card>
               </div>
@@ -2271,7 +2455,7 @@ export function RelatorioGestorPage() {
             </Card>
           )}
           {/* Summary KPI Cards da Aba Campanhas */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <StatsCard
               title="Investimento Total (Ads)"
               value={formatCurrency(campaignTotals.investido)}
@@ -2287,11 +2471,18 @@ export function RelatorioGestorPage() {
               iconColor="bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
             />
             <StatsCard
-              title="Custo Por Lead (CPL Médio)"
+              title="CPL do sistema"
               value={formatCurrency(campaignTotals.cplMedio)}
               icon={<Target size={20} />}
-              subtitle="Custo Médio"
+              subtitle="Investimento ÷ leads importados"
               iconColor="bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400"
+            />
+            <StatsCard
+              title="CPL reportado pela Meta"
+              value={formatCurrency(campaignTotals.metaCplMedio)}
+              icon={<Target size={20} />}
+              subtitle="Investimento ÷ leads da Meta"
+              iconColor="bg-violet-100 text-violet-600 dark:bg-violet-950/60 dark:text-violet-400"
             />
             <StatsCard
               title="Conversas de WhatsApp"
@@ -2301,6 +2492,38 @@ export function RelatorioGestorPage() {
               iconColor="bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
             />
           </div>
+
+          {executiveReport?.data_quality?.warnings?.length ? (
+            <Card className="border-amber-200 bg-amber-50/80 dark:border-amber-900/60 dark:bg-amber-950/20">
+              <div className="flex items-start gap-3">
+                <Shield
+                  size={20}
+                  className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400"
+                />
+                <div>
+                  <h3 className="text-sm font-bold text-amber-950 dark:text-amber-100">
+                    Notas de qualidade dos dados
+                  </h3>
+                  <ul className="mt-2 space-y-1 text-xs text-amber-900/80 dark:text-amber-200/80">
+                    {executiveReport.data_quality.warnings.map((warning) => (
+                      <li key={warning}>• {warning}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+                    Cobertura de atribuição:{" "}
+                    {formatNumber(
+                      executiveReport.attribution_coverage.attributed_leads,
+                    )}{" "}
+                    de{" "}
+                    {formatNumber(
+                      executiveReport.attribution_coverage.total_leads,
+                    )}{" "}
+                    leads.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          ) : null}
 
           {/* Tabela Hierárquica de Campanhas */}
           <Card>
@@ -2351,11 +2574,13 @@ export function RelatorioGestorPage() {
                     </th>
                     <th className="pb-3 px-3 text-right">Valor Investido</th>
                     <th className="pb-3 px-3 text-right">Quantidade Leads</th>
-                    <th className="pb-3 px-3 text-right">Custo por Lead</th>
+                    <th className="pb-3 px-3 text-right">CPL sistema</th>
                     <th className="pb-3 px-3 text-right">Impressões</th>
                     <th className="pb-3 px-3 text-right">Nº Conversas</th>
                     <th className="pb-3 px-3 text-right">Custo / Conversa</th>
-                    <th className="pb-3 px-3 text-right">Contas Alcançadas</th>
+                    <th className="pb-3 px-3 text-right">
+                      Alcance (soma diária)
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-zinc-800/60">

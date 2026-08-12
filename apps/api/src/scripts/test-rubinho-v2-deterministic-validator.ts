@@ -128,7 +128,8 @@ async function main() {
   const completedQuestion = run(code, {
     step: "COMPLETED",
     incoming: "Quais são as ofertas?",
-    output: "As condições incluem bônus na troca e taxa especial, conforme disponibilidade.",
+    output:
+      "As condições incluem bônus na troca e taxa especial, conforme disponibilidade.",
     lead: {
       companions: "Sem acompanhantes",
       store_visit_datetime: "2026-08-15T12:00:00.000Z",

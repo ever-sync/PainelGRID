@@ -461,7 +461,7 @@ describe("LeadsService", () => {
         {
           client_id: clientId,
           name: "Novo Lead",
-          phone: "11999999999",
+          phone: "11987654321",
           source: LeadSource.manual,
         } as never,
       ),
@@ -491,7 +491,7 @@ describe("LeadsService", () => {
         {
           client_id: clientId,
           name: "Lead repetido",
-          phone: "11999999999",
+          phone: "11987654321",
           source: LeadSource.manual,
           event_interest_id: eventId,
         } as never,

@@ -522,9 +522,56 @@ export class ConversationsService {
     // proximo refresh da lista para enxergar as mensagens mais novas.
     await this.syncN8nHistoryForClient(conv.client_id);
 
-    return this.prisma.message.findMany({
+    const messages = await this.prisma.message.findMany({
       where: { conversation_id: conversationId },
       orderBy: { created_at: "asc" },
+      include: {
+        dispatch_events: {
+          orderBy: { updated_at: "desc" },
+          take: 1,
+          select: {
+            status: true,
+            sent_at: true,
+            delivered_at: true,
+            read_at: true,
+            failed_at: true,
+            failure_code: true,
+            failure_reason: true,
+            provider_message_id: true,
+            metadata: true,
+          },
+        },
+      },
+    });
+
+    return messages.map(({ dispatch_events, ...message }) => {
+      const dispatch = dispatch_events?.[0] ?? null;
+      const sendStatus = dispatch
+        ? dispatch.read_at
+          ? "read"
+          : dispatch.delivered_at
+            ? "delivered"
+            : dispatch.failed_at || dispatch.status === "failed"
+              ? "failed"
+              : "sent"
+        : undefined;
+      return {
+        ...message,
+        send_status: sendStatus,
+        delivery: dispatch
+          ? {
+              status: dispatch.status,
+              sent_at: dispatch.sent_at,
+              delivered_at: dispatch.delivered_at,
+              read_at: dispatch.read_at,
+              failed_at: dispatch.failed_at,
+              failure_code: dispatch.failure_code,
+              failure_reason: dispatch.failure_reason,
+              provider_message_id: dispatch.provider_message_id,
+              metadata: dispatch.metadata,
+            }
+          : null,
+      };
     });
   }
 

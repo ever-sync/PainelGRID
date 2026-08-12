@@ -1037,6 +1037,7 @@ describe("EventDashboardService.getExecutiveReport attribution", () => {
         vehicle_model: "Onix",
         vehicle_year: "2020",
         vehicle_fipe_value: "R$ 45.500,00",
+        description: "Carro na troca: Sim",
       },
       {
         id: "lead-2",
@@ -1046,6 +1047,7 @@ describe("EventDashboardService.getExecutiveReport attribution", () => {
         vehicle_model: "T-Cross",
         vehicle_year: "2023",
         vehicle_fipe_value: "105000.50",
+        description: "Carro na troca: Sim",
       },
       {
         id: "lead-3",
@@ -1055,6 +1057,7 @@ describe("EventDashboardService.getExecutiveReport attribution", () => {
         vehicle_model: "Onix",
         vehicle_year: "2019",
         vehicle_fipe_value: "indisponível",
+        description: "Carro na troca: Sim",
       },
     ]);
 

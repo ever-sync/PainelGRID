@@ -66,8 +66,7 @@ export class AgentActionLogService {
       : (dto.block_reason ?? null);
     const previousState =
       dto.previous_state ?? this.toStateSnapshot(stateBefore);
-    const resultingState =
-      dto.resulting_state ?? previousState ?? undefined;
+    const resultingState = dto.resulting_state ?? previousState ?? undefined;
 
     const log = await this.prisma.agentActionLog.create({
       data: {

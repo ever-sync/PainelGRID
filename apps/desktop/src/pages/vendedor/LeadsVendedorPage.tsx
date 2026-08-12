@@ -764,9 +764,7 @@ export function LeadsVendedorPage() {
   };
 
   const showCreateFields =
-    !!normalizedLeadPhone &&
-    !checkingPhone &&
-    !duplicatePhoneLead;
+    !!normalizedLeadPhone && !checkingPhone && !duplicatePhoneLead;
   const canCreateNewLead = showCreateFields && !duplicatePhoneLead;
 
   const countNew = useMemo(
