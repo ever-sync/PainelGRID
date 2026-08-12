@@ -11,8 +11,16 @@ import {
   Clock,
   Swords,
   UserRound,
+  Banknote,
+  Users,
+  Target,
+  Eye,
+  Radio,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
+import { Modal } from "../../components/ui/Modal";
 import type { AppOutletContext } from "../../layouts/AppLayout";
 import { readStoredSession } from "../../services/auth";
 import { listClients, mapApiClientToClient } from "../../services/clients";
@@ -1082,8 +1090,16 @@ function CampaignsMediaTable({
   report: ReportModel;
   isDark: boolean;
 }) {
+  const [campaignsOpen, setCampaignsOpen] = useState(false);
   const t = tableClasses(isDark);
-  const rows = report.campaignRows;
+  const rows = report.campaignRows.filter(
+    (campaign) =>
+      campaign.name !== "Campanha sem nome" ||
+      campaign.investimento > 0 ||
+      campaign.leads > 0 ||
+      campaign.impressoes > 0 ||
+      campaign.alcance > 0,
+  );
   if (rows.length === 0) {
     return (
       <EmptyNote
@@ -1092,8 +1108,41 @@ function CampaignsMediaTable({
       />
     );
   }
+  const cards = [
+    {
+      label: "Investimento",
+      value: formatCurrency(report.metaSpend),
+      icon: Banknote,
+      color: "#10b981",
+    },
+    {
+      label: "Leads",
+      value: formatNumber(report.leadsMidia),
+      icon: Users,
+      color: "#3b82f6",
+    },
+    {
+      label: "CPL",
+      value: formatCurrency(report.cplMedio, 2),
+      icon: Target,
+      color: "#8b5cf6",
+    },
+    {
+      label: "Impressões",
+      value: formatNumber(report.impressoes),
+      icon: Eye,
+      color: "#f59e0b",
+    },
+    {
+      label: "Alcance",
+      value: formatNumber(report.alcance),
+      icon: Radio,
+      color: BRAND,
+    },
+  ];
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
       {report.attributionPeriod && (
         <div
           className={clsx(
@@ -1118,45 +1167,66 @@ function CampaignsMediaTable({
           )}
         </div>
       )}
-      <div className={t.wrap}>
-        <table className={t.table}>
-          <thead>
-            <tr className={t.thead}>
-              <th className={t.th}>Campanha</th>
-              <th className={t.th}>Investimento</th>
-              <th className={t.th}>Leads</th>
-              <th className={t.th}>CPL</th>
-              <th className={t.th}>Conversas</th>
-              <th className={t.th}>Custo/Conversa</th>
-              <th className={t.th}>Impressões</th>
-              <th className={t.th}>Alcance</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((c) => (
-              <tr key={c.id} className={t.row}>
-                <td className={clsx(t.td, "font-semibold")}>{c.name}</td>
-                <td className={t.td}>{formatCurrency(c.investimento)}</td>
-                <td className={t.td}>{formatNumber(c.leads)}</td>
-                <td className={t.td}>{formatCurrency(c.cpl, 2)}</td>
-                <td className={t.td}>{formatNumber(c.conversas)}</td>
-                <td className={t.td}>{formatCurrency(c.custoConversa, 2)}</td>
-                <td className={t.td}>{formatNumber(c.impressoes)}</td>
-                <td className={t.td}>{formatNumber(c.alcance)}</td>
-              </tr>
-            ))}
-            <tr className={t.totalRow}>
-              <td className={t.td}>TOTAL</td>
-              <td className={t.td}>{formatCurrency(report.metaSpend)}</td>
-              <td className={t.td}>{formatNumber(report.leadsMidia)}</td>
-              <td className={t.td}>{formatCurrency(report.cplMedio, 2)}</td>
-              <td className={t.td}>{formatNumber(report.conversas)}</td>
-              <td className={t.td}>—</td>
-              <td className={t.td}>{formatNumber(report.impressoes)}</td>
-              <td className={t.td}>{formatNumber(report.alcance)}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {cards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div
+              key={card.label}
+              className={clsx(
+                "rounded-2xl border p-4",
+                isDark
+                  ? "border-zinc-800 bg-zinc-900/70"
+                  : "border-zinc-200 bg-zinc-50/80",
+              )}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className={clsx(
+                    "text-[11px] font-bold uppercase tracking-[0.12em]",
+                    isDark ? "text-zinc-500" : "text-zinc-400",
+                  )}
+                >
+                  {card.label}
+                </span>
+                <span
+                  className="grid h-9 w-9 place-items-center rounded-xl"
+                  style={{
+                    backgroundColor: `${card.color}18`,
+                    color: card.color,
+                  }}
+                >
+                  <Icon size={18} />
+                </span>
+              </div>
+              <strong
+                className={clsx(
+                  "mt-5 block text-2xl font-black",
+                  isDark ? "text-white" : "text-zinc-950",
+                )}
+              >
+                {card.value}
+              </strong>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex items-center justify-between gap-4">
+        <p
+          className={clsx(
+            "text-xs",
+            isDark ? "text-zinc-500" : "text-zinc-400",
+          )}
+        >
+          {formatNumber(rows.length)} campanha(s) vinculada(s) ao evento
+        </p>
+        <button
+          type="button"
+          onClick={() => setCampaignsOpen(true)}
+          className="inline-flex items-center gap-2 rounded-full bg-[#FF0636] px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-[#FF0636]/20 transition-[transform,background-color] duration-200 hover:-translate-y-0.5 hover:bg-[#d90530]"
+        >
+          <Eye size={15} /> Ver campanhas
+        </button>
       </div>
       {(report.dataQuality?.warnings.length ?? 0) > 0 && (
         <ul
@@ -1170,6 +1240,66 @@ function CampaignsMediaTable({
           ))}
         </ul>
       )}
+      <Modal
+        open={campaignsOpen}
+        onClose={() => setCampaignsOpen(false)}
+        title={`Campanhas vinculadas (${formatNumber(rows.length)})`}
+        size="3xl"
+      >
+        <div className={clsx("space-y-4", isDark && "text-zinc-100")}>
+          <p
+            className={clsx(
+              "text-xs",
+              isDark ? "text-zinc-400" : "text-zinc-500",
+            )}
+          >
+            Dados restritos às campanhas vinculadas ao evento e à janela de
+            atribuição selecionada.
+          </p>
+          <div className={t.wrap}>
+            <table className={t.table}>
+              <thead>
+                <tr className={t.thead}>
+                  <th className={t.th}>Campanha</th>
+                  <th className={t.th}>Investimento</th>
+                  <th className={t.th}>Leads</th>
+                  <th className={t.th}>CPL</th>
+                  <th className={t.th}>Conversas</th>
+                  <th className={t.th}>Custo/Conversa</th>
+                  <th className={t.th}>Impressões</th>
+                  <th className={t.th}>Alcance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((c) => (
+                  <tr key={c.id} className={t.row}>
+                    <td className={clsx(t.td, "font-semibold")}>{c.name}</td>
+                    <td className={t.td}>{formatCurrency(c.investimento)}</td>
+                    <td className={t.td}>{formatNumber(c.leads)}</td>
+                    <td className={t.td}>{formatCurrency(c.cpl, 2)}</td>
+                    <td className={t.td}>{formatNumber(c.conversas)}</td>
+                    <td className={t.td}>
+                      {formatCurrency(c.custoConversa, 2)}
+                    </td>
+                    <td className={t.td}>{formatNumber(c.impressoes)}</td>
+                    <td className={t.td}>{formatNumber(c.alcance)}</td>
+                  </tr>
+                ))}
+                <tr className={t.totalRow}>
+                  <td className={t.td}>TOTAL</td>
+                  <td className={t.td}>{formatCurrency(report.metaSpend)}</td>
+                  <td className={t.td}>{formatNumber(report.leadsMidia)}</td>
+                  <td className={t.td}>{formatCurrency(report.cplMedio, 2)}</td>
+                  <td className={t.td}>{formatNumber(report.conversas)}</td>
+                  <td className={t.td}>—</td>
+                  <td className={t.td}>{formatNumber(report.impressoes)}</td>
+                  <td className={t.td}>{formatNumber(report.alcance)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -1185,6 +1315,7 @@ function CampaignsToCrm({
   const [level, setLevel] = useState<"campaigns" | "ad_sets" | "ads">(
     "campaigns",
   );
+  const [showAllRows, setShowAllRows] = useState(false);
   const levelOptions = [
     { key: "campaigns" as const, label: "Campanhas" },
     { key: "ad_sets" as const, label: "Conjuntos" },
@@ -1223,6 +1354,17 @@ function CampaignsToCrm({
       : level === "campaigns"
         ? campaignFallback
         : [];
+  const rankedRows = [...rows].sort((a, b) => {
+    const resultDifference =
+      (b.sold ?? 0) - (a.sold ?? 0) ||
+      (b.revenue ?? 0) - (a.revenue ?? 0) ||
+      (b.scheduled ?? 0) - (a.scheduled ?? 0) ||
+      (b.leads ?? 0) - (a.leads ?? 0) ||
+      (b.spend ?? 0) - (a.spend ?? 0);
+
+    return resultDifference || a.name.localeCompare(b.name, "pt-BR");
+  });
+  const visibleRows = showAllRows ? rankedRows : rankedRows.slice(0, 4);
   if (report.campaignRows.length === 0 && rows.length === 0) {
     return (
       <EmptyNote isDark={isDark} text="Sem campanhas para cruzar com o CRM." />
@@ -1255,7 +1397,10 @@ function CampaignsToCrm({
           <button
             key={option.key}
             type="button"
-            onClick={() => setLevel(option.key)}
+            onClick={() => {
+              setLevel(option.key);
+              setShowAllRows(false);
+            }}
             className={clsx(
               "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
               level === option.key
@@ -1308,7 +1453,7 @@ function CampaignsToCrm({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {visibleRows.map((row) => (
                 <tr key={row.entity_id} className={t.row}>
                   <td className={clsx(t.td, "min-w-56 font-semibold")}>
                     <div>{row.name}</div>
@@ -1345,6 +1490,39 @@ function CampaignsToCrm({
               ))}
             </tbody>
           </table>
+          {rankedRows.length > 4 && (
+            <div
+              className={clsx(
+                "flex justify-center border-t px-4 py-4",
+                isDark
+                  ? "border-zinc-800 bg-zinc-950/70"
+                  : "border-zinc-100 bg-zinc-50/70",
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => setShowAllRows((current) => !current)}
+                className={clsx(
+                  "inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold transition-all duration-200",
+                  isDark
+                    ? "border-zinc-700 bg-zinc-900 text-zinc-200 hover:border-[#FF0636] hover:text-white"
+                    : "border-zinc-200 bg-white text-zinc-700 shadow-sm hover:border-[#FF0636] hover:text-[#FF0636]",
+                )}
+              >
+                {showAllRows ? (
+                  <>
+                    Mostrar somente as 4 melhores
+                    <ChevronUp size={15} />
+                  </>
+                ) : (
+                  <>
+                    Ver todas ({formatNumber(rankedRows.length)})
+                    <ChevronDown size={15} />
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
