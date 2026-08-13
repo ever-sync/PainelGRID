@@ -1,6 +1,6 @@
 /**
  * Nest usa prefixo global `api` — a base deve ser .../api.
- * Aceita VITE_API_URL só com o host (ex.: https://g-pde-vendas-api.vercel.app) e completa automaticamente.
+ * Aceita VITE_API_URL só com o host (ex.: https://api.gpdevendas.app) e completa automaticamente.
  */
 import type { AuthApiUserPayload } from "./auth-map-user";
 import { mapAuthApiUser } from "./auth-map-user";
@@ -26,7 +26,7 @@ function normalizeApiBaseUrl(raw: string): string {
   return `${base}/api`;
 }
 
-/** Em dev, prefira proxy do Vite (mesma origem, sem CORS). Em producao, defina VITE_API_URL no build (Vercel). */
+/** Em dev, prefira proxy do Vite (mesma origem, sem CORS). Em producao, defina VITE_API_URL no build. */
 function resolveApiBase(): string {
   if (import.meta.env.DEV) {
     return "/api";
@@ -37,8 +37,8 @@ function resolveApiBase(): string {
     return normalizeApiBaseUrl(v);
   }
   console.error(
-    "[LeadFlow] VITE_API_URL nao definida no build. Na Vercel (desktop): Environment Variables → " +
-      "VITE_API_URL = https://<sua-api>.vercel.app (o sufixo /api e adicionado automaticamente). Depois redeploy.",
+    "[PainelGRID] VITE_API_URL nao definida no build. Configure " +
+      "VITE_API_URL = https://api.gpdevendas.app e publique o frontend novamente.",
   );
   return "";
 }
@@ -215,7 +215,7 @@ export async function httpRequest<T>(
 ): Promise<T> {
   if (!API_BASE) {
     throw new Error(
-      "API nao configurada: defina VITE_API_URL no projeto Vercel do desktop e faca um novo deploy.",
+      "O servidor não está configurado corretamente. Entre em contato com o suporte.",
     );
   }
 
@@ -238,10 +238,25 @@ export async function httpRequest<T>(
     if (err instanceof Error && err.name === "AbortError") {
       throw err;
     }
-    const hint = import.meta.env.DEV
-      ? "Em desenvolvimento o front usa o proxy /api → localhost:3000. Suba o backend (npm run dev na raiz)."
-      : `Base usada: ${API_BASE}. Verifique se a API está no ar, se FRONTEND_URL na Vercel (API) inclui a origem deste site (CORS) e redeploy do front após mudar VITE_API_URL.`;
-    throw new Error(`Não foi possível conectar à API. ${hint}`);
+
+    console.error("[PainelGRID] Falha de conexão com a API", {
+      method: options.method ?? "GET",
+      url,
+      online: typeof navigator === "undefined" ? undefined : navigator.onLine,
+      errorName: err instanceof Error ? err.name : "UnknownError",
+      errorMessage: err instanceof Error ? err.message : String(err),
+    });
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      throw new Error(
+        "Você está sem conexão com a internet. Verifique sua rede e tente novamente.",
+      );
+    }
+
+    const message = import.meta.env.DEV
+      ? "Não foi possível conectar à API local. Verifique se o backend está em execução."
+      : "Não foi possível conectar ao servidor. Tente novamente em alguns instantes. Se o problema continuar, informe o horário ao suporte.";
+    throw new Error(message);
   }
 
   const raw = await response.text();

@@ -103,7 +103,10 @@ async function main() {
     step: "WAITING_COMPANIONS",
     incoming: "sim",
     output: "Blz, qual é a placa do seu veículo?",
-    lead: { companions: null },
+    lead: {
+      companions: null,
+      store_visit_datetime: "2026-08-15T12:00:00.000Z",
+    },
   });
   assert.match(String(companions.output), /quantos acompanhantes/i);
   assert.equal(companions.validator_blocked, true);
@@ -143,7 +146,27 @@ async function main() {
   assert.equal(completedQuestion.validator_blocked, false);
   assert.match(String(completedQuestion.output), /bônus na troca/i);
 
-  console.log(JSON.stringify({ passed: 6, failed: 0 }));
+  const reasoningLeak = run(code, {
+    step: "WAITING_FULL_NAME",
+    incoming: "Neymar Luciano de Oliveira",
+    output:
+      "The user now must answer the pending question: \"Qual dia do evento você prefere?\" But system says one question per message. The current assistant message already asked companions. Now user will respond. Let's see user's next message. (Wait for user's next input)",
+    lead: {
+      first_name: "Neymar",
+      last_name: "Luciano de Oliveira",
+      companions: null,
+      store_visit_datetime: null,
+    },
+  });
+  assert.equal(reasoningLeak.validator_blocked, true);
+  assert.equal(reasoningLeak.validator_internal_reasoning_blocked, true);
+  assert.doesNotMatch(
+    String(reasoningLeak.output),
+    /the user|pending question|system says|wait for/i,
+  );
+  assert.match(String(reasoningLeak.output), /14\/08\/2026/);
+
+  console.log(JSON.stringify({ passed: 7, failed: 0 }));
 }
 
 main();

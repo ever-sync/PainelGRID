@@ -94,4 +94,26 @@ describe("DispatchTrackingService", () => {
       },
     });
   });
+
+  it("marca resposta confirmada no disparo exato pelo context.id", async () => {
+    prisma.dispatchEvent.updateMany.mockResolvedValue({ count: 1 });
+    const repliedAt = new Date("2026-08-13T12:00:00.000Z");
+
+    await expect(
+      service.markReplyByProviderMessageId("wamid-template-1", repliedAt),
+    ).resolves.toBe(1);
+
+    expect(prisma.dispatchEvent.updateMany).toHaveBeenCalledWith({
+      where: {
+        provider_message_id: "wamid-template-1",
+        sent_at: { not: null, lte: repliedAt },
+        replied_at: null,
+        status: { not: "failed" },
+      },
+      data: {
+        status: "replied",
+        replied_at: repliedAt,
+      },
+    });
+  });
 });

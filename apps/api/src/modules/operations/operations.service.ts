@@ -138,6 +138,7 @@ export class OperationsService {
           template_delivered: 0,
           template_read: 0,
           template_replied: 0,
+          template_not_replied: 0,
           template_failed: 0,
           engaged: 0,
           scheduled: 0,
@@ -149,7 +150,7 @@ export class OperationsService {
       };
     }
 
-    const [dispatches, states, conversations] = await Promise.all([
+    const [dispatches, states] = await Promise.all([
       this.prisma.dispatchEvent.findMany({
         where: {
           lead_id: { in: leadIds },
@@ -177,18 +178,6 @@ export class OperationsService {
         },
         orderBy: { updated_at: "desc" },
       }),
-      this.prisma.conversation.findMany({
-        where: { lead_id: { in: leadIds } },
-        select: {
-          lead_id: true,
-          messages: {
-            where: { sender_type: "lead" },
-            select: { created_at: true },
-            orderBy: { created_at: "desc" },
-            take: 1,
-          },
-        },
-      }),
     ]);
 
     const latestDispatch = new Map<string, (typeof dispatches)[number]>();
@@ -202,33 +191,23 @@ export class OperationsService {
       if (!latestState.has(state.lead_id))
         latestState.set(state.lead_id, state);
     }
-    const latestInbound = new Map<string, Date>();
-    for (const conversation of conversations) {
-      const createdAt = conversation.messages[0]?.created_at;
-      if (!createdAt) continue;
-      const previous = latestInbound.get(conversation.lead_id);
-      if (!previous || createdAt > previous) {
-        latestInbound.set(conversation.lead_id, createdAt);
-      }
-    }
-
     const questionCounts = new Map<RubinhoStep, number>();
     let awaitingTemplate = 0;
     let templateSent = 0;
     let templateDelivered = 0;
     let templateRead = 0;
     let templateReplied = 0;
+    let templateNotReplied = 0;
     let templateFailed = 0;
     let engaged = 0;
     let scheduled = 0;
 
     for (const lead of leads) {
       const dispatch = latestDispatch.get(lead.id);
-      const inboundAt = latestInbound.get(lead.id);
-      const hasReply = Boolean(
-        dispatch?.replied_at ||
-        (dispatch?.sent_at && inboundAt && inboundAt >= dispatch.sent_at),
-      );
+      // Somente `replied_at`, gravado ao receber a mensagem real do WhatsApp,
+      // confirma uma resposta. Historico importado do n8n nao possui timestamp
+      // original e portanto nao pode ser usado para inferir cronologia.
+      const hasReply = Boolean(dispatch?.replied_at);
       const sent = Boolean(dispatch?.sent_at);
       const failed = Boolean(
         dispatch?.failed_at || dispatch?.status === "failed",
@@ -238,11 +217,12 @@ export class OperationsService {
       if (dispatch?.delivered_at) templateDelivered += 1;
       if (dispatch?.read_at) templateRead += 1;
       if (hasReply) templateReplied += 1;
+      if (sent && !hasReply) templateNotReplied += 1;
       if (failed) templateFailed += 1;
       // Antes da primeira resposta o lead permanece no estágio operacional do
       // template. Depois da resposta, cada lead ocupa exatamente uma pergunta.
       if (!hasReply && dispatch) continue;
-      if (!hasReply && !latestState.has(lead.id) && !inboundAt) continue;
+      if (!hasReply && !latestState.has(lead.id)) continue;
       engaged += 1;
       if (
         ["scheduled", "confirmed", "checked_in", "closed"].includes(
@@ -285,6 +265,7 @@ export class OperationsService {
         template_delivered: templateDelivered,
         template_read: templateRead,
         template_replied: templateReplied,
+        template_not_replied: templateNotReplied,
         template_failed: templateFailed,
         engaged,
         scheduled,

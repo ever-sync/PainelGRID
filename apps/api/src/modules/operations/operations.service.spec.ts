@@ -117,6 +117,7 @@ describe("OperationsService", () => {
 
     expect(result.totals.template_sent).toBe(2);
     expect(result.totals.template_replied).toBe(1);
+    expect(result.totals.template_not_replied).toBe(1);
     expect(result.totals.engaged).toBe(1);
     expect(
       result.stages.find((stage) => stage.key === "WAITING_EVENT_DATE")?.count,
@@ -124,6 +125,49 @@ describe("OperationsService", () => {
     expect(result.stages.reduce((sum, stage) => sum + stage.count, 0)).toBe(1);
     expect(result.rates.scheduling).toBeLessThanOrEqual(100);
     expect(result.rates.completion).toBeLessThanOrEqual(100);
+  });
+
+  it("nao considera historico importado como resposta confirmada", async () => {
+    const sentAt = new Date("2026-08-09T12:00:00.000Z");
+    prisma.lead.findMany.mockResolvedValue([
+      {
+        id: "lead-history",
+        client_id: "client-1",
+        event_interest_id: "event-1",
+        name: "Lead com histórico importado",
+        first_name: null,
+        last_name: null,
+        companions: null,
+        store_visit_datetime: null,
+        description: null,
+        vehicle_plate: null,
+        confirmation_status: "pending",
+        created_at: sentAt,
+        updated_at: sentAt,
+      },
+    ]);
+    prisma.dispatchEvent.findMany.mockResolvedValue([
+      {
+        lead_id: "lead-history",
+        status: "sent",
+        sent_at: sentAt,
+        delivered_at: null,
+        read_at: null,
+        replied_at: null,
+        failed_at: null,
+        created_at: sentAt,
+      },
+    ]);
+    prisma.conversationState.findMany.mockResolvedValue([]);
+
+    const result = await service.rubinhoThermometer(
+      { role: "gestor" } as never,
+      { event_id: "event-1" },
+    );
+
+    expect(prisma.conversation.findMany).not.toHaveBeenCalled();
+    expect(result.totals.template_replied).toBe(0);
+    expect(result.totals.template_not_replied).toBe(1);
   });
 
   it("nao classifica lead sem disparo como aguardando template", async () => {

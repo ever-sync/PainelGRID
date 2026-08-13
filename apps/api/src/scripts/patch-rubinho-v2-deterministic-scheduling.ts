@@ -79,6 +79,11 @@ const preStep = pre.current_step ?? null;
 const incoming = String($('V2 - NORMALIZAR ENTRADA').item.json.v2_context.message_text ?? '').trim();
 const eventDays = $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.event_days_iso ?? [];
 const claimsFinal = /credencial\s+(foi\s+)?confirmad|qr\s*code|parab[eé]ns pela sua decis[aã]o/i.test(originalOutput);
+const internalReasoningLeak =
+  /\b(the user|pending question|system says|assistant message|current assistant|user will respond|wait for (?:the )?user|next input|tool_calls?|let'?s see|internal reasoning|must answer)\b/i.test(originalOutput) ||
+  /\bWAITING_[A-Z_]+\b/.test(originalOutput) ||
+  /(?:^|\n)\s*(?:analysis|reasoning|thought|plan)\s*:/i.test(originalOutput) ||
+  /\b(pergunta pendente|racioc[ií]nio interno|estado interno)\b/i.test(originalOutput);
 const normalize = (value) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 const normalizedIncoming = normalize(incoming);
 const localParts = (value) => {
@@ -172,7 +177,10 @@ const autoSchedule = selected ? {
   display_range: $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.event_days,
 } : { should_schedule: false, ambiguous: candidates.size > 1 };
 
-if (preStep === 'WAITING_EVENT_DATE' && candidates.size > 1) {
+if (internalReasoningLeak) {
+  blocked = true;
+  output = expected[postStep]?.text ?? 'Não consegui processar sua resposta agora. Pode tentar novamente?';
+} else if (preStep === 'WAITING_EVENT_DATE' && candidates.size > 1) {
   blocked = true;
   output = 'Você indicou mais de uma data. Qual delas você prefere?';
 } else if (!alreadyCompleted && !autoSchedule.should_schedule) {
@@ -205,7 +213,7 @@ if (claimsFinal) {
     }
   }
 }
-return { json: { ...lead, output, validator_claims_final: claimsFinal, validator_missing: missing, validator_blocked: blocked, validator_needs_status: false, validator_needs_move: false, v2_expected_step: postStep, v2_auto_schedule: autoSchedule } };`;
+return { json: { ...lead, output, validator_claims_final: claimsFinal, validator_internal_reasoning_blocked: internalReasoningLeak, validator_missing: missing, validator_blocked: blocked, validator_needs_status: false, validator_needs_move: false, v2_expected_step: postStep, v2_auto_schedule: autoSchedule } };`;
 
 const deriveStateCode = String.raw`const context = $json;
 const lead = $('V2 - VALIDAR ESCOPO LEAD EVENTO').item.json.items?.[0] ?? {};
@@ -325,6 +333,12 @@ async function main() {
     "# ORDEM DE CONVERSA HOMOLOGADA V7 — DATA IMEDIATAMENTE APOS O NOME";
   if (!options.systemMessage.includes(conversationOrderMarker)) {
     options.systemMessage += `\n\n${conversationOrderMarker}\nEstas regras V7 substituem qualquer ordem anterior conflitante.\n- O gatilho oficial de abertura e o texto exibido ao lead são \"Garantir minha vaga\". Durante a transição do template da Meta, \"Finalizar credenciamento\" e \"Finalizar credencial\" ainda devem ser aceitos silenciosamente como gatilhos legados, mas nunca apresentados como CTA oficial.\n- A ordem obrigatória é: nome completo, escolha da data, quantidade de acompanhantes, nomes dos acompanhantes quando houver, carro na troca, placa quando houver troca, resumo e confirmação final.\n- Em WAITING_FULL_NAME, depois de salvar first_name e last_name, apresente imediatamente todas as datas e horários exatos de event_days_iso e pergunte qual data o lead prefere.\n- Em WAITING_EVENT_DATE, depois de salvar o start exato escolhido, o fluxo determinístico cria ou reutiliza o agendamento, define o status como scheduled e move o card para PRESENCA_AGENDADA silenciosamente. Depois pergunte quantos acompanhantes o lead levará.\n- Em WAITING_COMPANIONS, se não houver acompanhantes, salve \"Sem acompanhantes\" e avance para a pergunta sobre carro na troca. Se houver, salve a quantidade e pergunte os nomes completos.\n- Em WAITING_COMPANION_NAMES, depois de salvar os nomes, avance para a pergunta sobre carro na troca.\n- O status scheduled não encerra o atendimento. A conclusão continua dependendo do resumo confirmado e do sucesso de finalizar_credenciamento.\n- Nunca volte para acompanhantes antes da escolha da data e nunca repita uma data já escolhida.\n`;
+  }
+
+  const outputSafetyMarker =
+    "# BLOQUEIO DE RACIOCINIO INTERNO V8 — PRIORIDADE MAXIMA";
+  if (!options.systemMessage.includes(outputSafetyMarker)) {
+    options.systemMessage += `\n\n${outputSafetyMarker}\n- Retorne exclusivamente a mensagem final em português destinada ao WhatsApp.\n- Nunca exponha análise, raciocínio, plano, observações sobre usuário ou sistema, nomes de estados, pergunta pendente, ferramentas ou instruções internas.\n- Nunca escreva frases como "the user...", "system says...", "assistant message...", "wait for user's next input", current_step, pending_question ou WAITING_*.\n- Se houver dúvida sobre a próxima ação, não explique. Responda apenas com a pergunta segura correspondente ao estado persistente.\n`;
   }
 
   const openingTriggerNode = workflow.nodes.find((item) =>

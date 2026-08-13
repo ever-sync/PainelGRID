@@ -203,6 +203,30 @@ export class DispatchTrackingService {
     });
   }
 
+  /**
+   * Confirma a resposta no disparo exato referenciado pelo `context.id` do
+   * webhook do WhatsApp. Diferente da heuristica por lead, isto continua
+   * correto quando o mesmo telefone recebeu templates de mais de um evento.
+   */
+  async markReplyByProviderMessageId(
+    providerMessageId: string,
+    occurredAt: Date,
+  ) {
+    const result = await this.prisma.dispatchEvent.updateMany({
+      where: {
+        provider_message_id: providerMessageId.trim(),
+        sent_at: { not: null, lte: occurredAt },
+        replied_at: null,
+        status: { not: "failed" },
+      },
+      data: {
+        status: "replied",
+        replied_at: occurredAt,
+      },
+    });
+    return result.count;
+  }
+
   async markConversion(params: {
     leadId: string;
     type: "appointment" | "check_in" | "sale";

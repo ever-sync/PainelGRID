@@ -428,6 +428,13 @@ function RubinhoThermometerCard({
       background: "bg-violet-50",
     },
     {
+      label: "Não responderam",
+      value: data?.totals.template_not_replied ?? 0,
+      icon: MessageCircle,
+      color: "text-rose-600",
+      background: "bg-rose-50",
+    },
+    {
       label: "Em atendimento",
       value: data?.totals.engaged ?? 0,
       icon: Users,
@@ -503,7 +510,7 @@ function RubinhoThermometerCard({
         </label>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
         {metrics.map((metric) => {
           const Icon = metric.icon;
           return (
