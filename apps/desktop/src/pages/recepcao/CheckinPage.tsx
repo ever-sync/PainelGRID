@@ -32,8 +32,8 @@ import {
   checkLeadPhone,
   checkInLeadByToken,
   createLead,
+  fetchAllLeads,
   listVendorAvailability,
-  listLeads,
   mapApiLeadToLead,
   notifyVendorCall,
   type VendorAvailability,
@@ -57,6 +57,8 @@ type OutletContext = {
 
 type DiscoverySource =
   "instagram" | "facebook" | "indicacao" | "passagem" | "outro";
+
+const CHECKIN_PAGE_SIZE = 25;
 
 const DISCOVERY_SOURCE_OPTIONS: Array<{
   value: DiscoverySource;
@@ -160,6 +162,7 @@ export function CheckinPage() {
   const [activeTab, setActiveTab] = useState<
     "all" | "expected" | "arrived" | "absent"
   >("all");
+  const [currentPage, setCurrentPage] = useState(1);
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [, setScannerTab] = useState<"qr" | "manual">("qr");
   const [onlineVendorIds, setOnlineVendorIds] = useState<string[]>([]);
@@ -178,7 +181,10 @@ export function CheckinPage() {
     if (!clientId || !t) return;
     void Promise.all([
       listEvents({ client_id: clientId }, t),
-      listLeads({ client_id: clientId }, t),
+      // A recepção precisa enxergar a operação inteira. `listLeads` retorna
+      // apenas a primeira página (50 itens), fazendo os cards e a busca
+      // omitirem agendamentos antigos do Rubinho e dos vendedores.
+      fetchAllLeads({ client_id: clientId }, t, { maxItems: 20_000 }),
     ])
       .then(([eventRows, leadRows]) => {
         const mapped = eventRows.map(mapApiEventToEvent);
@@ -292,7 +298,6 @@ export function CheckinPage() {
     if (activeTab === "expected") {
       return matchedSearch.filter(
         (l) =>
-          l.confirmation_status === "pending" ||
           l.confirmation_status === "scheduled" ||
           l.confirmation_status === "confirmed",
       );
@@ -307,6 +312,19 @@ export function CheckinPage() {
     }
     return matchedSearch;
   }, [leadsForEvent, search, activeTab]);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filtered.length / CHECKIN_PAGE_SIZE),
+  );
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedLeads = filtered.slice(
+    (safeCurrentPage - 1) * CHECKIN_PAGE_SIZE,
+    safeCurrentPage * CHECKIN_PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, search, selectedEventId]);
   const normalizedLeadPhone = normalizeBrPhoneToE164(leadPhone);
   const duplicatePhoneLead = normalizedLeadPhone
     ? (leadsState.find(
@@ -318,7 +336,6 @@ export function CheckinPage() {
 
   const expected = leadsForEvent.filter(
     (l) =>
-      l.confirmation_status === "pending" ||
       l.confirmation_status === "scheduled" ||
       l.confirmation_status === "confirmed",
   ).length;
@@ -998,7 +1015,7 @@ export function CheckinPage() {
             Nenhum lead neste evento.
           </p>
         )}
-        {filtered.map((lead) => {
+        {paginatedLeads.map((lead) => {
           const vendorName = lead.assigned_vendor_id
             ? vendorsById[lead.assigned_vendor_id]
             : undefined;
@@ -1148,6 +1165,46 @@ export function CheckinPage() {
             </div>
           );
         })}
+
+        {filtered.length > CHECKIN_PAGE_SIZE && (
+          <div
+            className={clsx(
+              "flex flex-col items-center justify-between gap-3 rounded-xl border px-4 py-3 sm:flex-row",
+              isDarkMode
+                ? "border-zinc-700/90 bg-[#141414] text-zinc-300"
+                : "border-gray-100 bg-white text-gray-600",
+            )}
+          >
+            <span className="text-xs font-medium">
+              Mostrando {(safeCurrentPage - 1) * CHECKIN_PAGE_SIZE + 1}–
+              {Math.min(safeCurrentPage * CHECKIN_PAGE_SIZE, filtered.length)}{" "}
+              de {filtered.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={safeCurrentPage === 1}
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                className="rounded-lg border border-current/20 px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Anterior
+              </button>
+              <span className="min-w-24 text-center text-xs font-semibold">
+                Página {safeCurrentPage} de {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={safeCurrentPage === totalPages}
+                onClick={() =>
+                  setCurrentPage((page) => Math.min(totalPages, page + 1))
+                }
+                className="rounded-lg border border-current/20 px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Próxima
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <Modal
