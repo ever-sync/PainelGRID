@@ -9,6 +9,7 @@ describe("AutomationController", () => {
   const leads = {
     countInitialTemplateQueue: jest.fn(),
     dispatchNextInitialWhatsappTemplate: jest.fn(),
+    dispatchInitialWhatsappTemplatePilot: jest.fn(),
     countEmailAttempt2Queue: jest.fn(),
     dispatchNextEmailAttempt2: jest.fn(),
   };
@@ -76,6 +77,21 @@ describe("AutomationController", () => {
       processed: true,
     });
     expect(leads.dispatchNextInitialWhatsappTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  it("processa um lead específico no piloto protegido", async () => {
+    leads.dispatchInitialWhatsappTemplatePilot.mockResolvedValue({
+      processed: true,
+      sent: true,
+    });
+    const leadId = "d66fd38f-95ec-4c68-8d29-f5320bb62f18";
+    await expect(controller.dispatchInitialTemplatePilot(leadId)).resolves.toEqual({
+      processed: true,
+      sent: true,
+    });
+    expect(leads.dispatchInitialWhatsappTemplatePilot).toHaveBeenCalledWith(
+      leadId,
+    );
   });
 
   it("encaminha status do WhatsApp recebidos pelo n8n", async () => {

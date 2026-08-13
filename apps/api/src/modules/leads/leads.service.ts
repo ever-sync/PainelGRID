@@ -291,8 +291,31 @@ export class LeadsService {
    * cadência, enquanto a chave única em dispatch_events impede duplicidade.
    */
   async dispatchNextInitialWhatsappTemplate() {
+    return this.dispatchInitialWhatsappTemplateCandidate();
+  }
+
+  async dispatchInitialWhatsappTemplatePilot(leadId: string) {
+    return this.dispatchInitialWhatsappTemplateCandidate(leadId);
+  }
+
+  private async dispatchInitialWhatsappTemplateCandidate(leadId?: string) {
     const candidates = await this.prisma.lead.findMany({
-      where: this.initialTemplateQueueWhere(),
+      where: {
+        ...this.initialTemplateQueueWhere(),
+        ...(leadId
+          ? {
+              id: leadId,
+              conversations: {
+                none: { messages: { some: { sender_type: "lead" } } },
+              },
+              appointments: {
+                none: {
+                  status: { in: ["proposed", "scheduled", "confirmed"] },
+                },
+              },
+            }
+          : {}),
+      },
       orderBy: [{ created_at: "asc" }, { id: "asc" }],
       take: 20,
       select: leadSelect,
@@ -496,7 +519,11 @@ export class LeadsService {
       };
     }
 
-    return { processed: false, sent: false, reason: "queue_empty" };
+    return {
+      processed: false,
+      sent: false,
+      reason: leadId ? "lead_not_eligible" : "queue_empty",
+    };
   }
 
   private async emailAttempt2Candidates() {

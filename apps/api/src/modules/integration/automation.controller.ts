@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, ParseUUIDPipe, Post, UseGuards } from "@nestjs/common";
 import { ApiHeader, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { Public } from "../../common/decorators";
@@ -68,6 +68,16 @@ export class AutomationController {
   })
   dispatchNextInitialTemplate() {
     return this.leads.dispatchNextInitialWhatsappTemplate();
+  }
+
+  @Post("initial-template/pilot")
+  @ApiOperation({
+    summary: "Dispara um lead específico após revalidar as proteções do piloto",
+  })
+  dispatchInitialTemplatePilot(
+    @Body("lead_id", new ParseUUIDPipe()) leadId: string,
+  ) {
+    return this.leads.dispatchInitialWhatsappTemplatePilot(leadId);
   }
 
   @Post("whatsapp/statuses")
