@@ -255,6 +255,9 @@ export class MetaService implements OnModuleInit {
         meta_gestor_connected_at: null,
       },
     });
+    await this.redis.client.del(
+      `meta:gestor:${user.sub}:enriched-businesses`,
+    );
 
     return { gestor_id: user.sub, disconnected: true };
   }
@@ -338,6 +341,9 @@ export class MetaService implements OnModuleInit {
           meta_gestor_connected_at: new Date(),
         },
       });
+      await this.redis.client.del(
+        `meta:gestor:${gestorId}:enriched-businesses`,
+      );
 
       let businesses: MetaBusinessSummary[] = [];
       try {
@@ -405,19 +411,33 @@ export class MetaService implements OnModuleInit {
         );
       }
 
-      const selection = await this.getGestorMetaSelectionSessionOrThrow(
-        user.sub,
-      );
+      const cacheKey = `meta:gestor:${user.sub}:enriched-businesses`;
+      const cached = await this.redis.client.get(cacheKey);
+      if (cached) {
+        return {
+          client_id: query.client_id,
+          oauth_session_id: null,
+          gestor_token: true,
+          businesses: this.parseJson<Awaited<ReturnType<MetaService["enrichBusinessesForAccessToken"]>>>(
+            cached,
+            "Cache Meta invalido",
+          ),
+          cached: true,
+        };
+      }
+      const selection = await this.getGestorMetaSelectionSessionOrThrow(user.sub);
       const businesses = await this.enrichBusinessesForAccessToken(
         selection.accessToken,
         selection.businesses,
       );
+      await this.redis.client.set(cacheKey, JSON.stringify(businesses), "EX", 300);
 
       return {
         client_id: query.client_id,
         oauth_session_id: null,
         gestor_token: true,
         businesses,
+        cached: false,
       };
     }
 

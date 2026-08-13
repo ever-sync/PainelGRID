@@ -1670,7 +1670,9 @@ export function ClienteDetailPage() {
     if (clientId && isUuid(clientId) && accessToken) {
       if (!gestorMetaConnected) {
         setMetaStatusMessage(
-          "Conecte a BM em Configurações antes de selecionar os ativos deste cliente.",
+          metaConnection
+            ? "Este cliente já está conectado à Meta. Para trocar a BM ou o número, reconecte a conta do gestor em Configurações."
+            : "Conecte a conta Meta do gestor em Configurações antes de selecionar os ativos deste cliente.",
         );
         return;
       }
@@ -2202,26 +2204,21 @@ export function ClienteDetailPage() {
       setMetaStatusMessage("Sincronizando com a Meta...");
       try {
         await syncMetaFull(clientId, token);
-
-        // `syncMetaFull` so enfileira o job; quem sincroniza e o worker.
-        // Atualizar a tela agora leria o estado antigo, entao esperamos o
-        // `last_sync_at` avancar antes de recarregar.
-        const concluiu = await waitForSyncToFinish(
-          clientId,
-          token,
-          syncedAtBefore,
-        );
-
-        await Promise.all([
-          refreshMetaStatusFromApi(clientId, token),
-          refreshLinkedCampaigns(),
-          refreshCampaignsReport(),
-        ]);
-
         setMetaStatusMessage(
-          concluiu
-            ? "Sincronização concluída."
-            : "A sincronização foi enfileirada e ainda está rodando. Os dados aparecem assim que ela terminar.",
+          "Sincronização iniciada em segundo plano. Você pode continuar usando o painel.",
+        );
+        // A ação HTTP apenas enfileira o worker. Acompanhamos sem bloquear o
+        // botão nem manter o usuário preso por até 60 segundos.
+        void waitForSyncToFinish(clientId, token, syncedAtBefore).then(
+          async (concluiu) => {
+            if (!concluiu) return;
+            await Promise.all([
+              refreshMetaStatusFromApi(clientId, token),
+              refreshLinkedCampaigns(),
+              refreshCampaignsReport(),
+            ]);
+            setMetaStatusMessage("Sincronização concluída.");
+          },
         );
       } catch {
         setMetaStatusMessage("Falha ao sincronizar Meta neste cliente.");
