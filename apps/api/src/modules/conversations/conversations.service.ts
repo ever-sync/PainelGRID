@@ -676,12 +676,18 @@ export class ConversationsService {
         where: { id: conv.lead_id },
         select: { phone: true },
       });
-      externalId = await this.metaService.sendClientWhatsappMessage(
-        conv.client_id,
-        lead?.phone ?? "",
-        content,
-        conv.whatsapp_phone_number_id ?? undefined,
-      );
+      externalId = conv.whatsapp_phone_number_id
+        ? await this.metaService.sendClientWhatsappMessage(
+            conv.client_id,
+            lead?.phone ?? "",
+            content,
+            conv.whatsapp_phone_number_id,
+          )
+        : await this.metaService.sendClientWhatsappMessage(
+            conv.client_id,
+            lead?.phone ?? "",
+            content,
+          );
     }
 
     const msg = await this.prisma.message.create({

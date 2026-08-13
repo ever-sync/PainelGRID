@@ -173,6 +173,10 @@ describe("MetaService", () => {
   });
 
   it("lista numeros de varias BMs vinculados ao mesmo cliente", async () => {
+    prisma.client.findUnique.mockResolvedValue({
+      id: "client-1",
+      gestor_id: "gestor-1",
+    });
     prisma.metaConnection.findMany.mockResolvedValue([
       {
         id: "connection-1",
