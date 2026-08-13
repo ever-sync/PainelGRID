@@ -829,6 +829,10 @@ export function DashboardGestorPage() {
     (client) => client.status === "active",
   ).length;
   const totalLeads = leads.length;
+  const rubinhoLeads = leads.filter(
+    (lead) => lead.source === "facebook_ads",
+  ).length;
+  const vendorLeads = leads.filter((lead) => lead.source === "manual").length;
   const activeEvents = events.filter(
     (event) => event.status === "active",
   ).length;
@@ -856,8 +860,15 @@ export function DashboardGestorPage() {
     new Date().getMonth(),
     1,
   ).getTime();
-  const leadsThisWeek = leads.filter(
-    (lead) => new Date(lead.created_at).getTime() >= weekAgoMs,
+  const rubinhoLeadsThisWeek = leads.filter(
+    (lead) =>
+      lead.source === "facebook_ads" &&
+      new Date(lead.created_at).getTime() >= weekAgoMs,
+  ).length;
+  const vendorLeadsThisWeek = leads.filter(
+    (lead) =>
+      lead.source === "manual" &&
+      new Date(lead.created_at).getTime() >= weekAgoMs,
   ).length;
   const clientsThisMonth = clients.filter(
     (client) => new Date(client.created_at).getTime() >= startOfMonthMs,
@@ -1446,8 +1457,8 @@ export function DashboardGestorPage() {
       ) : null}
 
       <div className="space-y-6">
-        {/* 1. Top Row: 4 Metric Cards (Full Width) */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* 1. Top Row: origem dos contatos separada entre Rubinho e vendedores */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <MetricCard
             title="Clientes ativos"
             value={String(activeClients)}
@@ -1460,16 +1471,27 @@ export function DashboardGestorPage() {
             accent="bg-[#FF0636]/10"
           />
           <MetricCard
-            title="Contatos captados"
-            value={String(totalLeads)}
+            title="Leads do Rubinho"
+            value={String(rubinhoLeads)}
             subtitle={
-              leadsThisWeek > 0
-                ? `+${leadsThisWeek} na semana`
+              rubinhoLeadsThisWeek > 0
+                ? `+${rubinhoLeadsThisWeek} na semana`
                 : "Sem novos na semana"
             }
             icon={<Sparkles size={18} />}
             accent="bg-white/15"
             highlight
+          />
+          <MetricCard
+            title="Leads dos vendedores"
+            value={String(vendorLeads)}
+            subtitle={
+              vendorLeadsThisWeek > 0
+                ? `+${vendorLeadsThisWeek} na semana`
+                : "Sem novos na semana"
+            }
+            icon={<Users size={18} className="text-sky-600" />}
+            accent="bg-sky-50"
           />
           <MetricCard
             title="Eventos ativos"
