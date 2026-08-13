@@ -1,6 +1,13 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
-import { Camera, CameraOff, AlertCircle, Zap, ZapOff } from "lucide-react";
+import {
+  Camera,
+  CameraOff,
+  AlertCircle,
+  ImageUp,
+  Zap,
+  ZapOff,
+} from "lucide-react";
 import { triggerHapticFeedback } from "../../utils/haptics";
 import { createAudioContext } from "../../utils/audioContext";
 
@@ -34,6 +41,7 @@ function playBeep() {
 
 export function QrScanner({ onScan, onClose }: QrScannerProps) {
   const qrRef = useRef<Html5Qrcode | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const onScanRef = useRef(onScan);
   const decodedRef = useRef(false);
   const readerId = `qr-reader-${useId().replace(/:/g, "")}`;
@@ -41,6 +49,7 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
   const [loading, setLoading] = useState(true);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
+  const [readingImage, setReadingImage] = useState(false);
 
   useEffect(() => {
     onScanRef.current = onScan;
@@ -145,6 +154,32 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
     }
   };
 
+  const scanImage = async (file: File) => {
+    const scanner = qrRef.current;
+    if (!scanner || readingImage) return;
+
+    setReadingImage(true);
+    setErrorMsg(null);
+    decodedRef.current = false;
+    try {
+      if (scanner.isScanning) await scanner.stop();
+      const decodedText = await scanner.scanFile(file, true);
+      if (!decodedText.trim()) throw new Error("QR Code vazio");
+      decodedRef.current = true;
+      playBeep();
+      triggerHapticFeedback(150);
+      onScanRef.current(decodedText);
+    } catch (error) {
+      console.error("Falha ao ler QR Code da imagem", error);
+      setErrorMsg(
+        "Não foi possível reconhecer o QR Code nesta imagem. Tente uma imagem sem cortes, reflexos ou desfoque.",
+      );
+    } finally {
+      setReadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   return (
     <div className="flex flex-col items-center justify-center p-4">
       <div
@@ -199,6 +234,39 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
           <AlertCircle size={13} />
           <span>Aponte a câmera para o QR Code do convite</span>
         </p>
+      )}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void scanImage(file);
+        }}
+      />
+      <button
+        type="button"
+        disabled={readingImage}
+        onClick={() => fileInputRef.current?.click()}
+        className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2 text-xs font-bold text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-wait disabled:opacity-60"
+      >
+        <ImageUp size={16} />
+        {readingImage ? "Lendo imagem..." : "Selecionar imagem do QR Code"}
+      </button>
+
+      {errorMsg && (
+        <button
+          type="button"
+          onClick={() => {
+            setErrorMsg(null);
+            fileInputRef.current?.click();
+          }}
+          className="mt-2 text-xs font-semibold text-[#E51838] hover:underline"
+        >
+          Escolher outra imagem
+        </button>
       )}
     </div>
   );
