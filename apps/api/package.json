@@ -21,7 +21,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "test:integration": "jest --config ./test/jest-integration.json",
     "db:migrate": "prisma migrate dev",
-    "db:migrate:prod": "prisma migrate resolve --rolled-back 20260813224000_add_conversation_whatsapp_channel || true; prisma migrate deploy",
+    "db:migrate:prod": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:seed": "ts-node prisma/seed.ts",
     "db:provision-crm": "ts-node prisma/provision-crm.ts",
