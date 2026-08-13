@@ -116,4 +116,28 @@ describe("DispatchTrackingService", () => {
       },
     });
   });
+
+  it("importa status individuais recebidos pelo WhatsApp Trigger do n8n", async () => {
+    prisma.dispatchEvent.updateMany.mockResolvedValue({ count: 1 });
+
+    await expect(
+      service.ingestWhatsappStatuses({
+        statuses: [
+          {
+            id: "wamid-template-1",
+            status: "delivered",
+            timestamp: "1786622400",
+          },
+        ],
+      }),
+    ).resolves.toEqual({ received: 1, matched: 1, ignored: 0 });
+
+    expect(prisma.dispatchEvent.updateMany).toHaveBeenCalledWith({
+      where: { provider_message_id: "wamid-template-1" },
+      data: {
+        status: "delivered",
+        delivered_at: new Date("2026-08-13T12:00:00.000Z"),
+      },
+    });
+  });
 });

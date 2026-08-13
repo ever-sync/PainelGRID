@@ -79,11 +79,25 @@ const preStep = pre.current_step ?? null;
 const incoming = String($('V2 - NORMALIZAR ENTRADA').item.json.v2_context.message_text ?? '').trim();
 const eventDays = $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.event_days_iso ?? [];
 const claimsFinal = /credencial\s+(foi\s+)?confirmad|qr\s*code|parab[eé]ns pela sua decis[aã]o/i.test(originalOutput);
-const internalReasoningLeak =
-  /\b(the user|pending question|system says|assistant message|current assistant|user will respond|wait for (?:the )?user|next input|tool_calls?|let'?s see|internal reasoning|must answer)\b/i.test(originalOutput) ||
-  /\bWAITING_[A-Z_]+\b/.test(originalOutput) ||
-  /(?:^|\n)\s*(?:analysis|reasoning|thought|plan)\s*:/i.test(originalOutput) ||
-  /\b(pergunta pendente|racioc[ií]nio interno|estado interno)\b/i.test(originalOutput);
+const technicalStateLeak =
+  /\b(?:v2_state|current_step|pending_question|tool_call_id|tool_calls?|validator_[a-z_]+|WAITING_[A-Z_]+|HUMAN_HANDOFF)\b/i.test(originalOutput) ||
+  /\$\([^)]+\)|\$json\b/i.test(originalOutput) ||
+  /["'](?:role|type)["']\s*:\s*["'](?:tool|system|assistant)["']/i.test(originalOutput);
+const metaReasoningLeak =
+  /\b(?:the user|the lead|pending question|system says|according to (?:the )?(?:system|prompt)|assistant message|current assistant|the assistant (?:should|must|will)|user (?:will respond|has provided)|wait for (?:the )?user|next input|let'?s see|internal reasoning|must answer|we need to|i need to|i should|respond to the user|current step|the message is)\b/i.test(originalOutput) ||
+  /\b(?:o usu[aá]rio|o lead (?:deve|precisa)|pergunta pendente|a mensagem atual|devo responder|preciso responder|o assistente deve|de acordo com (?:o )?(?:prompt|sistema)|vamos aguardar|aguardar (?:a )?pr[oó]xima mensagem|racioc[ií]nio interno|estado interno)\b/i.test(originalOutput);
+const labeledReasoningLeak =
+  /(?:^|\n)\s*(?:analysis|reasoning|thought|plan|assistant|tool|system|an[aá]lise|racioc[ií]nio|plano)\s*:/i.test(originalOutput);
+const structuredToolLeak =
+  /^\s*[\[{]/.test(originalOutput) &&
+  /["'](?:tool_calls?|tool_call_id|current_step|pending_question|v2_state|role)["']\s*:/i.test(originalOutput);
+const internalReasoningCategories = [
+  technicalStateLeak && 'technical_state',
+  metaReasoningLeak && 'meta_reasoning',
+  labeledReasoningLeak && 'reasoning_label',
+  structuredToolLeak && 'structured_tool_output',
+].filter(Boolean);
+const internalReasoningLeak = internalReasoningCategories.length > 0;
 const normalize = (value) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 const normalizedIncoming = normalize(incoming);
 const localParts = (value) => {
@@ -162,6 +176,16 @@ const expected = {
   WAITING_FINAL_CONFIRMATION: { regex: /(tudo correto|está tudo correto|confirma.*resumo)/i, text: 'Anotado aqui. Está tudo correto?' },
 };
 
+const questionIntents = {
+  WAITING_FULL_NAME: /(?:qual|informa|passa|diz).{0,35}(?:seu\s+)?nome completo[^?]*\?/i,
+  WAITING_EVENT_DATE: /(?:(?:qual|que|escolh[ae]).{0,40}(?:data|dia)|(?:data|dia).{0,30}prefere)[^?]*\?/i,
+  WAITING_COMPANIONS: /quantos?\s+acompanh[^?]*\?/i,
+  WAITING_COMPANION_NAMES: /(?:(?:qual|quais).{0,50}nome(?:s)? completo(?:s)?.{0,50}(?:quem vai|acompanh|com você)|(?:quem vai|acompanh).{0,50}(?:nome|chama))[^?]*\?/i,
+  WAITING_TRADE_IN: /(?:voc[eê]\s+)?(?:vai|pretende|quer|tem interesse).{0,45}(?:carro.{0,25}troca|troca.{0,25}carro)[^?]*\?/i,
+  WAITING_VEHICLE_PLATE: /(?:qual|informa|manda|passa).{0,35}placa[^?]*\?/i,
+  WAITING_FINAL_CONFIRMATION: /(?:tudo correto|está tudo correto|confirma.{0,25}resumo)[^?]*\?/i,
+};
+
 const missing = [];
 if (!hasFullName) missing.push('nome completo');
 if (!hasDate) missing.push('data da visita');
@@ -177,20 +201,38 @@ const autoSchedule = selected ? {
   display_range: $('RESUMO DO LEAD/EVENTO/RUBINHO').item.json.event_days,
 } : { should_schedule: false, ambiguous: candidates.size > 1 };
 
+const expectedOutputStep =
+  autoSchedule.should_schedule && postStep === 'WAITING_EVENT_DATE'
+    ? 'WAITING_COMPANIONS'
+    : postStep;
+const detectedQuestionSteps = Object.entries(questionIntents)
+  .filter(([, regex]) => regex.test(originalOutput))
+  .map(([step]) => step);
+const staleQuestionSteps = detectedQuestionSteps.filter(
+  (step) => step !== expectedOutputStep,
+);
+const questionMarkCount = (originalOutput.match(/\?/g) ?? []).length;
+const repeatedOrStaleQuestion =
+  !alreadyCompleted &&
+  (staleQuestionSteps.length > 0 || questionMarkCount > 1);
+
 if (internalReasoningLeak) {
   blocked = true;
-  output = expected[postStep]?.text ?? 'Não consegui processar sua resposta agora. Pode tentar novamente?';
+  output = expected[expectedOutputStep]?.text ?? 'Não consegui processar sua resposta agora. Pode tentar novamente?';
 } else if (preStep === 'WAITING_EVENT_DATE' && candidates.size > 1) {
   blocked = true;
   output = 'Você indicou mais de uma data. Qual delas você prefere?';
-} else if (!alreadyCompleted && !autoSchedule.should_schedule) {
-  const rule = expected[postStep];
+} else if (repeatedOrStaleQuestion) {
+  blocked = true;
+  output = expected[expectedOutputStep]?.text ?? 'Não consegui processar sua resposta agora. Pode tentar novamente?';
+} else if (!alreadyCompleted) {
+  const rule = expected[expectedOutputStep];
   const outputNormalized = normalize(output);
   const containsConfiguredDate = eventDays.some((option) => {
     const parts = localParts(option.start);
     return outputNormalized.includes(parts.date) || outputNormalized.includes(parts.date.slice(0, 5));
   });
-  const validForStep = rule && rule.regex.test(output) && (postStep !== 'WAITING_EVENT_DATE' || containsConfiguredDate);
+  const validForStep = rule && rule.regex.test(output) && (expectedOutputStep !== 'WAITING_EVENT_DATE' || containsConfiguredDate);
   if (rule && !validForStep) {
     blocked = true;
     output = rule.text;
@@ -213,7 +255,7 @@ if (claimsFinal) {
     }
   }
 }
-return { json: { ...lead, output, validator_claims_final: claimsFinal, validator_internal_reasoning_blocked: internalReasoningLeak, validator_missing: missing, validator_blocked: blocked, validator_needs_status: false, validator_needs_move: false, v2_expected_step: postStep, v2_auto_schedule: autoSchedule } };`;
+return { json: { ...lead, output, validator_claims_final: claimsFinal, validator_internal_reasoning_blocked: internalReasoningLeak, validator_internal_reasoning_categories: internalReasoningCategories, validator_question_flow_blocked: repeatedOrStaleQuestion, validator_detected_question_steps: detectedQuestionSteps, validator_stale_question_steps: staleQuestionSteps, validator_missing: missing, validator_blocked: blocked, validator_needs_status: false, validator_needs_move: false, v2_persisted_step: postStep, v2_expected_step: expectedOutputStep, v2_auto_schedule: autoSchedule } };`;
 
 const deriveStateCode = String.raw`const context = $json;
 const lead = $('V2 - VALIDAR ESCOPO LEAD EVENTO').item.json.items?.[0] ?? {};

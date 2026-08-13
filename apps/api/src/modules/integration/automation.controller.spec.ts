@@ -12,9 +12,13 @@ describe("AutomationController", () => {
     countEmailAttempt2Queue: jest.fn(),
     dispatchNextEmailAttempt2: jest.fn(),
   };
+  const dispatchTracking = {
+    ingestWhatsappStatuses: jest.fn(),
+  };
   const controller = new AutomationController(
     appointments as never,
     leads as never,
+    dispatchTracking as never,
   );
 
   beforeEach(() => jest.clearAllMocks());
@@ -72,6 +76,26 @@ describe("AutomationController", () => {
       processed: true,
     });
     expect(leads.dispatchNextInitialWhatsappTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  it("encaminha status do WhatsApp recebidos pelo n8n", async () => {
+    const payload = {
+      statuses: [{ id: "wamid-1", status: "delivered" }],
+    };
+    dispatchTracking.ingestWhatsappStatuses.mockResolvedValue({
+      received: 1,
+      matched: 1,
+      ignored: 0,
+    });
+
+    await expect(controller.ingestWhatsappStatuses(payload)).resolves.toEqual({
+      received: 1,
+      matched: 1,
+      ignored: 0,
+    });
+    expect(dispatchTracking.ingestWhatsappStatuses).toHaveBeenCalledWith(
+      payload,
+    );
   });
 
   it("consulta a fila de recuperação por e-mail", async () => {

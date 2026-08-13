@@ -137,6 +137,9 @@ export class OperationsService {
           template_sent: 0,
           template_delivered: 0,
           template_read: 0,
+          template_delivered_or_read: 0,
+          template_without_confirmation: 0,
+          template_without_dispatch: 0,
           template_replied: 0,
           template_not_replied: 0,
           template_failed: 0,
@@ -196,6 +199,9 @@ export class OperationsService {
     let templateSent = 0;
     let templateDelivered = 0;
     let templateRead = 0;
+    let templateDeliveredOrRead = 0;
+    let templateWithoutConfirmation = 0;
+    let templateWithoutDispatch = 0;
     let templateReplied = 0;
     let templateNotReplied = 0;
     let templateFailed = 0;
@@ -212,10 +218,18 @@ export class OperationsService {
       const failed = Boolean(
         dispatch?.failed_at || dispatch?.status === "failed",
       );
+      const deliveredOrRead = Boolean(
+        dispatch?.delivered_at || dispatch?.read_at,
+      );
+      if (!dispatch) templateWithoutDispatch += 1;
+      if (dispatch && !failed && !deliveredOrRead) {
+        templateWithoutConfirmation += 1;
+      }
       if (dispatch && !sent && !failed) awaitingTemplate += 1;
       if (sent) templateSent += 1;
       if (dispatch?.delivered_at) templateDelivered += 1;
       if (dispatch?.read_at) templateRead += 1;
+      if (deliveredOrRead && !failed) templateDeliveredOrRead += 1;
       if (hasReply) templateReplied += 1;
       if (sent && !hasReply) templateNotReplied += 1;
       if (failed) templateFailed += 1;
@@ -264,6 +278,9 @@ export class OperationsService {
         template_sent: templateSent,
         template_delivered: templateDelivered,
         template_read: templateRead,
+        template_delivered_or_read: templateDeliveredOrRead,
+        template_without_confirmation: templateWithoutConfirmation,
+        template_without_dispatch: templateWithoutDispatch,
         template_replied: templateReplied,
         template_not_replied: templateNotReplied,
         template_failed: templateFailed,
@@ -283,6 +300,135 @@ export class OperationsService {
         count: questionCounts.get(key) ?? 0,
         percent_of_replies: rate(questionCounts.get(key) ?? 0, engaged),
       })),
+    };
+  }
+
+  async rubinhoTemplateLeads(
+    user: AuthenticatedUser,
+    filters: {
+      client_id?: string;
+      event_id?: string;
+      status?: string;
+    },
+  ) {
+    const allowedStatuses = new Set([
+      "delivered_or_read",
+      "failed",
+      "without_confirmation",
+      "without_dispatch",
+    ]);
+    const requestedStatus = allowedStatuses.has(filters.status ?? "")
+      ? filters.status!
+      : "failed";
+    const clientId =
+      user.role === "cliente"
+        ? (user.client_id ?? "__none__")
+        : filters.client_id || undefined;
+    const leads = await this.prisma.lead.findMany({
+      where: {
+        deleted_at: null,
+        client_id: clientId,
+        event_interest_id: filters.event_id || undefined,
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        source: true,
+        created_at: true,
+        confirmation_status: true,
+        client: { select: { company_name: true } },
+        event_interest: { select: { name: true } },
+        dispatch_events: {
+          where: { dispatch_type: "lead_welcome_template" },
+          select: {
+            status: true,
+            sent_at: true,
+            delivered_at: true,
+            read_at: true,
+            replied_at: true,
+            failed_at: true,
+            failure_code: true,
+            failure_reason: true,
+            created_at: true,
+          },
+          orderBy: { created_at: "desc" },
+          take: 1,
+        },
+        conversations: {
+          select: {
+            id: true,
+            messages: {
+              where: { sender_type: "lead" },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        },
+        appointments: {
+          where: { status: { in: ["proposed", "scheduled", "confirmed"] } },
+          select: { id: true, status: true, scheduled_at: true },
+          orderBy: { scheduled_at: "desc" },
+          take: 1,
+        },
+      },
+      orderBy: { created_at: "desc" },
+      take: 5000,
+    });
+
+    const classified = leads.flatMap((lead) => {
+      const dispatch = lead.dispatch_events[0];
+      const failed = Boolean(
+        dispatch?.failed_at || dispatch?.status === "failed",
+      );
+      const deliveredOrRead = Boolean(
+        dispatch?.delivered_at || dispatch?.read_at,
+      );
+      const category = !dispatch
+        ? "without_dispatch"
+        : failed
+          ? "failed"
+          : deliveredOrRead
+            ? "delivered_or_read"
+            : "without_confirmation";
+      if (category !== requestedStatus) return [];
+      const hasLeadMessage = lead.conversations.some(
+        (conversation) => conversation.messages.length > 0,
+      );
+      const hasAppointment = lead.appointments.length > 0;
+      const hasReply = Boolean(dispatch?.replied_at || hasLeadMessage);
+      const protectedReasons = [
+        ...(hasReply ? ["Cliente já respondeu"] : []),
+        ...(hasAppointment ? ["Possui agendamento ativo"] : []),
+      ];
+      return [
+        {
+          id: lead.id,
+          name: lead.name,
+          phone: lead.phone,
+          source: lead.source,
+          client_name: lead.client.company_name,
+          event_name: lead.event_interest?.name ?? null,
+          created_at: lead.created_at,
+          confirmation_status: lead.confirmation_status,
+          template_status: category,
+          failure_code: dispatch?.failure_code ?? null,
+          failure_reason: dispatch?.failure_reason ?? null,
+          has_reply: hasReply,
+          has_active_appointment: hasAppointment,
+          protected: protectedReasons.length > 0,
+          protected_reasons: protectedReasons,
+        },
+      ];
+    });
+
+    return {
+      generated_at: new Date().toISOString(),
+      status: requestedStatus,
+      total: classified.length,
+      protected: classified.filter((lead) => lead.protected).length,
+      eligible_for_review: classified.filter((lead) => !lead.protected).length,
+      leads: classified.slice(0, 500),
     };
   }
 

@@ -13,6 +13,13 @@ import { ForbiddenException } from "@nestjs/common";
 
 type DispatchStatus = NonNullable<UpsertDispatchDto["status"]>;
 
+type WhatsappStatusItem = {
+  id?: unknown;
+  status?: unknown;
+  timestamp?: unknown;
+  errors?: unknown;
+};
+
 @Injectable()
 export class DispatchTrackingService {
   constructor(
@@ -177,6 +184,57 @@ export class DispatchTrackingService {
       },
     });
     return rows.count;
+  }
+
+  async ingestWhatsappStatuses(payload: unknown) {
+    const record =
+      payload && typeof payload === "object" && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>)
+        : {};
+    const direct = Array.isArray(record.statuses) ? record.statuses : [];
+    const statuses = direct.slice(0, 100) as WhatsappStatusItem[];
+
+    let ignored = 0;
+    const updates = statuses.map(async (item) => {
+      const providerMessageId =
+        typeof item.id === "string" ? item.id.trim() : "";
+      const rawStatus =
+        typeof item.status === "string" ? item.status.trim().toLowerCase() : "";
+      const status = ["sent", "delivered", "read", "failed"].includes(rawStatus)
+        ? (rawStatus as DispatchStatus)
+        : null;
+      if (!providerMessageId || !status) {
+        ignored += 1;
+        return 0;
+      }
+
+      const timestampSeconds = Number(item.timestamp);
+      const occurredAt = Number.isFinite(timestampSeconds)
+        ? new Date(timestampSeconds * 1000)
+        : new Date();
+      const firstError = Array.isArray(item.errors)
+        ? (item.errors[0] as Record<string, unknown> | undefined)
+        : undefined;
+      return this.markProviderStatus({
+        providerMessageId,
+        status,
+        occurredAt,
+        failureCode:
+          firstError?.code === undefined ? undefined : String(firstError.code),
+        failureReason:
+          typeof firstError?.message === "string"
+            ? firstError.message
+            : typeof firstError?.title === "string"
+              ? firstError.title
+              : undefined,
+      });
+    });
+    const matched = (await Promise.all(updates)).reduce(
+      (sum, count) => sum + count,
+      0,
+    );
+
+    return { received: statuses.length, matched, ignored };
   }
 
   async markReply(leadId: string, occurredAt: Date, messageId?: string) {

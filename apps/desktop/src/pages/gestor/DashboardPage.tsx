@@ -11,11 +11,13 @@ import {
   ChevronRight,
   MessageCircle,
   Moon,
-  Send,
   Sparkles,
   Sun,
   Users,
   CheckCircle2,
+  AlertTriangle,
+  HelpCircle,
+  SendHorizonal,
 } from "lucide-react";
 import { Card } from "../../components/ui/Card";
 import { readStoredSession } from "../../services/auth";
@@ -29,7 +31,10 @@ import {
 import { fetchAllLeads, mapApiLeadToLead } from "../../services/leads";
 import {
   getRubinhoThermometer,
+  getRubinhoTemplateLeads,
   type RubinhoThermometer,
+  type RubinhoTemplateLeadList,
+  type RubinhoTemplateLeadStatus,
 } from "../../services/operations";
 import { useGestorClient } from "../../hooks/useGestorClient";
 import {
@@ -391,6 +396,37 @@ function RubinhoThermometerCard({
   isDarkMode: boolean;
   loading: boolean;
 }) {
+  const [selectedTemplateStatus, setSelectedTemplateStatus] =
+    useState<RubinhoTemplateLeadStatus | null>(null);
+  const [templateLeadList, setTemplateLeadList] =
+    useState<RubinhoTemplateLeadList | null>(null);
+  const [templateLeadListLoading, setTemplateLeadListLoading] = useState(false);
+  useEffect(() => {
+    if (!selectedTemplateStatus) {
+      setTemplateLeadList(null);
+      return;
+    }
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+    const controller = new AbortController();
+    setTemplateLeadListLoading(true);
+    getRubinhoTemplateLeads(
+      token,
+      {
+        status: selectedTemplateStatus,
+        ...(selectedEventId ? { event_id: selectedEventId } : {}),
+      },
+      controller.signal,
+    )
+      .then(setTemplateLeadList)
+      .catch((error) => {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setTemplateLeadList(null);
+        }
+      })
+      .finally(() => setTemplateLeadListLoading(false));
+    return () => controller.abort();
+  }, [selectedEventId, selectedTemplateStatus]);
   const stages =
     data?.stages.filter(
       (stage) => !["CANCELLED", "HUMAN_HANDOFF"].includes(stage.key),
@@ -407,32 +443,44 @@ function RubinhoThermometerCard({
     : "--:--:--";
   const metrics = [
     {
-      label: "Na fila do template",
-      value: data?.totals.awaiting_template ?? 0,
-      icon: Send,
+      label: "Entregues ou lidos",
+      value: data?.totals.template_delivered_or_read ?? 0,
+      icon: CheckCircle2,
+      color: "text-emerald-600",
+      background: "bg-emerald-50",
+      status: "delivered_or_read" as const,
+    },
+    {
+      label: "Falharam",
+      value: data?.totals.template_failed ?? 0,
+      icon: AlertTriangle,
+      color: "text-rose-600",
+      background: "bg-rose-50",
+      status: "failed" as const,
+    },
+    {
+      label: "Sem confirmação",
+      value: data?.totals.template_without_confirmation ?? 0,
+      icon: HelpCircle,
       color: "text-amber-600",
       background: "bg-amber-50",
+      status: "without_confirmation" as const,
     },
     {
-      label: "Templates enviados",
-      value: data?.totals.template_sent ?? 0,
-      icon: CheckCircle2,
-      color: "text-blue-600",
-      background: "bg-blue-50",
+      label: "Sem disparo",
+      value: data?.totals.template_without_dispatch ?? 0,
+      icon: SendHorizonal,
+      color: "text-zinc-600",
+      background: "bg-zinc-100",
+      status: "without_dispatch" as const,
     },
     {
-      label: "Responderam ao template",
+      label: "Responderam",
       value: data?.totals.template_replied ?? 0,
       icon: MessageCircle,
       color: "text-violet-600",
       background: "bg-violet-50",
-    },
-    {
-      label: "Não responderam",
-      value: data?.totals.template_not_replied ?? 0,
-      icon: MessageCircle,
-      color: "text-rose-600",
-      background: "bg-rose-50",
+      status: null,
     },
     {
       label: "Em atendimento",
@@ -440,6 +488,7 @@ function RubinhoThermometerCard({
       icon: Users,
       color: "text-sky-600",
       background: "bg-sky-50",
+      status: null,
     },
     {
       label: "Agendados",
@@ -447,6 +496,7 @@ function RubinhoThermometerCard({
       icon: CalendarDays,
       color: "text-emerald-600",
       background: "bg-emerald-50",
+      status: null,
     },
     {
       label: "Concluídos",
@@ -454,6 +504,7 @@ function RubinhoThermometerCard({
       icon: Bot,
       color: "text-[#FF0636]",
       background: "bg-rose-50",
+      status: null,
     },
   ];
 
@@ -510,17 +561,28 @@ function RubinhoThermometerCard({
         </label>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+      <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
         {metrics.map((metric) => {
           const Icon = metric.icon;
           return (
-            <div
+            <button
+              type="button"
               key={metric.label}
+              disabled={!metric.status}
+              onClick={() =>
+                metric.status &&
+                setSelectedTemplateStatus((current) =>
+                  current === metric.status ? null : metric.status,
+                )
+              }
               className={clsx(
-                "rounded-2xl border p-3.5",
+                "rounded-2xl border p-3.5 text-left transition-colors",
                 isDarkMode
                   ? "border-zinc-800 bg-zinc-900/60"
                   : "border-zinc-100 bg-white",
+                metric.status && "cursor-pointer hover:border-[#FF0636]/40",
+                metric.status === selectedTemplateStatus &&
+                  "ring-2 ring-[#FF0636]/30",
               )}
             >
               <div className="flex items-center justify-between gap-3">
@@ -549,10 +611,84 @@ function RubinhoThermometerCard({
               >
                 {metric.label}
               </p>
-            </div>
+            </button>
           );
         })}
       </div>
+
+      {selectedTemplateStatus ? (
+        <div
+          className={clsx(
+            "mt-4 overflow-hidden rounded-2xl border",
+            isDarkMode
+              ? "border-zinc-800 bg-zinc-900/60"
+              : "border-zinc-100 bg-zinc-50/70",
+          )}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200/70 px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-zinc-950">
+                Leads para auditoria
+              </p>
+              <p className="mt-0.5 text-xs text-zinc-500">
+                {templateLeadListLoading
+                  ? "Carregando…"
+                  : `${templateLeadList?.total ?? 0} encontrados · ${templateLeadList?.protected ?? 0} protegidos · ${templateLeadList?.eligible_for_review ?? 0} disponíveis para revisão`}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedTemplateStatus(null)}
+              className="rounded-lg px-3 py-1.5 text-xs font-semibold text-zinc-500 hover:bg-zinc-200/60"
+            >
+              Fechar
+            </button>
+          </div>
+          <div className="max-h-80 overflow-auto">
+            {(templateLeadList?.leads ?? []).map((lead) => (
+              <div
+                key={lead.id}
+                className="grid gap-2 border-b border-zinc-200/60 px-4 py-3 last:border-0 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto] md:items-center"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-zinc-900">
+                    {lead.name}
+                  </p>
+                  <p className="truncate text-xs text-zinc-500">
+                    {lead.client_name} · {lead.event_name ?? "Sem evento"}
+                  </p>
+                </div>
+                <div className="text-xs text-zinc-500">
+                  <p>{lead.phone ?? "Telefone não informado"}</p>
+                  {lead.failure_reason ? (
+                    <p className="mt-0.5 truncate text-rose-600" title={lead.failure_reason}>
+                      {lead.failure_reason}
+                    </p>
+                  ) : null}
+                </div>
+                <span
+                  className={clsx(
+                    "w-fit rounded-full px-2.5 py-1 text-[10px] font-semibold",
+                    lead.protected
+                      ? "bg-amber-100 text-amber-800"
+                      : "bg-emerald-100 text-emerald-800",
+                  )}
+                  title={lead.protected_reasons.join(" · ")}
+                >
+                  {lead.protected
+                    ? lead.protected_reasons.join(" · ")
+                    : "Disponível para revisão"}
+                </span>
+              </div>
+            ))}
+            {!templateLeadListLoading && !templateLeadList?.leads.length ? (
+              <p className="px-4 py-6 text-center text-sm text-zinc-500">
+                Nenhum lead nesta classificação.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px]">
         {/* Grade que quebra em linhas: antes a faixa tinha largura minima de

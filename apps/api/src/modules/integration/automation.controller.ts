@@ -4,6 +4,7 @@ import { Throttle } from "@nestjs/throttler";
 import { Public } from "../../common/decorators";
 import { AppointmentsService } from "../appointments/appointments.service";
 import { LeadsService } from "../leads/leads.service";
+import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.service";
 import { AutomationKeyGuard } from "./automation-key.guard";
 import { SendCredentialEmailDto } from "./dto/send-credential-email.dto";
 import { ReconcileScheduledLeadDto } from "./dto/reconcile-scheduled-lead.dto";
@@ -18,6 +19,7 @@ export class AutomationController {
   constructor(
     private readonly appointments: AppointmentsService,
     private readonly leads: LeadsService,
+    private readonly dispatchTracking: DispatchTrackingService,
   ) {}
 
   @Post("credential-email")
@@ -66,6 +68,14 @@ export class AutomationController {
   })
   dispatchNextInitialTemplate() {
     return this.leads.dispatchNextInitialWhatsappTemplate();
+  }
+
+  @Post("whatsapp/statuses")
+  @ApiOperation({
+    summary: "Registra status sent/delivered/read/failed recebidos pelo n8n",
+  })
+  ingestWhatsappStatuses(@Body() payload: unknown) {
+    return this.dispatchTracking.ingestWhatsappStatuses(payload);
   }
 
   @Post("email-attempt-2/status")

@@ -40,6 +40,9 @@ export type RubinhoThermometer = {
     template_sent: number;
     template_delivered: number;
     template_read: number;
+    template_delivered_or_read: number;
+    template_without_confirmation: number;
+    template_without_dispatch: number;
     template_replied: number;
     template_not_replied: number;
     template_failed: number;
@@ -59,6 +62,37 @@ export type RubinhoThermometer = {
     short_label: string;
     count: number;
     percent_of_replies: number;
+  }>;
+};
+
+export type RubinhoTemplateLeadStatus =
+  | "delivered_or_read"
+  | "failed"
+  | "without_confirmation"
+  | "without_dispatch";
+
+export type RubinhoTemplateLeadList = {
+  generated_at: string;
+  status: RubinhoTemplateLeadStatus;
+  total: number;
+  protected: number;
+  eligible_for_review: number;
+  leads: Array<{
+    id: string;
+    name: string;
+    phone: string | null;
+    source: string;
+    client_name: string;
+    event_name: string | null;
+    created_at: string;
+    confirmation_status: string;
+    template_status: RubinhoTemplateLeadStatus;
+    failure_code: string | null;
+    failure_reason: string | null;
+    has_reply: boolean;
+    has_active_appointment: boolean;
+    protected: boolean;
+    protected_reasons: string[];
   }>;
 };
 
@@ -101,6 +135,24 @@ export function getRubinhoThermometer(
   ).toString();
   return httpRequest<RubinhoThermometer>(
     `/operations/rubinho-thermometer${query ? `?${query}` : ""}`,
+    { token, signal },
+  );
+}
+
+export function getRubinhoTemplateLeads(
+  token: string,
+  params: {
+    client_id?: string;
+    event_id?: string;
+    status: RubinhoTemplateLeadStatus;
+  },
+  signal?: AbortSignal,
+) {
+  const query = new URLSearchParams(
+    Object.entries(params).filter(([, value]) => Boolean(value)),
+  ).toString();
+  return httpRequest<RubinhoTemplateLeadList>(
+    `/operations/rubinho-template-leads?${query}`,
     { token, signal },
   );
 }

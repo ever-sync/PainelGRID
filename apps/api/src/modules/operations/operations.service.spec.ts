@@ -116,6 +116,9 @@ describe("OperationsService", () => {
     );
 
     expect(result.totals.template_sent).toBe(2);
+    expect(result.totals.template_delivered_or_read).toBe(1);
+    expect(result.totals.template_without_confirmation).toBe(1);
+    expect(result.totals.template_without_dispatch).toBe(0);
     expect(result.totals.template_replied).toBe(1);
     expect(result.totals.template_not_replied).toBe(1);
     expect(result.totals.engaged).toBe(1);
@@ -199,6 +202,8 @@ describe("OperationsService", () => {
     );
 
     expect(result.totals.awaiting_template).toBe(0);
+    expect(result.totals.template_without_dispatch).toBe(1);
+    expect(result.totals.template_without_confirmation).toBe(0);
     expect(result.totals.engaged).toBe(0);
   });
 });

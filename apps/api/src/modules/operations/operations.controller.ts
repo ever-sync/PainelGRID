@@ -30,6 +30,12 @@ export class OperationsController {
   ) {
     return this.service.rubinhoThermometer(user, query);
   }
+  @Get("rubinho-template-leads") rubinhoTemplateLeads(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: Record<string, string>,
+  ) {
+    return this.service.rubinhoTemplateLeads(user, query);
+  }
   @Get("conversations/:id/audit") audit(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id", new ParseUUIDPipe()) id: string,
