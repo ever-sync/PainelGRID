@@ -551,64 +551,6 @@ export class MetaService implements OnModuleInit {
       businessForms.map((form) => form.id),
       dto.form_ids,
     );
-    const legacyWabaId = dto.waba_id?.trim() || undefined;
-    const legacyPhoneNumberId = dto.phone_number_id?.trim() || undefined;
-    const requestedWhatsappNumbers = (dto.whatsapp_phone_numbers ?? [])
-      .map((item) => ({
-        waba_id: String(item?.waba_id ?? "").trim(),
-        phone_number_id: String(item?.phone_number_id ?? "").trim(),
-      }))
-      .filter((item) => item.waba_id && item.phone_number_id);
-
-    if (
-      requestedWhatsappNumbers.length === 0 &&
-      legacyWabaId &&
-      legacyPhoneNumberId
-    ) {
-      requestedWhatsappNumbers.push({
-        waba_id: legacyWabaId,
-        phone_number_id: legacyPhoneNumberId,
-      });
-    } else if (requestedWhatsappNumbers.length === 0 && legacyWabaId) {
-      const firstPhone = (
-        await this.fetchWabaPhoneNumbers(legacyWabaId, selection.accessToken)
-      )[0];
-      if (firstPhone?.id) {
-        requestedWhatsappNumbers.push({
-          waba_id: legacyWabaId,
-          phone_number_id: firstPhone.id,
-        });
-      }
-    }
-
-    const selectedWhatsappNumbers = this.uniqueBy(
-      requestedWhatsappNumbers,
-      (item) => item.phone_number_id,
-    );
-    for (const wabaId of this.uniqueStrings(
-      selectedWhatsappNumbers.map((item) => item.waba_id),
-    )) {
-      const availablePhoneIds = new Set(
-        (await this.fetchWabaPhoneNumbers(wabaId, selection.accessToken)).map(
-          (phone) => phone.id,
-        ),
-      );
-      const invalidSelection = selectedWhatsappNumbers.find(
-        (item) =>
-          item.waba_id === wabaId &&
-          !availablePhoneIds.has(item.phone_number_id),
-      );
-      if (invalidSelection) {
-        throw new BadRequestException(
-          `Numero ${invalidSelection.phone_number_id} nao pertence a WABA ${wabaId} ou nao esta acessivel.`,
-        );
-      }
-    }
-    const primaryPhoneNumberId =
-      dto.primary_phone_number_id?.trim() ||
-      legacyPhoneNumberId ||
-      selectedWhatsappNumbers[0]?.phone_number_id;
-
     const selectedAdAccounts = businessAdAccounts.filter((account) =>
       selectedAdAccountIds.includes(this.normalizeAdAccountId(account)),
     );
@@ -623,23 +565,6 @@ export class MetaService implements OnModuleInit {
     const tokenExpiresAt = selection.tokenExpiresAt
       ? new Date(selection.tokenExpiresAt)
       : null;
-
-    if (
-      primaryPhoneNumberId &&
-      !selectedWhatsappNumbers.some(
-        (item) => item.phone_number_id === primaryPhoneNumberId,
-      )
-    ) {
-      throw new BadRequestException(
-        "O numero principal precisa estar entre os numeros selecionados.",
-      );
-    }
-
-    for (const wabaId of this.uniqueStrings(
-      selectedWhatsappNumbers.map((item) => item.waba_id),
-    )) {
-      await this.subscribeWabaToWebhook(wabaId, selection.accessToken);
-    }
 
     // Subscreve as paginas selecionadas ao Webhook do App para receber eventos de leadgen
     for (const page of selectedPages) {
@@ -685,7 +610,12 @@ export class MetaService implements OnModuleInit {
         });
 
     await this.db.metaAssetSelection.deleteMany({
-      where: { meta_connection_id: connection.id },
+      // Facebook Ads e WhatsApp API sao configuracoes independentes. Salvar
+      // paginas/formularios nunca pode remover os canais desta ou de outra BM.
+      where: {
+        meta_connection_id: connection.id,
+        phone_number_id: null,
+      },
     });
 
     const assetRows = this.buildAssetSelectionRows({
@@ -693,8 +623,7 @@ export class MetaService implements OnModuleInit {
       selectedAdAccounts,
       selectedPages,
       selectedForms,
-      selectedWhatsappNumbers,
-      primaryPhoneNumberId,
+      selectedWhatsappNumbers: [],
     });
 
     for (const assetRow of assetRows) {
@@ -751,8 +680,6 @@ export class MetaService implements OnModuleInit {
           selected_ad_account_ids: selectedAdAccountIds,
           selected_page_ids: selectedPageIds,
           selected_form_ids: selectedFormIds,
-          selected_whatsapp_numbers: selectedWhatsappNumbers,
-          selected_phone_number_id: primaryPhoneNumberId,
         }),
       },
     });
@@ -786,9 +713,9 @@ export class MetaService implements OnModuleInit {
           page_id: form.page_id,
           name: form.name ?? form.id,
         })),
-        waba_id: selectedWhatsappNumbers[0]?.waba_id ?? null,
-        phone_number_id: primaryPhoneNumberId ?? null,
-        whatsapp_phone_numbers: selectedWhatsappNumbers,
+        waba_id: null,
+        phone_number_id: null,
+        whatsapp_phone_numbers: [],
       },
       sync_job_id: syncJob.id,
       initial_sync: initialSync,

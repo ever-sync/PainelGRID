@@ -227,6 +227,19 @@ describe("MetaService", () => {
     ]);
   });
 
+  it("monta ativos de Ads sem incluir WhatsApp", () => {
+    const rows = (service as any).buildAssetSelectionRows({
+      metaConnectionId: "connection-1",
+      selectedAdAccounts: [{ id: "act-1", account_id: "act-1", name: "CA" }],
+      selectedPages: [{ id: "page-1", name: "Pagina" }],
+      selectedForms: [{ id: "form-1", page_id: "page-1", name: "Form" }],
+      selectedWhatsappNumbers: [],
+    });
+
+    expect(rows).toHaveLength(3);
+    expect(rows.every((row: any) => row.phone_number_id == null)).toBe(true);
+  });
+
   it("rejeita webhook Meta sem assinatura valida ou sem corpo bruto", async () => {
     const rawBody = Buffer.from('{"object":"page"}');
     config.get.mockImplementation((key: string) =>

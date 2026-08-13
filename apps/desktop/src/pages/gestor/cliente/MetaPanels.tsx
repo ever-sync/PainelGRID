@@ -6,7 +6,6 @@ import {
   Facebook,
   FileText,
   Globe,
-  MessageCircle,
   Search,
   X,
 } from "lucide-react";
@@ -487,7 +486,7 @@ export function MetaAssetPicker({
   );
 }
 
-export type MetaSetupStep = 0 | 1 | 2 | 3 | 4;
+export type MetaSetupStep = 0 | 1 | 2 | 3;
 
 export const META_SETUP_STEPS: Array<{
   title: string;
@@ -519,34 +518,25 @@ export const META_SETUP_STEPS: Array<{
     description: "Escolha os formulários autorizados a cadastrar leads.",
     icon: <FileText size={18} />,
   },
-  {
-    title: "WhatsApp e revisão",
-    shortTitle: "Revisão",
-    description: "Vincule o WhatsApp, revise tudo e salve.",
-    icon: <MessageCircle size={18} />,
-  },
 ];
 
 export function MetaSelectionSummary({
   accountCount,
   pageCount,
   formCount,
-  hasWhatsapp,
 }: {
   accountCount: number;
   pageCount: number;
   formCount: number;
-  hasWhatsapp: boolean;
 }) {
   const items = [
     { label: "Contas", value: accountCount },
     { label: "Páginas", value: pageCount },
     { label: "Formulários", value: formCount },
-    { label: "WhatsApp", value: hasWhatsapp ? 1 : 0 },
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
       {items.map((item) => (
         <div
           key={item.label}
