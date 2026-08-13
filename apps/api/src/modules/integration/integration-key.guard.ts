@@ -28,10 +28,15 @@ export class IntegrationKeyGuard implements CanActivate {
       throw new UnauthorizedException("Chave de integracao invalida");
     }
 
-    const credentialClientId = await this.findCredentialClientId(provided);
-    if (credentialClientId) {
-      await this.assertClientScope(req, credentialClientId);
-      req.integrationClientId = credentialClientId;
+    const credentialScope = await this.findCredentialScope(provided);
+    if (credentialScope) {
+      await this.assertClientScope(
+        req,
+        credentialScope.clientId,
+        credentialScope.allowedClientIds,
+      );
+      req.integrationClientId =
+        this.explicitClientId(req) ?? credentialScope.clientId;
       return true;
     }
 
@@ -61,9 +66,9 @@ export class IntegrationKeyGuard implements CanActivate {
     return true;
   }
 
-  private async findCredentialClientId(
+  private async findCredentialScope(
     provided: string,
-  ): Promise<string | null> {
+  ): Promise<{ clientId: string; allowedClientIds: string[] } | null> {
     if (!this.prisma?.integrationCredential) {
       return null;
     }
@@ -73,6 +78,7 @@ export class IntegrationKeyGuard implements CanActivate {
       select: {
         id: true,
         client_id: true,
+        allowed_client_ids: true,
         expires_at: true,
         revoked_at: true,
         last_used_at: true,
@@ -97,7 +103,10 @@ export class IntegrationKeyGuard implements CanActivate {
         })
         .catch(() => undefined);
     }
-    return credential.client_id;
+    return {
+      clientId: credential.client_id,
+      allowedClientIds: credential.allowed_client_ids ?? [],
+    };
   }
 
   private safeEqual(provided: string, expected: string): boolean {
@@ -109,11 +118,20 @@ export class IntegrationKeyGuard implements CanActivate {
   private async assertClientScope(
     req: Request,
     clientId: string,
+    allowedClientIds: string[] = [],
   ): Promise<void> {
     const body = this.asRecord(req.body);
     const query = this.asRecord(req.query);
-    await this.assertExplicitClientId(body.client_id, clientId);
-    await this.assertExplicitClientId(query.client_id, clientId);
+    await this.assertExplicitClientId(
+      body.client_id,
+      clientId,
+      allowedClientIds,
+    );
+    await this.assertExplicitClientId(
+      query.client_id,
+      clientId,
+      allowedClientIds,
+    );
 
     const path = (req.originalUrl || req.url).split("?")[0];
     const routeId = this.firstRouteParam(req.params);
@@ -208,11 +226,24 @@ export class IntegrationKeyGuard implements CanActivate {
   private async assertExplicitClientId(
     value: unknown,
     clientId: string,
+    allowedClientIds: string[] = [],
   ): Promise<void> {
     const supplied = this.stringValue(value);
-    if (supplied && !(await this.isClientInScope(supplied, clientId))) {
+    if (
+      supplied &&
+      !allowedClientIds.includes(supplied) &&
+      !(await this.isClientInScope(supplied, clientId))
+    ) {
       throw new ForbiddenException("Cliente fora do escopo da integracao");
     }
+  }
+
+  private explicitClientId(req: Request): string | undefined {
+    const body = this.asRecord(req.body);
+    const query = this.asRecord(req.query);
+    return (
+      this.stringValue(body.client_id) ?? this.stringValue(query.client_id)
+    );
   }
 
   private async assertOwned(
@@ -238,6 +269,20 @@ export class IntegrationKeyGuard implements CanActivate {
     credentialClientId: string,
   ): Promise<boolean> {
     if (targetClientId === credentialClientId) {
+      return true;
+    }
+    const explicitScope = this.prisma?.integrationCredential?.findFirst
+      ? await this.prisma.integrationCredential.findFirst({
+          where: {
+            client_id: credentialClientId,
+            allowed_client_ids: { has: targetClientId },
+            revoked_at: null,
+            OR: [{ expires_at: null }, { expires_at: { gt: new Date() } }],
+          },
+          select: { id: true },
+        })
+      : null;
+    if (explicitScope) {
       return true;
     }
     if (!this.prisma?.metaAssetSelection) {

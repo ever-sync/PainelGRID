@@ -170,6 +170,38 @@ describe("IntegrationKeyGuard tenant scope", () => {
     );
   });
 
+  it("permite cliente adicional explicitamente autorizado pela credencial", async () => {
+    const databaseKey = "lfi_database-secret-with-client-scope";
+    const prisma = {
+      integrationCredential: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: "credential-1",
+          client_id: clientId,
+          allowed_client_ids: [otherClientId],
+          expires_at: null,
+          revoked_at: null,
+          last_used_at: new Date(),
+        }),
+        update: jest.fn(),
+      },
+    };
+    const guard = createGuard(prisma as unknown as Partial<PrismaService>);
+    const request = {
+      headers: { "x-leadflow-integration-key": databaseKey },
+      body: {},
+      query: { client_id: otherClientId },
+      params: {},
+      originalUrl: "/api/integrations/v1/leads",
+      method: "GET",
+    } as Partial<Request>;
+
+    await expect(guard.canActivate(contextFor(request))).resolves.toBe(true);
+    expect(
+      (request as Partial<Request> & { integrationClientId?: string })
+        .integrationClientId,
+    ).toBe(otherClientId);
+  });
+
   it("rejeita credencial revogada", async () => {
     const prisma = {
       integrationCredential: {
