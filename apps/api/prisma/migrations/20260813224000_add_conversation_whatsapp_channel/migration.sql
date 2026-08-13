@@ -1,5 +1,5 @@
 ALTER TABLE "conversations"
-ADD COLUMN "whatsapp_phone_number_id" VARCHAR(100);
+ADD COLUMN IF NOT EXISTS "whatsapp_phone_number_id" VARCHAR(100);
 
-CREATE INDEX "conversations_whatsapp_phone_number_id_idx"
+CREATE INDEX IF NOT EXISTS "conversations_whatsapp_phone_number_id_idx"
 ON "conversations"("whatsapp_phone_number_id");
