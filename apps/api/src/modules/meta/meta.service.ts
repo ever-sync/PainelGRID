@@ -255,9 +255,7 @@ export class MetaService implements OnModuleInit {
         meta_gestor_connected_at: null,
       },
     });
-    await this.redis.client.del(
-      `meta:gestor:${user.sub}:enriched-businesses`,
-    );
+    await this.redis.client.del(`meta:gestor:${user.sub}:enriched-businesses`);
 
     return { gestor_id: user.sub, disconnected: true };
   }
@@ -418,19 +416,25 @@ export class MetaService implements OnModuleInit {
           client_id: query.client_id,
           oauth_session_id: null,
           gestor_token: true,
-          businesses: this.parseJson<Awaited<ReturnType<MetaService["enrichBusinessesForAccessToken"]>>>(
-            cached,
-            "Cache Meta invalido",
-          ),
+          businesses: this.parseJson<
+            Awaited<ReturnType<MetaService["enrichBusinessesForAccessToken"]>>
+          >(cached, "Cache Meta invalido"),
           cached: true,
         };
       }
-      const selection = await this.getGestorMetaSelectionSessionOrThrow(user.sub);
+      const selection = await this.getGestorMetaSelectionSessionOrThrow(
+        user.sub,
+      );
       const businesses = await this.enrichBusinessesForAccessToken(
         selection.accessToken,
         selection.businesses,
       );
-      await this.redis.client.set(cacheKey, JSON.stringify(businesses), "EX", 300);
+      await this.redis.client.set(
+        cacheKey,
+        JSON.stringify(businesses),
+        "EX",
+        300,
+      );
 
       return {
         client_id: query.client_id,
@@ -1840,6 +1844,7 @@ export class MetaService implements OnModuleInit {
     clientId: string,
     to: string,
     content: string,
+    phoneNumberId?: string,
   ): Promise<string | null> {
     const targetPhone = this.normalizePhone(to);
     if (!targetPhone) {
@@ -1848,7 +1853,9 @@ export class MetaService implements OnModuleInit {
       );
     }
 
-    const selectedAsset = await this.getClientPrimaryWhatsappChannel(clientId);
+    const selectedAsset = phoneNumberId
+      ? await this.getClientWhatsappChannel(clientId, phoneNumberId)
+      : await this.getClientPrimaryWhatsappChannel(clientId);
 
     const response = await this.graphPost<WhatsappSendMessageResponse>(
       `${selectedAsset.phone_number_id}/messages`,
@@ -3940,6 +3947,29 @@ export class MetaService implements OnModuleInit {
       );
     }
 
+    return selectedAsset;
+  }
+
+  private async getClientWhatsappChannel(
+    clientId: string,
+    phoneNumberId: string,
+  ) {
+    const normalizedPhoneNumberId = phoneNumberId.trim();
+    if (!/^\d{5,100}$/.test(normalizedPhoneNumberId)) {
+      throw new BadRequestException("phone_number_id invalido.");
+    }
+    const selectedAsset = await this.db.metaAssetSelection.findFirst({
+      where: {
+        phone_number_id: normalizedPhoneNumberId,
+        meta_connection: { client_id: clientId, status: "connected" },
+      },
+      include: { meta_connection: true },
+    });
+    if (!selectedAsset?.phone_number_id) {
+      throw new ForbiddenException(
+        "Numero de WhatsApp nao pertence ao cliente informado.",
+      );
+    }
     return selectedAsset;
   }
 

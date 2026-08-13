@@ -39,6 +39,8 @@ import { RubinhoService } from "../rubinho/rubinho.service";
 import { ConversationsService } from "../conversations/conversations.service";
 import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.service";
 import { UpsertDispatchDto } from "../dispatch-tracking/dto/upsert-dispatch.dto";
+import { MetaService } from "../meta/meta.service";
+import { SendWhatsappTextDto } from "./dto/send-whatsapp-text.dto";
 
 @ApiTags("integrations")
 @Controller("integrations/v1")
@@ -54,7 +56,22 @@ export class IntegrationController {
     private readonly rubinhoService: RubinhoService,
     private readonly conversationsService: ConversationsService,
     private readonly dispatchTracking: DispatchTrackingService,
+    private readonly metaService: MetaService,
   ) {}
+
+  @Post("whatsapp/text")
+  @ApiOperation({
+    summary: "Envia texto pelo numero WhatsApp conectado ao cliente",
+  })
+  async sendWhatsappText(@Body() dto: SendWhatsappTextDto) {
+    const messageId = await this.metaService.sendClientWhatsappMessage(
+      dto.client_id,
+      dto.to,
+      dto.text,
+      dto.phone_number_id,
+    );
+    return { sent: Boolean(messageId), message_id: messageId };
+  }
 
   @Post("dispatches")
   @ApiOperation({

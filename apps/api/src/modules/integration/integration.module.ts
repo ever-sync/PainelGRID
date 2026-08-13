@@ -16,6 +16,7 @@ import { AutomationKeyGuard } from "./automation-key.guard";
 import { DispatchTrackingModule } from "../dispatch-tracking/dispatch-tracking.module";
 import { WhatsappContextModule } from "../whatsapp-context/whatsapp-context.module";
 import { RubinhoContextController } from "./rubinho-context.controller";
+import { MetaModule } from "../meta/meta.module";
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { RubinhoContextController } from "./rubinho-context.controller";
     AppointmentsModule,
     DispatchTrackingModule,
     WhatsappContextModule,
+    MetaModule,
   ],
   controllers: [
     IntegrationController,
