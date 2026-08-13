@@ -16,6 +16,7 @@ export interface MetaFormOption {
 
 export interface MetaWhatsappOption {
   id: string;
+  waba_id: string;
   name: string;
   phone_number_id: string;
   display_phone_number: string;

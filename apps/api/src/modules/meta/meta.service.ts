@@ -550,17 +550,63 @@ export class MetaService implements OnModuleInit {
       businessForms.map((form) => form.id),
       dto.form_ids,
     );
-    const selectedWabaId = dto.waba_id?.trim() || undefined;
-    const selectedPhoneNumberId =
-      dto.phone_number_id?.trim() ||
-      (selectedWabaId
-        ? (
-            await this.fetchWabaPhoneNumbers(
-              selectedWabaId,
-              selection.accessToken,
-            )
-          )[0]?.id
-        : undefined);
+    const legacyWabaId = dto.waba_id?.trim() || undefined;
+    const legacyPhoneNumberId = dto.phone_number_id?.trim() || undefined;
+    const requestedWhatsappNumbers = (dto.whatsapp_phone_numbers ?? [])
+      .map((item) => ({
+        waba_id: String(item?.waba_id ?? "").trim(),
+        phone_number_id: String(item?.phone_number_id ?? "").trim(),
+      }))
+      .filter((item) => item.waba_id && item.phone_number_id);
+
+    if (
+      requestedWhatsappNumbers.length === 0 &&
+      legacyWabaId &&
+      legacyPhoneNumberId
+    ) {
+      requestedWhatsappNumbers.push({
+        waba_id: legacyWabaId,
+        phone_number_id: legacyPhoneNumberId,
+      });
+    } else if (requestedWhatsappNumbers.length === 0 && legacyWabaId) {
+      const firstPhone = (
+        await this.fetchWabaPhoneNumbers(legacyWabaId, selection.accessToken)
+      )[0];
+      if (firstPhone?.id) {
+        requestedWhatsappNumbers.push({
+          waba_id: legacyWabaId,
+          phone_number_id: firstPhone.id,
+        });
+      }
+    }
+
+    const selectedWhatsappNumbers = this.uniqueBy(
+      requestedWhatsappNumbers,
+      (item) => item.phone_number_id,
+    );
+    for (const wabaId of this.uniqueStrings(
+      selectedWhatsappNumbers.map((item) => item.waba_id),
+    )) {
+      const availablePhoneIds = new Set(
+        (await this.fetchWabaPhoneNumbers(wabaId, selection.accessToken)).map(
+          (phone) => phone.id,
+        ),
+      );
+      const invalidSelection = selectedWhatsappNumbers.find(
+        (item) =>
+          item.waba_id === wabaId &&
+          !availablePhoneIds.has(item.phone_number_id),
+      );
+      if (invalidSelection) {
+        throw new BadRequestException(
+          `Numero ${invalidSelection.phone_number_id} nao pertence a WABA ${wabaId} ou nao esta acessivel.`,
+        );
+      }
+    }
+    const primaryPhoneNumberId =
+      dto.primary_phone_number_id?.trim() ||
+      legacyPhoneNumberId ||
+      selectedWhatsappNumbers[0]?.phone_number_id;
 
     const selectedAdAccounts = businessAdAccounts.filter((account) =>
       selectedAdAccountIds.includes(this.normalizeAdAccountId(account)),
@@ -577,13 +623,21 @@ export class MetaService implements OnModuleInit {
       ? new Date(selection.tokenExpiresAt)
       : null;
 
-    if (selectedWabaId) {
-      if (!selectedPhoneNumberId) {
-        throw new BadRequestException(
-          "WABA selecionada sem phone_number_id. Verifique se o numero esta ativo no WhatsApp Manager.",
-        );
-      }
-      await this.subscribeWabaToWebhook(selectedWabaId, selection.accessToken);
+    if (
+      primaryPhoneNumberId &&
+      !selectedWhatsappNumbers.some(
+        (item) => item.phone_number_id === primaryPhoneNumberId,
+      )
+    ) {
+      throw new BadRequestException(
+        "O numero principal precisa estar entre os numeros selecionados.",
+      );
+    }
+
+    for (const wabaId of this.uniqueStrings(
+      selectedWhatsappNumbers.map((item) => item.waba_id),
+    )) {
+      await this.subscribeWabaToWebhook(wabaId, selection.accessToken);
     }
 
     // Subscreve as paginas selecionadas ao Webhook do App para receber eventos de leadgen
@@ -638,8 +692,8 @@ export class MetaService implements OnModuleInit {
       selectedAdAccounts,
       selectedPages,
       selectedForms,
-      selectedWabaId,
-      phoneNumberId: selectedPhoneNumberId,
+      selectedWhatsappNumbers,
+      primaryPhoneNumberId,
     });
 
     for (const assetRow of assetRows) {
@@ -696,8 +750,8 @@ export class MetaService implements OnModuleInit {
           selected_ad_account_ids: selectedAdAccountIds,
           selected_page_ids: selectedPageIds,
           selected_form_ids: selectedFormIds,
-          selected_waba_id: selectedWabaId,
-          selected_phone_number_id: selectedPhoneNumberId,
+          selected_whatsapp_numbers: selectedWhatsappNumbers,
+          selected_phone_number_id: primaryPhoneNumberId,
         }),
       },
     });
@@ -731,8 +785,9 @@ export class MetaService implements OnModuleInit {
           page_id: form.page_id,
           name: form.name ?? form.id,
         })),
-        waba_id: selectedWabaId ?? null,
-        phone_number_id: selectedPhoneNumberId ?? null,
+        waba_id: selectedWhatsappNumbers[0]?.waba_id ?? null,
+        phone_number_id: primaryPhoneNumberId ?? null,
+        whatsapp_phone_numbers: selectedWhatsappNumbers,
       },
       sync_job_id: syncJob.id,
       initial_sync: initialSync,
@@ -5012,21 +5067,23 @@ export class MetaService implements OnModuleInit {
           pages.map((page) => page.id),
           accessToken,
         );
-        const whatsappAccounts = await Promise.all(
-          wabas.map(async (waba) => {
-            const phoneNumbers = await this.fetchWabaPhoneNumbers(
-              waba.id,
-              accessToken,
-            );
-            const firstPhone = phoneNumbers[0];
-            return {
-              id: waba.id,
-              name: waba.name ?? `WABA ${waba.id}`,
-              phone_number_id: firstPhone?.id,
-              display_phone_number: firstPhone?.display_phone_number,
-            };
-          }),
-        );
+        const whatsappAccounts = (
+          await Promise.all(
+            wabas.map(async (waba) => {
+              const phoneNumbers = await this.fetchWabaPhoneNumbers(
+                waba.id,
+                accessToken,
+              );
+              return phoneNumbers.map((phone) => ({
+                id: phone.id,
+                waba_id: waba.id,
+                name: waba.name ?? `WABA ${waba.id}`,
+                phone_number_id: phone.id,
+                display_phone_number: phone.display_phone_number,
+              }));
+            }),
+          )
+        ).flat();
 
         return {
           id: business.id,
@@ -5211,8 +5268,11 @@ export class MetaService implements OnModuleInit {
     selectedAdAccounts: MetaAdAccountSummary[];
     selectedPages: MetaPageSummary[];
     selectedForms: MetaLeadFormSummary[];
-    selectedWabaId?: string;
-    phoneNumberId?: string;
+    selectedWhatsappNumbers: Array<{
+      waba_id: string;
+      phone_number_id: string;
+    }>;
+    primaryPhoneNumberId?: string;
   }) {
     const rows: Array<Record<string, unknown>> = [];
     let primaryAssigned = false;
@@ -5248,13 +5308,16 @@ export class MetaService implements OnModuleInit {
       primaryAssigned = true;
     }
 
-    if (args.selectedWabaId || args.phoneNumberId) {
+    for (const whatsapp of args.selectedWhatsappNumbers) {
       rows.push({
         meta_connection_id: args.metaConnectionId,
-        waba_id: args.selectedWabaId ?? null,
-        phone_number_id: args.phoneNumberId ?? null,
-        is_primary: !primaryAssigned,
+        waba_id: whatsapp.waba_id,
+        phone_number_id: whatsapp.phone_number_id,
+        is_primary:
+          whatsapp.phone_number_id === args.primaryPhoneNumberId ||
+          (!args.primaryPhoneNumberId && !primaryAssigned),
       });
+      primaryAssigned = true;
     }
 
     return rows;

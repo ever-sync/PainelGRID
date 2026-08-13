@@ -91,6 +91,7 @@ export type MetaBusinessApiOption = {
   forms?: Array<{ id: string; name?: string; page_id?: string }>;
   whatsapp_accounts?: Array<{
     id: string;
+    waba_id?: string;
     name?: string;
     phone_number_id?: string;
     display_phone_number?: string;
@@ -121,6 +122,11 @@ type SelectMetaAssetsPayload = {
   form_ids?: string[];
   waba_id?: string;
   phone_number_id?: string;
+  whatsapp_phone_numbers?: Array<{
+    waba_id: string;
+    phone_number_id: string;
+  }>;
+  primary_phone_number_id?: string;
 };
 
 export type MetaGestorConnectResponse = {
@@ -149,6 +155,10 @@ type SelectMetaAssetsResponse = {
     forms: Array<{ id: string; page_id: string; name: string }>;
     waba_id?: string | null;
     phone_number_id?: string | null;
+    whatsapp_phone_numbers?: Array<{
+      waba_id: string;
+      phone_number_id: string;
+    }>;
   };
   sync_job_id: string;
   initial_sync: {

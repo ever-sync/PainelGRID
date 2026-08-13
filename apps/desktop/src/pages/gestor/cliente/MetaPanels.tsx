@@ -79,14 +79,17 @@ export function mapMetaConnectionFromApi(
       item.asset_type === "whatsapp" || item.waba_id || item.phone_number_id,
   );
   const whatsappOptions = whatsappAssets.map((item) => ({
-    id: String(item.waba_id ?? item.external_id ?? ""),
+    id: String(item.phone_number_id ?? item.external_id ?? ""),
+    waba_id: String(item.waba_id ?? ""),
     name: String(item.asset_name ?? item.waba_id ?? "WhatsApp"),
     phone_number_id: String(item.phone_number_id ?? ""),
     display_phone_number: String(
       item.display_phone_number ?? item.phone_number_id ?? "—",
     ),
   }));
-  const whatsapp = whatsappAssets[0];
+  const whatsapp =
+    whatsappAssets.find((item) => item.is_primary === true) ??
+    whatsappAssets[0];
   const latestSync = syncJobs[0];
   const syncSummary =
     latestSync &&
@@ -103,7 +106,8 @@ export function mapMetaConnectionFromApi(
     selected_forms: forms,
     selected_whatsapp: whatsapp
       ? {
-          id: String(whatsapp.waba_id ?? whatsapp.external_id ?? ""),
+          id: String(whatsapp.phone_number_id ?? whatsapp.external_id ?? ""),
+          waba_id: String(whatsapp.waba_id ?? ""),
           name: String(whatsapp.asset_name ?? whatsapp.waba_id ?? "WhatsApp"),
           phone_number_id: String(whatsapp.phone_number_id ?? ""),
           display_phone_number: String(whatsapp.phone_number_id ?? "—"),
@@ -149,6 +153,7 @@ export function mapMetaBusinessFromApi(
     })),
     whatsapp_accounts: (rawBusiness.whatsapp_accounts ?? []).map((item) => ({
       id: String(item.id),
+      waba_id: String(item.waba_id ?? item.id),
       name: String(item.name ?? item.id),
       phone_number_id: String(item.phone_number_id ?? ""),
       display_phone_number: String(

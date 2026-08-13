@@ -630,6 +630,7 @@ export function ClienteDetailPage() {
   const [draftPageIds, setDraftPageIds] = useState<string[]>([]);
   const [draftFormIds, setDraftFormIds] = useState<string[]>([]);
   const [draftWhatsappId, setDraftWhatsappId] = useState("");
+  const [draftWhatsappIds, setDraftWhatsappIds] = useState<string[]>([]);
   const [draftPhoneNumberId, setDraftPhoneNumberId] = useState("");
   const [metaSetupStep, setMetaSetupStep] = useState<MetaSetupStep>(0);
   const [metaSetupSearch, setMetaSetupSearch] = useState("");
@@ -1617,6 +1618,7 @@ export function ClienteDetailPage() {
     setDraftPageIds(business.pages.length === 1 ? [business.pages[0].id] : []);
     setDraftFormIds([]);
     setDraftWhatsappId("");
+    setDraftWhatsappIds([]);
     setDraftPhoneNumberId("");
   }
 
@@ -1632,7 +1634,13 @@ export function ClienteDetailPage() {
     );
     setDraftPageIds(metaConnection.selected_pages.map((item) => item.id));
     setDraftFormIds(metaConnection.selected_forms.map((item) => item.id));
-    setDraftWhatsappId(metaConnection.selected_whatsapp?.id ?? "");
+    const selectedWhatsappIds = (metaConnection.selected_whatsapps ?? [])
+      .map((item) => item.id)
+      .filter(Boolean);
+    setDraftWhatsappIds(selectedWhatsappIds);
+    setDraftWhatsappId(
+      metaConnection.selected_whatsapp?.id ?? selectedWhatsappIds[0] ?? "",
+    );
     setDraftPhoneNumberId(metaConnection.phone_number_id ?? "");
   }
 
@@ -1737,15 +1745,31 @@ export function ClienteDetailPage() {
 
     if (whatsappId === "") {
       setDraftWhatsappId("");
+      setDraftWhatsappIds([]);
       setDraftPhoneNumberId("");
       return;
     }
 
-    const selectedWhatsapp = selectedBusiness.whatsapp_accounts.find(
-      (item) => item.id === whatsappId,
-    );
-    setDraftWhatsappId(whatsappId);
-    setDraftPhoneNumberId(selectedWhatsapp?.phone_number_id ?? "");
+    setDraftWhatsappIds((current) => {
+      const removing = current.includes(whatsappId);
+      const next = removing
+        ? current.filter((item) => item !== whatsappId)
+        : [...current, whatsappId];
+      if (!removing && !draftWhatsappId) {
+        const selectedWhatsapp = selectedBusiness.whatsapp_accounts.find(
+          (item) => item.id === whatsappId,
+        );
+        setDraftWhatsappId(whatsappId);
+        setDraftPhoneNumberId(selectedWhatsapp?.phone_number_id ?? "");
+      } else if (removing && draftWhatsappId === whatsappId) {
+        const nextPrimary = selectedBusiness.whatsapp_accounts.find(
+          (item) => item.id === next[0],
+        );
+        setDraftWhatsappId(nextPrimary?.id ?? "");
+        setDraftPhoneNumberId(nextPrimary?.phone_number_id ?? "");
+      }
+      return next;
+    });
   }
 
   async function handleSaveMetaConnection() {
@@ -1773,8 +1797,18 @@ export function ClienteDetailPage() {
             ad_account_ids: draftAdAccountIds,
             page_ids: draftPageIds,
             form_ids: draftFormIds,
-            waba_id: draftWhatsappId || undefined,
+            waba_id:
+              selectedBusiness.whatsapp_accounts.find(
+                (item) => item.id === draftWhatsappId,
+              )?.waba_id || undefined,
             phone_number_id: draftPhoneNumberId || undefined,
+            whatsapp_phone_numbers: selectedBusiness.whatsapp_accounts
+              .filter((item) => draftWhatsappIds.includes(item.id))
+              .map((item) => ({
+                waba_id: item.waba_id,
+                phone_number_id: item.phone_number_id,
+              })),
+            primary_phone_number_id: draftPhoneNumberId || undefined,
           },
           accessToken,
         );
@@ -1807,6 +1841,9 @@ export function ClienteDetailPage() {
       selectedBusiness.whatsapp_accounts.find(
         (item) => item.id === draftWhatsappId,
       ) ?? null;
+    const selectedWhatsapps = selectedBusiness.whatsapp_accounts.filter(
+      (item) => draftWhatsappIds.includes(item.id),
+    );
 
     setMetaConnection({
       business_id: selectedBusiness.id,
@@ -1815,7 +1852,7 @@ export function ClienteDetailPage() {
       selected_pages: selectedPages,
       selected_forms: selectedForms,
       selected_whatsapp: selectedWhatsapp,
-      selected_whatsapps: selectedWhatsapp ? [selectedWhatsapp] : [],
+      selected_whatsapps: selectedWhatsapps,
       phone_number_id:
         selectedWhatsapp?.phone_number_id ?? draftPhoneNumberId ?? null,
       last_sync_at: new Date().toISOString(),
@@ -5646,7 +5683,7 @@ export function ClienteDetailPage() {
             accountCount={draftAdAccountIds.length}
             pageCount={draftPageIds.length}
             formCount={draftFormIds.length}
-            hasWhatsapp={Boolean(draftWhatsappId)}
+            hasWhatsapp={draftWhatsappIds.length > 0}
           />
 
           <section className="rounded-[26px] border border-zinc-200 bg-[#fcfbf8] p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
@@ -5783,14 +5820,51 @@ export function ClienteDetailPage() {
                     label: item.name,
                     description: `${item.display_phone_number} · ID ${item.phone_number_id}`,
                   }))}
-                  selectedIds={draftWhatsappId ? [draftWhatsappId] : []}
+                  selectedIds={draftWhatsappIds}
                   onToggle={handleSelectWhatsapp}
                   emptyLabel="Nenhum WhatsApp Business disponível nesta BM."
                   search={metaSetupSearch}
                   onSearchChange={setMetaSetupSearch}
                   searchPlaceholder="Buscar WhatsApp por nome, número ou ID"
-                  mode="single"
+                  mode="multiple"
                 />
+
+                {draftWhatsappIds.length > 1 ? (
+                  <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+                    <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+                      Número principal
+                    </p>
+                    <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                      Será usado quando o disparo não escolher um número.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {selectedBusiness.whatsapp_accounts
+                        .filter((item) => draftWhatsappIds.includes(item.id))
+                        .map((item) => {
+                          const primary = item.id === draftWhatsappId;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => {
+                                setDraftWhatsappId(item.id);
+                                setDraftPhoneNumberId(item.phone_number_id);
+                              }}
+                              className={clsx(
+                                "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                                primary
+                                  ? "border-[#FF0636] bg-[#FF0636]/10 text-[#FF0636]"
+                                  : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300",
+                              )}
+                            >
+                              {item.display_phone_number}
+                              {primary ? " · Principal" : ""}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                ) : null}
 
                 <button
                   type="button"
@@ -5838,8 +5912,9 @@ export function ClienteDetailPage() {
                     <div className="flex items-center justify-between gap-4">
                       <span className="text-zinc-500">WhatsApp</span>
                       <strong className="truncate text-right font-medium text-zinc-900 dark:text-zinc-100">
-                        {selectedWhatsappAccount?.display_phone_number ??
-                          "Não vinculado"}
+                        {draftWhatsappIds.length > 0
+                          ? `${draftWhatsappIds.length} número${draftWhatsappIds.length === 1 ? "" : "s"} · principal ${selectedWhatsappAccount?.display_phone_number ?? "—"}`
+                          : "Não vinculado"}
                       </strong>
                     </div>
                   </div>

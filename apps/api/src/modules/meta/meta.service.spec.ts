@@ -144,6 +144,33 @@ describe("MetaService", () => {
     );
   });
 
+  it("persiste varios numeros de WhatsApp e marca somente o principal", () => {
+    const rows = (service as any).buildAssetSelectionRows({
+      metaConnectionId: "connection-1",
+      selectedAdAccounts: [],
+      selectedPages: [],
+      selectedForms: [],
+      selectedWhatsappNumbers: [
+        { waba_id: "waba-1", phone_number_id: "phone-1" },
+        { waba_id: "waba-2", phone_number_id: "phone-2" },
+      ],
+      primaryPhoneNumberId: "phone-2",
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        waba_id: "waba-1",
+        phone_number_id: "phone-1",
+        is_primary: false,
+      }),
+      expect.objectContaining({
+        waba_id: "waba-2",
+        phone_number_id: "phone-2",
+        is_primary: true,
+      }),
+    ]);
+  });
+
   it("rejeita webhook Meta sem assinatura valida ou sem corpo bruto", async () => {
     const rawBody = Buffer.from('{"object":"page"}');
     config.get.mockImplementation((key: string) =>

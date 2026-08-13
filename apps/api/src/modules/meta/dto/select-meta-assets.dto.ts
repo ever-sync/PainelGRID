@@ -1,13 +1,22 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { Transform } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import {
   IsArray,
   IsBoolean,
   IsOptional,
   IsString,
   IsUUID,
+  ValidateNested,
   ValidateIf,
 } from "class-validator";
+
+class WhatsappPhoneSelectionDto {
+  @IsString()
+  waba_id!: string;
+
+  @IsString()
+  phone_number_id!: string;
+}
 
 export class SelectMetaAssetsDto {
   @ApiProperty({ format: "uuid" })
@@ -59,4 +68,21 @@ export class SelectMetaAssetsDto {
   @IsOptional()
   @IsString()
   phone_number_id?: string;
+
+  @ApiPropertyOptional({
+    type: [Object],
+    description: "Numeros WhatsApp vinculados ao cliente.",
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => WhatsappPhoneSelectionDto)
+  whatsapp_phone_numbers?: WhatsappPhoneSelectionDto[];
+
+  @ApiPropertyOptional({
+    description: "Numero principal usado quando o disparo nao informa o canal.",
+  })
+  @IsOptional()
+  @IsString()
+  primary_phone_number_id?: string;
 }
