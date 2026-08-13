@@ -52,7 +52,6 @@ import {
   clientIdToPipelineCode,
   defaultKanbanStages,
   distributeLeadsByStageId,
-  emptyBoardForStages,
   pickDefaultPipeline,
   stageCodeById,
 } from "../../lib/crm-kanban";
@@ -631,40 +630,41 @@ export function CRMPage() {
     let active = true;
     setBoardLoading(true);
 
-    // Contagem real por etapa (independente do carregamento progressivo dos cards).
-    void getCrmStageCounts(selectedClient, accessToken)
-      .then((result) => {
-        if (active && !abort.signal.aborted)
-          setStageCounts(result.counts ?? {});
-      })
-      .catch(() => {
-        /* badge cai para a contagem local */
-      });
-
-    const applyLeads = (rows: ReturnType<typeof mapApiLeadToLead>[]) => {
-      setBoardState(distributeLeadsByStageId(rows, apiStages));
-    };
-
-    void fetchAllLeads(
-      { client_id: selectedClient, search: searchTermRef.current || undefined },
-      accessToken,
-      {
-        signal: abort.signal,
-        onPage: (_page, accumulated) => {
-          if (!active || abort.signal.aborted) return;
-          applyLeads(accumulated.map(mapApiLeadToLead));
+    // Carrega todos os cards e a contagem oficial antes de publicar o novo
+    // estado. Atualizar a cada pagina fazia os badges oscilarem durante o fetch.
+    void Promise.all([
+      fetchAllLeads(
+        {
+          client_id: selectedClient,
+          search: searchTermRef.current || undefined,
         },
-      },
-    )
-      .then((rows) => {
+        accessToken,
+        { signal: abort.signal },
+      ),
+      getCrmStageCounts(selectedClient, accessToken).catch(() => null),
+    ])
+      .then(([rows, stageCountResult]) => {
         if (!active || abort.signal.aborted) return;
-        applyLeads(rows.map(mapApiLeadToLead));
+        const mappedRows = rows.map(mapApiLeadToLead);
+        const nextBoard = distributeLeadsByStageId(mappedRows, apiStages);
+
+        setBoardState(nextBoard);
+        setStageCounts(
+          stageCountResult?.counts ??
+            Object.fromEntries(
+              apiStages.map((stage) => [
+                stage.id,
+                nextBoard[stage.id]?.length ?? 0,
+              ]),
+            ),
+        );
       })
       .catch((error) => {
         if (!active || abort.signal.aborted) return;
         if (error instanceof DOMException && error.name === "AbortError")
           return;
-        setBoardState(emptyBoardForStages(apiStages));
+        // Conserva o ultimo quadro confirmado. Zerar os cards em uma falha
+        // temporaria tambem fazia os totais parecerem mudar sem alteracao real.
         showToast("Falha ao carregar leads.", "error");
       })
       .finally(() => {
