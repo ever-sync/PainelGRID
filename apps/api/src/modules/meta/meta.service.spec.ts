@@ -204,7 +204,10 @@ describe("MetaService", () => {
       },
     ]);
 
-    const result = await service.listWhatsappChannels(gestor, "client-1");
+    const result = await service.listWhatsappChannels(
+      { sub: "gestor-1", role: Role.GESTOR } as AuthenticatedUser,
+      "client-1",
+    );
 
     expect(result.channels).toEqual([
       expect.objectContaining({

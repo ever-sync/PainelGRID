@@ -3779,7 +3779,10 @@ export class MetaService implements OnModuleInit {
       }
 
       const lead = { id: context.lead.id };
-      const conversation =
+      const conversation: {
+        id: string;
+        whatsapp_phone_number_id: string | null;
+      } =
         context.conversation ??
         (await this.findOrCreateWhatsappConversation(
           context.client.id,
