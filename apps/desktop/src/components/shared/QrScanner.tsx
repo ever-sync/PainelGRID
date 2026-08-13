@@ -13,6 +13,12 @@ import { createAudioContext } from "../../utils/audioContext";
 
 type TorchCapabilities = MediaTrackCapabilities & { torch?: boolean };
 type TorchConstraintSet = MediaTrackConstraintSet & { torch?: boolean };
+type CameraCapabilities = MediaTrackCapabilities & {
+  focusMode?: string[];
+};
+type CameraConstraintSet = MediaTrackConstraintSet & {
+  focusMode?: "continuous";
+};
 
 export interface QrScannerProps {
   onScan: (decodedText: string) => void;
@@ -59,6 +65,7 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
     let disposed = false;
     const html5QrCode = new Html5Qrcode(readerId, {
       formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
       verbose: false,
     });
     qrRef.current = html5QrCode;
@@ -68,11 +75,19 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
         setLoading(true);
         setErrorMsg(null);
         await html5QrCode.start(
-          { facingMode: "environment" },
           {
-            fps: 15,
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920, min: 640 },
+            height: { ideal: 1080, min: 480 },
+          },
+          {
+            fps: 12,
+            aspectRatio: 1,
+            disableFlip: false,
             qrbox: (width, height) => {
-              const size = Math.floor(Math.min(width, height) * 0.85);
+              // Deixa margem ao redor do QR: códigos de convite são densos
+              // (JWT) e o decodificador precisa enxergar a "quiet zone".
+              const size = Math.floor(Math.min(width, height) * 0.72);
               return { width: size, height: size };
             },
           },
@@ -104,12 +119,18 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
         // Check for torch capability
         try {
           const capabilities =
-            html5QrCode.getRunningTrackCapabilities() as TorchCapabilities;
+            html5QrCode.getRunningTrackCapabilities() as CameraCapabilities &
+              TorchCapabilities;
           if (capabilities && capabilities.torch) {
             setHasTorch(true);
           }
+          if (capabilities.focusMode?.includes("continuous")) {
+            await html5QrCode.applyVideoConstraints({
+              advanced: [{ focusMode: "continuous" } as CameraConstraintSet],
+            });
+          }
         } catch (e) {
-          console.warn("Torch capabilities check failed", e);
+          console.warn("Camera capabilities check failed", e);
         }
 
         setLoading(false);
