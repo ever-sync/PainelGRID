@@ -124,6 +124,8 @@ import {
   getMetaSummary,
   getMetaCampaignsReport,
   getMetaStatus,
+  configureWhatsappApiChannels,
+  listWhatsappApiChannels,
   listMetaBusinesses,
   selectMetaAssets,
   syncMetaFull,
@@ -141,6 +143,7 @@ import {
   type MetaLeadWhatsappTemplate,
   type MetaLeadWhatsappTemplateParameterKey,
   type MetaCampaignsReportItem,
+  type WhatsappApiChannel,
 } from "../../services/meta";
 import {
   listClientVehicles,
@@ -163,6 +166,7 @@ const TABS = [
   { id: "acesso", label: "Acesso", icon: <Settings size={14} /> },
   { id: "integracao", label: "Integração n8n", icon: <KeyRound size={14} /> },
   { id: "ads", label: "Ads (Facebook)", icon: <Facebook size={14} /> },
+  { id: "whatsapp", label: "WhatsApp API", icon: <MessageCircle size={14} /> },
   { id: "rubinho", label: "Rubinho", icon: <Settings size={14} /> },
   { id: "veiculos", label: "Veículos", icon: <Car size={14} /> },
   { id: "leads", label: "Lista de Leads", icon: <CheckCircle2 size={14} /> },
@@ -632,6 +636,14 @@ export function ClienteDetailPage() {
   const [draftWhatsappId, setDraftWhatsappId] = useState("");
   const [draftWhatsappIds, setDraftWhatsappIds] = useState<string[]>([]);
   const [draftPhoneNumberId, setDraftPhoneNumberId] = useState("");
+  const [whatsappApiChannels, setWhatsappApiChannels] = useState<
+    WhatsappApiChannel[]
+  >([]);
+  const [whatsappApiLoading, setWhatsappApiLoading] = useState(false);
+  const [whatsappApiSaving, setWhatsappApiSaving] = useState(false);
+  const [whatsappApiBusinessId, setWhatsappApiBusinessId] = useState("");
+  const [whatsappApiPhoneIds, setWhatsappApiPhoneIds] = useState<string[]>([]);
+  const [whatsappApiPrimaryId, setWhatsappApiPrimaryId] = useState("");
   const [metaSetupStep, setMetaSetupStep] = useState<MetaSetupStep>(0);
   const [metaSetupSearch, setMetaSetupSearch] = useState("");
 
@@ -747,6 +759,119 @@ export function ClienteDetailPage() {
       }
     } finally {
       setMetaBusinessesLoading(false);
+    }
+  }
+
+  const refreshWhatsappApi = useCallback(async () => {
+    if (!resolvedId || !isUuid(resolvedId)) return;
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+
+    setWhatsappApiLoading(true);
+    try {
+      const [channelsResponse, businessesResponse] = await Promise.all([
+        listWhatsappApiChannels(resolvedId, token),
+        listMetaBusinesses(resolvedId, null, token, { gestor_token: true }),
+      ]);
+      const businesses = (businessesResponse.businesses ?? []).map(
+        mapMetaBusinessFromApi,
+      );
+      setWhatsappApiChannels(channelsResponse.channels ?? []);
+      setApiBusinesses(businesses);
+
+      setWhatsappApiBusinessId((current) => {
+        const nextBusinessId =
+          (current && businesses.some((business) => business.id === current)
+            ? current
+            : channelsResponse.channels[0]?.business_id) ??
+          businesses[0]?.id ??
+          "";
+        const linked = channelsResponse.channels.filter(
+          (channel) => channel.business_id === nextBusinessId,
+        );
+        setWhatsappApiPhoneIds(
+          linked.map((channel) => channel.phone_number_id),
+        );
+        setWhatsappApiPrimaryId(
+          linked.find((channel) => channel.is_primary)?.phone_number_id ??
+            linked[0]?.phone_number_id ??
+            "",
+        );
+        return nextBusinessId;
+      });
+    } catch (error) {
+      pushToast({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível carregar os canais do WhatsApp.",
+      });
+    } finally {
+      setWhatsappApiLoading(false);
+    }
+  }, [resolvedId]);
+
+  useEffect(() => {
+    if (activeTab === "whatsapp") void refreshWhatsappApi();
+  }, [activeTab, refreshWhatsappApi]);
+
+  function selectWhatsappApiBusiness(businessId: string) {
+    setWhatsappApiBusinessId(businessId);
+    const linked = whatsappApiChannels.filter(
+      (channel) => channel.business_id === businessId,
+    );
+    setWhatsappApiPhoneIds(linked.map((channel) => channel.phone_number_id));
+    setWhatsappApiPrimaryId(
+      linked.find((channel) => channel.is_primary)?.phone_number_id ??
+        linked[0]?.phone_number_id ??
+        "",
+    );
+  }
+
+  async function saveWhatsappApiChannels() {
+    if (!resolvedId || !whatsappApiBusinessId) return;
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+    const business = apiBusinesses.find(
+      (item) => item.id === whatsappApiBusinessId,
+    );
+    if (!business) return;
+
+    setWhatsappApiSaving(true);
+    try {
+      const response = await configureWhatsappApiChannels(
+        {
+          client_id: resolvedId,
+          business_id: business.id,
+          channels: business.whatsapp_accounts
+            .filter((item) =>
+              whatsappApiPhoneIds.includes(item.phone_number_id),
+            )
+            .map((item) => ({
+              waba_id: item.waba_id,
+              phone_number_id: item.phone_number_id,
+            })),
+          primary_phone_number_id:
+            whatsappApiPrimaryId || whatsappApiPhoneIds[0] || undefined,
+        },
+        token,
+      );
+      setWhatsappApiChannels(response.channels ?? []);
+      pushToast({
+        type: "success",
+        message: "Canais do WhatsApp atualizados com sucesso.",
+      });
+    } catch (error) {
+      pushToast({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível salvar os canais do WhatsApp.",
+      });
+    } finally {
+      setWhatsappApiSaving(false);
     }
   }
 
@@ -4822,35 +4947,261 @@ export function ClienteDetailPage() {
       )}
 
       {activeTab === "whatsapp" && (
-        <Card>
-          <h3 className="mb-4 text-base font-semibold text-gray-900">
-            Conexões WhatsApp
-          </h3>
-          <div className="space-y-4 text-sm">
-            <div className="flex items-center justify-between rounded-lg border border-gray-100 p-3">
+        <div className="space-y-4">
+          <Card>
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs text-gray-400">WhatsApp Business</p>
-                <p className="font-medium text-gray-900">
-                  {client.whatsapp_number || "—"}
+                <div className="flex items-center gap-2">
+                  <MessageCircle size={18} className="text-emerald-500" />
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-zinc-100">
+                    WhatsApp API
+                  </h3>
+                </div>
+                <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">
+                  Vincule números de uma ou mais BMs para disparos e conversas
+                  deste cliente.
                 </p>
               </div>
-              <Badge variant={client.whatsapp_number ? "green" : "gray"} dot>
-                {client.whatsapp_number ? "Conectado" : "Não configurado"}
-              </Badge>
+              <Button
+                variant="secondary"
+                onClick={() => void refreshWhatsappApi()}
+                loading={whatsappApiLoading}
+              >
+                <RefreshCcw size={15} />
+                Atualizar Meta
+              </Button>
             </div>
-            <div className="flex items-center justify-between rounded-lg border border-gray-100 p-3">
+
+            {!gestorMetaConnected ? (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+                Conecte a conta Meta do gestor em Configurações antes de
+                adicionar números.
+              </div>
+            ) : (
+              <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
+                <div className="space-y-3">
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-400">
+                    Business Manager
+                  </label>
+                  <select
+                    value={whatsappApiBusinessId}
+                    onChange={(event) =>
+                      selectWhatsappApiBusiness(event.target.value)
+                    }
+                    className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none focus:border-[#FF0636] dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                  >
+                    <option value="">Selecione uma BM</option>
+                    {apiBusinesses.map((business) => (
+                      <option key={business.id} value={business.id}>
+                        {business.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-xs text-gray-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
+                    Você pode salvar uma BM, trocar para outra e adicionar mais
+                    números. Os vínculos anteriores serão preservados.
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-400">
+                      Números disponíveis
+                    </label>
+                    <span className="text-xs text-gray-400">
+                      {whatsappApiPhoneIds.length} selecionado(s)
+                    </span>
+                  </div>
+
+                  {whatsappApiLoading ? (
+                    <div className="flex min-h-32 items-center justify-center rounded-xl border border-gray-100 dark:border-zinc-800">
+                      <RefreshCcw
+                        size={18}
+                        className="animate-spin text-gray-400"
+                      />
+                    </div>
+                  ) : !whatsappApiBusinessId ? (
+                    <div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-400 dark:border-zinc-700">
+                      Selecione uma Business Manager.
+                    </div>
+                  ) : (apiBusinesses.find(
+                      (business) => business.id === whatsappApiBusinessId,
+                    )?.whatsapp_accounts.length ?? 0) === 0 ? (
+                    <div className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-400 dark:border-zinc-700">
+                      Nenhum número disponível nesta BM. Verifique o acesso ao
+                      ativo no Meta Business Manager.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {apiBusinesses
+                        .find(
+                          (business) => business.id === whatsappApiBusinessId,
+                        )
+                        ?.whatsapp_accounts.map((number) => {
+                          const selected = whatsappApiPhoneIds.includes(
+                            number.phone_number_id,
+                          );
+                          const primary =
+                            whatsappApiPrimaryId === number.phone_number_id;
+                          return (
+                            <div
+                              key={number.phone_number_id}
+                              className={clsx(
+                                "flex flex-wrap items-center gap-3 rounded-xl border p-3 transition",
+                                selected
+                                  ? "border-emerald-300 bg-emerald-50/60 dark:border-emerald-800 dark:bg-emerald-950/20"
+                                  : "border-gray-100 bg-white dark:border-zinc-800 dark:bg-zinc-950",
+                              )}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setWhatsappApiPhoneIds((current) => {
+                                    const removing = current.includes(
+                                      number.phone_number_id,
+                                    );
+                                    const next = removing
+                                      ? current.filter(
+                                          (id) => id !== number.phone_number_id,
+                                        )
+                                      : [...current, number.phone_number_id];
+                                    if (removing && primary) {
+                                      setWhatsappApiPrimaryId(next[0] ?? "");
+                                    } else if (!removing && next.length === 1) {
+                                      setWhatsappApiPrimaryId(
+                                        number.phone_number_id,
+                                      );
+                                    }
+                                    return next;
+                                  });
+                                }}
+                                className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                              >
+                                <span
+                                  className={clsx(
+                                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border",
+                                    selected
+                                      ? "border-emerald-500 bg-emerald-500 text-white"
+                                      : "border-gray-300 dark:border-zinc-600",
+                                  )}
+                                >
+                                  {selected ? <Check size={13} /> : null}
+                                </span>
+                                <span className="min-w-0">
+                                  <span className="block font-semibold text-gray-900 dark:text-zinc-100">
+                                    {number.display_phone_number}
+                                  </span>
+                                  <span className="block truncate text-xs text-gray-400">
+                                    {number.name} · ID {number.phone_number_id}
+                                  </span>
+                                </span>
+                              </button>
+                              {selected ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setWhatsappApiPrimaryId(
+                                      number.phone_number_id,
+                                    )
+                                  }
+                                  className={clsx(
+                                    "rounded-full border px-3 py-1 text-xs font-semibold",
+                                    primary
+                                      ? "border-[#FF0636] bg-[#FF0636]/10 text-[#FF0636]"
+                                      : "border-gray-200 text-gray-500 dark:border-zinc-700 dark:text-zinc-400",
+                                  )}
+                                >
+                                  {primary ? "Principal" : "Tornar principal"}
+                                </button>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={() => void saveWhatsappApiChannels()}
+                      loading={whatsappApiSaving}
+                      isDisabled={
+                        !whatsappApiBusinessId || !gestorMetaConnected
+                      }
+                    >
+                      <CheckCircle2 size={15} />
+                      Salvar números desta BM
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs text-gray-400">Número para Ligação</p>
-                <p className="font-medium text-gray-900">
-                  {client.phone_number || "—"}
+                <h3 className="text-base font-semibold text-gray-900 dark:text-zinc-100">
+                  Canais vinculados
+                </h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">
+                  Números autorizados para disparos e atendimento deste cliente.
                 </p>
               </div>
-              <Badge variant={client.phone_number ? "blue" : "gray"} dot>
-                {client.phone_number ? "Configurado" : "Não configurado"}
+              <Badge
+                variant={whatsappApiChannels.length ? "green" : "gray"}
+                dot
+              >
+                {whatsappApiChannels.length} canal(is)
               </Badge>
             </div>
-          </div>
-        </Card>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {whatsappApiChannels.length === 0 ? (
+                <div className="col-span-full rounded-xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-400 dark:border-zinc-700">
+                  Nenhum número vinculado.
+                </div>
+              ) : (
+                whatsappApiChannels.map((channel) => {
+                  const option = apiBusinesses
+                    .find((business) => business.id === channel.business_id)
+                    ?.whatsapp_accounts.find(
+                      (item) =>
+                        item.phone_number_id === channel.phone_number_id,
+                    );
+                  return (
+                    <div
+                      key={channel.id}
+                      className="rounded-xl border border-gray-100 p-4 dark:border-zinc-800 dark:bg-zinc-950"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-gray-900 dark:text-zinc-100">
+                            {option?.display_phone_number ??
+                              channel.phone_number_id}
+                          </p>
+                          <p className="mt-1 truncate text-xs text-gray-400">
+                            {channel.business_name}
+                          </p>
+                        </div>
+                        {channel.is_primary ? (
+                          <Badge variant="red">Principal</Badge>
+                        ) : (
+                          <Badge variant="green" dot>
+                            Ativo
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="mt-3 break-all font-mono text-[10px] text-gray-400">
+                        phone_number_id: {channel.phone_number_id}
+                      </p>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </Card>
+        </div>
       )}
 
       {activeTab === "veiculos" && (

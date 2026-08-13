@@ -14,6 +14,7 @@ describe("MetaService", () => {
       findUnique: jest.fn(),
     },
     metaConnection: {
+      findMany: jest.fn(),
       findFirst: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -167,6 +168,54 @@ describe("MetaService", () => {
         waba_id: "waba-2",
         phone_number_id: "phone-2",
         is_primary: true,
+      }),
+    ]);
+  });
+
+  it("lista numeros de varias BMs vinculados ao mesmo cliente", async () => {
+    prisma.metaConnection.findMany.mockResolvedValue([
+      {
+        id: "connection-1",
+        business_id: "business-1",
+        business_name: "BM 1",
+        status: "connected",
+        selected_assets: [
+          {
+            id: "asset-1",
+            waba_id: "waba-1",
+            phone_number_id: "phone-1",
+            is_primary: true,
+          },
+        ],
+      },
+      {
+        id: "connection-2",
+        business_id: "business-2",
+        business_name: "BM 2",
+        status: "connected",
+        selected_assets: [
+          {
+            id: "asset-2",
+            waba_id: "waba-2",
+            phone_number_id: "phone-2",
+            is_primary: false,
+          },
+        ],
+      },
+    ]);
+
+    const result = await service.listWhatsappChannels(gestor, "client-1");
+
+    expect(result.channels).toEqual([
+      expect.objectContaining({
+        business_id: "business-1",
+        phone_number_id: "phone-1",
+        is_primary: true,
+      }),
+      expect.objectContaining({
+        business_id: "business-2",
+        phone_number_id: "phone-2",
+        is_primary: false,
       }),
     ]);
   });

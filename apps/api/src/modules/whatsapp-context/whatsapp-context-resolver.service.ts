@@ -194,12 +194,20 @@ export class WhatsappContextResolverService {
             lead_id: leadId,
             channel: "whatsapp",
           },
-          select: { id: true, last_message_at: true },
+          select: {
+            id: true,
+            last_message_at: true,
+            whatsapp_phone_number_id: true,
+          },
         })
       : await this.prisma.conversation.findFirst({
           where: { client_id: clientId, lead_id: leadId, channel: "whatsapp" },
           orderBy: [{ last_message_at: "desc" }, { created_at: "desc" }],
-          select: { id: true, last_message_at: true },
+          select: {
+            id: true,
+            last_message_at: true,
+            whatsapp_phone_number_id: true,
+          },
         });
 
     const [client, pipeline, stage] = await Promise.all([

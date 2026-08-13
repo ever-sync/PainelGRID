@@ -589,6 +589,7 @@ model Conversation {
   client_id                String                     @db.Uuid
   lead_id                  String                     @db.Uuid
   channel                  ConversationChannel
+  whatsapp_phone_number_id String?                    @db.VarChar(100)
   last_message_at          DateTime?
   created_at               DateTime                   @default(now())
   agent_action_logs        AgentActionLog[]
@@ -603,6 +604,7 @@ model Conversation {
   @@index([client_id])
   @@index([lead_id])
   @@index([last_message_at])
+  @@index([whatsapp_phone_number_id])
   @@index([client_id, last_message_at(sort: Desc)], map: "idx_conversations_client_last_message")
   @@map("conversations")
 }

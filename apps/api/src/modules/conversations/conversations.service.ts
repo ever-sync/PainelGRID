@@ -680,6 +680,7 @@ export class ConversationsService {
         conv.client_id,
         lead?.phone ?? "",
         content,
+        conv.whatsapp_phone_number_id ?? undefined,
       );
     }
 

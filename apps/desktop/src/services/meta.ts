@@ -168,6 +168,22 @@ type SelectMetaAssetsResponse = {
   };
 };
 
+export type WhatsappApiChannel = {
+  id: string;
+  meta_connection_id: string;
+  business_id: string;
+  business_name: string;
+  waba_id: string | null;
+  phone_number_id: string;
+  is_primary: boolean;
+  status: string;
+};
+
+type WhatsappApiChannelsResponse = {
+  client_id: string;
+  channels: WhatsappApiChannel[];
+};
+
 type SyncFullResponse = {
   client_id: string;
   meta_connection_id: string;
@@ -228,6 +244,29 @@ export function getMetaStatus(clientId: string, token: string) {
   return httpRequest<MetaStatusResponse>(`/meta/status/${clientId}`, {
     method: "GET",
     token,
+  });
+}
+
+export function listWhatsappApiChannels(clientId: string, token: string) {
+  return httpRequest<WhatsappApiChannelsResponse>(
+    `/meta/whatsapp/channels?client_id=${encodeURIComponent(clientId)}`,
+    { method: "GET", token },
+  );
+}
+
+export function configureWhatsappApiChannels(
+  payload: {
+    client_id: string;
+    business_id: string;
+    channels: Array<{ waba_id: string; phone_number_id: string }>;
+    primary_phone_number_id?: string;
+  },
+  token: string,
+) {
+  return httpRequest<WhatsappApiChannelsResponse>("/meta/whatsapp/channels", {
+    method: "PUT",
+    token,
+    body: payload,
   });
 }
 

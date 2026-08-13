@@ -26,6 +26,7 @@ import { ClientWebhookService } from "../crm/client-webhook.service";
 import { RealtimeEventsService } from "../realtime/realtime-events.service";
 import { AssignMetaCampaignDto } from "./dto/assign-meta-campaign.dto";
 import { CampaignsReportQueryDto } from "./dto/campaigns-report-query.dto";
+import { ConfigureWhatsappChannelsDto } from "./dto/configure-whatsapp-channels.dto";
 import { DisconnectMetaDto } from "./dto/disconnect-meta.dto";
 import { ImportMetaLeadsDto } from "./dto/import-meta-leads.dto";
 import { ListMetaBusinessesQueryDto } from "./dto/list-meta-businesses-query.dto";
@@ -814,6 +815,173 @@ export class MetaService implements OnModuleInit {
       connected: Boolean(connection),
       connection,
     };
+  }
+
+  async listWhatsappChannels(user: AuthenticatedUser, clientId: string) {
+    await this.assertMetaClientAccess(user, clientId);
+
+    const connections = await this.db.metaConnection.findMany({
+      where: { client_id: clientId, status: "connected" },
+      include: {
+        selected_assets: {
+          where: { phone_number_id: { not: null } },
+          orderBy: [{ is_primary: "desc" }, { updated_at: "desc" }],
+        },
+      },
+      orderBy: { updated_at: "desc" },
+    });
+
+    return {
+      client_id: clientId,
+      channels: connections.flatMap((connection) =>
+        connection.selected_assets
+          .filter((asset) => Boolean(asset.phone_number_id))
+          .map((asset) => ({
+            id: asset.id,
+            meta_connection_id: connection.id,
+            business_id: connection.business_id,
+            business_name: connection.business_name,
+            waba_id: asset.waba_id,
+            phone_number_id: asset.phone_number_id,
+            is_primary: asset.is_primary,
+            status: connection.status,
+          })),
+      ),
+    };
+  }
+
+  async configureWhatsappChannels(
+    user: AuthenticatedUser,
+    dto: ConfigureWhatsappChannelsDto,
+  ) {
+    await this.assertMetaClientAccess(user, dto.client_id);
+    const selection = await this.getGestorMetaSelectionSessionOrThrow(user.sub);
+    const selectedBusiness =
+      selection.businesses.find(
+        (business) => business.id === dto.business_id,
+      ) ??
+      (await this.fetchBusinessById(dto.business_id, selection.accessToken));
+    if (!selectedBusiness) {
+      throw new NotFoundException("Business Manager nao encontrada");
+    }
+
+    const channels = this.uniqueBy(
+      dto.channels
+        .map((channel) => ({
+          waba_id: channel.waba_id.trim(),
+          phone_number_id: channel.phone_number_id.trim(),
+        }))
+        .filter((channel) => channel.waba_id && channel.phone_number_id),
+      (channel) => channel.phone_number_id,
+    );
+    const primaryPhoneNumberId =
+      dto.primary_phone_number_id?.trim() || channels[0]?.phone_number_id;
+    if (
+      primaryPhoneNumberId &&
+      !channels.some(
+        (channel) => channel.phone_number_id === primaryPhoneNumberId,
+      )
+    ) {
+      throw new BadRequestException(
+        "O numero principal precisa estar entre os canais selecionados.",
+      );
+    }
+
+    for (const wabaId of this.uniqueStrings(
+      channels.map((channel) => channel.waba_id),
+    )) {
+      const availablePhoneIds = new Set(
+        (await this.fetchWabaPhoneNumbers(wabaId, selection.accessToken)).map(
+          (phone) => phone.id,
+        ),
+      );
+      const invalid = channels.find(
+        (channel) =>
+          channel.waba_id === wabaId &&
+          !availablePhoneIds.has(channel.phone_number_id),
+      );
+      if (invalid) {
+        throw new BadRequestException(
+          `Numero ${invalid.phone_number_id} nao pertence a WABA ${wabaId} ou nao esta acessivel.`,
+        );
+      }
+      await this.subscribeWabaToWebhook(wabaId, selection.accessToken);
+    }
+
+    const tokenExpiresAt = selection.tokenExpiresAt
+      ? new Date(selection.tokenExpiresAt)
+      : null;
+    const existingConnection = await this.db.metaConnection.findFirst({
+      where: { client_id: dto.client_id, business_id: dto.business_id },
+    });
+    const connection = existingConnection
+      ? await this.db.metaConnection.update({
+          where: { id: existingConnection.id },
+          data: {
+            business_name: selectedBusiness.name ?? `BM ${selectedBusiness.id}`,
+            access_token: selection.accessToken,
+            token_expires_at: tokenExpiresAt,
+            scopes: selection.scopes,
+            status: "connected",
+          },
+        })
+      : await this.db.metaConnection.create({
+          data: {
+            client_id: dto.client_id,
+            business_id: dto.business_id,
+            business_name: selectedBusiness.name ?? `BM ${selectedBusiness.id}`,
+            access_token: selection.accessToken,
+            token_expires_at: tokenExpiresAt,
+            scopes: selection.scopes,
+            status: "connected",
+          },
+        });
+
+    await this.db.$transaction(async (transaction) => {
+      if (primaryPhoneNumberId) {
+        await transaction.metaAssetSelection.updateMany({
+          where: {
+            phone_number_id: { not: null },
+            meta_connection: { client_id: dto.client_id },
+          },
+          data: { is_primary: false },
+        });
+      }
+      await transaction.metaAssetSelection.deleteMany({
+        where: {
+          meta_connection_id: connection.id,
+          phone_number_id: { not: null },
+        },
+      });
+      if (channels.length > 0) {
+        await transaction.metaAssetSelection.createMany({
+          data: channels.map((channel) => ({
+            meta_connection_id: connection.id,
+            waba_id: channel.waba_id,
+            phone_number_id: channel.phone_number_id,
+            is_primary: channel.phone_number_id === primaryPhoneNumberId,
+          })),
+        });
+      } else {
+        const remainingChannel = await transaction.metaAssetSelection.findFirst(
+          {
+            where: {
+              phone_number_id: { not: null },
+              meta_connection: { client_id: dto.client_id },
+            },
+            orderBy: [{ is_primary: "desc" }, { updated_at: "desc" }],
+          },
+        );
+        if (remainingChannel && !remainingChannel.is_primary) {
+          await transaction.metaAssetSelection.update({
+            where: { id: remainingChannel.id },
+            data: { is_primary: true },
+          });
+        }
+      }
+    });
+
+    return this.listWhatsappChannels(user, dto.client_id);
   }
 
   async getSummary(user: AuthenticatedUser, clientId: string) {
@@ -3617,7 +3785,15 @@ export class MetaService implements OnModuleInit {
           context.client.id,
           lead.id,
           occurredAt,
+          phoneNumberId,
         ));
+
+      if (conversation.whatsapp_phone_number_id !== phoneNumberId) {
+        await this.db.conversation.update({
+          where: { id: conversation.id },
+          data: { whatsapp_phone_number_id: phoneNumberId },
+        });
+      }
 
       const duplicate = wamid
         ? await this.db.message.findFirst({
@@ -4123,6 +4299,7 @@ export class MetaService implements OnModuleInit {
     clientId: string,
     leadId: string,
     occurredAt: Date,
+    phoneNumberId: string,
   ) {
     const existing = await this.db.conversation.findFirst({
       where: {
@@ -4131,7 +4308,7 @@ export class MetaService implements OnModuleInit {
         channel: ConversationChannel.whatsapp,
       },
       orderBy: { last_message_at: "desc" },
-      select: { id: true },
+      select: { id: true, whatsapp_phone_number_id: true },
     });
 
     if (existing) {
@@ -4143,9 +4320,10 @@ export class MetaService implements OnModuleInit {
         client_id: clientId,
         lead_id: leadId,
         channel: ConversationChannel.whatsapp,
+        whatsapp_phone_number_id: phoneNumberId,
         last_message_at: occurredAt,
       },
-      select: { id: true },
+      select: { id: true, whatsapp_phone_number_id: true },
     });
   }
 

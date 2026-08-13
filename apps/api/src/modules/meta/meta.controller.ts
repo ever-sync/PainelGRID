@@ -28,6 +28,7 @@ import { Role } from "../../common/types";
 import { parseAllowedOrigins } from "../../config/cors-origins";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { AssignMetaCampaignDto } from "./dto/assign-meta-campaign.dto";
+import { ConfigureWhatsappChannelsDto } from "./dto/configure-whatsapp-channels.dto";
 import { CampaignsReportQueryDto } from "./dto/campaigns-report-query.dto";
 import { DisconnectMetaDto } from "./dto/disconnect-meta.dto";
 import { ListMetaBusinessesQueryDto } from "./dto/list-meta-businesses-query.dto";
@@ -159,6 +160,26 @@ export class MetaController {
     @Body() dto: SelectMetaAssetsDto,
   ): Promise<Record<string, unknown>> {
     return this.metaService.selectAssets(user, dto);
+  }
+
+  @Roles(Role.GESTOR)
+  @Get("whatsapp/channels")
+  @ApiOperation({ summary: "Lista canais WhatsApp vinculados ao cliente" })
+  listWhatsappChannels(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query("client_id", new ParseUUIDPipe()) clientId: string,
+  ): Promise<Record<string, unknown>> {
+    return this.metaService.listWhatsappChannels(user, clientId);
+  }
+
+  @Roles(Role.GESTOR)
+  @Put("whatsapp/channels")
+  @ApiOperation({ summary: "Configura canais WhatsApp de uma BM no cliente" })
+  configureWhatsappChannels(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ConfigureWhatsappChannelsDto,
+  ): Promise<Record<string, unknown>> {
+    return this.metaService.configureWhatsappChannels(user, dto);
   }
 
   @Roles(Role.GESTOR, Role.CLIENTE)
