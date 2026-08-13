@@ -4,6 +4,7 @@ import {
   AppointmentSource,
   AppointmentStatus,
   ConfirmationStatus,
+  ConversationChannel,
   EventStatus,
   Prisma,
   SenderType,
@@ -406,6 +407,8 @@ export class AppointmentsService {
       requestHash,
       idempotencyKey,
       async () => {
+        const conversationId =
+          await this.resolveCredentialConversation(appointment);
         let emailDelivery:
           | { sent: boolean; idempotent_replay: boolean; reason?: string }
           | undefined;
@@ -455,59 +458,57 @@ export class AppointmentsService {
         });
 
         let messageId: string | null = null;
-        if (appointment.conversation_id) {
-          const message = await this.prisma.message.create({
-            data: {
-              conversation_id: appointment.conversation_id,
-              sender_type: SenderType.system,
-              content: caption,
-              external_id: sent.wamid,
-              author_type: "automation",
-              origin: "credential_qrcode",
-              workflow_key: "appointment-credential",
-              media_id: sent.mediaId,
-              media_url: sent.mediaUrl,
-            },
-          });
-          messageId = message.id;
-          await this.prisma.conversation.update({
-            where: { id: appointment.conversation_id },
-            data: { last_message_at: message.created_at },
-          });
-          this.realtimeEvents.emitNewMessage(appointment.client_id, {
-            conversation_id: appointment.conversation_id,
+        const message = await this.prisma.message.create({
+          data: {
+            conversation_id: conversationId,
+            sender_type: SenderType.system,
+            content: caption,
+            external_id: sent.wamid,
+            author_type: "automation",
+            origin: "credential_qrcode",
+            workflow_key: "appointment-credential",
+            media_id: sent.mediaId,
+            media_url: sent.mediaUrl,
+          },
+        });
+        messageId = message.id;
+        await this.prisma.conversation.update({
+          where: { id: conversationId },
+          data: { last_message_at: message.created_at },
+        });
+        this.realtimeEvents.emitNewMessage(appointment.client_id, {
+          conversation_id: conversationId,
+          message_id: message.id,
+          sender_type: SenderType.system,
+          sender_id: null,
+          content: caption,
+          media_id: sent.mediaId,
+          media_url: sent.mediaUrl,
+          created_at: message.created_at,
+        });
+        void this.clientWebhook.dispatch(
+          appointment.client_id,
+          "conversation.message.sent",
+          {
             message_id: message.id,
+            conversation_id: conversationId,
+            lead_id: appointment.lead_id,
             sender_type: SenderType.system,
             sender_id: null,
             content: caption,
+            channel: "whatsapp",
             media_id: sent.mediaId,
             media_url: sent.mediaUrl,
-            created_at: message.created_at,
-          });
-          void this.clientWebhook.dispatch(
-            appointment.client_id,
-            "conversation.message.sent",
-            {
-              message_id: message.id,
-              conversation_id: appointment.conversation_id,
-              lead_id: appointment.lead_id,
-              sender_type: SenderType.system,
-              sender_id: null,
-              content: caption,
-              channel: "whatsapp",
-              media_id: sent.mediaId,
-              media_url: sent.mediaUrl,
-              created_at: message.created_at.toISOString(),
-            },
-          );
-        }
+            created_at: message.created_at.toISOString(),
+          },
+        );
 
         return {
           sent: true,
           appointment_id: appointment.id,
           lead_id: appointment.lead_id,
           event_id: appointment.event_id,
-          conversation_id: appointment.conversation_id,
+          conversation_id: conversationId,
           message_id: messageId,
           wamid: sent.wamid,
           media_id: sent.mediaId,
@@ -520,6 +521,44 @@ export class AppointmentsService {
         };
       },
     );
+  }
+
+  private async resolveCredentialConversation(appointment: {
+    id: string;
+    client_id: string;
+    lead_id: string;
+    conversation_id: string | null;
+  }) {
+    if (appointment.conversation_id) {
+      return appointment.conversation_id;
+    }
+
+    const existingConversation = await this.prisma.conversation.findFirst({
+      where: {
+        client_id: appointment.client_id,
+        lead_id: appointment.lead_id,
+        channel: ConversationChannel.whatsapp,
+      },
+      select: { id: true },
+      orderBy: [{ last_message_at: "desc" }, { created_at: "desc" }],
+    });
+    const conversation =
+      existingConversation ??
+      (await this.prisma.conversation.create({
+        data: {
+          client_id: appointment.client_id,
+          lead_id: appointment.lead_id,
+          channel: ConversationChannel.whatsapp,
+        },
+        select: { id: true },
+      }));
+
+    await this.prisma.appointment.update({
+      where: { id: appointment.id },
+      data: { conversation_id: conversation.id },
+    });
+
+    return conversation.id;
   }
 
   async deliverCredentialForLead(leadId: string, idempotencyKey?: string) {

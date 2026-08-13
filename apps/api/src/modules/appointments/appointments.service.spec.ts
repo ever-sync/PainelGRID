@@ -99,6 +99,8 @@ describe("AppointmentsService", () => {
       },
       conversation: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
+        create: jest.fn(),
         update: jest.fn(),
       },
       message: {
@@ -803,6 +805,14 @@ describe("AppointmentsService", () => {
     prisma.apiIdempotencyRequest.upsert.mockResolvedValue({
       id: "idem-vendor-credential",
     });
+    prisma.conversation.findFirst.mockResolvedValue(null);
+    prisma.conversation.create.mockResolvedValue({
+      id: "conversation-vendor-credential",
+    });
+    prisma.message.create.mockResolvedValue({
+      id: "message-vendor-credential",
+      created_at: new Date("2026-04-20T12:10:00.000Z"),
+    });
 
     const result = await service.sendCheckinNotification(
       appointmentId,
@@ -811,7 +821,33 @@ describe("AppointmentsService", () => {
     );
 
     expect(meta.sendClientWhatsappMediaMessage).toHaveBeenCalledTimes(1);
-    expect(result).toEqual(expect.objectContaining({ sent: true }));
+    expect(prisma.conversation.create).toHaveBeenCalledWith({
+      data: {
+        client_id: clientId,
+        lead_id: leadId,
+        channel: "whatsapp",
+      },
+      select: { id: true },
+    });
+    expect(prisma.appointment.update).toHaveBeenCalledWith({
+      where: { id: appointmentId },
+      data: { conversation_id: "conversation-vendor-credential" },
+    });
+    expect(prisma.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          conversation_id: "conversation-vendor-credential",
+          origin: "credential_qrcode",
+        }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        sent: true,
+        conversation_id: "conversation-vendor-credential",
+        message_id: "message-vendor-credential",
+      }),
+    );
   });
 
   it("reproduz o resultado do envio sem disparar QR novamente", async () => {
