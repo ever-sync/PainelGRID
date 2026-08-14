@@ -799,16 +799,13 @@ export class AppointmentsService {
     appointmentId: string,
     dto: RescheduleAppointmentDto,
   ) {
-    if (user.role !== Role.GESTOR || !user.client_id) {
+    if (user.role !== Role.GESTOR) {
       throw new BadRequestException(
         "Apenas gestor pode reagendar visitas pelo painel",
       );
     }
 
-    const appointment = await this.getAppointmentOrFail(appointmentId);
-    if (appointment.client_id !== user.client_id) {
-      throw new BadRequestException("Agendamento nao pertence a esta empresa");
-    }
+    await this.getAppointmentOrFail(appointmentId);
 
     return this.reschedule(appointmentId, dto);
   }

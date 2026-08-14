@@ -181,6 +181,35 @@ describe("AppointmentsService", () => {
     jest.restoreAllMocks();
   });
 
+  it("permite que gestor global sem client_id reagende pelo painel", async () => {
+    prisma.appointment.findUnique.mockResolvedValue(baseAppointment);
+    const reschedule = jest
+      .spyOn(service, "reschedule")
+      .mockResolvedValue({ id: rescheduledAppointmentId } as never);
+
+    await expect(
+      service.rescheduleForManager(
+        {
+          sub: "gestor-1",
+          role: Role.GESTOR,
+          client_id: null,
+        } as any,
+        appointmentId,
+        {
+          scheduled_at: "2026-04-25T14:00:00-03:00",
+          timezone: "America/Sao_Paulo",
+        },
+      ),
+    ).resolves.toEqual({ id: rescheduledAppointmentId });
+
+    expect(reschedule).toHaveBeenCalledWith(
+      appointmentId,
+      expect.objectContaining({
+        scheduled_at: "2026-04-25T14:00:00-03:00",
+      }),
+    );
+  });
+
   it("cria appointment e sincroniza Lead.store_visit_datetime", async () => {
     prisma.lead.findUnique.mockResolvedValue(lead);
     prisma.event.findUnique.mockResolvedValue(event);
