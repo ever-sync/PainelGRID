@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import clsx from "clsx";
 import {
@@ -109,8 +116,7 @@ import { listClientStaff } from "../../services/staff";
 import {
   createLead,
   deleteLead,
-  fetchAllLeads,
-  listLeads,
+  fetchLeadsPage,
   mapApiLeadToLead,
   updateLead,
 } from "../../services/leads";
@@ -177,7 +183,6 @@ const TABS = [
 ];
 
 import {
-  LEADS_PAGE_SIZE,
   LEAD_SOURCE_OPTIONS,
   LEAD_STATUS_OPTIONS,
   META_IMPORT_PAGE_SIZE,
@@ -362,7 +367,9 @@ export function ClienteDetailPage() {
     useState<LeadSourceFilter>("all");
   const [leadStatusFilter, setLeadStatusFilter] =
     useState<ConfirmationStatusFilter>("all");
-  const [leadsPage, setLeadsPage] = useState(1);
+  const [leadsNextCursor, setLeadsNextCursor] = useState<string | null>(null);
+  const [leadsHasNextPage, setLeadsHasNextPage] = useState(false);
+  const [leadsLoadingMore, setLeadsLoadingMore] = useState(false);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [leadProfileOpen, setLeadProfileOpen] = useState<Lead | null>(null);
   const [leadEditing, setLeadEditing] = useState<Lead | null>(null);
@@ -951,6 +958,8 @@ export function ClienteDetailPage() {
     setDetailConversations(null);
   }, [resolvedId]);
 
+  const deferredLeadSearch = useDeferredValue(leadSearch);
+
   const refreshDetailLeads = useCallback(() => {
     if (activeTab !== "leads") return;
     if (!resolvedId || !isUuid(resolvedId)) {
@@ -962,18 +971,78 @@ export function ClienteDetailPage() {
     if (!session?.accessToken) return;
 
     let active = true;
-    fetchAllLeads({ client_id: resolvedId }, session.accessToken)
-      .then((rows) => {
-        if (active) setDetailLeads(rows.map(mapApiLeadToLead));
+    setDetailLeads(null);
+    fetchLeadsPage(
+      {
+        client_id: resolvedId,
+        search: deferredLeadSearch.trim() || undefined,
+        source: leadSourceFilter === "all" ? undefined : leadSourceFilter,
+        confirmation_status:
+          leadStatusFilter === "all" ? undefined : leadStatusFilter,
+        take: 50,
+      },
+      session.accessToken,
+    )
+      .then((page) => {
+        if (!active) return;
+        setDetailLeads(page.items.map(mapApiLeadToLead));
+        setLeadsNextCursor(page.page_info.next_cursor);
+        setLeadsHasNextPage(page.page_info.has_next_page);
       })
       .catch(() => {
-        if (active) setDetailLeads([]);
+        if (!active) return;
+        setDetailLeads([]);
+        setLeadsNextCursor(null);
+        setLeadsHasNextPage(false);
       });
 
     return () => {
       active = false;
     };
-  }, [activeTab, resolvedId]);
+  }, [
+    activeTab,
+    deferredLeadSearch,
+    leadSourceFilter,
+    leadStatusFilter,
+    resolvedId,
+  ]);
+
+  const loadMoreDetailLeads = useCallback(async () => {
+    if (!resolvedId || !leadsNextCursor || leadsLoadingMore) return;
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+
+    setLeadsLoadingMore(true);
+    try {
+      const page = await fetchLeadsPage(
+        {
+          client_id: resolvedId,
+          search: deferredLeadSearch.trim() || undefined,
+          source: leadSourceFilter === "all" ? undefined : leadSourceFilter,
+          confirmation_status:
+            leadStatusFilter === "all" ? undefined : leadStatusFilter,
+          take: 50,
+          cursor: leadsNextCursor,
+        },
+        token,
+      );
+      setDetailLeads((current) => [
+        ...(current ?? []),
+        ...page.items.map(mapApiLeadToLead),
+      ]);
+      setLeadsNextCursor(page.page_info.next_cursor);
+      setLeadsHasNextPage(page.page_info.has_next_page);
+    } finally {
+      setLeadsLoadingMore(false);
+    }
+  }, [
+    deferredLeadSearch,
+    leadSourceFilter,
+    leadStatusFilter,
+    leadsLoadingMore,
+    leadsNextCursor,
+    resolvedId,
+  ]);
 
   useEffect(() => {
     const cleanup = refreshDetailLeads();
@@ -1035,10 +1104,6 @@ export function ClienteDetailPage() {
       return matchesSearch && matchesSource && matchesStatus;
     });
   }, [detailLeads, leadSearch, leadSourceFilter, leadStatusFilter, resolvedId]);
-
-  useEffect(() => {
-    setLeadsPage(1);
-  }, [leadSearch, leadSourceFilter, leadStatusFilter, resolvedId]);
 
   useEffect(() => {
     if (!client) return;
@@ -1848,16 +1913,6 @@ export function ClienteDetailPage() {
   }
 
   const clientLeads = filteredClientLeads;
-  const leadsTotalPages = Math.max(
-    1,
-    Math.ceil(clientLeads.length / LEADS_PAGE_SIZE),
-  );
-  const leadsSafePage = Math.min(leadsPage, leadsTotalPages);
-  const leadsPageStart = (leadsSafePage - 1) * LEADS_PAGE_SIZE;
-  const pagedClientLeads = clientLeads.slice(
-    leadsPageStart,
-    leadsPageStart + LEADS_PAGE_SIZE,
-  );
   const leadsTabLoading = isUuid(resolvedId) && detailLeads === null;
   const convosTabLoading = isUuid(resolvedId) && detailConversations === null;
   const clientConvos = isUuid(resolvedId) ? (detailConversations ?? []) : [];
@@ -2492,11 +2547,7 @@ export function ClienteDetailPage() {
           session.accessToken,
           selectedMetaImportFormIds,
         );
-        const rows = await listLeads(
-          { client_id: clientId },
-          session.accessToken,
-        );
-        setDetailLeads(rows.map(mapApiLeadToLead));
+        refreshDetailLeads();
         await refreshMetaStatusFromApi(clientId, session.accessToken);
         setLeadsActionMessage(
           "Importação histórica da Meta concluída com sucesso.",
@@ -2660,7 +2711,6 @@ export function ClienteDetailPage() {
       const mapped = mapApiLeadToLead(created);
       setDetailLeads((current) => [mapped, ...(current ?? [])]);
       setLeadCreating(false);
-      setLeadsPage(1);
       setLeadsActionMessage("Lead criado e vinculado ao cliente com sucesso.");
     } catch (error) {
       setLeadsActionMessage(
@@ -5810,7 +5860,7 @@ export function ClienteDetailPage() {
                 <p className="mt-1 text-xs text-gray-400">
                   {clientLeads.length === 0
                     ? `0 de ${(detailLeads ?? []).length} leads`
-                    : `Mostrando ${leadsPageStart + 1}–${leadsPageStart + pagedClientLeads.length} de ${clientLeads.length} leads`}
+                    : `Mostrando ${clientLeads.length} leads carregados`}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -5967,7 +6017,7 @@ export function ClienteDetailPage() {
                       </td>
                     </tr>
                   ) : (
-                    pagedClientLeads.map((lead) => (
+                    clientLeads.map((lead) => (
                       <tr
                         key={lead.id}
                         className="border-b border-gray-50 last:border-0"
@@ -6050,31 +6100,16 @@ export function ClienteDetailPage() {
               </table>
             )}
           </div>
-          {!leadsTabLoading && leadsTotalPages > 1 && (
-            <div className="flex items-center justify-between gap-3 border-t border-gray-100 px-4 py-3">
-              <span className="text-xs text-gray-400">
-                Página {leadsSafePage} de {leadsTotalPages}
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  isDisabled={leadsSafePage <= 1}
-                  onClick={() => setLeadsPage((page) => Math.max(1, page - 1))}
-                >
-                  Anterior
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  isDisabled={leadsSafePage >= leadsTotalPages}
-                  onClick={() =>
-                    setLeadsPage((page) => Math.min(leadsTotalPages, page + 1))
-                  }
-                >
-                  Próxima
-                </Button>
-              </div>
+          {!leadsTabLoading && leadsHasNextPage && (
+            <div className="flex justify-center border-t border-gray-100 px-4 py-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={leadsLoadingMore}
+                onClick={() => void loadMoreDetailLeads()}
+              >
+                Carregar mais leads
+              </Button>
             </div>
           )}
         </Card>
