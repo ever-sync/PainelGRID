@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import clsx from "clsx";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { Calendar as CalendarIcon, History, LayoutTemplate, Mail } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Modal } from "../../components/ui/Modal";
 import type { User } from "../../types";
@@ -131,6 +131,9 @@ export function EmailsEnviadosPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [selectedEmail, setSelectedEmail] = useState<SentEmailLog | null>(null);
+  const [activeTab, setActiveTab] = useState<"templates" | "history">(
+    "templates",
+  );
 
   const filteredLogs = useMemo(() => {
     return logs.filter((item) => {
@@ -231,9 +234,100 @@ export function EmailsEnviadosPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="E-mails enviados"
-        subtitle="Histórico dos e-mails disparados para a sua empresa."
+        title="E-mails"
+        subtitle="Consulte os modelos utilizados nas automações e acompanhe os envios."
       />
+
+      <div className="flex w-fit gap-1 rounded-2xl border border-zinc-200 bg-white p-1 dark:border-zinc-800 dark:bg-[#121212]">
+        <button
+          type="button"
+          onClick={() => setActiveTab("templates")}
+          className={clsx(
+            "flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition",
+            activeTab === "templates"
+              ? "bg-[#ef233c] text-white shadow-sm"
+              : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900",
+          )}
+        >
+          <LayoutTemplate size={16} /> Modelos
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("history")}
+          className={clsx(
+            "flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition",
+            activeTab === "history"
+              ? "bg-[#ef233c] text-white shadow-sm"
+              : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900",
+          )}
+        >
+          <History size={16} /> Histórico
+        </button>
+      </div>
+
+      {activeTab === "templates" ? (
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-[#121212]">
+            <div className="flex items-start justify-between gap-4 border-b border-zinc-100 p-6 dark:border-zinc-800">
+              <div>
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                    Ativo
+                  </span>
+                  <span className="rounded-full bg-sky-100 px-3 py-1 text-[11px] font-bold text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+                    Tentativa 2 — Email
+                  </span>
+                </div>
+                <h2 className="text-xl font-bold text-zinc-950 dark:text-white">
+                  Recuperação de credenciamento
+                </h2>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Enviado automaticamente após 24 horas sem avanço em Tentativa contato.
+                </p>
+              </div>
+              <div className="rounded-2xl bg-red-50 p-3 text-[#ef233c] dark:bg-red-950/40">
+                <Mail size={22} />
+              </div>
+            </div>
+
+            <div className="space-y-5 p-6">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-400">Assunto</p>
+                <p className="mt-2 font-bold text-zinc-900 dark:text-white">
+                  IMPORTANTE: VOCÊ AINDA NÃO FINALIZOU SEU CREDENCIAMENTO
+                </p>
+              </div>
+              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5 text-sm leading-7 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
+                <p>Olá, <strong>{"{{primeiro_nome}}"}</strong>!</p>
+                <p className="mt-3">
+                  Sua inscrição no <strong>{"{{evento}}"}</strong> está quase pronta.
+                  Finalize agora para garantir sua credencial e receber as orientações do evento.
+                </p>
+                <div className="my-5 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                  Condições especiais do evento são preenchidas automaticamente quando cadastradas na descrição.
+                </div>
+                <div className="text-center">
+                  <span className="inline-block rounded-xl bg-emerald-600 px-5 py-3 font-bold text-white">
+                    GARANTIR MINHA VAGA
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <aside className="h-fit rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-[#121212]">
+            <h3 className="font-bold text-zinc-950 dark:text-white">Como este modelo funciona</h3>
+            <dl className="mt-5 space-y-4 text-sm">
+              <div><dt className="text-zinc-400">Provedor</dt><dd className="font-semibold text-zinc-800 dark:text-zinc-200">Resend</dd></div>
+              <div><dt className="text-zinc-400">Origem</dt><dd className="font-semibold text-zinc-800 dark:text-zinc-200">Automação do CRM</dd></div>
+              <div><dt className="text-zinc-400">Gatilho</dt><dd className="font-semibold text-zinc-800 dark:text-zinc-200">24h em Tentativa contato</dd></div>
+              <div><dt className="text-zinc-400">Após o aceite</dt><dd className="font-semibold text-zinc-800 dark:text-zinc-200">Move para Tentativa 2 — Email</dd></div>
+              <div><dt className="text-zinc-400">Botão</dt><dd className="font-semibold text-zinc-800 dark:text-zinc-200">Abre o WhatsApp da empresa</dd></div>
+            </dl>
+          </aside>
+        </div>
+      ) : (
+        <>
 
       {loading ? (
         <p className="text-sm text-zinc-500">Carregando histórico...</p>
@@ -469,6 +563,8 @@ export function EmailsEnviadosPage() {
           </div>
         )}
       </Modal>
+        </>
+      )}
     </div>
   );
 }
