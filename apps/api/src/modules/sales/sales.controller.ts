@@ -9,6 +9,7 @@ import { CurrentUser, Roles } from "../../common/decorators";
 import { Role } from "../../common/types";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { CreateSaleDto } from "./dto/create-sale.dto";
+import { CreateQuickSaleDto } from "./dto/create-quick-sale.dto";
 import { SalesService } from "./sales.service";
 
 @ApiTags("sales")
@@ -31,5 +32,15 @@ export class SalesController {
   @ApiResponse({ status: 201, description: "Venda criada com sucesso" })
   create(@Body() dto: CreateSaleDto, @CurrentUser() user: AuthenticatedUser) {
     return this.salesService.create(user, dto);
+  }
+
+  @Post("quick")
+  @Roles(Role.GESTOR)
+  @ApiOperation({ summary: "Registra venda rápida pelo gestor" })
+  quickSale(
+    @Body() dto: CreateQuickSaleDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.salesService.createQuickSale(user, dto);
   }
 }

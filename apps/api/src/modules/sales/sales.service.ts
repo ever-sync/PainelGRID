@@ -7,6 +7,8 @@ import {
 } from "@nestjs/common";
 import {
   AppointmentActorType,
+  AppointmentChannel,
+  AppointmentSource,
   AppointmentStatus,
   ConfirmationStatus,
   Prisma,
@@ -18,6 +20,7 @@ import { RealtimeEventsService } from "../realtime/realtime-events.service";
 import { ScoreEventsService } from "../score-events/score-events.service";
 import { resolveConfirmationStatusForStage } from "../clients/client-settings";
 import { CreateSaleDto } from "./dto/create-sale.dto";
+import { CreateQuickSaleDto } from "./dto/create-quick-sale.dto";
 import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.service";
 
 @Injectable()
@@ -114,6 +117,7 @@ export class SalesService {
           model: product,
           value: saleValue,
           sold_at: soldAt,
+          order_number: dto.order_number?.trim() || null,
           notes: dto.notes?.trim() || null,
         },
       });
@@ -237,6 +241,168 @@ export class SalesService {
     return this.toResponse(sale);
   }
 
+  async createQuickSale(user: AuthenticatedUser, dto: CreateQuickSaleDto) {
+    if (user.role !== Role.GESTOR) {
+      throw new ForbiddenException("Apenas gestor pode registrar venda rápida");
+    }
+
+    const [client, event, vendor, vehicle] = await Promise.all([
+      this.prisma.client.findUnique({ where: { id: dto.client_id } }),
+      this.prisma.event.findFirst({
+        where: {
+          id: dto.event_id,
+          OR: [
+            { client_id: dto.client_id },
+            { participants: { some: { client_id: dto.client_id } } },
+          ],
+        },
+      }),
+      this.prisma.user.findFirst({
+        where: {
+          id: dto.vendor_id,
+          client_id: dto.client_id,
+          role: Role.VENDEDOR,
+          is_active: true,
+        },
+      }),
+      dto.vehicle_id
+        ? this.prisma.vehicle.findFirst({
+            where: { id: dto.vehicle_id, client_id: dto.client_id },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    if (!client) throw new NotFoundException("Empresa não encontrada");
+    if (!event) {
+      throw new NotFoundException("Evento não encontrado para a empresa");
+    }
+    if (!vendor) {
+      throw new NotFoundException("Vendedor não encontrado para a empresa");
+    }
+    if (dto.vehicle_id && !vehicle) {
+      throw new NotFoundException("Veículo não encontrado para a empresa");
+    }
+    if (event.require_wristband && !dto.wristband_number?.trim()) {
+      throw new BadRequestException(
+        "Número da pulseira é obrigatório neste evento",
+      );
+    }
+
+    const membership = await this.prisma.salesTeamMember.findFirst({
+      where: { user_id: vendor.id, team: { event_id: event.id } },
+      select: { team_id: true },
+    });
+    if (!membership) {
+      throw new BadRequestException(
+        "Vendedor precisa estar vinculado a um time do evento",
+      );
+    }
+
+    const soldAt = new Date(dto.sold_at);
+    const appointment = await this.prisma.$transaction(async (tx) => {
+      let lead = dto.lead_id
+        ? await tx.lead.findFirst({
+            where: {
+              id: dto.lead_id,
+              client_id: dto.client_id,
+              deleted_at: null,
+            },
+          })
+        : null;
+
+      if (dto.lead_id && !lead) {
+        throw new NotFoundException("Cliente comprador não encontrado");
+      }
+      if (!lead) {
+        const name = dto.lead_name?.trim();
+        if (!name) {
+          throw new BadRequestException("Nome do comprador é obrigatório");
+        }
+        lead = await tx.lead.create({
+          data: {
+            client_id: dto.client_id,
+            name,
+            email: dto.lead_email?.trim() || null,
+            phone: dto.lead_phone?.trim() || null,
+            source: "manual",
+            event_interest_id: event.id,
+            confirmation_status: ConfirmationStatus.checked_in,
+            confirmation_date: soldAt,
+            store_visit_datetime: soldAt,
+            assigned_vendor_id: vendor.id,
+            sold_by_vendor_id: vendor.id,
+            team_id: membership.team_id,
+            registered_by_id: user.sub,
+            wristband_number: dto.wristband_number?.trim() || null,
+          },
+        });
+      } else {
+        lead = await tx.lead.update({
+          where: { id: lead.id },
+          data: {
+            event_interest_id: event.id,
+            assigned_vendor_id: vendor.id,
+            team_id: membership.team_id,
+            wristband_number: dto.wristband_number?.trim() || undefined,
+          },
+        });
+      }
+
+      const existing = await tx.appointment.findFirst({
+        where: {
+          lead_id: lead.id,
+          event_id: event.id,
+          sale: null,
+          status: { in: ["scheduled", "confirmed", "completed"] },
+        },
+        orderBy: { created_at: "desc" },
+      });
+      if (existing) return existing;
+
+      return tx.appointment.create({
+        data: {
+          client_id: dto.client_id,
+          lead_id: lead.id,
+          event_id: event.id,
+          scheduled_at: soldAt,
+          timezone: "America/Sao_Paulo",
+          status: AppointmentStatus.completed,
+          completed_at: soldAt,
+          channel: AppointmentChannel.internal,
+          source: AppointmentSource.gestor,
+          created_by_type: AppointmentActorType.user,
+          created_by_id: user.sub,
+          notes: "Agendamento criado automaticamente pela venda rápida.",
+        },
+      });
+    });
+
+    const product = vehicle
+      ? `${vehicle.brand} ${vehicle.model}`.trim()
+      : dto.product?.trim();
+    if (!product) {
+      throw new BadRequestException("Selecione ou informe o veículo");
+    }
+
+    return this.create(
+      {
+        ...user,
+        sub: vendor.id,
+        role: Role.VENDEDOR,
+        client_id: dto.client_id,
+      },
+      {
+        appointment_id: appointment.id,
+        type: dto.type,
+        product,
+        value: dto.value,
+        sold_at: dto.sold_at,
+        order_number: dto.order_number,
+        notes: dto.notes,
+      },
+    );
+  }
+
   async listMine(user: AuthenticatedUser) {
     if (user.role !== Role.VENDEDOR || !user.client_id) {
       throw new ForbiddenException("Apenas vendedor pode listar vendas");
@@ -342,6 +508,7 @@ export class SalesService {
     model: string;
     value: Prisma.Decimal;
     sold_at: Date;
+    order_number: string | null;
     notes: string | null;
     created_at: Date;
     updated_at: Date;

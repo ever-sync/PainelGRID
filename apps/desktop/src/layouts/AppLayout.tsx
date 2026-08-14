@@ -77,6 +77,7 @@ import { resolveClientId } from "../utils/userContext";
 import { createAudioContext } from "../utils/audioContext";
 import { triggerHapticFeedback } from "../utils/haptics";
 import { CommandPalette } from "../components/shared/CommandPalette";
+import { QuickSaleModal } from "../components/shared/QuickSaleModal";
 
 interface AppLayoutProps {
   user: User;
@@ -345,6 +346,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
   /** Kanban ocupa a altura toda e rola por dentro (sem scroll da pagina). */
   const isBoardRoute = location.pathname.startsWith("/gestor/crm");
   const [quickActionOpen, setQuickActionOpen] = useState(false);
+  const [quickSaleOpen, setQuickSaleOpen] = useState(false);
   const [quickAction, setQuickAction] = useState<MobileQuickAction | null>(
     null,
   );
@@ -1908,6 +1910,23 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
           )}
         </div>
       </nav>
+
+      {user.role === "gestor" && !isImmersiveChatRoute && (
+        <button
+          type="button"
+          onClick={() => setQuickSaleOpen(true)}
+          className="fixed bottom-[calc(6.25rem+env(safe-area-inset-bottom))] right-5 z-40 flex h-14 items-center gap-2 rounded-full bg-[#E51838] px-5 font-bold text-white shadow-[0_16px_36px_rgba(229,24,56,0.35)] transition hover:-translate-y-0.5 hover:bg-[#c9122e] active:translate-y-0 md:bottom-8 md:right-8"
+          aria-label="Registrar venda rápida"
+        >
+          <DollarSign size={22} strokeWidth={2.5} />
+          <span>Venda rápida</span>
+        </button>
+      )}
+
+      <QuickSaleModal
+        open={quickSaleOpen}
+        onClose={() => setQuickSaleOpen(false)}
+      />
 
       {quickActionOpen &&
       (user.role === "vendedor" || user.role === "recepcao") ? (

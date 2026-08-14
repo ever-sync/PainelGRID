@@ -1123,6 +1123,7 @@ model Sale {
   model           String          @db.VarChar(255)
   value           Decimal         @db.Decimal(12, 2)
   sold_at         DateTime        @default(now())
+  order_number    String?         @db.VarChar(100)
   notes           String?
   created_at      DateTime        @default(now())
   updated_at      DateTime        @updatedAt

@@ -35,6 +35,11 @@ export class CreateSaleDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
+  order_number?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(2000)
   notes?: string;
 }

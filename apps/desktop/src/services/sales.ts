@@ -12,6 +12,7 @@ export type SaleResponse = {
   product: string;
   value: string;
   sold_at: string;
+  order_number: string | null;
   notes: string | null;
 };
 
@@ -51,6 +52,32 @@ export function createSale(
   },
 ) {
   return httpRequest<SaleResponse>("/sales", {
+    method: "POST",
+    token,
+    body,
+  });
+}
+
+export type QuickSalePayload = {
+  client_id: string;
+  event_id: string;
+  vendor_id: string;
+  lead_id?: string;
+  lead_name?: string;
+  lead_phone?: string;
+  lead_email?: string;
+  vehicle_id?: string;
+  product?: string;
+  type: SaleType;
+  value: string;
+  sold_at: string;
+  order_number: string;
+  wristband_number?: string;
+  notes?: string;
+};
+
+export function createQuickSale(token: string, body: QuickSalePayload) {
+  return httpRequest<SaleResponse>("/sales/quick", {
     method: "POST",
     token,
     body,
