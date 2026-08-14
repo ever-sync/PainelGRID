@@ -505,7 +505,10 @@ export function EventTVDashboardPage() {
             now={now}
           />
           <div className="grid min-h-0 flex-1 grid-cols-12 gap-3">
-            <VendorRanking vendors={data.vendors} className="col-span-7" />
+            <VendorRanking
+              vendors={data.vendors.slice(0, 5)}
+              className="col-span-7"
+            />
             <TeamRanking teams={data.teams} className="col-span-5" />
             <Suspense fallback={<TvChartFallback className="col-span-4" />}>
               <SegmentDonut
