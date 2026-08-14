@@ -448,9 +448,15 @@ export function EventDetailPage() {
       const mappedEvent = mapApiEventToEvent(apiEvent);
       const participantClientIds = mappedEvent.participant_client_ids;
 
+      // Exibe os dados principais assim que o evento chega. As listas
+      // auxiliares continuam carregando sem manter a página inteira bloqueada.
+      setEvent(mappedEvent);
+      hydrateForm(mappedEvent);
+      if (showSpinner) setLoading(false);
+
       const failedParts: string[] = [];
 
-      const [apiClient, apiClients, apiTeams, apiStaff, leadGroups] =
+      const [apiClient, apiClients, apiTeams, apiStaff, apiLeads] =
         await Promise.all([
           getClient(
             participantClientIds[0] ?? mappedEvent.client_id,
@@ -471,16 +477,16 @@ export function EventDetailPage() {
             failedParts.push("vendedores");
             return [];
           }),
-          Promise.all(
-            participantClientIds.map((clientId) =>
-              fetchAllLeads({ client_id: clientId }, session.accessToken).catch(
-                () => {
-                  failedParts.push("leads");
-                  return [];
-                },
-              ),
-            ),
-          ),
+          // A API já filtra pelo evento. Antes, esta tela baixava até 2.000
+          // leads de cada cliente participante e descartava os demais no
+          // browser, gerando dezenas de requisições sequenciais.
+          fetchAllLeads(
+            { event_id: mappedEvent.id },
+            session.accessToken,
+          ).catch(() => {
+            failedParts.push("leads");
+            return [];
+          }),
         ]);
 
       if (failedParts.length > 0) {
@@ -490,9 +496,6 @@ export function EventDetailPage() {
         );
       }
 
-      const apiLeads = leadGroups.flat();
-
-      setEvent(mappedEvent);
       setClient(apiClient ? mapApiClientToClient(apiClient) : null);
       setAllClients(apiClients.map(mapApiClientToClient));
       setTeams(apiTeams);
@@ -502,7 +505,6 @@ export function EventDetailPage() {
           .map(mapApiLeadToLead)
           .filter((lead) => lead.event_id === mappedEvent.id),
       );
-      hydrateForm(mappedEvent);
       setAddMemberTeamId(null);
       setSelectedMemberIds([]);
     } catch (loadError) {
