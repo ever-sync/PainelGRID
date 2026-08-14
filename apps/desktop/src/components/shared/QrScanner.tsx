@@ -26,13 +26,6 @@ const cameraScanConfig = {
   fps: 15,
   aspectRatio: 1,
   disableFlip: false,
-  qrbox: (width: number, height: number) => {
-    // O recorte anterior usava só 72% do quadro e descartava partes do QR
-    // quando ele parecia estar dentro da moldura, sobretudo em telas pequenas.
-    // Mantemos uma margem mínima para a quiet zone sem perder módulos do código.
-    const size = Math.floor(Math.min(width, height) * 0.9);
-    return { width: size, height: size };
-  },
 };
 
 export interface QrScannerProps {
@@ -292,6 +285,19 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
         ) : (
           <>
             <div id={readerId} className="w-full h-full" />
+
+            {/*
+              Esta moldura é somente visual. O html5-qrcode precisa analisar o
+              quadro inteiro: no Safari, o bottom sheet ainda está crescendo
+              quando a biblioteca mede o elemento e um `qrbox` pode virar uma
+              faixa horizontal pequena, ignorando quase todo o QR visível.
+            */}
+            {!loading && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-[9%] z-10 rounded-xl border-2 border-white/90 shadow-[0_0_0_999px_rgba(0,0,0,0.16)]"
+              />
+            )}
 
             {hasTorch && !loading && (
               <button
