@@ -12,6 +12,7 @@ import {
   X,
   Upload,
   Sparkles,
+  CheckCircle2,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Card } from "../../components/ui/Card";
@@ -32,6 +33,7 @@ import {
   listCarModelsByBrand,
   importVehicleCatalog,
   syncVehicleCatalog,
+  bulkUpdateVehicleStatus,
   type Vehicle,
   type VehicleCatalogItem,
   type VehicleOption,
@@ -72,6 +74,9 @@ export function VeiculosPage() {
     "all" | "available" | "hidden"
   >("all");
   const [vehiclesTagFilter, setVehiclesTagFilter] = useState("all");
+  const [selectedVehicleIds, setSelectedVehicleIds] = useState<string[]>([]);
+  const [bulkActivatingVehicles, setBulkActivatingVehicles] = useState(false);
+  const [bulkVehicleMessage, setBulkVehicleMessage] = useState("");
 
   // Form/Modal states for vehicles
   const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
@@ -394,6 +399,39 @@ export function VeiculosPage() {
     } catch (err) {
       console.error("Erro ao alternar status do veículo:", err);
       loadVehicles();
+    }
+  };
+
+  const handleActivateSelectedVehicles = async () => {
+    const token = readStoredSession()?.accessToken;
+    if (!token || !selectedVehicleIds.length) return;
+    setBulkActivatingVehicles(true);
+    setBulkVehicleMessage("");
+    try {
+      const result = await bulkUpdateVehicleStatus(
+        selectedVehicleIds,
+        true,
+        token,
+      );
+      setVehicles((current) =>
+        current.map((vehicle) =>
+          selectedVehicleIds.includes(vehicle.id)
+            ? { ...vehicle, status: true }
+            : vehicle,
+        ),
+      );
+      setBulkVehicleMessage(
+        `${result.updated} veículo${result.updated === 1 ? "" : "s"} ativado${result.updated === 1 ? "" : "s"}.`,
+      );
+      setSelectedVehicleIds([]);
+    } catch (error) {
+      setBulkVehicleMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível ativar os veículos selecionados.",
+      );
+    } finally {
+      setBulkActivatingVehicles(false);
     }
   };
 
@@ -766,6 +804,59 @@ export function VeiculosPage() {
             </select>
           </div>
         </div>
+
+        {filteredVehicles.length > 0 ? (
+          <div
+            className={clsx(
+              "flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3",
+              isDarkMode
+                ? "border-zinc-800 bg-zinc-900/20"
+                : "border-gray-100 bg-gray-50/70",
+            )}
+          >
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold">
+                <input
+                  type="checkbox"
+                  checked={
+                    filteredVehicles.length > 0 &&
+                    filteredVehicles.every((vehicle) =>
+                      selectedVehicleIds.includes(vehicle.id),
+                    )
+                  }
+                  onChange={(event) =>
+                    setSelectedVehicleIds(
+                      event.target.checked
+                        ? filteredVehicles.map((vehicle) => vehicle.id)
+                        : [],
+                    )
+                  }
+                  className="h-4 w-4 rounded border-gray-300 accent-[#E51838]"
+                />
+                Selecionar todos
+              </label>
+              <span className="text-xs text-muted-foreground">
+                {selectedVehicleIds.length} selecionado
+                {selectedVehicleIds.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <Button
+              size="sm"
+              disabled={!selectedVehicleIds.length}
+              loading={bulkActivatingVehicles}
+              onClick={() => void handleActivateSelectedVehicles()}
+              icon={<CheckCircle2 size={15} />}
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              Ativar selecionados
+            </Button>
+            {bulkVehicleMessage ? (
+              <p className="w-full text-xs font-medium text-emerald-600">
+                {bulkVehicleMessage}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         {vehiclesLoading ? (
           <div className="py-12 text-center text-sm text-gray-400">
