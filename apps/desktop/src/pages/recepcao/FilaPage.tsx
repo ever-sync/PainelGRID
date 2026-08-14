@@ -196,6 +196,43 @@ export function FilaPage() {
     };
   }, [user.id, user.role, vendors]);
 
+  const vendorQueue = useMemo(() => {
+    const byLastAssignment = (a: VendorAvailability, b: VendorAvailability) => {
+      const timeA = a.last_assigned_at
+        ? new Date(a.last_assigned_at).getTime()
+        : 0;
+      const timeB = b.last_assigned_at
+        ? new Date(b.last_assigned_at).getTime()
+        : 0;
+      return timeA - timeB || a.name.localeCompare(b.name, "pt-BR");
+    };
+    const available = vendors
+      .filter((vendor) => vendor.eligible)
+      .sort(byLastAssignment)
+      .map((vendor, index) => ({ ...vendor, queuePosition: index + 1 }));
+    const unavailable = vendors
+      .filter((vendor) => !vendor.eligible)
+      .sort((a, b) => {
+        const statusOrder = { busy: 0, away: 1, online: 2 };
+        return (
+          statusOrder[a.operational_status] -
+            statusOrder[b.operational_status] ||
+          a.name.localeCompare(b.name, "pt-BR")
+        );
+      })
+      .map((vendor) => ({ ...vendor, queuePosition: null }));
+
+    return [...available, ...unavailable].map((vendor) => ({
+      ...vendor,
+      activeLeadName:
+        vendor.operational_status === "busy"
+          ? activeService.find(
+              (lead) => lead.assigned_vendor_id === vendor.id,
+            )?.name ?? null
+          : null,
+    }));
+  }, [activeService, vendors]);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -261,6 +298,8 @@ export function FilaPage() {
           </div>
         </div>
       ) : null}
+
+      <VendorQueuePanel vendors={vendorQueue} currentUserId={user.id} />
 
       {error ? <Notice tone="error">{error}</Notice> : null}
       {success ? <Notice tone="success">{success}</Notice> : null}
@@ -450,6 +489,121 @@ export function FilaPage() {
         </div>
       </Modal>
     </div>
+  );
+}
+
+function VendorQueuePanel({
+  vendors,
+  currentUserId,
+}: {
+  vendors: Array<
+    VendorAvailability & {
+      queuePosition: number | null;
+      activeLeadName: string | null;
+    }
+  >;
+  currentUserId: string;
+}) {
+  const availableCount = vendors.filter((vendor) => vendor.eligible).length;
+
+  return (
+    <section className="relative overflow-hidden rounded-3xl border border-zinc-800 bg-[#0d0d10] p-4 text-white shadow-[0_18px_45px_rgba(0,0,0,0.2)] sm:p-6">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,0,56,0.1),transparent_38%)]" />
+      <div className="relative mb-4 flex items-center justify-between gap-3 border-b border-white/[0.08] pb-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#ff0038]/25 bg-[#ff0038]/10 text-[#ff3159]">
+            <Users size={21} />
+          </span>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#ff6684]">
+              Rodízio de atendimento
+            </p>
+            <h2 className="text-lg font-black uppercase tracking-tight">
+              Ordem dos vendedores
+            </h2>
+          </div>
+        </div>
+        <span className="rounded-xl bg-white/[0.06] px-3 py-2 text-xs font-bold text-zinc-300">
+          {availableCount} na fila
+        </span>
+      </div>
+
+      <div className="relative grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+        {vendors.length ? (
+          vendors.map((vendor) => {
+            const isCurrentUser = vendor.id === currentUserId;
+            const isBusy = vendor.operational_status === "busy";
+            const isAway = vendor.operational_status === "away";
+            return (
+              <div
+                key={vendor.id}
+                className={`flex min-w-0 items-center gap-3 rounded-2xl border p-3 transition-colors ${
+                  isCurrentUser
+                    ? "border-[#ff0038]/45 bg-[#ff0038]/10"
+                    : "border-white/[0.07] bg-white/[0.025]"
+                }`}
+              >
+                <span
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border text-lg font-black ${
+                    vendor.queuePosition
+                      ? "border-[#ff0038]/25 bg-[#ff0038]/10 text-[#ff6684]"
+                      : isBusy
+                        ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-400"
+                        : "border-zinc-700 bg-zinc-800/70 text-zinc-500"
+                  }`}
+                >
+                  {vendor.queuePosition ? (
+                    `${vendor.queuePosition}º`
+                  ) : isBusy ? (
+                    <UserCheck size={19} />
+                  ) : (
+                    "—"
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-bold text-zinc-100">
+                      {vendor.name}
+                    </p>
+                    {isCurrentUser ? (
+                      <span className="rounded-full bg-[#ff0038] px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white">
+                        Você
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-0.5 truncate text-[11px] text-zinc-500">
+                    {vendor.activeLeadName
+                      ? `Atendendo ${vendor.activeLeadName}`
+                      : vendor.team_name || "Sem equipe informada"}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                    vendor.eligible
+                      ? "bg-[#ff0038]/10 text-[#ff6684]"
+                      : isBusy
+                        ? "bg-emerald-400/10 text-emerald-400"
+                        : "bg-zinc-800 text-zinc-500"
+                  }`}
+                >
+                  {vendor.eligible
+                    ? "Na fila"
+                    : isBusy
+                      ? "Atendendo"
+                      : isAway
+                        ? "Ausente"
+                        : "Indisponível"}
+                </span>
+              </div>
+            );
+          })
+        ) : (
+          <div className="col-span-full rounded-2xl border border-dashed border-white/10 py-8 text-center text-sm text-zinc-500">
+            Nenhum vendedor cadastrado nesta empresa.
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
