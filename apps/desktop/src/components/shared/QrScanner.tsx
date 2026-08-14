@@ -20,6 +20,21 @@ type CameraConstraintSet = MediaTrackConstraintSet & {
   focusMode?: "continuous";
 };
 
+const cameraScanConfig = {
+  // Uma taxa um pouco maior reduz o tempo para capturar um quadro nítido
+  // quando o QR está sendo exibido em outra tela.
+  fps: 15,
+  aspectRatio: 1,
+  disableFlip: false,
+  qrbox: (width: number, height: number) => {
+    // O recorte anterior usava só 72% do quadro e descartava partes do QR
+    // quando ele parecia estar dentro da moldura, sobretudo em telas pequenas.
+    // Mantemos uma margem mínima para a quiet zone sem perder módulos do código.
+    const size = Math.floor(Math.min(width, height) * 0.9);
+    return { width: size, height: size };
+  },
+};
+
 export interface QrScannerProps {
   onScan: (decodedText: string) => void;
   onClose: () => void;
@@ -103,17 +118,7 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
       try {
         await html5QrCode.start(
           { facingMode: "environment" },
-          {
-            fps: 10,
-            aspectRatio: 1,
-            disableFlip: false,
-            qrbox: (width, height) => {
-              // Deixa margem ao redor do QR: códigos de convite são densos
-              // (JWT) e o decodificador precisa enxergar a "quiet zone".
-              const size = Math.floor(Math.min(width, height) * 0.72);
-              return { width: size, height: size };
-            },
-          },
+          cameraScanConfig,
           (decodedText) => {
             if (decodedRef.current) return;
             decodedRef.current = true;
@@ -137,15 +142,7 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
 
         await html5QrCode.start(
           preferredCamera.id,
-          {
-            fps: 10,
-            aspectRatio: 1,
-            disableFlip: false,
-            qrbox: (width, height) => {
-              const size = Math.floor(Math.min(width, height) * 0.72);
-              return { width: size, height: size };
-            },
-          },
+          cameraScanConfig,
           (decodedText) => {
             if (decodedRef.current) return;
             decodedRef.current = true;
@@ -167,7 +164,16 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
         }
         if (capabilities.focusMode?.includes("continuous")) {
           await html5QrCode.applyVideoConstraints({
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
             advanced: [{ focusMode: "continuous" } as CameraConstraintSet],
+          });
+        } else {
+          // `ideal` é apenas uma preferência: não derruba câmeras que não
+          // oferecem Full HD, mas evita leitura em resolução muito baixa.
+          await html5QrCode.applyVideoConstraints({
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
           });
         }
       } catch (e) {
