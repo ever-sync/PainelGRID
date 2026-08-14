@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import {
   Camera,
@@ -52,6 +52,7 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
   const decodedRef = useRef(false);
   const readerId = `qr-reader-${useId().replace(/:/g, "")}`;
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [hasTorch, setHasTorch] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
@@ -61,8 +62,34 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
     onScanRef.current = onScan;
   }, [onScan]);
 
-  useEffect(() => {
-    let disposed = false;
+  const stopScanner = useCallback(async () => {
+    const scanner = qrRef.current;
+    qrRef.current = null;
+    if (!scanner) return;
+
+    try {
+      if (scanner.isScanning) await scanner.stop();
+      scanner.clear();
+    } catch (err) {
+      console.warn("Erro ao encerrar câmera do QR Code", err);
+    }
+  }, []);
+
+  const startScanning = useCallback(async () => {
+    await stopScanner();
+    decodedRef.current = false;
+    setLoading(true);
+    setErrorMsg(null);
+    setPermissionDenied(false);
+
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      setErrorMsg(
+        "Este navegador não liberou o acesso à câmera. Abra o painel diretamente no Safari ou Chrome usando HTTPS.",
+      );
+      setLoading(false);
+      return;
+    }
+
     const html5QrCode = new Html5Qrcode(readerId, {
       formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
       experimentalFeatures: { useBarCodeDetectorIfSupported: true },
@@ -70,18 +97,14 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
     });
     qrRef.current = html5QrCode;
 
-    const startScanning = async () => {
+    try {
+      // Restrições simples são mais compatíveis com Safari/iOS. A resolução
+      // anterior podia causar OverconstrainedError em algumas câmeras.
       try {
-        setLoading(true);
-        setErrorMsg(null);
         await html5QrCode.start(
+          { facingMode: "environment" },
           {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1920, min: 640 },
-            height: { ideal: 1080, min: 480 },
-          },
-          {
-            fps: 12,
+            fps: 10,
             aspectRatio: 1,
             disableFlip: false,
             qrbox: (width, height) => {
@@ -92,29 +115,46 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
             },
           },
           (decodedText) => {
-            if (decodedRef.current || disposed) return;
+            if (decodedRef.current) return;
             decodedRef.current = true;
             playBeep();
             triggerHapticFeedback(150);
-            // Stop scanning on first successful match
-            if (html5QrCode.isScanning) {
-              html5QrCode
-                .stop()
-                .then(() => {
-                  if (!disposed) onScanRef.current(decodedText);
-                })
-                .catch((err) => {
-                  console.error("Erro ao parar camera apos scan", err);
-                  if (!disposed) onScanRef.current(decodedText);
-                });
-            } else {
-              onScanRef.current(decodedText);
-            }
+            void stopScanner().finally(() => onScanRef.current(decodedText));
           },
           () => {
             // Constant verbose logging suppressed
           },
         );
+      } catch (rearCameraError) {
+        // Alguns aparelhos não aceitam facingMode, mas funcionam quando a
+        // câmera é escolhida pelo ID retornado pelo próprio navegador.
+        const cameras = await Html5Qrcode.getCameras();
+        const preferredCamera =
+          cameras.find((camera) => /back|rear|traseira|ambiente/i.test(camera.label)) ??
+          cameras[cameras.length - 1];
+        if (!preferredCamera) throw rearCameraError;
+
+        await html5QrCode.start(
+          preferredCamera.id,
+          {
+            fps: 10,
+            aspectRatio: 1,
+            disableFlip: false,
+            qrbox: (width, height) => {
+              const size = Math.floor(Math.min(width, height) * 0.72);
+              return { width: size, height: size };
+            },
+          },
+          (decodedText) => {
+            if (decodedRef.current) return;
+            decodedRef.current = true;
+            playBeep();
+            triggerHapticFeedback(150);
+            void stopScanner().finally(() => onScanRef.current(decodedText));
+          },
+          () => undefined,
+        );
+      }
 
         // Check for torch capability
         try {
@@ -133,34 +173,36 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
           console.warn("Camera capabilities check failed", e);
         }
 
-        setLoading(false);
-      } catch (err) {
-        console.error("Falha ao iniciar escaneamento", err);
-        setErrorMsg(
-          "Não foi possível acessar a câmera. Verifique as permissões do seu navegador.",
-        );
-        setLoading(false);
-      }
-    };
+      setLoading(false);
+    } catch (err) {
+      console.error("Falha ao iniciar escaneamento", err);
+      const errorName =
+        err instanceof DOMException
+          ? err.name
+          : typeof err === "object" && err && "name" in err
+            ? String(err.name)
+            : "";
+      const errorText = err instanceof Error ? err.message : String(err ?? "");
+      const denied = /NotAllowed|PermissionDenied|SecurityError|permission denied|not permitted/i.test(
+        `${errorName} ${errorText}`,
+      );
+      setPermissionDenied(denied);
+      setErrorMsg(
+        denied
+          ? "A câmera está bloqueada para este site. No iPhone, toque em aA na barra de endereço, abra Ajustes do Site, selecione Câmera e escolha Permitir."
+          : "Não foi possível iniciar a câmera. Toque em Tentar novamente para liberar o acesso.",
+      );
+      setLoading(false);
+    }
+  }, [readerId, stopScanner]);
 
+  useEffect(() => {
     void startScanning();
 
     return () => {
-      disposed = true;
-      const scanner = qrRef.current;
-      qrRef.current = null;
-      if (scanner?.isScanning) {
-        void scanner
-          .stop()
-          .then(() => {
-            scanner.clear();
-          })
-          .catch((err) => {
-            console.error("Erro ao parar camera no cleanup", err);
-          });
-      } else scanner?.clear();
+      void stopScanner();
     };
-  }, [readerId]);
+  }, [startScanning, stopScanner]);
 
   const toggleTorch = async () => {
     if (!qrRef.current || !hasTorch) return;
@@ -220,13 +262,24 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
             <p className="text-xs leading-relaxed font-semibold text-zinc-300 mb-4">
               {errorMsg}
             </p>
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-zinc-800 rounded-xl text-xs font-bold hover:bg-zinc-700 transition-colors"
-            >
-              Voltar
-            </button>
+            <div className="flex flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void startScanning()}
+                className="px-4 py-2 bg-[#E51838] rounded-xl text-xs font-bold hover:bg-[#c91430] transition-colors"
+              >
+                Tentar novamente
+              </button>
+              {permissionDenied && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 text-xs font-bold text-zinc-300 hover:text-white transition-colors"
+                >
+                  Voltar
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <>
