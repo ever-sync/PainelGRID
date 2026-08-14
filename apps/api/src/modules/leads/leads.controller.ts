@@ -90,6 +90,14 @@ export class LeadsController {
     return this.leadsService.findAll(user, query);
   }
 
+  @Get("reception-queue")
+  @Roles(Role.VENDEDOR, Role.RECEPCAO)
+  @ApiOperation({ summary: "Lista enxuta da fila de atendimento do evento" })
+  @ApiResponse({ status: 200, description: "Fila retornada com sucesso" })
+  getReceptionQueue(@CurrentUser() user: AuthenticatedUser) {
+    return this.leadsService.getReceptionQueue(user);
+  }
+
   @Get("check-phone")
   @Roles(Role.GESTOR, Role.CLIENTE, Role.VENDEDOR, Role.RECEPCAO)
   @ApiOperation({

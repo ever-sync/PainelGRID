@@ -944,6 +944,59 @@ export class LeadsService {
     };
   }
 
+  async getReceptionQueue(user: AuthenticatedUser) {
+    if (!user.client_id) {
+      throw new ForbiddenException("Usuario sem empresa vinculada");
+    }
+
+    const eventScope = {
+      participants: { some: { client_id: user.client_id } },
+    };
+    const eventSelect = { id: true, name: true } as const;
+    const event =
+      (await this.prisma.event.findFirst({
+        where: { ...eventScope, status: "active" },
+        orderBy: { event_date: "desc" },
+        select: eventSelect,
+      })) ??
+      (await this.prisma.event.findFirst({
+        where: eventScope,
+        orderBy: { event_date: "desc" },
+        select: eventSelect,
+      }));
+
+    if (!event) return { event: null, leads: [] };
+
+    const leads = await this.prisma.lead.findMany({
+      where: {
+        client_id: user.client_id,
+        event_interest_id: event.id,
+        confirmation_status: ConfirmationStatus.checked_in,
+        deleted_at: null,
+        ...(user.role === Role.VENDEDOR
+          ? { assigned_vendor_id: user.sub }
+          : {}),
+      },
+      orderBy: [
+        { confirmation_date: "asc" },
+        { updated_at: "asc" },
+        { id: "asc" },
+      ],
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        assigned_vendor_id: true,
+        confirmation_date: true,
+        store_visit_datetime: true,
+        created_at: true,
+        updated_at: true,
+      },
+    });
+
+    return { event, leads };
+  }
+
   /**
    * Quando cada lead entrou na etapa em que esta hoje, para o painel mostrar
    * "parado ha X dias". Uma unica query por pagina: agrupa o historico por

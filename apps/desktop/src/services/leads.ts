@@ -275,6 +275,30 @@ export function listLeads(params: ListLeadsParams, token: string) {
   });
 }
 
+export type ReceptionQueueLead = Pick<
+  ApiLead,
+  | "id"
+  | "name"
+  | "phone"
+  | "assigned_vendor_id"
+  | "confirmation_date"
+  | "store_visit_datetime"
+  | "created_at"
+  | "updated_at"
+>;
+
+export type ReceptionQueueResponse = {
+  event: { id: string; name: string } | null;
+  leads: ReceptionQueueLead[];
+};
+
+export function getReceptionQueue(token: string) {
+  return httpRequest<ReceptionQueueResponse>("/leads/reception-queue", {
+    method: "GET",
+    token,
+  });
+}
+
 export type UpdateLeadBody = {
   confirmation_status?: ConfirmationStatus;
   name?: string;

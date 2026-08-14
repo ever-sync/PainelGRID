@@ -11,15 +11,17 @@ import type { User } from "../../types";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Notice } from "../../components/ui/Notice";
 import { readStoredSession } from "../../services/auth";
-import { listEvents, mapApiEventToEvent } from "../../services/events";
-import { fetchAllLeads, type ApiLead } from "../../services/leads";
+import {
+  getReceptionQueue,
+  type ReceptionQueueLead,
+} from "../../services/leads";
 import { resolveClientId } from "../../utils/userContext";
 import { useLeadRealtimeSync } from "../../hooks/useLeadRealtimeSync";
 import gpLogo from "../../assets/logo.png";
 
 type OutletContext = { user: User };
 
-function arrivalTime(lead: ApiLead) {
+function arrivalTime(lead: ReceptionQueueLead) {
   return new Date(
     lead.confirmation_date ||
       lead.updated_at ||
@@ -32,7 +34,7 @@ export function FilaPage() {
   const { user } = useOutletContext<OutletContext>();
   const clientId = resolveClientId(user);
   const [eventName, setEventName] = useState("");
-  const [leads, setLeads] = useState<ApiLead[]>([]);
+  const [leads, setLeads] = useState<ReceptionQueueLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -45,31 +47,15 @@ export function FilaPage() {
     }
 
     try {
-      const events = (await listEvents({ client_id: clientId }, token)).map(
-        mapApiEventToEvent,
-      );
-      const event =
-        events.find((item) => item.status === "active") ?? events[0];
-      if (!event) {
+      const queue = await getReceptionQueue(token);
+      if (!queue.event) {
         setError("Nenhum evento disponível para exibir a fila.");
         setLoading(false);
         return;
       }
 
-      const rows = await fetchAllLeads(
-        {
-          client_id: clientId,
-          event_id: event.id,
-          confirmation_status: "checked_in",
-        },
-        token,
-      );
-      setEventName(event.name);
-      setLeads(
-        user.role === "vendedor"
-          ? rows.filter((lead) => lead.assigned_vendor_id === user.id)
-          : rows,
-      );
+      setEventName(queue.event.name);
+      setLeads(queue.leads);
       setError("");
     } catch (cause) {
       setError(
@@ -80,7 +66,7 @@ export function FilaPage() {
     } finally {
       setLoading(false);
     }
-  }, [clientId, user.id, user.role]);
+  }, [clientId]);
 
   useEffect(() => {
     void load();
@@ -313,7 +299,7 @@ function QueueLeadRow({
   position,
   state,
 }: {
-  lead: ApiLead;
+  lead: ReceptionQueueLead;
   position?: number;
   state: "waiting" | "active";
 }) {

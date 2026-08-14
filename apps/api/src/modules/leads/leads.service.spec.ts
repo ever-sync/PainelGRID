@@ -273,6 +273,52 @@ describe("LeadsService", () => {
     jest.restoreAllMocks();
   });
 
+  it("carrega a fila da recepcao em uma consulta enxuta de leads", async () => {
+    const event = { id: eventId, name: "Evento ativo" };
+    const queueLead = {
+      id: "lead-queue-1",
+      name: "Lead na fila",
+      phone: "5511999999999",
+      assigned_vendor_id: null,
+      confirmation_date: new Date("2026-08-14T12:00:00.000Z"),
+      store_visit_datetime: null,
+      created_at: new Date("2026-08-14T11:00:00.000Z"),
+      updated_at: new Date("2026-08-14T12:00:00.000Z"),
+    };
+    prisma.event.findFirst.mockResolvedValue(event);
+    prisma.lead.findMany.mockResolvedValue([queueLead]);
+
+    const result = await service.getReceptionQueue({
+      sub: "reception-1",
+      role: Role.RECEPCAO,
+      name: "Recepcao",
+      email: "recepcao@teste.com",
+      client_id: clientId,
+    });
+
+    expect(result).toEqual({ event, leads: [queueLead] });
+    expect(prisma.lead.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          client_id: clientId,
+          event_interest_id: eventId,
+          confirmation_status: ConfirmationStatus.checked_in,
+          deleted_at: null,
+        },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          assigned_vendor_id: true,
+          confirmation_date: true,
+          store_visit_datetime: true,
+          created_at: true,
+          updated_at: true,
+        },
+      }),
+    );
+  });
+
   it("exporta CSV com cabeçalho e linha de lead", async () => {
     prisma.lead.findMany.mockResolvedValue([
       {
