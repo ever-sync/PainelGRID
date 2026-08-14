@@ -26,7 +26,7 @@ export function TeamRanking({
             return (
               <li
                 key={team.team_id}
-                className={`rounded-xl border border-zinc-800/60 p-3 ${medal?.bg ?? ""}`}
+                className="rounded-lg border border-white/[0.07] bg-white/[0.02] p-3"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -45,7 +45,7 @@ export function TeamRanking({
                       {team.team_name}
                     </span>
                   </div>
-                  <span className="text-2xl font-black tabular-nums text-emerald-400">
+                  <span className="text-2xl font-black tabular-nums text-[#ff3159]">
                     {team.sold}
                   </span>
                 </div>

@@ -25,15 +25,13 @@ export function Funnel({
         return (
           <div
             key={step.key}
-            className="relative overflow-hidden rounded-2xl border p-4 shadow-lg"
+            className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-[#111114] p-4 shadow-[0_12px_30px_rgba(0,0,0,0.25)]"
             style={{
-              borderColor: `${step.color}55`,
-              background: `linear-gradient(135deg, ${step.color}22 0%, ${step.color}08 60%, transparent 100%)`,
-              boxShadow: isSold ? `0 0 28px ${step.color}22 inset` : undefined,
+              borderTopColor: `${step.color}88`,
             }}
           >
             <div
-              className="absolute -right-3 -top-3 h-20 w-20 rounded-full opacity-20 blur-2xl"
+              className="absolute right-0 top-0 h-px w-2/3 opacity-70"
               style={{ backgroundColor: step.color }}
             />
             <div className="relative flex items-center justify-between">
@@ -65,12 +63,12 @@ export function Funnel({
                     className="h-full rounded-full transition-all duration-500"
                     style={{
                       width: `${Math.min(100, metaPct ?? 0)}%`,
-                      background: `linear-gradient(90deg, ${step.color}, #34D399)`,
+                      background: step.color,
                     }}
                   />
                 </div>
                 <p className="mt-1.5 text-[11px] font-medium text-zinc-400">
-                  <span className="font-bold text-emerald-300">{metaPct}%</span>{" "}
+                  <span className="font-bold text-[#ff3159]">{metaPct}%</span>{" "}
                   da meta
                   {rate !== null && (
                     <>

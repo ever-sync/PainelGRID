@@ -19,7 +19,7 @@ export function VendorRanking({
     <Section className={className} title="Ranking de vendedores">
       <div className="h-full overflow-y-auto">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 z-10 bg-zinc-900/95 text-[10px] uppercase tracking-wider text-zinc-500 backdrop-blur">
+          <thead className="sticky top-0 z-10 bg-[#17171a]/95 text-[10px] uppercase tracking-[0.14em] text-zinc-500 backdrop-blur">
             <tr>
               <th className="px-3 py-2 text-left">#</th>
               <th className="px-3 py-2 text-left">Vendedor</th>
@@ -39,7 +39,7 @@ export function VendorRanking({
               return (
                 <tr
                   key={vendor.vendor_id}
-                  className={`border-t border-zinc-800/60 ${medal ? medal.bg : ""}`}
+                  className="border-t border-white/[0.06] transition-colors odd:bg-white/[0.015]"
                 >
                   <td className="px-3 py-2.5">
                     {medal ? (
@@ -95,7 +95,7 @@ export function VendorRanking({
                       <span className="text-zinc-700">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 text-right text-xl font-black tabular-nums text-emerald-400">
+                  <td className="px-3 py-2.5 text-right text-xl font-black tabular-nums text-[#ff3159]">
                     {vendor.sold}
                   </td>
                 </tr>

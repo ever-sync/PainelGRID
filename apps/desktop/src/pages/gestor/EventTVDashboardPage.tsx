@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useParams } from "react-router-dom";
 import { Maximize2, Minimize2 } from "lucide-react";
+import gpLogo from "../../assets/logo.png";
 import {
   getEventDashboardTv,
   type EventDashboardTvResponse,
@@ -370,25 +371,34 @@ export function EventTVDashboardPage() {
 
   return (
     <div
-      className={`flex h-screen flex-col gap-3 overflow-hidden bg-zinc-950 text-zinc-100 ${
+      className={`relative flex h-screen flex-col gap-3 overflow-hidden bg-[#09090b] text-zinc-100 before:pointer-events-none before:absolute before:inset-0 before:bg-[linear-gradient(115deg,rgba(255,0,56,0.055),transparent_28%),repeating-linear-gradient(135deg,transparent_0,transparent_28px,rgba(255,255,255,0.012)_29px,transparent_30px)] ${
         fullscreen ? "px-16 py-8" : "p-4"
       }`}
     >
       {/* Header (oculto em modo tela cheia) */}
       {!fullscreen && (
-        <header className="flex shrink-0 flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-zinc-500">
-              Grand Prix de Vendas
-            </p>
-            <h1 className="mt-1 text-4xl font-black tracking-tight">
-              {data.event.name}
-            </h1>
-            {data.event.location && (
-              <p className="mt-1 text-sm text-zinc-400">
-                {data.event.location}
+        <header className="relative z-10 flex shrink-0 flex-wrap items-end justify-between gap-4 border-b border-white/[0.07] pb-3">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-[#ff0038]/30 bg-[#ff0038]/10">
+              <img
+                src={gpLogo}
+                alt="GP de Vendas"
+                className="h-10 w-10 object-contain"
+              />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.34em] text-[#ff3159]">
+                GP de Vendas · Live
               </p>
-            )}
+              <h1 className="mt-1 text-4xl font-black uppercase tracking-[-0.03em]">
+                {data.event.name}
+              </h1>
+              {data.event.location && (
+                <p className="mt-1 text-sm text-zinc-400">
+                  {data.event.location}
+                </p>
+              )}
+            </div>
           </div>
           <div className="flex flex-col items-end text-right">
             <div className="flex items-center gap-3">

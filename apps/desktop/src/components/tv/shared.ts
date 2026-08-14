@@ -61,22 +61,22 @@ export const FUNNEL_STEPS: Array<{
   {
     key: "scheduled",
     label: "Agendaram",
-    color: "#60A5FA",
+    color: "#A1A1AA",
     icon: CalendarClock,
   },
   {
     key: "confirmed",
     label: "Confirmaram",
-    color: "#3D56A2",
+    color: "#E4E4E7",
     icon: BadgeCheck,
   },
   {
     key: "checked_in",
     label: "Compareceram",
-    color: "#FBBB49",
+    color: "#FF6684",
     icon: UserCheck,
   },
-  { key: "sold", label: "Vendas", color: "#10B981", icon: Trophy },
+  { key: "sold", label: "Vendas", color: "#FF0038", icon: Trophy },
 ];
 
 // ── Medalhas e avatares ──────────────────────────────────────────────────────
@@ -92,12 +92,10 @@ export const MEDAL_STYLE: Array<{ bg: string; text: string; ring: string }> = [
 ];
 
 export const AVATAR_PALETTE = [
-  ["from-rose-500/30", "to-rose-700/20", "text-rose-200"],
-  ["from-sky-500/30", "to-sky-700/20", "text-sky-200"],
-  ["from-emerald-500/30", "to-emerald-700/20", "text-emerald-200"],
-  ["from-amber-500/30", "to-amber-700/20", "text-amber-200"],
-  ["from-violet-500/30", "to-violet-700/20", "text-violet-200"],
-  ["from-cyan-500/30", "to-cyan-700/20", "text-cyan-200"],
+  ["from-rose-500/30", "to-rose-950/40", "text-rose-100"],
+  ["from-zinc-500/30", "to-zinc-800/40", "text-zinc-100"],
+  ["from-red-500/25", "to-zinc-900/50", "text-red-100"],
+  ["from-amber-500/25", "to-zinc-900/50", "text-amber-100"],
 ] as const;
 
 export function vendorInitials(name: string): string {
