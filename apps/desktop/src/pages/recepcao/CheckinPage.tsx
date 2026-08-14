@@ -184,7 +184,14 @@ export function CheckinPage() {
       // A recepção precisa enxergar a operação inteira. `listLeads` retorna
       // apenas a primeira página (50 itens), fazendo os cards e a busca
       // omitirem agendamentos antigos do Rubinho e dos vendedores.
-      fetchAllLeads({ client_id: clientId }, t, { maxItems: 20_000 }),
+      fetchAllLeads({ client_id: clientId }, t, {
+        maxItems: 20_000,
+        // Exibe a primeira pagina imediatamente. Antes, qualquer demora ou
+        // falha em uma pagina posterior mantinha a recepcao inteira vazia.
+        onPage: (_page, accumulated) => {
+          setLeadsState(accumulated.map(mapApiLeadToLead));
+        },
+      }),
     ])
       .then(([eventRows, leadRows]) => {
         const mapped = eventRows.map(mapApiEventToEvent);
@@ -197,8 +204,8 @@ export function CheckinPage() {
         setLeadsState(leadRows.map(mapApiLeadToLead));
       })
       .catch(() => {
-        setEvents([]);
-        setLeadsState([]);
+        // Uma falha transitoria nao deve apagar a operacao que ja estava na
+        // tela (nem as paginas que acabaram de chegar pelo onPage).
       });
     void listClientStaff(clientId, t)
       .then((rows) => {
