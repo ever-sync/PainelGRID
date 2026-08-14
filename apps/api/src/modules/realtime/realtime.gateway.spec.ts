@@ -18,12 +18,14 @@ describe("RealtimeGateway security", () => {
   let gateway: RealtimeGateway;
 
   function socket(overrides: {
+    id?: string;
     origin?: string;
     authToken?: string;
     queryToken?: string;
     clientId?: string;
   }): Socket {
     return {
+      id: overrides.id ?? "socket-1",
       data: {},
       handshake: {
         auth: overrides.authToken ? { token: overrides.authToken } : {},
@@ -144,5 +146,40 @@ describe("RealtimeGateway security", () => {
     expect(clientsService.assertGestorOwnsClient).not.toHaveBeenCalled();
     expect(client.join).not.toHaveBeenCalled();
     expect(client.disconnect).toHaveBeenCalledWith(true);
+  });
+
+  it("keeps a user online until their last socket disconnects", async () => {
+    jwtService.verifyAsync.mockResolvedValue({
+      sub: "vendor-multiple-sockets",
+      role: Role.VENDEDOR,
+      type: "access",
+      client_id: CLIENT_ID,
+    });
+    const first = socket({
+      id: "socket-first",
+      origin: "https://app.example.com",
+      authToken: "jwt",
+      clientId: CLIENT_ID,
+    });
+    const second = socket({
+      id: "socket-second",
+      origin: "https://app.example.com",
+      authToken: "jwt",
+      clientId: CLIENT_ID,
+    });
+
+    await gateway.handleConnection(first);
+    await gateway.handleConnection(second);
+    gateway.handleDisconnect(first);
+
+    expect(gateway.isUserOnline(CLIENT_ID, "vendor-multiple-sockets")).toBe(
+      true,
+    );
+
+    gateway.handleDisconnect(second);
+
+    expect(gateway.isUserOnline(CLIENT_ID, "vendor-multiple-sockets")).toBe(
+      false,
+    );
   });
 });

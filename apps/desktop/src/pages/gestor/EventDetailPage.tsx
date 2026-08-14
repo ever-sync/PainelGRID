@@ -2333,7 +2333,7 @@ export function EventDetailPage() {
                         <td className="px-5 py-4">
                           <p className="font-medium">{sale.product}</p>
                           <p className="mt-0.5 text-xs text-zinc-500">
-                              {sale.type.replace(/_/g, " ")}
+                            {sale.type.replace(/_/g, " ")}
                           </p>
                         </td>
                         <td className="px-5 py-4 font-mono text-xs">

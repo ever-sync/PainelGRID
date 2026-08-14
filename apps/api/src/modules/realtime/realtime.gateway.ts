@@ -28,7 +28,14 @@ export class RealtimeGateway
 {
   private readonly logger = new Logger(RealtimeGateway.name);
   private readonly allowedOrigins: Set<string>;
-  private static readonly onlineUsers = new Map<string, Set<string>>();
+  /**
+   * Um mesmo usuário mantém mais de um socket (layout, página e/ou abas).
+   * A presença só pode ser removida quando o último socket dele desconectar.
+   */
+  private static readonly onlineUserSockets = new Map<
+    string,
+    Map<string, Set<string>>
+  >();
 
   constructor(
     private readonly jwtService: JwtService,
@@ -85,17 +92,12 @@ export class RealtimeGateway
         await client.join(this.room(clientId));
         this.trackAuthorizedClient(client, clientId);
 
-        let set = RealtimeGateway.onlineUsers.get(clientId);
-        if (!set) {
-          set = new Set();
-          RealtimeGateway.onlineUsers.set(clientId, set);
-        }
-        set.add(payload.sub);
+        this.addOnlineSocket(clientId, payload.sub, client.id);
 
         // Envia a lista para todos na sala da empresa
         this.server
           .to(this.room(clientId))
-          .emit("online_vendors", Array.from(set));
+          .emit("online_vendors", this.getOnlineUserIds(clientId));
       }
     } catch {
       this.logger.warn("Desconectando socket por falha de autenticacao");
@@ -112,13 +114,10 @@ export class RealtimeGateway
     }
 
     for (const clientId of authorizedClientIds) {
-      const set = RealtimeGateway.onlineUsers.get(clientId);
-      if (set) {
-        set.delete(payload.sub);
-        this.server
-          .to(this.room(clientId))
-          .emit("online_vendors", Array.from(set));
-      }
+      this.removeOnlineSocket(clientId, payload.sub, client.id);
+      this.server
+        .to(this.room(clientId))
+        .emit("online_vendors", this.getOnlineUserIds(clientId));
     }
   }
 
@@ -144,14 +143,11 @@ export class RealtimeGateway
     await client.join(this.room(clientId));
     this.trackAuthorizedClient(client, clientId);
 
-    let set = RealtimeGateway.onlineUsers.get(clientId);
-    if (!set) {
-      set = new Set();
-      RealtimeGateway.onlineUsers.set(clientId, set);
-    }
-    set.add(payload.sub);
+    this.addOnlineSocket(clientId, payload.sub, client.id);
 
-    this.server.to(this.room(clientId)).emit("online_vendors", Array.from(set));
+    this.server
+      .to(this.room(clientId))
+      .emit("online_vendors", this.getOnlineUserIds(clientId));
     return { ok: true };
   }
 
@@ -164,11 +160,48 @@ export class RealtimeGateway
   }
 
   isUserOnline(clientId: string, userId: string): boolean {
-    return RealtimeGateway.onlineUsers.get(clientId)?.has(userId) ?? false;
+    return (
+      (RealtimeGateway.onlineUserSockets.get(clientId)?.get(userId)?.size ??
+        0) > 0
+    );
   }
 
   getOnlineUserIds(clientId: string): string[] {
-    return Array.from(RealtimeGateway.onlineUsers.get(clientId) ?? []);
+    return Array.from(
+      RealtimeGateway.onlineUserSockets.get(clientId)?.keys() ?? [],
+    );
+  }
+
+  private addOnlineSocket(
+    clientId: string,
+    userId: string,
+    socketId: string,
+  ): void {
+    let users = RealtimeGateway.onlineUserSockets.get(clientId);
+    if (!users) {
+      users = new Map();
+      RealtimeGateway.onlineUserSockets.set(clientId, users);
+    }
+    let sockets = users.get(userId);
+    if (!sockets) {
+      sockets = new Set();
+      users.set(userId, sockets);
+    }
+    sockets.add(socketId);
+  }
+
+  private removeOnlineSocket(
+    clientId: string,
+    userId: string,
+    socketId: string,
+  ): void {
+    const users = RealtimeGateway.onlineUserSockets.get(clientId);
+    const sockets = users?.get(userId);
+    if (!users || !sockets) return;
+
+    sockets.delete(socketId);
+    if (sockets.size === 0) users.delete(userId);
+    if (users.size === 0) RealtimeGateway.onlineUserSockets.delete(clientId);
   }
 
   private room(clientId: string) {
