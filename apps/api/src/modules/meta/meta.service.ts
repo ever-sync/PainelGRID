@@ -232,7 +232,19 @@ export class MetaService implements OnModuleInit {
         where: { id: client.gestor_id },
         select: { meta_gestor_access_token: true },
       });
-      if (owner?.meta_gestor_access_token) gestorId = client.gestor_id;
+      if (owner?.meta_gestor_access_token) {
+        gestorId = client.gestor_id;
+      } else {
+        const sharedGestor = await this.db.user.findFirst({
+          where: {
+            role: Role.GESTOR,
+            meta_gestor_access_token: { not: null },
+          },
+          select: { id: true },
+          orderBy: { meta_gestor_connected_at: "desc" },
+        });
+        if (sharedGestor) gestorId = sharedGestor.id;
+      }
     }
 
     const row = await this.db.user.findUnique({
@@ -5203,11 +5215,40 @@ export class MetaService implements OnModuleInit {
         ),
       };
     } catch (ownerError) {
-      if (client.gestor_id === user.sub) throw ownerError;
-      return {
-        gestorId: user.sub,
-        selection: await this.getGestorMetaSelectionSessionOrThrow(user.sub),
-      };
+      if (client.gestor_id !== user.sub) {
+        try {
+          return {
+            gestorId: user.sub,
+            selection: await this.getGestorMetaSelectionSessionOrThrow(
+              user.sub,
+            ),
+          };
+        } catch {
+          // Continua para a conexao compartilhada mais recente.
+        }
+      }
+      const sharedGestores = await this.db.user.findMany({
+        where: {
+          role: Role.GESTOR,
+          meta_gestor_access_token: { not: null },
+          id: { notIn: [client.gestor_id, user.sub] },
+        },
+        select: { id: true },
+        orderBy: { meta_gestor_connected_at: "desc" },
+      });
+      for (const sharedGestor of sharedGestores) {
+        try {
+          return {
+            gestorId: sharedGestor.id,
+            selection: await this.getGestorMetaSelectionSessionOrThrow(
+              sharedGestor.id,
+            ),
+          };
+        } catch {
+          // Tenta a proxima conexao ativa.
+        }
+      }
+      throw ownerError;
     }
   }
 
