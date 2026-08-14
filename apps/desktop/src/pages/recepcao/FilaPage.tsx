@@ -330,11 +330,10 @@ export function FilaPage() {
     if (user.role !== "vendedor") return null;
     const me = vendors.find((vendor) => vendor.id === user.id);
     if (!me) return null;
-    const segment = resolveVendorSegment(me.team_name);
+    const segment = vendorSegments(me)[0] ?? "novo";
     const ordered = vendors
       .filter(
-        (vendor) =>
-          vendor.eligible && resolveVendorSegment(vendor.team_name) === segment,
+        (vendor) => vendor.eligible && vendorSegments(vendor).includes(segment),
       )
       .sort((a, b) => {
         const timeA = a.last_assigned_at
@@ -709,8 +708,8 @@ function VendorQueuePanel({
     { value: "assinatura", label: "Assinatura" },
   ];
   const vendorsBySegment = useMemo(() => {
-    const segmentVendors = vendors.filter(
-      (vendor) => resolveVendorSegment(vendor.team_name) === activeSegment,
+    const segmentVendors = vendors.filter((vendor) =>
+      vendorSegments(vendor).includes(activeSegment),
     );
     const byLastAssignment = (
       a: (typeof vendors)[number],
@@ -762,9 +761,8 @@ function VendorQueuePanel({
 
       <div className="relative mb-5 flex gap-1 overflow-x-auto rounded-2xl border border-white/[0.07] bg-black/20 p-1">
         {segments.map((segment) => {
-          const count = vendors.filter(
-            (vendor) =>
-              resolveVendorSegment(vendor.team_name) === segment.value,
+          const count = vendors.filter((vendor) =>
+            vendorSegments(vendor).includes(segment.value),
           ).length;
           return (
             <button
@@ -877,23 +875,20 @@ function VendorQueuePanel({
   );
 }
 
-function resolveVendorSegment(teamName: string | null): VendorQueueSegment {
-  const normalized = (teamName ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-  if (normalized.includes("seminovo") || normalized.includes("usado")) {
-    return "seminovo";
-  }
-  if (normalized.includes("pcd") || normalized.includes("pdc")) return "pcd";
-  if (
-    normalized.includes("venda direta") ||
-    /(^|\W)vd($|\W)/.test(normalized)
-  ) {
-    return "vd";
-  }
-  if (normalized.includes("assinatura")) return "assinatura";
-  return "novo";
+function vendorSegments(vendor: VendorAvailability): VendorQueueSegment[] {
+  const stored = vendor.vendor_categories.length
+    ? vendor.vendor_categories
+    : vendor.vendor_category
+      ? [vendor.vendor_category]
+      : [];
+  const categoryMap = {
+    novo: "novo",
+    semininovo: "seminovo",
+    pdc: "pcd",
+    consorcio: "vd",
+    assinatura: "assinatura",
+  } as const;
+  return stored.map((category) => categoryMap[category]);
 }
 
 function vendorSegmentLabel(segment: VendorQueueSegment) {

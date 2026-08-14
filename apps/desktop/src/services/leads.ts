@@ -428,6 +428,11 @@ export type VendorOperationalStatus = "online" | "away" | "busy";
 export type VendorAvailability = {
   id: string;
   name: string;
+  vendor_category:
+    "novo" | "semininovo" | "pdc" | "consorcio" | "assinatura" | null;
+  vendor_categories: Array<
+    "novo" | "semininovo" | "pdc" | "consorcio" | "assinatura"
+  >;
   team_id: string | null;
   team_name: string | null;
   connected: boolean;

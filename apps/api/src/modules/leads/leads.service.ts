@@ -16,6 +16,7 @@ import {
   LeadSource,
   Prisma,
   VendorAttendanceStatus,
+  VendorCategory,
   VendorOperationalStatus,
 } from "@prisma/client";
 import { readSheet } from "read-excel-file/node";
@@ -4703,6 +4704,8 @@ export class LeadsService {
       select: {
         id: true,
         name: true,
+        vendor_category: true,
+        vendor_categories: true,
         vendor_availability: true,
         sales_team_memberships: {
           take: 1,
@@ -4718,6 +4721,8 @@ export class LeadsService {
       return {
         id: vendor.id,
         name: vendor.name,
+        vendor_category: vendor.vendor_category,
+        vendor_categories: vendor.vendor_categories,
         team_id: vendor.sales_team_memberships[0]?.team_id ?? null,
         team_name: vendor.sales_team_memberships[0]?.team.name ?? null,
         connected,
@@ -4810,6 +4815,8 @@ export class LeadsService {
       select: {
         id: true,
         name: true,
+        vendor_category: true,
+        vendor_categories: true,
         vendor_availability: true,
         sales_team_memberships: {
           select: { team_id: true, team: { select: { name: true } } },
@@ -4824,11 +4831,12 @@ export class LeadsService {
     const vendor = requestedVendorId
       ? candidates[0]
       : dto.category
-        ? candidates.find(
-            (candidate) =>
-              this.resolveVendorQueueCategory(
-                candidate.sales_team_memberships[0]?.team.name ?? null,
-              ) === dto.category,
+        ? candidates.find((candidate) =>
+            this.vendorMatchesQueueCategory(
+              candidate.vendor_category,
+              candidate.vendor_categories,
+                dto.category!,
+            ),
           )
         : lead.team_id
           ? candidates.find((candidate) =>
@@ -4922,29 +4930,22 @@ export class LeadsService {
     return { success: true, ...callPayload };
   }
 
-  private resolveVendorQueueCategory(
-    teamName: string | null,
-  ): VendorQueueCategory {
-    const normalized = (teamName ?? "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
-    if (normalized.includes("seminovo") || normalized.includes("usado")) {
-      return VendorQueueCategory.SEMINOVO;
-    }
-    if (normalized.includes("pcd") || normalized.includes("pdc")) {
-      return VendorQueueCategory.PCD;
-    }
-    if (
-      normalized.includes("venda direta") ||
-      /(^|\W)vd($|\W)/.test(normalized)
-    ) {
-      return VendorQueueCategory.VD;
-    }
-    if (normalized.includes("assinatura")) {
-      return VendorQueueCategory.ASSINATURA;
-    }
-    return VendorQueueCategory.NOVO;
+  private vendorMatchesQueueCategory(
+    legacyCategory: VendorCategory | null,
+    categories: VendorCategory[],
+    requested: VendorQueueCategory,
+  ) {
+    const assigned = new Set(
+      categories.length ? categories : legacyCategory ? [legacyCategory] : [],
+    );
+    const categoryMap: Record<VendorQueueCategory, VendorCategory> = {
+      [VendorQueueCategory.NOVO]: VendorCategory.novo,
+      [VendorQueueCategory.SEMINOVO]: VendorCategory.semininovo,
+      [VendorQueueCategory.PCD]: VendorCategory.pdc,
+      [VendorQueueCategory.VD]: VendorCategory.consorcio,
+      [VendorQueueCategory.ASSINATURA]: VendorCategory.assinatura,
+    };
+    return assigned.has(categoryMap[requested]);
   }
 
   async acceptVendorCall(user: AuthenticatedUser, leadId: string) {

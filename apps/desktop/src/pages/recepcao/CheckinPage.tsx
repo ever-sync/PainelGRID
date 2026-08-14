@@ -80,23 +80,20 @@ const VENDOR_CATEGORY_OPTIONS: Array<{
   { value: "assinatura", label: "Assinatura" },
 ];
 
-function resolveVendorCategory(teamName: string | null): VendorQueueCategory {
-  const normalized = (teamName ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-  if (normalized.includes("seminovo") || normalized.includes("usado")) {
-    return "seminovo";
-  }
-  if (normalized.includes("pcd") || normalized.includes("pdc")) return "pcd";
-  if (
-    normalized.includes("venda direta") ||
-    /(^|\W)vd($|\W)/.test(normalized)
-  ) {
-    return "vd";
-  }
-  if (normalized.includes("assinatura")) return "assinatura";
-  return "novo";
+function vendorCategories(vendor: VendorAvailability): VendorQueueCategory[] {
+  const stored = vendor.vendor_categories.length
+    ? vendor.vendor_categories
+    : vendor.vendor_category
+      ? [vendor.vendor_category]
+      : [];
+  const categoryMap = {
+    novo: "novo",
+    semininovo: "seminovo",
+    pdc: "pcd",
+    consorcio: "vd",
+    assinatura: "assinatura",
+  } as const;
+  return stored.map((category) => categoryMap[category]);
 }
 
 const DISCOVERY_SOURCE_OPTIONS: Array<{
@@ -520,7 +517,7 @@ export function CheckinPage() {
         : "__automatic__",
     );
     setQuickCheckinCategory(
-      linkedVendor ? resolveVendorCategory(linkedVendor.team_name) : "",
+      linkedVendor ? (vendorCategories(linkedVendor)[0] ?? "") : "",
     );
     setQuickCheckinLead(lead);
   };
@@ -1685,8 +1682,7 @@ export function CheckinPage() {
                   (vendor) =>
                     vendor.eligible &&
                     (!quickCheckinCategory ||
-                      resolveVendorCategory(vendor.team_name) ===
-                        quickCheckinCategory),
+                      vendorCategories(vendor).includes(quickCheckinCategory)),
                 )
                 .map((vendor) => ({
                   value: vendor.id,
@@ -1705,8 +1701,7 @@ export function CheckinPage() {
                 (vendor) =>
                   vendor.eligible &&
                   (!quickCheckinCategory ||
-                    resolveVendorCategory(vendor.team_name) ===
-                      quickCheckinCategory),
+                    vendorCategories(vendor).includes(quickCheckinCategory)),
               ).length
             }{" "}
             vendedor(es) online e disponível(is).
