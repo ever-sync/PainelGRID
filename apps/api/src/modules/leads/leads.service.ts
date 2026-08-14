@@ -2566,34 +2566,50 @@ export class LeadsService {
     if (query.search?.trim()) {
       const term = query.search.trim();
       // Normaliza o termo se parecer um telefone (somente dígitos)
-      const normalizedPhone = /^\d+$/.test(term)
+      const isNumericSearch = /^\d+$/.test(term);
+      const normalizedPhone = isNumericSearch
         ? normalizeBrazilianPhone(term)
         : null;
       // Extrai apenas os dígitos locais para busca parcial (ex.: "981092776")
-      const digits = /^\d+$/.test(term) ? phoneDigits(term) : null;
+      const digits = isNumericSearch ? phoneDigits(term) : null;
 
-      const phoneConditions: Prisma.LeadWhereInput[] = [
-        { phone: { contains: term, mode: "insensitive" } },
-        ...(normalizedPhone
-          ? [
-              {
-                phone: {
-                  contains: normalizedPhone,
-                  mode: "insensitive" as const,
+      // As integrações do WhatsApp sempre enviam o telefone completo. Nesse
+      // caso, uma busca exata aproveita o índice client_id + phone e evita três
+      // ILIKEs sobre toda a base a cada mensagem recebida pelo Rubinho.
+      if (digits && digits.length >= 10 && normalizedPhone) {
+        const phoneCandidates = [
+          ...new Set([
+            term,
+            digits,
+            normalizedPhone,
+            normalizedPhone.replace(/^\+/, ""),
+          ]),
+        ];
+        where.phone = { in: phoneCandidates };
+      } else {
+        const phoneConditions: Prisma.LeadWhereInput[] = [
+          { phone: { contains: term, mode: "insensitive" } },
+          ...(normalizedPhone
+            ? [
+                {
+                  phone: {
+                    contains: normalizedPhone,
+                    mode: "insensitive" as const,
+                  },
                 },
-              },
-            ]
-          : []),
-        ...(digits && digits.length >= 8
-          ? [{ phone: { contains: digits, mode: "insensitive" as const } }]
-          : []),
-      ];
+              ]
+            : []),
+          ...(digits && digits.length >= 8
+            ? [{ phone: { contains: digits, mode: "insensitive" as const } }]
+            : []),
+        ];
 
-      where.OR = [
-        { name: { contains: term, mode: "insensitive" } },
-        { email: { contains: term, mode: "insensitive" } },
-        ...phoneConditions,
-      ];
+        where.OR = [
+          { name: { contains: term, mode: "insensitive" } },
+          { email: { contains: term, mode: "insensitive" } },
+          ...phoneConditions,
+        ];
+      }
     }
     if (query.created_after)
       where.created_at = { gte: new Date(query.created_after) };
