@@ -11,6 +11,7 @@ import {
   User,
   CalendarDays,
   QrCode,
+  Trash2,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Button } from "../../components/ui/Button";
@@ -52,6 +53,11 @@ import {
   phoneDigitsForCompare,
 } from "../../utils/phone";
 import { triggerHapticFeedback } from "../../utils/haptics";
+import {
+  parseWristbandNumbers,
+  serializeWristbandNumbers,
+  validateWristbandNumbers,
+} from "./reception-checkin.model";
 
 type OutletContext = {
   user: AuthUser;
@@ -171,7 +177,7 @@ export function CheckinPage() {
   const [quickCheckinLead, setQuickCheckinLead] = useState<Lead | null>(null);
   const [quickCheckinVendorId, setQuickCheckinVendorId] =
     useState("__automatic__");
-  const [quickCheckinWristband, setQuickCheckinWristband] = useState("");
+  const [quickCheckinWristbands, setQuickCheckinWristbands] = useState([""]);
   const [quickCheckinBusy, setQuickCheckinBusy] = useState(false);
   const [quickCheckinError, setQuickCheckinError] = useState("");
 
@@ -270,6 +276,10 @@ export function CheckinPage() {
   const event = events.find((e) => e.id === selectedEventId);
   const quickCheckinEvent = events.find(
     (eventRow) => eventRow.id === quickCheckinLead?.event_id,
+  );
+  const quickCheckinWristbandError = validateWristbandNumbers(
+    quickCheckinWristbands,
+    Boolean(quickCheckinEvent?.require_wristband),
   );
   const linkedVendorId = quickCheckinLead?.assigned_vendor_id ?? null;
   const linkedVendorName = linkedVendorId
@@ -466,7 +476,7 @@ export function CheckinPage() {
         (vendor) => vendor.id === lead.assigned_vendor_id && vendor.eligible,
       );
     setQuickCheckinError("");
-    setQuickCheckinWristband(lead.wristband_number ?? "");
+    setQuickCheckinWristbands(parseWristbandNumbers(lead.wristband_number));
     setQuickCheckinVendorId(
       linkedVendorIsAvailable
         ? (lead.assigned_vendor_id ?? "__automatic__")
@@ -563,12 +573,16 @@ export function CheckinPage() {
     if (!quickCheckinLead) return;
     const t = readStoredSession()?.accessToken;
     if (!t) return;
-    const wristbandNumber = quickCheckinWristband.trim();
+    const wristbandNumber = serializeWristbandNumbers(quickCheckinWristbands);
     const checkinEvent = events.find(
       (eventRow) => eventRow.id === quickCheckinLead.event_id,
     );
-    if (checkinEvent?.require_wristband && !wristbandNumber) {
-      setQuickCheckinError("Informe o número da pulseira.");
+    const wristbandError = validateWristbandNumbers(
+      quickCheckinWristbands,
+      Boolean(checkinEvent?.require_wristband),
+    );
+    if (wristbandError) {
+      setQuickCheckinError(wristbandError);
       return;
     }
 
@@ -581,7 +595,7 @@ export function CheckinPage() {
           await checkInAppointment(t, appointmentId);
           await updateLead(
             quickCheckinLead.id,
-            { wristband_number: wristbandNumber || null },
+            { wristband_number: wristbandNumber },
             t,
           );
         } else {
@@ -589,17 +603,17 @@ export function CheckinPage() {
             quickCheckinLead.id,
             {
               confirmation_status: "checked_in",
-              wristband_number: wristbandNumber || null,
+              wristband_number: wristbandNumber,
             },
             t,
           );
         }
       } else if (
-        wristbandNumber !== (quickCheckinLead.wristband_number ?? "")
+        wristbandNumber !== (quickCheckinLead.wristband_number ?? null)
       ) {
         await updateLead(
           quickCheckinLead.id,
-          { wristband_number: wristbandNumber || null },
+          { wristband_number: wristbandNumber },
           t,
         );
       }
@@ -1494,9 +1508,7 @@ export function CheckinPage() {
               variant="secondary"
               onClick={() => void handleQuickCheckin(false)}
               isDisabled={
-                quickCheckinBusy ||
-                (Boolean(quickCheckinEvent?.require_wristband) &&
-                  !quickCheckinWristband.trim())
+                quickCheckinBusy || Boolean(quickCheckinWristbandError)
               }
             >
               Salvar sem chamar
@@ -1504,10 +1516,7 @@ export function CheckinPage() {
             <Button
               onClick={() => void handleQuickCheckin(true)}
               loading={quickCheckinBusy}
-              isDisabled={
-                Boolean(quickCheckinEvent?.require_wristband) &&
-                !quickCheckinWristband.trim()
-              }
+              isDisabled={Boolean(quickCheckinWristbandError)}
             >
               Salvar e chamar
             </Button>
@@ -1524,17 +1533,65 @@ export function CheckinPage() {
             Confirme a pulseira de <strong>{quickCheckinLead?.name}</strong> e
             escolha quem fará o atendimento.
           </p>
-          <Input
-            label={`Número da pulseira${quickCheckinEvent?.require_wristband ? " *" : " (opcional)"}`}
-            value={quickCheckinWristband}
-            onChange={(inputEvent) => {
-              setQuickCheckinWristband(inputEvent.target.value.slice(0, 50));
-              setQuickCheckinError("");
-            }}
-            placeholder="Ex.: 127"
-            autoFocus
-            isDisabled={quickCheckinBusy}
-          />
+          <div className="space-y-2">
+            {quickCheckinWristbands.map((wristband, index) => (
+              <div key={`wristband-${index}`} className="flex items-end gap-2">
+                <div className="min-w-0 flex-1">
+                  <Input
+                    label={`Pulseira ${index + 1}${quickCheckinEvent?.require_wristband ? " *" : ""}`}
+                    value={wristband}
+                    onChange={(inputEvent) => {
+                      const value = inputEvent.target.value.slice(0, 50);
+                      setQuickCheckinWristbands((current) =>
+                        current.map((item, itemIndex) =>
+                          itemIndex === index ? value : item,
+                        ),
+                      );
+                      setQuickCheckinError("");
+                    }}
+                    placeholder="Ex.: 127"
+                    autoFocus={index === 0}
+                    isDisabled={quickCheckinBusy}
+                  />
+                </div>
+                {quickCheckinWristbands.length > 1 ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    icon={<Trash2 size={15} />}
+                    aria-label={`Remover pulseira ${index + 1}`}
+                    onClick={() => {
+                      setQuickCheckinWristbands((current) =>
+                        current.filter((_, itemIndex) => itemIndex !== index),
+                      );
+                      setQuickCheckinError("");
+                    }}
+                    isDisabled={quickCheckinBusy}
+                  />
+                ) : null}
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<Plus size={14} />}
+              onClick={() => {
+                setQuickCheckinWristbands((current) => [...current, ""]);
+                setQuickCheckinError("");
+              }}
+              isDisabled={
+                quickCheckinBusy ||
+                quickCheckinWristbands.some((item) => !item.trim())
+              }
+            >
+              Adicionar pulseira
+            </Button>
+            {quickCheckinWristbandError ? (
+              <Notice tone="error" className="text-xs">
+                {quickCheckinWristbandError}
+              </Notice>
+            ) : null}
+          </div>
           {linkedVendorName ? (
             <Notice tone={linkedVendorIsAvailable ? "success" : "warning"}>
               Vendedor vinculado: <strong>{linkedVendorName}</strong>
