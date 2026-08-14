@@ -76,6 +76,7 @@ describe("SalesService", () => {
       },
       sale: {
         create: jest.fn(),
+        findMany: jest.fn(),
       },
       salesTeamMember: {
         findFirst: jest.fn(),
@@ -197,5 +198,43 @@ describe("SalesService", () => {
         value: "120000",
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("lista todas as vendas vinculadas ao evento para o gestor", async () => {
+    prisma.event.findUnique.mockResolvedValue({ id: baseAppointment.event_id });
+    prisma.sale.findMany.mockResolvedValue([
+      {
+        ...sale,
+        order_number: "PED-123",
+        lead: { id: leadId, name: "Cliente Teste", phone: "11999999999" },
+        vendor: { id: vendorId, name: "Vendedor Teste" },
+        sales_team: { id: teamId, name: "Equipe Teste" },
+        appointment: {
+          id: appointmentId,
+          scheduled_at: soldAt,
+          status: AppointmentStatus.completed,
+          event: { id: baseAppointment.event_id, name: "Evento Teste" },
+        },
+      },
+    ]);
+
+    const result = await service.listByEvent(
+      { ...user, role: Role.GESTOR } as any,
+      baseAppointment.event_id,
+    );
+
+    expect(prisma.sale.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { appointment: { event_id: baseAppointment.event_id } },
+      }),
+    );
+    expect(result[0]).toEqual(
+      expect.objectContaining({
+        id: saleId,
+        order_number: "PED-123",
+        vendor: { id: vendorId, name: "Vendedor Teste" },
+        team: { id: teamId, name: "Equipe Teste" },
+      }),
+    );
   });
 });
