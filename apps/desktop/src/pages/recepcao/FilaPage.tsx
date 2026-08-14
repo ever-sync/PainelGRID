@@ -155,11 +155,7 @@ export function FilaPage() {
                 </p>
                 <div className="space-y-3">
                   {activeService.map((lead) => (
-                    <QueueLeadRow
-                      key={lead.id}
-                      lead={lead}
-                      state="active"
-                    />
+                    <QueueLeadRow key={lead.id} lead={lead} state="active" />
                   ))}
                 </div>
               </div>
@@ -185,9 +181,7 @@ function QueueLeadRow({
     <div className="flex items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <span
         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-black ${
-          active
-            ? "bg-blue-500 text-white"
-            : "bg-amber-500 text-black"
+          active ? "bg-blue-500 text-white" : "bg-amber-500 text-black"
         }`}
       >
         {active ? <UserCheck size={18} /> : position}
