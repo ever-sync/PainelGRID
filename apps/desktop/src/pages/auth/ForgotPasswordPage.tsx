@@ -144,13 +144,20 @@ export function ForgotPasswordPage() {
           </div>
 
           {successMessage ? (
-            <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+            <div
+              role="status"
+              aria-live="polite"
+              className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
+            >
               {successMessage}
             </div>
           ) : null}
 
           {error ? (
-            <div className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+            <div
+              role="alert"
+              className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700"
+            >
               {error}
             </div>
           ) : null}
@@ -158,12 +165,19 @@ export function ForgotPasswordPage() {
           {step === "request" ? (
             <form onSubmit={handleRequestReset} className="space-y-4">
               <div className="relative">
+                <label htmlFor="password-reset-email" className="sr-only">
+                  E-mail da conta
+                </label>
                 <Mail
                   size={15}
                   className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
                 />
                 <input
+                  id="password-reset-email"
+                  name="email"
                   type="email"
+                  autoComplete="email"
+                  required
                   placeholder="Digite seu e-mail"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
@@ -194,12 +208,19 @@ export function ForgotPasswordPage() {
               </div>
 
               <div className="relative">
+                <label htmlFor="new-password" className="sr-only">
+                  Nova senha
+                </label>
                 <Lock
                   size={15}
                   className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
                 />
                 <input
+                  id="new-password"
+                  name="new-password"
                   type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  required
                   placeholder="Nova senha"
                   value={newPassword}
                   onChange={(event) => setNewPassword(event.target.value)}
@@ -218,12 +239,19 @@ export function ForgotPasswordPage() {
               </div>
 
               <div className="relative">
+                <label htmlFor="confirm-new-password" className="sr-only">
+                  Confirmar nova senha
+                </label>
                 <Lock
                   size={15}
                   className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
                 />
                 <input
+                  id="confirm-new-password"
+                  name="confirm-new-password"
                   type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  required
                   placeholder="Confirmar nova senha"
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
@@ -291,7 +319,7 @@ export function ForgotPasswordPage() {
             >
               Voltar ao login
             </button>
-            <span className="text-xs text-zinc-400">
+            <span className="text-xs text-zinc-600">
               Recuperação temporária no próprio fluxo da conta.
             </span>
           </div>
