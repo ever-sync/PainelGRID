@@ -60,6 +60,11 @@ export class UpdateLeadDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(50)
+  wristband_number?: string | null;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(5000)
   notes?: string | null;
 

@@ -171,6 +171,7 @@ export function CheckinPage() {
   const [quickCheckinLead, setQuickCheckinLead] = useState<Lead | null>(null);
   const [quickCheckinVendorId, setQuickCheckinVendorId] =
     useState("__automatic__");
+  const [quickCheckinWristband, setQuickCheckinWristband] = useState("");
   const [quickCheckinBusy, setQuickCheckinBusy] = useState(false);
   const [quickCheckinError, setQuickCheckinError] = useState("");
 
@@ -267,6 +268,18 @@ export function CheckinPage() {
   }, [user.id]);
 
   const event = events.find((e) => e.id === selectedEventId);
+  const quickCheckinEvent = events.find(
+    (eventRow) => eventRow.id === quickCheckinLead?.event_id,
+  );
+  const linkedVendorId = quickCheckinLead?.assigned_vendor_id ?? null;
+  const linkedVendorName = linkedVendorId
+    ? (vendorsById[linkedVendorId] ?? "Vendedor vinculado")
+    : null;
+  const linkedVendorIsAvailable = linkedVendorId
+    ? vendorAvailability.some(
+        (vendor) => vendor.id === linkedVendorId && vendor.eligible,
+      )
+    : false;
   const leadsForEvent = useMemo(
     () => leadsState.filter((l) => l.event_id === selectedEventId),
     [leadsState, selectedEventId],
@@ -446,6 +459,22 @@ export function CheckinPage() {
     }
   };
 
+  const openQuickCheckin = (lead: Lead) => {
+    const linkedVendorIsAvailable =
+      Boolean(lead.assigned_vendor_id) &&
+      vendorAvailability.some(
+        (vendor) => vendor.id === lead.assigned_vendor_id && vendor.eligible,
+      );
+    setQuickCheckinError("");
+    setQuickCheckinWristband(lead.wristband_number ?? "");
+    setQuickCheckinVendorId(
+      linkedVendorIsAvailable
+        ? (lead.assigned_vendor_id ?? "__automatic__")
+        : "__automatic__",
+    );
+    setQuickCheckinLead(lead);
+  };
+
   const handleCheckInByTokenValue = async (tokenValue: string) => {
     const t = readStoredSession()?.accessToken;
     const payload = normalizeCheckInPaste(tokenValue);
@@ -465,8 +494,7 @@ export function CheckinPage() {
       playBeep(880);
       triggerHapticFeedback([100, 50, 100]);
       setShowScannerModal(false);
-      setQuickCheckinVendorId("__automatic__");
-      setQuickCheckinLead(mapped);
+      openQuickCheckin(mapped);
     } catch (err) {
       const isNetwork =
         !navigator.onLine ||
@@ -535,6 +563,14 @@ export function CheckinPage() {
     if (!quickCheckinLead) return;
     const t = readStoredSession()?.accessToken;
     if (!t) return;
+    const wristbandNumber = quickCheckinWristband.trim();
+    const checkinEvent = events.find(
+      (eventRow) => eventRow.id === quickCheckinLead.event_id,
+    );
+    if (checkinEvent?.require_wristband && !wristbandNumber) {
+      setQuickCheckinError("Informe o número da pulseira.");
+      return;
+    }
 
     setQuickCheckinBusy(true);
     setQuickCheckinError("");
@@ -543,13 +579,29 @@ export function CheckinPage() {
         const appointmentId = quickCheckinLead.active_appointment?.id;
         if (appointmentId) {
           await checkInAppointment(t, appointmentId);
+          await updateLead(
+            quickCheckinLead.id,
+            { wristband_number: wristbandNumber || null },
+            t,
+          );
         } else {
           await updateLead(
             quickCheckinLead.id,
-            { confirmation_status: "checked_in" },
+            {
+              confirmation_status: "checked_in",
+              wristband_number: wristbandNumber || null,
+            },
             t,
           );
         }
+      } else if (
+        wristbandNumber !== (quickCheckinLead.wristband_number ?? "")
+      ) {
+        await updateLead(
+          quickCheckinLead.id,
+          { wristband_number: wristbandNumber || null },
+          t,
+        );
       }
 
       if (sendToQueue) {
@@ -562,6 +614,12 @@ export function CheckinPage() {
         );
       }
 
+      pushToast({
+        type: "success",
+        message: sendToQueue
+          ? `Check-in de ${quickCheckinLead.name} salvo e vendedor chamado.`
+          : `Check-in de ${quickCheckinLead.name} salvo.`,
+      });
       setQuickCheckinLead(null);
       refreshCheckinData();
     } catch (error) {
@@ -658,9 +716,7 @@ export function CheckinPage() {
       setSearch("");
       setActiveTab("all");
       setCurrentPage(1);
-      setQuickCheckinError("");
-      setQuickCheckinVendorId("__automatic__");
-      setQuickCheckinLead(mapped);
+      openQuickCheckin(mapped);
       pushToast({
         type: "success",
         message: `${mapped.name} foi cadastrado. Confirme agora o check-in e o vendedor.`,
@@ -1163,9 +1219,7 @@ export function CheckinPage() {
                   type="button"
                   disabled={isCheckedIn}
                   onClick={() => {
-                    setQuickCheckinError("");
-                    setQuickCheckinVendorId("__automatic__");
-                    setQuickCheckinLead(lead);
+                    openQuickCheckin(lead);
                   }}
                   className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs sm:text-sm font-semibold text-white transition-all hover:bg-emerald-700 active:scale-95 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -1438,16 +1492,24 @@ export function CheckinPage() {
           <>
             <Button
               variant="secondary"
-              onClick={() => setQuickCheckinLead(null)}
-              isDisabled={quickCheckinBusy}
+              onClick={() => void handleQuickCheckin(false)}
+              isDisabled={
+                quickCheckinBusy ||
+                (Boolean(quickCheckinEvent?.require_wristband) &&
+                  !quickCheckinWristband.trim())
+              }
             >
-              Não
+              Salvar sem chamar
             </Button>
             <Button
               onClick={() => void handleQuickCheckin(true)}
               loading={quickCheckinBusy}
+              isDisabled={
+                Boolean(quickCheckinEvent?.require_wristband) &&
+                !quickCheckinWristband.trim()
+              }
             >
-              Sim
+              Salvar e chamar
             </Button>
           </>
         }
@@ -1459,11 +1521,34 @@ export function CheckinPage() {
               isDarkMode ? "text-zinc-300" : "text-zinc-700",
             )}
           >
-            Enviar <strong>{quickCheckinLead?.name}</strong> para a fila de
-            atendimento?
+            Confirme a pulseira de <strong>{quickCheckinLead?.name}</strong> e
+            escolha quem fará o atendimento.
           </p>
+          <Input
+            label={`Número da pulseira${quickCheckinEvent?.require_wristband ? " *" : " (opcional)"}`}
+            value={quickCheckinWristband}
+            onChange={(inputEvent) => {
+              setQuickCheckinWristband(inputEvent.target.value.slice(0, 50));
+              setQuickCheckinError("");
+            }}
+            placeholder="Ex.: 127"
+            autoFocus
+            isDisabled={quickCheckinBusy}
+          />
+          {linkedVendorName ? (
+            <Notice tone={linkedVendorIsAvailable ? "success" : "warning"}>
+              Vendedor vinculado: <strong>{linkedVendorName}</strong>
+              {!linkedVendorIsAvailable
+                ? ". Ele está indisponível; escolha outro vendedor ou o próximo da fila."
+                : ""}
+            </Notice>
+          ) : (
+            <Notice tone="info">
+              Este cliente ainda não possui vendedor vinculado.
+            </Notice>
+          )}
           <Select
-            label="Como deseja chamar?"
+            label="Vendedor para atendimento"
             value={quickCheckinVendorId}
             onChange={(event) => {
               setQuickCheckinVendorId(event.target.value);

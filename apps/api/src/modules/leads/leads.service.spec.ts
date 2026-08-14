@@ -749,6 +749,33 @@ describe("LeadsService", () => {
     deleted_at: null,
   };
 
+  it("permite que a recepcao salve o numero da pulseira no check-in", async () => {
+    prisma.lead.findFirst.mockResolvedValue(baseExistingLead);
+    prisma.lead.update.mockResolvedValue({
+      ...baseExistingLead,
+      wristband_number: "A-42",
+    });
+
+    await service.update(
+      {
+        sub: "reception-1",
+        role: Role.RECEPCAO,
+        name: "Recepcao",
+        email: "recepcao@teste.com",
+        client_id: clientId,
+      },
+      baseExistingLead.id,
+      { wristband_number: " A-42 " },
+    );
+
+    expect(prisma.lead.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: baseExistingLead.id },
+        data: { wristband_number: "A-42" },
+      }),
+    );
+  });
+
   it("impede vendedor de assumir lead ja cadastrado no evento", async () => {
     prisma.lead.findFirst.mockResolvedValue({
       ...baseExistingLead,

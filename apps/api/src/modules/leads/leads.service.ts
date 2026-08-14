@@ -5341,6 +5341,9 @@ export class LeadsService {
     if (dto.assigned_vendor_id !== undefined) {
       data.assigned_vendor_id = dto.assigned_vendor_id;
     }
+    if (dto.wristband_number !== undefined) {
+      data.wristband_number = dto.wristband_number?.trim() || null;
+    }
     if (dto.notes !== undefined) {
       data.notes = dto.notes;
     }
@@ -5534,6 +5537,9 @@ export class LeadsService {
       if (dto.assigned_vendor_id !== undefined) {
         data.assigned_vendor_id = dto.assigned_vendor_id;
       }
+      if (dto.wristband_number !== undefined) {
+        data.wristband_number = dto.wristband_number?.trim() || null;
+      }
       return data;
     }
 
@@ -5585,6 +5591,7 @@ export class LeadsService {
     const allowed: (keyof UpdateLeadDto)[] = [
       "confirmation_status",
       "assigned_vendor_id",
+      "wristband_number",
     ];
     const keys = Object.keys(dto) as (keyof UpdateLeadDto)[];
     const bad = keys.filter(
@@ -5592,7 +5599,7 @@ export class LeadsService {
     );
     if (bad.length > 0) {
       throw new BadRequestException(
-        "Recepcao so pode atualizar confirmation_status e assigned_vendor_id",
+        "Recepcao so pode atualizar confirmation_status, assigned_vendor_id e wristband_number",
       );
     }
   }
