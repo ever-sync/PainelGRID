@@ -216,13 +216,27 @@ export class MetaService implements OnModuleInit {
     };
   }
 
-  async getGestorMetaStatus(user: AuthenticatedUser) {
+  async getGestorMetaStatus(user: AuthenticatedUser, clientId?: string) {
     if (user.role !== Role.GESTOR) {
       throw new ForbiddenException("Apenas gestores");
     }
 
+    let gestorId = user.sub;
+    if (clientId) {
+      const client = await this.db.client.findUnique({
+        where: { id: clientId },
+        select: { gestor_id: true },
+      });
+      if (!client) throw new NotFoundException("Cliente nao encontrado");
+      const owner = await this.db.user.findUnique({
+        where: { id: client.gestor_id },
+        select: { meta_gestor_access_token: true },
+      });
+      if (owner?.meta_gestor_access_token) gestorId = client.gestor_id;
+    }
+
     const row = await this.db.user.findUnique({
-      where: { id: user.sub },
+      where: { id: gestorId },
       select: {
         meta_gestor_access_token: true,
         meta_gestor_token_expires_at: true,
@@ -233,7 +247,7 @@ export class MetaService implements OnModuleInit {
 
     const connected = Boolean(row?.meta_gestor_access_token);
     return {
-      gestor_id: user.sub,
+      gestor_id: gestorId,
       connected,
       token_expires_at:
         row?.meta_gestor_token_expires_at?.toISOString() ?? null,
@@ -410,7 +424,12 @@ export class MetaService implements OnModuleInit {
         );
       }
 
-      const cacheKey = `meta:gestor:${user.sub}:enriched-businesses`;
+      const { gestorId, selection } =
+        await this.getGestorMetaSelectionForClientOrThrow(
+          user,
+          query.client_id,
+        );
+      const cacheKey = `meta:gestor:${gestorId}:enriched-businesses`;
       const cached = await this.redis.client.get(cacheKey);
       if (cached) {
         return {
@@ -423,9 +442,6 @@ export class MetaService implements OnModuleInit {
           cached: true,
         };
       }
-      const selection = await this.getGestorMetaSelectionSessionOrThrow(
-        user.sub,
-      );
       const businesses = await this.enrichBusinessesForAccessToken(
         selection.accessToken,
         selection.businesses,
@@ -487,7 +503,9 @@ export class MetaService implements OnModuleInit {
           "gestor_token so pode ser usado por gestores",
         );
       }
-      selection = await this.getGestorMetaSelectionSessionOrThrow(user.sub);
+      selection = (
+        await this.getGestorMetaSelectionForClientOrThrow(user, dto.client_id)
+      ).selection;
     } else {
       if (!dto.oauth_session_id) {
         throw new BadRequestException(
@@ -782,7 +800,9 @@ export class MetaService implements OnModuleInit {
     dto: ConfigureWhatsappChannelsDto,
   ) {
     await this.assertMetaClientAccess(user, dto.client_id);
-    const selection = await this.getGestorMetaSelectionSessionOrThrow(user.sub);
+    const selection = (
+      await this.getGestorMetaSelectionForClientOrThrow(user, dto.client_id)
+    ).selection;
     const selectedBusiness =
       selection.businesses.find(
         (business) => business.id === dto.business_id,
@@ -5158,6 +5178,37 @@ export class MetaService implements OnModuleInit {
       state: null,
       businesses,
     };
+  }
+
+  private async getGestorMetaSelectionForClientOrThrow(
+    user: AuthenticatedUser,
+    clientId: string,
+  ): Promise<{ gestorId: string; selection: MetaSelectionSession }> {
+    if (user.role !== Role.GESTOR) {
+      throw new ForbiddenException(
+        "A conexão compartilhada da Meta está disponível apenas para gestores",
+      );
+    }
+    const client = await this.db.client.findUnique({
+      where: { id: clientId },
+      select: { gestor_id: true },
+    });
+    if (!client) throw new NotFoundException("Cliente nao encontrado");
+
+    try {
+      return {
+        gestorId: client.gestor_id,
+        selection: await this.getGestorMetaSelectionSessionOrThrow(
+          client.gestor_id,
+        ),
+      };
+    } catch (ownerError) {
+      if (client.gestor_id === user.sub) throw ownerError;
+      return {
+        gestorId: user.sub,
+        selection: await this.getGestorMetaSelectionSessionOrThrow(user.sub),
+      };
+    }
   }
 
   private async enrichBusinessesForAccessToken(

@@ -76,8 +76,9 @@ export class MetaController {
   @ApiResponse({ status: 200, description: "Status retornado com sucesso" })
   getGestorMetaStatus(
     @CurrentUser() user: AuthenticatedUser,
+    @Query("client_id") clientId?: string,
   ): Promise<Record<string, unknown>> {
-    return this.metaService.getGestorMetaStatus(user);
+    return this.metaService.getGestorMetaStatus(user, clientId);
   }
 
   @Roles(Role.GESTOR)

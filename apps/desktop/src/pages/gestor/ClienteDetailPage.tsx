@@ -914,10 +914,10 @@ export function ClienteDetailPage() {
     const session = readStoredSession();
     const accessToken = session?.accessToken ?? "";
     if (!accessToken) return;
-    void getMetaGestorStatus(accessToken)
+    void getMetaGestorStatus(accessToken, resolvedId)
       .then((res) => setGestorMetaConnected(res.connected))
       .catch(() => setGestorMetaConnected(false));
-  }, []);
+  }, [resolvedId]);
 
   useEffect(() => {
     if (!resolvedId || !isUuid(resolvedId)) {

@@ -223,8 +223,9 @@ export function startMetaGestorConnect(token: string) {
   });
 }
 
-export function getMetaGestorStatus(token: string) {
-  return httpRequest<MetaGestorStatusResponse>("/meta/gestor/status", {
+export function getMetaGestorStatus(token: string, clientId?: string) {
+  const query = clientId ? `?client_id=${encodeURIComponent(clientId)}` : "";
+  return httpRequest<MetaGestorStatusResponse>(`/meta/gestor/status${query}`, {
     method: "GET",
     token,
   });
