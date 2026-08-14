@@ -661,7 +661,10 @@ function RubinhoThermometerCard({
                 <div className="text-xs text-zinc-500">
                   <p>{lead.phone ?? "Telefone não informado"}</p>
                   {lead.failure_reason ? (
-                    <p className="mt-0.5 truncate text-rose-600" title={lead.failure_reason}>
+                    <p
+                      className="mt-0.5 truncate text-rose-600"
+                      title={lead.failure_reason}
+                    >
                       {lead.failure_reason}
                     </p>
                   ) : null}

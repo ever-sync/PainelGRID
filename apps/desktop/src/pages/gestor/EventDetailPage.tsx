@@ -854,9 +854,7 @@ export function EventDetailPage() {
     setLeadDrawerEmail(lead.email ?? "");
     setLeadDrawerPhone(lead.phone ?? "");
     const scheduledAt =
-      lead.active_appointment?.scheduled_at ??
-      lead.store_visit_datetime ??
-      "";
+      lead.active_appointment?.scheduled_at ?? lead.store_visit_datetime ?? "";
     const matchingDay = (event?.event_days ?? []).find(
       (day) => Date.parse(day.start) === Date.parse(scheduledAt),
     );
@@ -954,15 +952,11 @@ export function EventDetailPage() {
       );
 
       if (dateChanged && activeAppointment && selectedEventDay) {
-        await rescheduleAppointment(
-          session.accessToken,
-          activeAppointment.id,
-          {
-            scheduled_at: selectedEventDay.start,
-            timezone: "America/Sao_Paulo",
-            notes: "Data alterada pelo gestor na ficha do lead.",
-          },
-        );
+        await rescheduleAppointment(session.accessToken, activeAppointment.id, {
+          scheduled_at: selectedEventDay.start,
+          timezone: "America/Sao_Paulo",
+          notes: "Data alterada pelo gestor na ficha do lead.",
+        });
       }
 
       const [freshLead, history] = await Promise.all([
@@ -987,9 +981,7 @@ export function EventDetailPage() {
       const refreshedDay = (event?.event_days ?? []).find(
         (day) => Date.parse(day.start) === Date.parse(refreshedScheduledAt),
       );
-      setLeadDrawerScheduledAt(
-        refreshedDay?.start ?? refreshedScheduledAt,
-      );
+      setLeadDrawerScheduledAt(refreshedDay?.start ?? refreshedScheduledAt);
       setLeadDrawerMode("view");
       setLeadDrawerMessage(
         dateChanged

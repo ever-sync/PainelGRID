@@ -85,7 +85,9 @@ describe("AutomationController", () => {
       sent: true,
     });
     const leadId = "d66fd38f-95ec-4c68-8d29-f5320bb62f18";
-    await expect(controller.dispatchInitialTemplatePilot(leadId)).resolves.toEqual({
+    await expect(
+      controller.dispatchInitialTemplatePilot(leadId),
+    ).resolves.toEqual({
       processed: true,
       sent: true,
     });

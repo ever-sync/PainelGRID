@@ -42,8 +42,13 @@ export class PanelAppointmentsController {
 
   @Post(":id/reschedule")
   @Roles(Role.GESTOR)
-  @ApiOperation({ summary: "Reagenda uma visita pelas datas validas do evento" })
-  @ApiResponse({ status: 201, description: "Agendamento reagendado com sucesso" })
+  @ApiOperation({
+    summary: "Reagenda uma visita pelas datas validas do evento",
+  })
+  @ApiResponse({
+    status: 201,
+    description: "Agendamento reagendado com sucesso",
+  })
   reschedule(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() dto: RescheduleAppointmentDto,

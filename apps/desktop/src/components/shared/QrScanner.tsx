@@ -130,8 +130,9 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
         // câmera é escolhida pelo ID retornado pelo próprio navegador.
         const cameras = await Html5Qrcode.getCameras();
         const preferredCamera =
-          cameras.find((camera) => /back|rear|traseira|ambiente/i.test(camera.label)) ??
-          cameras[cameras.length - 1];
+          cameras.find((camera) =>
+            /back|rear|traseira|ambiente/i.test(camera.label),
+          ) ?? cameras[cameras.length - 1];
         if (!preferredCamera) throw rearCameraError;
 
         await html5QrCode.start(
@@ -156,22 +157,22 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
         );
       }
 
-        // Check for torch capability
-        try {
-          const capabilities =
-            html5QrCode.getRunningTrackCapabilities() as CameraCapabilities &
-              TorchCapabilities;
-          if (capabilities && capabilities.torch) {
-            setHasTorch(true);
-          }
-          if (capabilities.focusMode?.includes("continuous")) {
-            await html5QrCode.applyVideoConstraints({
-              advanced: [{ focusMode: "continuous" } as CameraConstraintSet],
-            });
-          }
-        } catch (e) {
-          console.warn("Camera capabilities check failed", e);
+      // Check for torch capability
+      try {
+        const capabilities =
+          html5QrCode.getRunningTrackCapabilities() as CameraCapabilities &
+            TorchCapabilities;
+        if (capabilities && capabilities.torch) {
+          setHasTorch(true);
         }
+        if (capabilities.focusMode?.includes("continuous")) {
+          await html5QrCode.applyVideoConstraints({
+            advanced: [{ focusMode: "continuous" } as CameraConstraintSet],
+          });
+        }
+      } catch (e) {
+        console.warn("Camera capabilities check failed", e);
+      }
 
       setLoading(false);
     } catch (err) {
@@ -183,9 +184,10 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
             ? String(err.name)
             : "";
       const errorText = err instanceof Error ? err.message : String(err ?? "");
-      const denied = /NotAllowed|PermissionDenied|SecurityError|permission denied|not permitted/i.test(
-        `${errorName} ${errorText}`,
-      );
+      const denied =
+        /NotAllowed|PermissionDenied|SecurityError|permission denied|not permitted/i.test(
+          `${errorName} ${errorText}`,
+        );
       setPermissionDenied(denied);
       setErrorMsg(
         denied

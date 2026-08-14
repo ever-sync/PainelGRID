@@ -66,10 +66,7 @@ export type RubinhoThermometer = {
 };
 
 export type RubinhoTemplateLeadStatus =
-  | "delivered_or_read"
-  | "failed"
-  | "without_confirmation"
-  | "without_dispatch";
+  "delivered_or_read" | "failed" | "without_confirmation" | "without_dispatch";
 
 export type RubinhoTemplateLeadList = {
   generated_at: string;
