@@ -1,7 +1,9 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from "@nestjs/common";
 import { PrismaService } from "../../config/prisma.service";
 import { ClientsService } from "../clients/clients.service";
@@ -10,6 +12,10 @@ import { Role } from "../../common/types";
 import { CreateVehicleDto } from "./dto/create-vehicle.dto";
 import { UpdateVehicleDto } from "./dto/update-vehicle.dto";
 import { Prisma } from "@prisma/client";
+import { ImportVehicleCatalogDto } from "./dto/import-vehicle-catalog.dto";
+
+type FipeBrand = { codigo: string; nome: string };
+type FipeModels = { modelos?: Array<{ codigo: number; nome: string }> };
 
 @Injectable()
 export class VehiclesService {
@@ -88,6 +94,153 @@ export class VehiclesService {
       where,
       orderBy: { brand: "asc" },
     });
+  }
+
+  private normalizeBrand(value: string) {
+    return value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/gi, "")
+      .toLowerCase();
+  }
+
+  private async fipeFetch<T>(path: string): Promise<T> {
+    try {
+      const response = await fetch(
+        `https://parallelum.com.br/fipe/api/v1${path}`,
+        { signal: AbortSignal.timeout(20_000) },
+      );
+      if (!response.ok) throw new Error(`FIPE ${response.status}`);
+      return (await response.json()) as T;
+    } catch {
+      throw new ServiceUnavailableException(
+        "A tabela FIPE está indisponível. Tente novamente em alguns instantes.",
+      );
+    }
+  }
+
+  private async getClientVehicleBrand(
+    user: AuthenticatedUser,
+    clientId: string,
+  ) {
+    await this.assertGestorClientAccess(user, clientId);
+    const client = await this.prisma.client.findUnique({
+      where: { id: clientId },
+      select: { settings: true },
+    });
+    if (!client) throw new NotFoundException("Cliente não encontrado");
+    const settings = (client.settings ?? {}) as Record<string, unknown>;
+    const brand =
+      typeof settings.vehicle_brand === "string"
+        ? settings.vehicle_brand.trim()
+        : "";
+    if (!brand || brand === "Outra") {
+      throw new BadRequestException(
+        "Defina uma marca principal válida no cadastro do cliente.",
+      );
+    }
+    return brand;
+  }
+
+  async syncCatalog(user: AuthenticatedUser, clientId: string) {
+    const configuredBrand = await this.getClientVehicleBrand(user, clientId);
+    const brands = await this.fipeFetch<FipeBrand[]>("/carros/marcas");
+    const normalized = this.normalizeBrand(configuredBrand);
+    const brand = brands.find(
+      (row) => this.normalizeBrand(row.nome) === normalized,
+    );
+    if (!brand) {
+      throw new BadRequestException(
+        `A marca ${configuredBrand} não foi encontrada na tabela FIPE.`,
+      );
+    }
+
+    const payload = await this.fipeFetch<FipeModels>(
+      `/carros/marcas/${encodeURIComponent(brand.codigo)}/modelos`,
+    );
+    const models = payload.modelos ?? [];
+    if (!models.length) {
+      throw new BadRequestException(
+        "Nenhum modelo encontrado para esta marca.",
+      );
+    }
+
+    await this.prisma.vehicleCatalog.createMany({
+      data: models.map((model) => ({
+        brand_code: brand.codigo,
+        brand: brand.nome,
+        model_code: String(model.codigo),
+        model: model.nome,
+      })),
+      skipDuplicates: true,
+    });
+
+    const catalog = await this.prisma.vehicleCatalog.findMany({
+      where: { brand_code: brand.codigo },
+      orderBy: [{ model: "asc" }, { model_code: "asc" }],
+    });
+    const existingVehicles = await this.prisma.vehicle.findMany({
+      where: { client_id: clientId, brand: brand.nome },
+      select: { model: true },
+    });
+    const existing = new Set(
+      existingVehicles.map((vehicle) => vehicle.model.toLocaleLowerCase()),
+    );
+
+    return {
+      brand: brand.nome,
+      brand_code: brand.codigo,
+      synced: models.length,
+      items: catalog.map((item) => ({
+        ...item,
+        imported: existing.has(item.model.toLocaleLowerCase()),
+      })),
+    };
+  }
+
+  async importCatalog(user: AuthenticatedUser, dto: ImportVehicleCatalogDto) {
+    await this.assertGestorClientAccess(user, dto.client_id);
+    const catalog = await this.prisma.vehicleCatalog.findMany({
+      where: { id: { in: dto.catalog_ids } },
+    });
+    if (!catalog.length) {
+      throw new NotFoundException("Modelos do catálogo não encontrados");
+    }
+
+    const existingVehicles = await this.prisma.vehicle.findMany({
+      where: { client_id: dto.client_id },
+      select: { brand: true, model: true },
+    });
+    const existing = new Set(
+      existingVehicles.map((vehicle) =>
+        `${vehicle.brand}|${vehicle.model}`.toLocaleLowerCase("pt-BR"),
+      ),
+    );
+    const pending = catalog.filter(
+      (item) =>
+        !existing.has(`${item.brand}|${item.model}`.toLocaleLowerCase("pt-BR")),
+    );
+
+    if (pending.length) {
+      await this.prisma.vehicle.createMany({
+        data: pending.map((item) => ({
+          client_id: dto.client_id,
+          brand: item.brand,
+          model: item.model,
+          year_or_km: "A definir",
+          price: "0",
+          stores: "A definir",
+          status: false,
+          tags: ["Catálogo FIPE"],
+          condition: "novo",
+        })),
+      });
+    }
+
+    return {
+      imported: pending.length,
+      skipped: catalog.length - pending.length,
+    };
   }
 
   async findOne(user: AuthenticatedUser, id: string) {

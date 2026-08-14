@@ -22,6 +22,8 @@ import { AuthenticatedUser } from "../auth/auth.types";
 import { VehiclesService } from "./vehicles.service";
 import { CreateVehicleDto } from "./dto/create-vehicle.dto";
 import { UpdateVehicleDto } from "./dto/update-vehicle.dto";
+import { SyncVehicleCatalogDto } from "./dto/sync-vehicle-catalog.dto";
+import { ImportVehicleCatalogDto } from "./dto/import-vehicle-catalog.dto";
 
 @ApiTags("vehicles")
 @ApiBearerAuth()
@@ -61,6 +63,26 @@ export class VehiclesController {
       status: isStatusBool,
       tag,
     });
+  }
+
+  @Post("catalog/sync")
+  @Roles(Role.GESTOR, Role.CLIENTE)
+  @ApiOperation({ summary: "Sincroniza o catálogo FIPE da marca do cliente" })
+  syncCatalog(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: SyncVehicleCatalogDto,
+  ) {
+    return this.vehiclesService.syncCatalog(user, dto.client_id);
+  }
+
+  @Post("catalog/import")
+  @Roles(Role.GESTOR, Role.CLIENTE)
+  @ApiOperation({ summary: "Importa modelos do catálogo para o estoque" })
+  importCatalog(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ImportVehicleCatalogDto,
+  ) {
+    return this.vehiclesService.importCatalog(user, dto);
   }
 
   @Get(":id")

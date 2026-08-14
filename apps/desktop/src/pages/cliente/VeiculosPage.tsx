@@ -3,6 +3,7 @@ import { useOutletContext } from "react-router-dom";
 import clsx from "clsx";
 import {
   Car,
+  Database,
   Pencil,
   Plus,
   Search,
@@ -28,7 +29,10 @@ import {
   deleteVehicle,
   listCarBrands,
   listCarModelsByBrand,
+  importVehicleCatalog,
+  syncVehicleCatalog,
   type Vehicle,
+  type VehicleCatalogItem,
   type VehicleOption,
 } from "../../services/vehicles";
 import {
@@ -135,6 +139,13 @@ export function VeiculosPage() {
   const [loadingFipeBrands, setLoadingFipeBrands] = useState(false);
   const [loadingFipeModels, setLoadingFipeModels] = useState(false);
   const [isManualInput, setIsManualInput] = useState(false);
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogImporting, setCatalogImporting] = useState(false);
+  const [catalogBrand, setCatalogBrand] = useState("");
+  const [catalogItems, setCatalogItems] = useState<VehicleCatalogItem[]>([]);
+  const [selectedCatalogIds, setSelectedCatalogIds] = useState<string[]>([]);
+  const [catalogMessage, setCatalogMessage] = useState("");
 
   // Sync Dark Mode
   useEffect(() => {
@@ -489,6 +500,64 @@ export function VeiculosPage() {
     setVehicleTags((prev) => prev.filter((t) => t !== tagToRemove));
   };
 
+  const handleOpenCatalog = async () => {
+    const token = readStoredSession()?.accessToken;
+    if (!token || !clientId) return;
+    setCatalogOpen(true);
+    setCatalogLoading(true);
+    setCatalogMessage("");
+    try {
+      const response = await syncVehicleCatalog(clientId, token);
+      setCatalogBrand(response.brand);
+      setCatalogItems(response.items);
+      setSelectedCatalogIds(
+        response.items.filter((item) => !item.imported).map((item) => item.id),
+      );
+    } catch (error) {
+      setCatalogMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível sincronizar o catálogo FIPE.",
+      );
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
+
+  const handleImportCatalog = async () => {
+    const token = readStoredSession()?.accessToken;
+    if (!token || !clientId || !selectedCatalogIds.length) return;
+    setCatalogImporting(true);
+    setCatalogMessage("");
+    try {
+      const result = await importVehicleCatalog(
+        clientId,
+        selectedCatalogIds,
+        token,
+      );
+      setCatalogMessage(
+        `${result.imported} modelo${result.imported === 1 ? "" : "s"} importado${result.imported === 1 ? "" : "s"}.`,
+      );
+      setCatalogItems((items) =>
+        items.map((item) =>
+          selectedCatalogIds.includes(item.id)
+            ? { ...item, imported: true }
+            : item,
+        ),
+      );
+      setSelectedCatalogIds([]);
+      loadVehicles();
+    } catch (error) {
+      setCatalogMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível importar os modelos.",
+      );
+    } finally {
+      setCatalogImporting(false);
+    }
+  };
+
   if (!clientId) return <MissingClientScope />;
 
   return (
@@ -503,33 +572,42 @@ export function VeiculosPage() {
         breadcrumbs={[{ label: "TechStore" }, { label: "Veículos" }]}
         dark={isDarkMode}
         actions={
-          <Button
-            onClick={() => {
-              setEditingVehicleId(null);
-              setVehicleBrand("");
-              setVehicleModel("");
-              setVehicleYearOrKm("");
-              setVehiclePrice("");
-              setVehicleStores("");
-              setVehicleStatus(true);
-              setVehicleTags([]);
-              setSelectedBrandCode("");
-              setIsManualInput(false);
-              setVehicleImageUrl("");
-              setVehicleCategory("");
-              setVehicleGallery([]);
-              setUploadError("");
-              setVehicleCondition("novo");
-              setVehicleManufacturingYear("");
-              setVehicleModelYear("");
-              setVehicleKm("");
-              setIsVehicleModalOpen(true);
-            }}
-            className="bg-[#E51838] text-white hover:bg-[#c01530] transition-colors"
-            icon={<Plus size={16} />}
-          >
-            Novo Veículo
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => void handleOpenCatalog()}
+              icon={<Database size={16} />}
+            >
+              Importar da FIPE
+            </Button>
+            <Button
+              onClick={() => {
+                setEditingVehicleId(null);
+                setVehicleBrand("");
+                setVehicleModel("");
+                setVehicleYearOrKm("");
+                setVehiclePrice("");
+                setVehicleStores("");
+                setVehicleStatus(true);
+                setVehicleTags([]);
+                setSelectedBrandCode("");
+                setIsManualInput(false);
+                setVehicleImageUrl("");
+                setVehicleCategory("");
+                setVehicleGallery([]);
+                setUploadError("");
+                setVehicleCondition("novo");
+                setVehicleManufacturingYear("");
+                setVehicleModelYear("");
+                setVehicleKm("");
+                setIsVehicleModalOpen(true);
+              }}
+              className="bg-[#E51838] text-white hover:bg-[#c01530] transition-colors"
+              icon={<Plus size={16} />}
+            >
+              Novo Veículo
+            </Button>
+          </div>
         }
       />
 
@@ -1458,6 +1536,136 @@ export function VeiculosPage() {
               </label>
             </div>
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={catalogOpen}
+        onClose={() => setCatalogOpen(false)}
+        title="Importar catálogo FIPE"
+        size="xl"
+      >
+        <div className="space-y-4">
+          <div
+            className={clsx(
+              "rounded-2xl border p-4",
+              isDarkMode
+                ? "border-zinc-800 bg-zinc-900/50"
+                : "border-zinc-200 bg-zinc-50",
+            )}
+          >
+            <p className="text-sm font-bold">
+              {catalogBrand || "Marca principal do cliente"}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Os modelos importados entram ocultos, com preço, ano e loja a
+              definir. Revise cada veículo antes de ativá-lo na vitrine.
+            </p>
+          </div>
+
+          {catalogMessage ? (
+            <p
+              className={clsx(
+                "rounded-xl border px-3 py-2 text-sm",
+                catalogMessage.includes("importado")
+                  ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600"
+                  : "border-red-500/20 bg-red-500/10 text-red-600",
+              )}
+            >
+              {catalogMessage}
+            </p>
+          ) : null}
+
+          {catalogLoading ? (
+            <div className="flex items-center justify-center gap-3 py-14 text-sm text-zinc-500">
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-300 border-t-[#E51838]" />
+              Sincronizando modelos com a tabela FIPE...
+            </div>
+          ) : catalogItems.length ? (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-zinc-500">
+                  {catalogItems.length} modelos encontrados ·{" "}
+                  {selectedCatalogIds.length} selecionados
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const available = catalogItems
+                      .filter((item) => !item.imported)
+                      .map((item) => item.id);
+                    setSelectedCatalogIds(
+                      selectedCatalogIds.length === available.length
+                        ? []
+                        : available,
+                    );
+                  }}
+                  className="text-xs font-bold text-[#E51838] hover:underline"
+                >
+                  {selectedCatalogIds.length ===
+                  catalogItems.filter((item) => !item.imported).length
+                    ? "Desmarcar todos"
+                    : "Selecionar todos"}
+                </button>
+              </div>
+
+              <div className="max-h-[52vh] overflow-y-auto rounded-2xl border border-border p-2">
+                {catalogItems.map((item) => {
+                  const checked = selectedCatalogIds.includes(item.id);
+                  return (
+                    <label
+                      key={item.id}
+                      className={clsx(
+                        "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm",
+                        item.imported
+                          ? "cursor-not-allowed opacity-50"
+                          : "cursor-pointer hover:bg-muted",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        disabled={item.imported}
+                        checked={item.imported || checked}
+                        onChange={() =>
+                          setSelectedCatalogIds((current) =>
+                            checked
+                              ? current.filter((id) => id !== item.id)
+                              : [...current, item.id],
+                          )
+                        }
+                        className="h-4 w-4 rounded border-zinc-300 accent-[#E51838]"
+                      />
+                      <span className="min-w-0 flex-1 truncate font-medium">
+                        {item.model}
+                      </span>
+                      {item.imported ? (
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-500">
+                          Já importado
+                        </span>
+                      ) : null}
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="flex justify-end gap-2 border-t border-border pt-4">
+                <Button
+                  variant="secondary"
+                  onClick={() => setCatalogOpen(false)}
+                >
+                  Fechar
+                </Button>
+                <Button
+                  loading={catalogImporting}
+                  isDisabled={!selectedCatalogIds.length}
+                  onClick={() => void handleImportCatalog()}
+                  icon={<Upload size={16} />}
+                >
+                  Importar selecionados
+                </Button>
+              </div>
+            </>
+          ) : null}
         </div>
       </Modal>
 

@@ -1469,6 +1469,20 @@ model Vehicle {
   @@map("vehicles")
 }
 
+model VehicleCatalog {
+  id          String   @id @default(uuid()) @db.Uuid
+  brand_code  String   @db.VarChar(30)
+  brand       String   @db.VarChar(100)
+  model_code  String   @db.VarChar(30)
+  model       String   @db.VarChar(180)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@unique([brand_code, model_code])
+  @@index([brand])
+  @@map("vehicle_catalog")
+}
+
 model Store {
   id             String   @id @default(uuid()) @db.Uuid
   client_id      String   @db.Uuid

@@ -22,6 +22,22 @@ export type VehicleOption = {
   label: string;
 };
 
+export type VehicleCatalogItem = {
+  id: string;
+  brand_code: string;
+  brand: string;
+  model_code: string;
+  model: string;
+  imported: boolean;
+};
+
+export type VehicleCatalogResponse = {
+  brand: string;
+  brand_code: string;
+  synced: number;
+  items: VehicleCatalogItem[];
+};
+
 export type Vehicle = {
   id: string;
   client_id: string;
@@ -130,6 +146,29 @@ export function createVehicle(dto: CreateVehicleDto, token: string) {
     token,
     body: dto,
   });
+}
+
+export function syncVehicleCatalog(clientId: string, token: string) {
+  return httpRequest<VehicleCatalogResponse>("/vehicles/catalog/sync", {
+    method: "POST",
+    token,
+    body: { client_id: clientId },
+  });
+}
+
+export function importVehicleCatalog(
+  clientId: string,
+  catalogIds: string[],
+  token: string,
+) {
+  return httpRequest<{ imported: number; skipped: number }>(
+    "/vehicles/catalog/import",
+    {
+      method: "POST",
+      token,
+      body: { client_id: clientId, catalog_ids: catalogIds },
+    },
+  );
 }
 
 export function updateVehicle(
