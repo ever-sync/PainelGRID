@@ -10,6 +10,11 @@ import { MetaService } from "./meta.service";
 
 describe("MetaService", () => {
   const prisma = {
+    user: {
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
     client: {
       findUnique: jest.fn(),
     },
@@ -143,6 +148,47 @@ describe("MetaService", () => {
       whatsappContextResolver as never,
       metaSyncQueue as never,
     );
+  });
+
+  it("considera a conexao Meta legada compartilhada para qualquer gestor global", async () => {
+    prisma.client.findUnique.mockResolvedValue({ gestor_id: "gestor-dono" });
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.metaConnection.findFirst.mockResolvedValue({
+      id: "meta-connection-master",
+    });
+
+    const result = await service.getGestorMetaStatus(
+      { sub: "outro-gestor", role: Role.GESTOR } as AuthenticatedUser,
+      "client-1",
+    );
+
+    expect(result.connected).toBe(true);
+    expect(prisma.metaConnection.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: "connected" }),
+      }),
+    );
+  });
+
+  it("reaproveita o token legado mais recente da empresa master", async () => {
+    prisma.metaConnection.findMany.mockResolvedValue([
+      {
+        access_token: "token-master",
+        token_expires_at: null,
+        scopes: ["business_management"],
+      },
+    ]);
+    jest
+      .spyOn(service as any, "fetchBusinesses")
+      .mockResolvedValue([{ id: "bm-1", name: "BM Master" }]);
+
+    const session = await (
+      service as any
+    ).getSharedMetaConnectionSessionOrThrow();
+
+    expect(session.accessToken).toBe("token-master");
+    expect(session.businesses).toEqual([{ id: "bm-1", name: "BM Master" }]);
   });
 
   it("persiste varios numeros de WhatsApp e marca somente o principal", () => {

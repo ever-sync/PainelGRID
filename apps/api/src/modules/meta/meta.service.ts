@@ -243,7 +243,34 @@ export class MetaService implements OnModuleInit {
           select: { id: true },
           orderBy: { meta_gestor_connected_at: "desc" },
         });
-        if (sharedGestor) gestorId = sharedGestor.id;
+        if (sharedGestor) {
+          gestorId = sharedGestor.id;
+        } else {
+          // Antes da conexao Meta passar a ser feita no dashboard do gestor,
+          // os tokens eram persistidos por cliente em MetaConnection. Como os
+          // gestores sao administradores globais da mesma empresa master, uma
+          // conexao legada ativa tambem representa a conexao compartilhada.
+          const sharedConnection = await this.db.metaConnection.findFirst({
+            where: {
+              status: "connected",
+              OR: [
+                { token_expires_at: null },
+                { token_expires_at: { gt: new Date(Date.now() - 60_000) } },
+              ],
+            },
+            select: { id: true },
+            orderBy: { updated_at: "desc" },
+          });
+          if (sharedConnection) {
+            return {
+              gestor_id: client.gestor_id,
+              connected: true,
+              token_expires_at: null,
+              connected_at: null,
+              scopes: [],
+            };
+          }
+        }
       }
     }
 
@@ -5192,6 +5219,49 @@ export class MetaService implements OnModuleInit {
     };
   }
 
+  private async getSharedMetaConnectionSessionOrThrow(): Promise<MetaSelectionSession> {
+    const connections = await this.db.metaConnection.findMany({
+      where: {
+        status: "connected",
+        OR: [
+          { token_expires_at: null },
+          { token_expires_at: { gt: new Date(Date.now() - 60_000) } },
+        ],
+      },
+      select: {
+        access_token: true,
+        token_expires_at: true,
+        scopes: true,
+      },
+      orderBy: { updated_at: "desc" },
+      take: 20,
+    });
+
+    for (const connection of connections) {
+      if (
+        connection.token_expires_at &&
+        connection.token_expires_at.getTime() < Date.now() - 60_000
+      ) {
+        continue;
+      }
+      try {
+        return {
+          accessToken: connection.access_token,
+          scopes: connection.scopes ?? [],
+          tokenExpiresAt: connection.token_expires_at?.toISOString() ?? null,
+          state: null,
+          businesses: await this.fetchBusinesses(connection.access_token),
+        };
+      } catch {
+        // Pode haver conexoes antigas ou revogadas. Tenta a proxima ativa.
+      }
+    }
+
+    throw new BadRequestException(
+      "Conta Meta da empresa nao conectada. Conecte em Configuracoes / dashboard do gestor.",
+    );
+  }
+
   private async getGestorMetaSelectionForClientOrThrow(
     user: AuthenticatedUser,
     clientId: string,
@@ -5214,7 +5284,7 @@ export class MetaService implements OnModuleInit {
           client.gestor_id,
         ),
       };
-    } catch (ownerError) {
+    } catch {
       if (client.gestor_id !== user.sub) {
         try {
           return {
@@ -5248,7 +5318,10 @@ export class MetaService implements OnModuleInit {
           // Tenta a proxima conexao ativa.
         }
       }
-      throw ownerError;
+      return {
+        gestorId: client.gestor_id,
+        selection: await this.getSharedMetaConnectionSessionOrThrow(),
+      };
     }
   }
 
