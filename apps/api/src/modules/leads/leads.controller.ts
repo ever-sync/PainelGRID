@@ -32,6 +32,7 @@ import { FindLeadsQueryDto } from "./dto/find-leads-query.dto";
 import { ImportLeadsDto } from "./dto/import-leads.dto";
 import { UpdateLeadDto } from "./dto/update-lead.dto";
 import { UpdateVendorStatusDto } from "./dto/update-vendor-status.dto";
+import { ReceptionQueueQueryDto } from "./dto/reception-queue-query.dto";
 import { LeadsService } from "./leads.service";
 import { spreadsheetUploadOptions } from "../../common/upload-options";
 
@@ -94,8 +95,11 @@ export class LeadsController {
   @Roles(Role.VENDEDOR, Role.RECEPCAO)
   @ApiOperation({ summary: "Lista enxuta da fila de atendimento do evento" })
   @ApiResponse({ status: 200, description: "Fila retornada com sucesso" })
-  getReceptionQueue(@CurrentUser() user: AuthenticatedUser) {
-    return this.leadsService.getReceptionQueue(user);
+  getReceptionQueue(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ReceptionQueueQueryDto,
+  ) {
+    return this.leadsService.getReceptionQueue(user, query);
   }
 
   @Get("check-phone")

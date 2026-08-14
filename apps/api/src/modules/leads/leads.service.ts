@@ -944,7 +944,10 @@ export class LeadsService {
     };
   }
 
-  async getReceptionQueue(user: AuthenticatedUser) {
+  async getReceptionQueue(
+    user: AuthenticatedUser,
+    query: { page?: number; take?: number } = {},
+  ) {
     if (!user.client_id) {
       throw new ForbiddenException("Usuario sem empresa vinculada");
     }
@@ -965,35 +968,56 @@ export class LeadsService {
         select: eventSelect,
       }));
 
-    if (!event) return { event: null, leads: [] };
+    const page = Math.max(query.page ?? 1, 1);
+    const take = Math.min(Math.max(query.take ?? 50, 1), 100);
 
-    const leads = await this.prisma.lead.findMany({
-      where: {
-        client_id: user.client_id,
-        event_interest_id: event.id,
-        confirmation_status: ConfirmationStatus.checked_in,
-        deleted_at: null,
-        ...(user.role === Role.VENDEDOR
-          ? { assigned_vendor_id: user.sub }
-          : {}),
-      },
-      orderBy: [
-        { confirmation_date: "asc" },
-        { updated_at: "asc" },
-        { id: "asc" },
-      ],
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        assigned_vendor_id: true,
-        assigned_vendor: { select: { name: true } },
-        confirmation_date: true,
-        store_visit_datetime: true,
-        created_at: true,
-        updated_at: true,
-      },
-    });
+    if (!event) {
+      return {
+        event: null,
+        leads: [],
+        page_info: {
+          page,
+          take,
+          total: 0,
+          waiting_total: 0,
+          active_total: 0,
+          has_next_page: false,
+        },
+      };
+    }
+
+    const where: Prisma.LeadWhereInput = {
+      client_id: user.client_id,
+      event_interest_id: event.id,
+      confirmation_status: ConfirmationStatus.checked_in,
+      deleted_at: null,
+      ...(user.role === Role.VENDEDOR ? { assigned_vendor_id: user.sub } : {}),
+    };
+    const [leads, total, waitingTotal] = await Promise.all([
+      this.prisma.lead.findMany({
+        where,
+        orderBy: [
+          { confirmation_date: "asc" },
+          { updated_at: "asc" },
+          { id: "asc" },
+        ],
+        skip: (page - 1) * take,
+        take,
+        select: {
+          id: true,
+          name: true,
+          assigned_vendor_id: true,
+          assigned_vendor: { select: { name: true } },
+          confirmation_date: true,
+          created_at: true,
+          updated_at: true,
+        },
+      }),
+      this.prisma.lead.count({ where }),
+      this.prisma.lead.count({
+        where: { ...where, assigned_vendor_id: null },
+      }),
+    ]);
 
     return {
       event,
@@ -1001,6 +1025,14 @@ export class LeadsService {
         ...lead,
         assigned_vendor_name: assigned_vendor?.name ?? null,
       })),
+      page_info: {
+        page,
+        take,
+        total,
+        waiting_total: waitingTotal,
+        active_total: total - waitingTotal,
+        has_next_page: page * take < total,
+      },
     };
   }
 

@@ -324,10 +324,8 @@ export type ReceptionQueueLead = Pick<
   ApiLead,
   | "id"
   | "name"
-  | "phone"
   | "assigned_vendor_id"
   | "confirmation_date"
-  | "store_visit_datetime"
   | "created_at"
   | "updated_at"
 > & { assigned_vendor_name?: string | null };
@@ -335,13 +333,31 @@ export type ReceptionQueueLead = Pick<
 export type ReceptionQueueResponse = {
   event: { id: string; name: string } | null;
   leads: ReceptionQueueLead[];
+  page_info: {
+    page: number;
+    take: number;
+    total: number;
+    waiting_total: number;
+    active_total: number;
+    has_next_page: boolean;
+  };
 };
 
-export function getReceptionQueue(token: string) {
-  return httpRequest<ReceptionQueueResponse>("/leads/reception-queue", {
-    method: "GET",
-    token,
-  });
+export function getReceptionQueue(
+  token: string,
+  params: { page?: number; take?: number } = {},
+) {
+  const query = new URLSearchParams();
+  if (params.page) query.set("page", String(params.page));
+  if (params.take) query.set("take", String(params.take));
+  const suffix = query.size ? `?${query.toString()}` : "";
+  return httpRequest<ReceptionQueueResponse>(
+    `/leads/reception-queue${suffix}`,
+    {
+      method: "GET",
+      token,
+    },
+  );
 }
 
 export type UpdateLeadBody = {

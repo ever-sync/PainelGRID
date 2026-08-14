@@ -35,12 +35,7 @@ import gpLogo from "../../assets/logo.png";
 type OutletContext = { user: User };
 
 function arrivalTime(lead: ReceptionQueueLead) {
-  return new Date(
-    lead.confirmation_date ||
-      lead.updated_at ||
-      lead.store_visit_datetime ||
-      lead.created_at,
-  );
+  return new Date(lead.confirmation_date || lead.updated_at || lead.created_at);
 }
 
 export function FilaPage() {
@@ -50,6 +45,13 @@ export function FilaPage() {
   const [leads, setLeads] = useState<ReceptionQueueLead[]>([]);
   const [vendors, setVendors] = useState<VendorAvailability[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [queuePage, setQueuePage] = useState(1);
+  const [queueHasNextPage, setQueueHasNextPage] = useState(false);
+  const [queueTotals, setQueueTotals] = useState({
+    waiting: 0,
+    active: 0,
+  });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [finishingLead, setFinishingLead] = useState<ReceptionQueueLead | null>(
@@ -70,7 +72,7 @@ export function FilaPage() {
 
     try {
       const [queue, vendorRows] = await Promise.all([
-        getReceptionQueue(token),
+        getReceptionQueue(token, { page: 1, take: 50 }),
         listVendorAvailability(token),
       ]);
       if (!queue.event) {
@@ -81,6 +83,16 @@ export function FilaPage() {
 
       setEventName(queue.event.name);
       setLeads(queue.leads);
+      setQueuePage(queue.page_info?.page ?? 1);
+      setQueueHasNextPage(queue.page_info?.has_next_page ?? false);
+      setQueueTotals({
+        waiting:
+          queue.page_info?.waiting_total ??
+          queue.leads.filter((lead) => !lead.assigned_vendor_id).length,
+        active:
+          queue.page_info?.active_total ??
+          queue.leads.filter((lead) => Boolean(lead.assigned_vendor_id)).length,
+      });
       setVendors(vendorRows);
       setError("");
     } catch (cause) {
@@ -101,6 +113,40 @@ export function FilaPage() {
   }, [load]);
 
   useLeadRealtimeSync(clientId, load);
+
+  const loadMore = useCallback(async () => {
+    const token = readStoredSession()?.accessToken;
+    if (!token || !queueHasNextPage || loadingMore) return;
+
+    setLoadingMore(true);
+    try {
+      const queue = await getReceptionQueue(token, {
+        page: queuePage + 1,
+        take: 50,
+      });
+      setLeads((current) => {
+        const existingIds = new Set(current.map((lead) => lead.id));
+        return [
+          ...current,
+          ...queue.leads.filter((lead) => !existingIds.has(lead.id)),
+        ];
+      });
+      setQueuePage(queue.page_info.page);
+      setQueueHasNextPage(queue.page_info.has_next_page);
+      setQueueTotals({
+        waiting: queue.page_info.waiting_total,
+        active: queue.page_info.active_total,
+      });
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível carregar mais pessoas da fila.",
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, queueHasNextPage, queuePage]);
 
   const openFinishAttendance = (lead: ReceptionQueueLead) => {
     setFinishingLead(lead);
@@ -330,12 +376,12 @@ export function FilaPage() {
             <div className="grid grid-cols-2 gap-2">
               <QueueMetric
                 label="Aguardando"
-                value={waitingQueue.length}
+                value={queueTotals.waiting}
                 tone="waiting"
               />
               <QueueMetric
                 label="Em atendimento"
-                value={activeService.length}
+                value={queueTotals.active}
                 tone="active"
               />
             </div>
@@ -363,7 +409,7 @@ export function FilaPage() {
                 title="Fila de espera"
                 subtitle="Por ordem de chegada"
                 icon={<Clock size={19} />}
-                count={waitingQueue.length}
+                count={queueTotals.waiting}
                 tone="waiting"
               >
                 {waitingQueue.length ? (
@@ -386,7 +432,7 @@ export function FilaPage() {
                 title="Em atendimento"
                 subtitle="Clientes com vendedor"
                 icon={<UserCheck size={19} />}
-                count={activeService.length}
+                count={queueTotals.active}
                 tone="active"
               >
                 {activeService.length ? (
@@ -410,6 +456,18 @@ export function FilaPage() {
               </QueueSection>
             </div>
           )}
+          {queueHasNextPage && !loading ? (
+            <div className="mt-5 flex justify-center">
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={loadingMore}
+                onClick={() => void loadMore()}
+              >
+                Carregar mais pessoas
+              </Button>
+            </div>
+          ) : null}
         </div>
       </div>
 

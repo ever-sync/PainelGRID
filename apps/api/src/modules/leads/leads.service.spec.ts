@@ -24,6 +24,7 @@ describe("LeadsService", () => {
       update: jest.Mock;
       delete: jest.Mock;
       createMany: jest.Mock;
+      count: jest.Mock;
     };
     crmStage: { findFirst: jest.Mock; findUnique: jest.Mock };
     crmPipeline: { findFirst: jest.Mock };
@@ -107,6 +108,7 @@ describe("LeadsService", () => {
         update: jest.fn(),
         delete: jest.fn(),
         createMany: jest.fn(),
+        count: jest.fn(),
       },
       crmStage: { findFirst: jest.fn(), findUnique: jest.fn() },
       crmPipeline: { findFirst: jest.fn() },
@@ -163,6 +165,7 @@ describe("LeadsService", () => {
     };
     prisma.lead.findFirst.mockResolvedValue(null);
     prisma.lead.findMany.mockResolvedValue([]);
+    prisma.lead.count.mockResolvedValue(0);
     prisma.lead.createMany.mockResolvedValue({ count: 0 });
     prisma.lead.delete.mockResolvedValue({ id: "lead-deleted" });
     prisma.crmStage.findFirst.mockResolvedValue(null);
@@ -335,15 +338,14 @@ describe("LeadsService", () => {
     const queueLead = {
       id: "lead-queue-1",
       name: "Lead na fila",
-      phone: "5511999999999",
       assigned_vendor_id: null,
       confirmation_date: new Date("2026-08-14T12:00:00.000Z"),
-      store_visit_datetime: null,
       created_at: new Date("2026-08-14T11:00:00.000Z"),
       updated_at: new Date("2026-08-14T12:00:00.000Z"),
     };
     prisma.event.findFirst.mockResolvedValue(event);
     prisma.lead.findMany.mockResolvedValue([queueLead]);
+    prisma.lead.count.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
 
     const result = await service.getReceptionQueue({
       sub: "reception-1",
@@ -356,6 +358,14 @@ describe("LeadsService", () => {
     expect(result).toEqual({
       event,
       leads: [{ ...queueLead, assigned_vendor_name: null }],
+      page_info: {
+        page: 1,
+        take: 50,
+        total: 1,
+        waiting_total: 1,
+        active_total: 0,
+        has_next_page: false,
+      },
     });
     expect(prisma.lead.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -368,14 +378,14 @@ describe("LeadsService", () => {
         select: {
           id: true,
           name: true,
-          phone: true,
           assigned_vendor_id: true,
           assigned_vendor: { select: { name: true } },
           confirmation_date: true,
-          store_visit_datetime: true,
           created_at: true,
           updated_at: true,
         },
+        skip: 0,
+        take: 50,
       }),
     );
   });
