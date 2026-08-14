@@ -954,7 +954,7 @@ export class EventDashboardService {
 
     const eventIds = events.map((event) => event.id);
 
-    const [leadGroups, sales] = await Promise.all([
+    const [leadGroups, sales, appointments] = await Promise.all([
       this.prisma.lead.groupBy({
         by: ["event_interest_id", "confirmation_status"],
         where: { event_interest_id: { in: eventIds }, deleted_at: null },
@@ -963,6 +963,21 @@ export class EventDashboardService {
       this.prisma.sale.findMany({
         where: { appointment: { event_id: { in: eventIds } } },
         select: { appointment: { select: { event_id: true } } },
+      }),
+      this.prisma.appointment.findMany({
+        where: {
+          event_id: { in: eventIds },
+          status: {
+            notIn: [AppointmentStatus.cancelled, AppointmentStatus.rescheduled],
+          },
+        },
+        select: {
+          event_id: true,
+          lead_id: true,
+          scheduled_at: true,
+          completed_at: true,
+          lead: { select: { confirmation_status: true } },
+        },
       }),
     ]);
 
@@ -1016,12 +1031,51 @@ export class EventDashboardService {
       if (bucket) bucket.sold += 1;
     });
 
+    const attendanceByEvent = new Map<
+      string,
+      Map<string, Map<string, boolean>>
+    >();
+    appointments.forEach((appointment) => {
+      const date = this.toIsoDate(appointment.scheduled_at);
+      let eventDays = attendanceByEvent.get(appointment.event_id);
+      if (!eventDays) {
+        eventDays = new Map();
+        attendanceByEvent.set(appointment.event_id, eventDays);
+      }
+      let leadsByDay = eventDays.get(date);
+      if (!leadsByDay) {
+        leadsByDay = new Map();
+        eventDays.set(date, leadsByDay);
+      }
+      const came =
+        Boolean(appointment.completed_at) ||
+        appointment.lead.confirmation_status === ConfirmationStatus.checked_in;
+      leadsByDay.set(
+        appointment.lead_id,
+        Boolean(leadsByDay.get(appointment.lead_id)) || came,
+      );
+    });
+
     return events.map((event) => ({
       id: event.id,
       name: event.name,
       event_date: event.event_date,
       location: event.location,
       funnel: funnelByEvent.get(event.id)!,
+      attendance_by_day: Array.from(
+        attendanceByEvent.get(event.id)?.entries() ?? [],
+      )
+        .map(([date, leadsByDay]) => {
+          const expected = leadsByDay.size;
+          const came = Array.from(leadsByDay.values()).filter(Boolean).length;
+          return {
+            date,
+            expected,
+            came,
+            missing: Math.max(expected - came, 0),
+          };
+        })
+        .sort((left, right) => left.date.localeCompare(right.date)),
     }));
   }
 

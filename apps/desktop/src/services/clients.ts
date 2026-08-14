@@ -22,8 +22,46 @@ export type ApiClient = {
   vehicles_count: number;
 };
 
+const CLIENT_LIST_CACHE_TTL_MS = 10_000;
+let clientListCache:
+  | {
+      token: string;
+      expiresAt: number;
+      value: ApiClient[];
+    }
+  | undefined;
+let clientListRequest:
+  { token: string; promise: Promise<ApiClient[]> } | undefined;
+
+export function invalidateClientListCache() {
+  clientListCache = undefined;
+  clientListRequest = undefined;
+}
+
 export function listClients(token: string) {
-  return httpRequest<ApiClient[]>("/clients", { method: "GET", token });
+  const now = Date.now();
+  if (clientListCache?.token === token && clientListCache.expiresAt > now) {
+    return Promise.resolve(clientListCache.value);
+  }
+  if (clientListRequest?.token === token) return clientListRequest.promise;
+
+  const promise = httpRequest<ApiClient[]>("/clients", {
+    method: "GET",
+    token,
+  })
+    .then((rows) => {
+      clientListCache = {
+        token,
+        expiresAt: Date.now() + CLIENT_LIST_CACHE_TTL_MS,
+        value: rows,
+      };
+      return rows;
+    })
+    .finally(() => {
+      if (clientListRequest?.promise === promise) clientListRequest = undefined;
+    });
+  clientListRequest = { token, promise };
+  return promise;
 }
 
 /**
@@ -64,6 +102,9 @@ export function createClient(token: string, payload: CreateClientPayload) {
     method: "POST",
     token,
     body: payload,
+  }).then((created) => {
+    invalidateClientListCache();
+    return created;
   });
 }
 
@@ -90,6 +131,9 @@ export function updateClient(
     method: "PATCH",
     token,
     body: payload,
+  }).then((updated) => {
+    invalidateClientListCache();
+    return updated;
   });
 }
 
@@ -97,6 +141,9 @@ export function deleteClient(id: string, token: string) {
   return httpRequest<{ deleted: boolean }>(`/clients/${id}`, {
     method: "DELETE",
     token,
+  }).then((result) => {
+    invalidateClientListCache();
+    return result;
   });
 }
 

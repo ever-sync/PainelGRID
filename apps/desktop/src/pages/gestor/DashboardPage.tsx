@@ -298,6 +298,11 @@ function ActiveEventFunnelCard({
   const conversionRate = Math.round((event.funnel.sold / maxValue) * 100);
   const isExpired =
     new Date(event.event_date).getTime() < new Date().setHours(0, 0, 0, 0);
+  const dayFormatter = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "UTC",
+  });
 
   return (
     <Card className="w-[420px] shrink-0 rounded-3xl relative overflow-hidden">
@@ -345,6 +350,52 @@ function ActiveEventFunnelCard({
           </div>
         ))}
       </div>
+
+      {event.attendance_by_day.length > 0 && (
+        <div className="mt-5 space-y-2 border-t border-zinc-100 pt-4">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400">
+            Presença por dia
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {event.attendance_by_day.map((day) => (
+              <div
+                key={day.date}
+                className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3"
+              >
+                <p className="text-xs font-bold text-zinc-800">
+                  Dia {dayFormatter.format(new Date(`${day.date}T12:00:00Z`))}
+                </p>
+                <div className="mt-2 grid grid-cols-3 gap-1 text-center">
+                  <div>
+                    <p className="text-base font-black text-[#3D56A2]">
+                      {day.expected}
+                    </p>
+                    <p className="text-[9px] font-semibold uppercase text-zinc-400">
+                      Esperados
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-base font-black text-emerald-600">
+                      {day.came}
+                    </p>
+                    <p className="text-[9px] font-semibold uppercase text-zinc-400">
+                      Vieram
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-base font-black text-[#FF0636]">
+                      {day.missing}
+                    </p>
+                    <p className="text-[9px] font-semibold uppercase text-zinc-400">
+                      Faltam
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mt-4">
         <div className="mb-1 flex items-center justify-between text-xs text-zinc-500">

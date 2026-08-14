@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import clsx from "clsx";
 import {
@@ -57,7 +63,7 @@ import {
   updateEvent,
 } from "../../services/events";
 import {
-  fetchAllLeads,
+  fetchLeadsPage,
   getLead,
   mapApiLeadToLead,
   updateLead,
@@ -301,6 +307,11 @@ export function EventDetailPage() {
   const [allStaffRaw, setAllStaffRaw] = useState<StaffUser[]>([]);
   const [eventLeads, setEventLeads] = useState<Lead[]>([]);
   const [leadsLoading, setLeadsLoading] = useState(false);
+  const [eventLeadsNextCursor, setEventLeadsNextCursor] = useState<
+    string | null
+  >(null);
+  const [eventLeadsHasNextPage, setEventLeadsHasNextPage] = useState(false);
+  const [eventLeadsLoadingMore, setEventLeadsLoadingMore] = useState(false);
   const [eventSales, setEventSales] = useState<EventSaleListItem[]>([]);
   const [salesLoading, setSalesLoading] = useState(false);
   const [leadSearch, setLeadSearch] = useState("");
@@ -469,12 +480,20 @@ export function EventDetailPage() {
             failedParts.push("vendedores");
             return [];
           }),
-          fetchAllLeads({ event_id: eventId }, session.accessToken).catch(
-            () => {
-              failedParts.push("leads");
-              return [];
-            },
-          ),
+          fetchLeadsPage(
+            { event_id: eventId, take: 100 },
+            session.accessToken,
+          ).catch(() => {
+            failedParts.push("leads");
+            return {
+              items: [],
+              page_info: {
+                take: 100,
+                next_cursor: null,
+                has_next_page: false,
+              },
+            };
+          }),
           listEventSales(session.accessToken, eventId).catch(() => {
             failedParts.push("vendas");
             return [];
@@ -505,10 +524,12 @@ export function EventDetailPage() {
       setTeams(apiTeams);
       setAllStaffRaw(apiStaff);
       setEventLeads(
-        apiLeads
+        apiLeads.items
           .map(mapApiLeadToLead)
           .filter((lead) => lead.event_id === mappedEvent.id),
       );
+      setEventLeadsNextCursor(apiLeads.page_info.next_cursor);
+      setEventLeadsHasNextPage(apiLeads.page_info.has_next_page);
       setEventSales(apiSales);
       setAddMemberTeamId(null);
       setSelectedMemberIds([]);
@@ -530,6 +551,92 @@ export function EventDetailPage() {
     // Deps propositalmente reduzidas para o efeito nao reexecutar a cada
     // render das dependencias derivadas.
   }, [eventId]);
+
+  const deferredLeadSearch = useDeferredValue(leadSearch);
+
+  useEffect(() => {
+    if (activeTab !== "leads" || !isUuid(eventId)) return;
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+
+    const controller = new AbortController();
+    setLeadsLoading(true);
+    void fetchLeadsPage(
+      {
+        event_id: eventId,
+        search: deferredLeadSearch.trim() || undefined,
+        source: leadSourceFilter === "all" ? undefined : leadSourceFilter,
+        confirmation_status:
+          leadStatusFilter === "all" ? undefined : leadStatusFilter,
+        take: 100,
+      },
+      token,
+      controller.signal,
+    )
+      .then((page) => {
+        setEventLeads(page.items.map(mapApiLeadToLead));
+        setEventLeadsNextCursor(page.page_info.next_cursor);
+        setEventLeadsHasNextPage(page.page_info.has_next_page);
+        setEventLeadsPage(1);
+      })
+      .catch((loadError) => {
+        if (loadError instanceof Error && loadError.name === "AbortError") {
+          return;
+        }
+        setLoadWarning(
+          getErrorMessage(loadError, "Não foi possível filtrar os leads."),
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLeadsLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [
+    activeTab,
+    deferredLeadSearch,
+    eventId,
+    leadSourceFilter,
+    leadStatusFilter,
+  ]);
+
+  async function loadMoreEventLeads() {
+    if (!eventLeadsNextCursor || eventLeadsLoadingMore) return;
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+
+    setEventLeadsLoadingMore(true);
+    try {
+      const page = await fetchLeadsPage(
+        {
+          event_id: eventId,
+          search: deferredLeadSearch.trim() || undefined,
+          source: leadSourceFilter === "all" ? undefined : leadSourceFilter,
+          confirmation_status:
+            leadStatusFilter === "all" ? undefined : leadStatusFilter,
+          take: 100,
+          cursor: eventLeadsNextCursor,
+        },
+        token,
+      );
+      const incoming = page.items.map(mapApiLeadToLead);
+      setEventLeads((current) => {
+        const knownIds = new Set(current.map((lead) => lead.id));
+        return [
+          ...current,
+          ...incoming.filter((lead) => !knownIds.has(lead.id)),
+        ];
+      });
+      setEventLeadsNextCursor(page.page_info.next_cursor);
+      setEventLeadsHasNextPage(page.page_info.has_next_page);
+    } catch (loadError) {
+      setLoadWarning(
+        getErrorMessage(loadError, "Não foi possível carregar mais leads."),
+      );
+    } finally {
+      setEventLeadsLoadingMore(false);
+    }
+  }
 
   const staff = useMemo(
     () =>
@@ -806,19 +913,17 @@ export function EventDetailPage() {
 
       setLeadsLoading(true);
       try {
-        const leadGroups = await Promise.all(
-          nextParticipantIds.map((clientId) =>
-            fetchAllLeads({ client_id: clientId }, session.accessToken).catch(
-              () => [],
-            ),
-          ),
+        const page = await fetchLeadsPage(
+          { event_id: mapped.id, take: 100 },
+          session.accessToken,
         );
         setEventLeads(
-          leadGroups
-            .flat()
+          page.items
             .map(mapApiLeadToLead)
             .filter((lead) => lead.event_id === mapped.id),
         );
+        setEventLeadsNextCursor(page.page_info.next_cursor);
+        setEventLeadsHasNextPage(page.page_info.has_next_page);
       } finally {
         setLeadsLoading(false);
       }
@@ -1922,7 +2027,7 @@ export function EventDetailPage() {
               >
                 {filteredEventLeads.length === 0
                   ? "Nenhum lead encontrado"
-                  : `Mostrando ${(eventLeadsPage - 1) * eventLeadsPageSize + 1}–${Math.min(eventLeadsPage * eventLeadsPageSize, filteredEventLeads.length)} de ${filteredEventLeads.length} leads`}
+                  : `Mostrando ${(eventLeadsPage - 1) * eventLeadsPageSize + 1}–${Math.min(eventLeadsPage * eventLeadsPageSize, filteredEventLeads.length)} de ${filteredEventLeads.length} leads carregados`}
               </p>
             </div>
             <Button
@@ -2184,6 +2289,19 @@ export function EventDetailPage() {
                       Próxima
                     </Button>
                   </div>
+                </div>
+              )}
+              {eventLeadsHasNextPage && (
+                <div className="mt-3 flex justify-center">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    loading={eventLeadsLoadingMore}
+                    onClick={() => void loadMoreEventLeads()}
+                  >
+                    Carregar mais 100 leads
+                  </Button>
                 </div>
               )}
             </>

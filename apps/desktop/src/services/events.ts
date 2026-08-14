@@ -293,6 +293,12 @@ export type ActiveEventSummary = {
     checked_in: number;
     sold: number;
   };
+  attendance_by_day: Array<{
+    date: string;
+    expected: number;
+    came: number;
+    missing: number;
+  }>;
 };
 
 export function getActiveEventsSummary(token: string, signal?: AbortSignal) {
