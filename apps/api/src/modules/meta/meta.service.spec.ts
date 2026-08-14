@@ -991,7 +991,10 @@ describe("MetaService", () => {
     });
 
     it("recusa vincular campanha a evento de outro cliente", async () => {
-      prisma.event.findUnique.mockResolvedValue({ client_id: "client-2" });
+      prisma.event.findUnique.mockResolvedValue({
+        client_id: "client-2",
+        participants: [{ client_id: "client-2" }],
+      });
 
       await expect(
         service.assignCampaign(gestor, {
@@ -1002,6 +1005,32 @@ describe("MetaService", () => {
       ).rejects.toThrow("Evento pertence a outro cliente");
 
       expect(prisma.metaCampaignAssignment.upsert).not.toHaveBeenCalled();
+    });
+
+    it("permite vincular campanha quando o cliente participa do evento compartilhado", async () => {
+      prisma.event.findUnique.mockResolvedValue({
+        client_id: "client-principal",
+        participants: [
+          { client_id: "client-principal" },
+          { client_id: "client-1" },
+        ],
+      });
+      prisma.metaCampaignAssignment.upsert.mockResolvedValue({
+        meta_campaign_id: "campaign-ram",
+        client_id: "client-1",
+        event_id: "event-compartilhado",
+      });
+
+      await expect(
+        service.assignCampaign(gestor, {
+          meta_campaign_id: "campaign-ram",
+          client_id: "client-1",
+          event_id: "event-compartilhado",
+        }),
+      ).resolves.toMatchObject({
+        meta_campaign_id: "campaign-ram",
+        client_id: "client-1",
+      });
     });
   });
 

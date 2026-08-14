@@ -2589,7 +2589,10 @@ export class MetaService implements OnModuleInit {
     if (dto.event_id) {
       const event = await this.db.event.findUnique({
         where: { id: dto.event_id },
-        select: { client_id: true },
+        select: {
+          client_id: true,
+          participants: { select: { client_id: true } },
+        },
       });
 
       if (!event) {
@@ -2597,7 +2600,12 @@ export class MetaService implements OnModuleInit {
       }
 
       // Evita atribuir o gasto de um cliente ao evento de outro.
-      if (event.client_id !== dto.client_id) {
+      const belongsToClient =
+        event.client_id === dto.client_id ||
+        event.participants.some(
+          (participant) => participant.client_id === dto.client_id,
+        );
+      if (!belongsToClient) {
         throw new BadRequestException("Evento pertence a outro cliente");
       }
     }
