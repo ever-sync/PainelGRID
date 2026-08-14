@@ -944,7 +944,15 @@ export function ClienteDetailPage() {
       .finally(() => setClientLoading(false));
   }, [resolvedId]);
 
+  useEffect(() => {
+    // A mesma tela pode navegar entre clientes sem desmontar. Evita exibir ou
+    // reutilizar listas do cliente anterior enquanto a aba ainda nao foi aberta.
+    setDetailLeads(null);
+    setDetailConversations(null);
+  }, [resolvedId]);
+
   const refreshDetailLeads = useCallback(() => {
+    if (activeTab !== "leads") return;
     if (!resolvedId || !isUuid(resolvedId)) {
       setDetailLeads(null);
       return;
@@ -965,16 +973,19 @@ export function ClienteDetailPage() {
     return () => {
       active = false;
     };
-  }, [resolvedId]);
+  }, [activeTab, resolvedId]);
 
   useEffect(() => {
     const cleanup = refreshDetailLeads();
     return cleanup;
   }, [refreshDetailLeads]);
 
-  useLeadRealtimeSync(resolvedId, refreshDetailLeads);
+  useLeadRealtimeSync(resolvedId, refreshDetailLeads, {
+    enabled: activeTab === "leads",
+  });
 
   useEffect(() => {
+    if (activeTab !== "conversas") return;
     if (!resolvedId || !isUuid(resolvedId)) {
       setDetailConversations(null);
       return;
@@ -997,7 +1008,7 @@ export function ClienteDetailPage() {
     return () => {
       active = false;
     };
-  }, [resolvedId]);
+  }, [activeTab, resolvedId]);
 
   const client = apiClient ?? undefined;
   const defaultPipelineCode = useMemo(() => {

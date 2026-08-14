@@ -1856,77 +1856,125 @@ export class EventDashboardService {
       take: 6,
       select: { id: true, name: true, event_date: true },
     });
-    const history = await Promise.all(
-      historyEvents.map(async (ev) => {
-        const [hLeads, hAppointments, hSales] = await Promise.all([
-          this.prisma.lead.findMany({
-            where: { event_interest_id: ev.id, deleted_at: null },
-            select: { id: true, confirmation_status: true },
-          }),
-          this.prisma.appointment.findMany({
-            where: { event_id: ev.id },
-            select: { lead_id: true, status: true, completed_at: true },
-          }),
-          this.prisma.sale.findMany({
-            where: { appointment: { event_id: ev.id } },
-            select: { value: true },
-          }),
-        ]);
-        const scheduledLeadIds = new Set<string>();
-        const confirmedLeadIds = new Set<string>();
-        const checkedInLeadIds = new Set<string>();
-        for (const l of hLeads) {
-          const s = l.confirmation_status;
-          if (
-            s === ConfirmationStatus.scheduled ||
-            s === ConfirmationStatus.confirmed ||
-            s === ConfirmationStatus.checked_in
-          )
-            scheduledLeadIds.add(l.id);
-          if (
-            s === ConfirmationStatus.confirmed ||
-            s === ConfirmationStatus.checked_in
-          )
-            confirmedLeadIds.add(l.id);
-          if (s === ConfirmationStatus.checked_in) checkedInLeadIds.add(l.id);
-        }
-        for (const appointment of hAppointments) {
-          if (
-            appointment.status === AppointmentStatus.scheduled ||
-            appointment.status === AppointmentStatus.confirmed ||
-            appointment.status === AppointmentStatus.completed ||
-            appointment.status === AppointmentStatus.no_show ||
-            appointment.status === AppointmentStatus.rescheduled
-          ) {
-            scheduledLeadIds.add(appointment.lead_id);
-          }
-          if (
-            appointment.status === AppointmentStatus.confirmed ||
-            appointment.status === AppointmentStatus.completed
-          ) {
-            confirmedLeadIds.add(appointment.lead_id);
-          }
-          if (
-            appointment.status === AppointmentStatus.completed ||
-            appointment.completed_at
-          ) {
-            checkedInLeadIds.add(appointment.lead_id);
-          }
-        }
-        const revenue = hSales.reduce((sum, s) => sum + Number(s.value), 0);
-        return {
-          event_id: ev.id,
-          name: ev.name,
-          event_date: ev.event_date,
-          leads: hLeads.length,
-          scheduled: scheduledLeadIds.size,
-          confirmed: confirmedLeadIds.size,
-          checked_in: checkedInLeadIds.size,
-          sold: hSales.length,
-          revenue: Math.round(revenue * 100) / 100,
-        };
-      }),
+    const historyEventIds = historyEvents.map(
+      (historyEvent) => historyEvent.id,
     );
+    const [historyLeads, historyAppointments, historySales] =
+      historyEventIds.length > 0
+        ? await Promise.all([
+            this.prisma.lead.findMany({
+              where: {
+                event_interest_id: { in: historyEventIds },
+                deleted_at: null,
+              },
+              select: {
+                id: true,
+                event_interest_id: true,
+                confirmation_status: true,
+              },
+            }),
+            this.prisma.appointment.findMany({
+              where: { event_id: { in: historyEventIds } },
+              select: {
+                event_id: true,
+                lead_id: true,
+                status: true,
+                completed_at: true,
+              },
+            }),
+            this.prisma.sale.findMany({
+              where: { appointment: { event_id: { in: historyEventIds } } },
+              select: {
+                value: true,
+                appointment: { select: { event_id: true } },
+              },
+            }),
+          ])
+        : [[], [], []];
+
+    const historyLeadsByEvent = new Map<string, typeof historyLeads>();
+    for (const lead of historyLeads) {
+      if (!lead.event_interest_id) continue;
+      const bucket = historyLeadsByEvent.get(lead.event_interest_id) ?? [];
+      bucket.push(lead);
+      historyLeadsByEvent.set(lead.event_interest_id, bucket);
+    }
+    const historyAppointmentsByEvent = new Map<
+      string,
+      typeof historyAppointments
+    >();
+    for (const appointment of historyAppointments) {
+      const bucket = historyAppointmentsByEvent.get(appointment.event_id) ?? [];
+      bucket.push(appointment);
+      historyAppointmentsByEvent.set(appointment.event_id, bucket);
+    }
+    const historySalesByEvent = new Map<string, typeof historySales>();
+    for (const sale of historySales) {
+      const historyEventId = sale.appointment?.event_id;
+      if (!historyEventId) continue;
+      const bucket = historySalesByEvent.get(historyEventId) ?? [];
+      bucket.push(sale);
+      historySalesByEvent.set(historyEventId, bucket);
+    }
+
+    const history = historyEvents.map((ev) => {
+      const hLeads = historyLeadsByEvent.get(ev.id) ?? [];
+      const hAppointments = historyAppointmentsByEvent.get(ev.id) ?? [];
+      const hSales = historySalesByEvent.get(ev.id) ?? [];
+      const scheduledLeadIds = new Set<string>();
+      const confirmedLeadIds = new Set<string>();
+      const checkedInLeadIds = new Set<string>();
+      for (const l of hLeads) {
+        const s = l.confirmation_status;
+        if (
+          s === ConfirmationStatus.scheduled ||
+          s === ConfirmationStatus.confirmed ||
+          s === ConfirmationStatus.checked_in
+        )
+          scheduledLeadIds.add(l.id);
+        if (
+          s === ConfirmationStatus.confirmed ||
+          s === ConfirmationStatus.checked_in
+        )
+          confirmedLeadIds.add(l.id);
+        if (s === ConfirmationStatus.checked_in) checkedInLeadIds.add(l.id);
+      }
+      for (const appointment of hAppointments) {
+        if (
+          appointment.status === AppointmentStatus.scheduled ||
+          appointment.status === AppointmentStatus.confirmed ||
+          appointment.status === AppointmentStatus.completed ||
+          appointment.status === AppointmentStatus.no_show ||
+          appointment.status === AppointmentStatus.rescheduled
+        ) {
+          scheduledLeadIds.add(appointment.lead_id);
+        }
+        if (
+          appointment.status === AppointmentStatus.confirmed ||
+          appointment.status === AppointmentStatus.completed
+        ) {
+          confirmedLeadIds.add(appointment.lead_id);
+        }
+        if (
+          appointment.status === AppointmentStatus.completed ||
+          appointment.completed_at
+        ) {
+          checkedInLeadIds.add(appointment.lead_id);
+        }
+      }
+      const revenue = hSales.reduce((sum, s) => sum + Number(s.value), 0);
+      return {
+        event_id: ev.id,
+        name: ev.name,
+        event_date: ev.event_date,
+        leads: hLeads.length,
+        scheduled: scheduledLeadIds.size,
+        confirmed: confirmedLeadIds.size,
+        checked_in: checkedInLeadIds.size,
+        sold: hSales.length,
+        revenue: Math.round(revenue * 100) / 100,
+      };
+    });
     history.reverse(); // cronológico ascendente
 
     // ── Avaliações dos clientes por vendedor ──

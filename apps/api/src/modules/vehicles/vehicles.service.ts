@@ -315,7 +315,9 @@ export class VehiclesService {
       throw new NotFoundException("Um ou mais veículos não foram encontrados");
     }
 
-    const clientIds = [...new Set(vehicles.map((vehicle) => vehicle.client_id))];
+    const clientIds = [
+      ...new Set(vehicles.map((vehicle) => vehicle.client_id)),
+    ];
     if (clientIds.length !== 1) {
       throw new BadRequestException(
         "Selecione veículos pertencentes à mesma empresa.",

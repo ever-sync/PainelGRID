@@ -48,11 +48,7 @@ import { Tabs } from "../../components/ui/Tabs";
 import { Drawer, Modal } from "../../components/ui/Modal";
 import type { Client, Event, Lead } from "../../types";
 import { readStoredSession } from "../../services/auth";
-import {
-  getClient,
-  listClients,
-  mapApiClientToClient,
-} from "../../services/clients";
+import { listClients, mapApiClientToClient } from "../../services/clients";
 import { listLeadHistory, type ApiCrmHistoryItem } from "../../services/crm";
 import {
   deleteEvent,
@@ -457,7 +453,33 @@ export function EventDetailPage() {
     setSettingsSuccess("");
 
     try {
-      const apiEvent = await getEvent(eventId, session.accessToken);
+      const failedParts: string[] = [];
+      const [apiEvent, apiClients, apiTeams, apiStaff, apiLeads, apiSales] =
+        await Promise.all([
+          getEvent(eventId, session.accessToken),
+          listClients(session.accessToken).catch(() => {
+            failedParts.push("lista de clientes");
+            return [];
+          }),
+          listSalesTeams(session.accessToken, eventId).catch(() => {
+            failedParts.push("times");
+            return [];
+          }),
+          listUsers(session.accessToken).catch(() => {
+            failedParts.push("vendedores");
+            return [];
+          }),
+          fetchAllLeads({ event_id: eventId }, session.accessToken).catch(
+            () => {
+              failedParts.push("leads");
+              return [];
+            },
+          ),
+          listEventSales(session.accessToken, eventId).catch(() => {
+            failedParts.push("vendas");
+            return [];
+          }),
+        ]);
       const mappedEvent = mapApiEventToEvent(apiEvent);
       const participantClientIds = mappedEvent.participant_client_ids;
 
@@ -467,45 +489,6 @@ export function EventDetailPage() {
       hydrateForm(mappedEvent);
       if (showSpinner) setLoading(false);
 
-      const failedParts: string[] = [];
-
-      const [apiClient, apiClients, apiTeams, apiStaff, apiLeads, apiSales] =
-        await Promise.all([
-          getClient(
-            participantClientIds[0] ?? mappedEvent.client_id,
-            session.accessToken,
-          ).catch(() => {
-            failedParts.push("dados do cliente");
-            return null;
-          }),
-          listClients(session.accessToken).catch(() => {
-            failedParts.push("lista de clientes");
-            return [];
-          }),
-          listSalesTeams(session.accessToken, mappedEvent.id).catch(() => {
-            failedParts.push("times");
-            return [];
-          }),
-          listUsers(session.accessToken).catch(() => {
-            failedParts.push("vendedores");
-            return [];
-          }),
-          // A API já filtra pelo evento. Antes, esta tela baixava até 2.000
-          // leads de cada cliente participante e descartava os demais no
-          // browser, gerando dezenas de requisições sequenciais.
-          fetchAllLeads(
-            { event_id: mappedEvent.id },
-            session.accessToken,
-          ).catch(() => {
-            failedParts.push("leads");
-            return [];
-          }),
-          listEventSales(session.accessToken, mappedEvent.id).catch(() => {
-            failedParts.push("vendas");
-            return [];
-          }),
-        ]);
-
       if (failedParts.length > 0) {
         const uniqueParts = Array.from(new Set(failedParts));
         setLoadWarning(
@@ -513,8 +496,12 @@ export function EventDetailPage() {
         );
       }
 
-      setClient(apiClient ? mapApiClientToClient(apiClient) : null);
-      setAllClients(apiClients.map(mapApiClientToClient));
+      const mappedClients = apiClients.map(mapApiClientToClient);
+      const primaryClientId = participantClientIds[0] ?? mappedEvent.client_id;
+      setClient(
+        mappedClients.find((client) => client.id === primaryClientId) ?? null,
+      );
+      setAllClients(mappedClients);
       setTeams(apiTeams);
       setAllStaffRaw(apiStaff);
       setEventLeads(
