@@ -234,7 +234,13 @@ export class IntegrationController {
   })
   async listLeads(@Query() query: FindLeadsQueryDto) {
     const result = await this.leadsService.findAllForIntegration(query);
-    await this.conversationsService.syncN8nHistoryForClient(query.client_id!);
+
+    // A sincronizacao do historico legado nao faz parte da resposta de leads.
+    // Executa-la de forma bloqueante acrescentava varios segundos a cada
+    // consulta do Rubinho e o workflow consulta este endpoint mais de uma vez
+    // por mensagem. O service ja deduplica sincronizacoes concorrentes por
+    // cliente e trata as falhas, portanto ela pode continuar em background.
+    void this.conversationsService.syncN8nHistoryForClient(query.client_id!);
     return result;
   }
 
