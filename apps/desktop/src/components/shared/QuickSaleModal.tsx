@@ -66,6 +66,7 @@ export function QuickSaleModal({
   const [leadEmail, setLeadEmail] = useState("");
   const [buyerSearch, setBuyerSearch] = useState("");
   const [buyerResultsOpen, setBuyerResultsOpen] = useState(false);
+  const [vehicleSearch, setVehicleSearch] = useState("");
   const [vehicleId, setVehicleId] = useState("");
   const [newVehicleBrand, setNewVehicleBrand] = useState("");
   const [newVehicleModel, setNewVehicleModel] = useState("");
@@ -120,6 +121,7 @@ export function QuickSaleModal({
     setVendorId("");
     setLeadId("");
     setBuyerSearch("");
+    setVehicleSearch("");
     setVehicleId("");
     setNewVehicleBrand("");
     setNewVehicleModel("");
@@ -231,6 +233,26 @@ export function QuickSaleModal({
       )
       .slice(0, 50);
   }, [buyerSearch, initialLeads, leads]);
+
+  const filteredVehicles = useMemo(() => {
+    const query = vehicleSearch.trim().toLocaleLowerCase("pt-BR");
+    return [...vehicles]
+      .filter((vehicle) => {
+        if (!query) return true;
+        return `${vehicle.brand} ${vehicle.model} ${vehicle.year_or_km ?? ""}`
+          .toLocaleLowerCase("pt-BR")
+          .includes(query);
+      })
+      .sort((a, b) =>
+        `${a.brand} ${a.model}`.localeCompare(
+          `${b.brand} ${b.model}`,
+          "pt-BR",
+          {
+            sensitivity: "base",
+          },
+        ),
+      );
+  }, [vehicleSearch, vehicles]);
 
   async function submit() {
     const token = readStoredSession()?.accessToken;
@@ -489,6 +511,14 @@ export function QuickSaleModal({
             )}
 
             <div className="grid gap-4 md:grid-cols-2">
+              <Input
+                label="Buscar carro"
+                value={vehicleSearch}
+                onChange={(event) => setVehicleSearch(event.target.value)}
+                placeholder="Digite a marca ou o nome do carro"
+                icon={<Search size={16} />}
+                disabled={loading || !clientId}
+              />
               <Select
                 label="Carro"
                 value={vehicleId}
@@ -501,7 +531,7 @@ export function QuickSaleModal({
                   }
                 }}
                 options={[
-                  ...vehicles.map((vehicle) => ({
+                  ...filteredVehicles.map((vehicle) => ({
                     value: vehicle.id,
                     label: `${vehicle.brand} ${vehicle.model} · ${vehicle.year_or_km}`,
                   })),
@@ -513,6 +543,12 @@ export function QuickSaleModal({
                 placeholder="Selecione do estoque"
                 disabled={loading || !clientId}
               />
+              {vehicleSearch.trim() && filteredVehicles.length === 0 ? (
+                <p className="-mt-2 text-xs text-muted-foreground md:col-span-2">
+                  Nenhum carro encontrado. Use a opção de cadastrar um novo
+                  carro.
+                </p>
+              ) : null}
               {vehicleId === NEW_VEHICLE ? (
                 <div className="rounded-2xl border border-[#E51838]/20 bg-[#E51838]/5 p-4 md:col-span-2">
                   <div className="mb-3 flex items-center gap-2 text-sm font-bold text-[#E51838]">
