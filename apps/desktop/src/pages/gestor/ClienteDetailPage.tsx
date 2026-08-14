@@ -1136,10 +1136,7 @@ export function ClienteDetailPage() {
     setAutomaticVehicleImportMessage("");
 
     try {
-      const catalog = await syncVehicleCatalog(
-        resolvedId,
-        session.accessToken,
-      );
+      const catalog = await syncVehicleCatalog(resolvedId, session.accessToken);
       const pendingCatalogIds = catalog.items
         .filter((item) => !item.imported)
         .map((item) => item.id);

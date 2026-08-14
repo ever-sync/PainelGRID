@@ -56,6 +56,7 @@ import {
   phoneDigitsForCompare,
 } from "../../utils/phone";
 import { triggerHapticFeedback } from "../../utils/haptics";
+import { createSale, type SaleType } from "../../services/sales";
 
 type OutletContext = {
   user: User;
@@ -102,6 +103,15 @@ function playBeep() {
 
 function triggerVibration() {
   triggerHapticFeedback([100, 50, 100]);
+}
+
+function maskCurrency(value: string) {
+  const cents = Number(value.replace(/\D/g, ""));
+  if (!cents) return "";
+  return (cents / 100).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
 }
 
 type StageTab = "all" | "new" | "scheduled" | "checkin" | "done";
@@ -153,6 +163,11 @@ export function LeadsVendedorPage() {
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStageTab, setSelectedStageTab] = useState<StageTab>("all");
+  const [saleModal, setSaleModal] = useState<Lead | null>(null);
+  const [saleType, setSaleType] = useState<SaleType>("NOVO");
+  const [saleProduct, setSaleProduct] = useState("");
+  const [saleValue, setSaleValue] = useState("");
+  const [saleOrderNumber, setSaleOrderNumber] = useState("");
 
   const isLeadNew = useCallback((l: Lead) => {
     const stage = (l.crm_stage || "").toLowerCase();
@@ -680,15 +695,30 @@ export function LeadsVendedorPage() {
     setActionError("");
     setSaving(true);
     try {
-      await closeLeadAttendance(closeAttendanceModal.id, { sold }, t);
+      const row = await closeLeadAttendance(
+        closeAttendanceModal.id,
+        { sold },
+        t,
+      );
+      const updatedLead = mapApiLeadToLead(row);
+      setLeads((current) =>
+        current.map((lead) =>
+          lead.id === updatedLead.id ? updatedLead : lead,
+        ),
+      );
+      setAllClientLeads((current) =>
+        current.map((lead) =>
+          lead.id === updatedLead.id ? updatedLead : lead,
+        ),
+      );
       setCloseAttendanceModal(null);
       setCloseAttendanceStep("confirm");
-      await refreshLeads();
       setSuccessMessage(
         sold
-          ? "Atendimento concluído e lead movido para Compraram."
+          ? "Atendimento concluído. Agora registre os dados da venda no botão exibido no cliente."
           : "Atendimento concluído e lead movido para Atendimento encerrado.",
       );
+      void refreshLeads();
       setTimeout(() => setSuccessMessage(""), 5000);
     } catch (err: unknown) {
       setActionError(
@@ -700,6 +730,74 @@ export function LeadsVendedorPage() {
       setSaving(false);
     }
   };
+
+  const openSaleRegistration = (lead: Lead) => {
+    setSaleModal(lead);
+    setSaleType("NOVO");
+    setSaleProduct(
+      [lead.vehicle_brand, lead.vehicle_model].filter(Boolean).join(" "),
+    );
+    setSaleValue("");
+    setSaleOrderNumber("");
+    setActionError("");
+  };
+
+  const registerSale = async () => {
+    if (!saleModal?.active_appointment) return;
+    const t = readStoredSession()?.accessToken;
+    if (!t) return;
+    if (!saleProduct.trim() || !saleValue) {
+      setActionError("Informe o veículo e o valor da venda.");
+      return;
+    }
+    setSaving(true);
+    setActionError("");
+    try {
+      const sale = await createSale(t, {
+        appointment_id: saleModal.active_appointment.id,
+        type: saleType,
+        product: saleProduct.trim(),
+        value: saleValue,
+        sold_at: new Date().toISOString(),
+        order_number: saleOrderNumber.trim() || undefined,
+      });
+      setLeads((current) =>
+        current.map((lead) =>
+          lead.id === saleModal.id && lead.active_appointment
+            ? {
+                ...lead,
+                active_appointment: {
+                  ...lead.active_appointment,
+                  sale_id: sale.id,
+                  sale_vendor_id: sale.vendor_id,
+                },
+              }
+            : lead,
+        ),
+      );
+      setSaleModal(null);
+      setSuccessMessage("Venda registrada com sucesso e pontuação atribuída.");
+      setTimeout(() => setSuccessMessage(""), 5000);
+      void Promise.all([refreshLeads(), refreshScore()]);
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível registrar a venda.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const canRegisterSale = (lead: Lead) =>
+    Boolean(
+      lead.sold_by_vendor_id &&
+      lead.active_appointment &&
+      !lead.active_appointment.sale_id &&
+      events.find((event) => event.id === lead.active_appointment?.event_id)
+        ?.allow_vendor_create_sale !== false,
+    );
 
   const saveNote = async () => {
     if (!noteModal) return;
@@ -1026,6 +1124,16 @@ export function LeadsVendedorPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-1">
+                {canRegisterSale(lead) ? (
+                  <button
+                    type="button"
+                    onClick={() => openSaleRegistration(lead)}
+                    className="col-span-2 flex items-center justify-center gap-2 rounded-xl border border-emerald-600 bg-emerald-600 p-3 text-xs font-bold text-white shadow-sm transition-all active:scale-[0.98]"
+                  >
+                    <ShoppingCart size={16} />
+                    Registrar venda
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => openLeadChat(lead)}
@@ -1109,6 +1217,17 @@ export function LeadsVendedorPage() {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center justify-end gap-1">
+                      {canRegisterSale(lead) ? (
+                        <button
+                          type="button"
+                          onClick={() => openSaleRegistration(lead)}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 font-bold text-white transition-colors hover:bg-emerald-700"
+                          title="Registrar os dados da venda"
+                        >
+                          <ShoppingCart size={15} />
+                          Registrar venda
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => openLeadChat(lead)}
@@ -1139,6 +1258,67 @@ export function LeadsVendedorPage() {
           </table>
         </div>
       </div>
+
+      <Modal
+        open={!!saleModal}
+        onClose={() => {
+          setSaleModal(null);
+          setActionError("");
+        }}
+        title={`Registrar venda — ${saleModal?.name ?? ""}`}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setSaleModal(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => void registerSale()}
+              loading={saving}
+              icon={<ShoppingCart size={16} />}
+              isDisabled={!saleProduct.trim() || !saleValue}
+            >
+              Registrar venda
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Notice tone="info">
+            Atendimento marcado como venda. Complete os dados para contabilizar
+            a venda e a pontuação.
+          </Notice>
+          {actionError ? <Notice tone="error">{actionError}</Notice> : null}
+          <Select
+            label="Tipo da venda"
+            value={saleType}
+            onChange={(event) => setSaleType(event.target.value as SaleType)}
+            options={[
+              { value: "NOVO", label: "Novo" },
+              { value: "SEMINOVO", label: "Seminovo" },
+              { value: "VENDA_DIRETA", label: "Venda direta" },
+              { value: "PCD", label: "PCD" },
+            ]}
+          />
+          <Input
+            label="Veículo vendido"
+            value={saleProduct}
+            onChange={(event) => setSaleProduct(event.target.value)}
+            placeholder="Ex.: Volkswagen T-Cross"
+          />
+          <Input
+            label="Valor da venda"
+            value={saleValue}
+            onChange={(event) => setSaleValue(maskCurrency(event.target.value))}
+            placeholder="R$ 120.000,00"
+            inputMode="numeric"
+          />
+          <Input
+            label="Número do pedido (opcional)"
+            value={saleOrderNumber}
+            onChange={(event) => setSaleOrderNumber(event.target.value)}
+          />
+        </div>
+      </Modal>
 
       <Modal
         open={leadModalOpen}

@@ -60,6 +60,7 @@ export function createSale(
     product: string;
     value: string;
     sold_at?: string;
+    order_number?: string;
     notes?: string;
   },
 ) {
