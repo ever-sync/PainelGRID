@@ -117,6 +117,7 @@ import {
   createLead,
   deleteLead,
   fetchLeadsPage,
+  getLead,
   mapApiLeadToLead,
   updateLead,
 } from "../../services/leads";
@@ -1049,8 +1050,65 @@ export function ClienteDetailPage() {
     return cleanup;
   }, [refreshDetailLeads]);
 
+  const applyRealtimeDetailLead = useCallback(
+    async (leadId: string, action?: string) => {
+      if (action === "deleted") {
+        setDetailLeads(
+          (current) => current?.filter((lead) => lead.id !== leadId) ?? current,
+        );
+        setSelectedLeadIds((current) =>
+          current.filter((selectedId) => selectedId !== leadId),
+        );
+        return;
+      }
+
+      const token = readStoredSession()?.accessToken;
+      if (!token || !resolvedId) return;
+
+      try {
+        const freshLead = mapApiLeadToLead(await getLead(leadId, token));
+        const search = deferredLeadSearch.trim().toLowerCase();
+        const matchesFilters =
+          freshLead.client_id === resolvedId &&
+          (leadSourceFilter === "all" ||
+            freshLead.source === leadSourceFilter) &&
+          (leadStatusFilter === "all" ||
+            freshLead.confirmation_status === leadStatusFilter) &&
+          (!search ||
+            freshLead.name.toLowerCase().includes(search) ||
+            freshLead.phone.toLowerCase().includes(search) ||
+            freshLead.email.toLowerCase().includes(search));
+
+        setDetailLeads((current) => {
+          if (!current) return current;
+          const alreadyLoaded = current.some((lead) => lead.id === leadId);
+          if (!matchesFilters) {
+            return alreadyLoaded
+              ? current.filter((lead) => lead.id !== leadId)
+              : current;
+          }
+          if (alreadyLoaded) {
+            return current.map((lead) =>
+              lead.id === leadId ? freshLead : lead,
+            );
+          }
+          return action === "created" ? [freshLead, ...current] : current;
+        });
+      } catch {
+        // Reconexao e retorno a aba fazem a reconciliacao completa de seguranca.
+      }
+    },
+    [deferredLeadSearch, leadSourceFilter, leadStatusFilter, resolvedId],
+  );
+
   useLeadRealtimeSync(resolvedId, refreshDetailLeads, {
     enabled: activeTab === "leads",
+    refreshOnEvent: false,
+    onEvent: (_eventName, payload) => {
+      if (payload.lead_id) {
+        void applyRealtimeDetailLead(payload.lead_id, payload.action);
+      }
+    },
   });
 
   useEffect(() => {
