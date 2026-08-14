@@ -496,6 +496,35 @@ export class SalesService {
     }));
   }
 
+  async listBuyers(user: AuthenticatedUser, clientId: string, search?: string) {
+    if (user.role !== Role.GESTOR && user.role !== Role.RECEPCAO) {
+      throw new ForbiddenException("Sem permissão para buscar compradores");
+    }
+    if (user.role === Role.RECEPCAO && user.client_id !== clientId) {
+      throw new ForbiddenException("Empresa não permitida para este acesso");
+    }
+
+    const query = search?.trim();
+    return this.prisma.lead.findMany({
+      where: {
+        client_id: clientId,
+        deleted_at: null,
+        ...(query
+          ? {
+              OR: [
+                { name: { contains: query, mode: "insensitive" } },
+                { phone: { contains: query, mode: "insensitive" } },
+                { email: { contains: query, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      },
+      select: { id: true, name: true, phone: true, email: true },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      take: 50,
+    });
+  }
+
   private async resolveVendorBinding(
     vendorId: string,
     appointmentId: string,

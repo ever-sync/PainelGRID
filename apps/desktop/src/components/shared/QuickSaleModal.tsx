@@ -19,9 +19,13 @@ import {
   mapApiClientToClient,
 } from "../../services/clients";
 import { listEvents, type ApiEvent } from "../../services/events";
-import { listLeads, type ApiLead } from "../../services/leads";
 import { listClientVehicles, type Vehicle } from "../../services/vehicles";
-import { createQuickSale, type SaleType } from "../../services/sales";
+import {
+  createQuickSale,
+  listQuickSaleBuyers,
+  type QuickSaleBuyer,
+  type SaleType,
+} from "../../services/sales";
 import { listSalesTeams } from "../../services/salesTeams";
 import type { Client, User } from "../../types";
 
@@ -45,8 +49,8 @@ export function QuickSaleModal({
   const [clients, setClients] = useState<Client[]>([]);
   const [events, setEvents] = useState<ApiEvent[]>([]);
   const [vendors, setVendors] = useState<User[]>([]);
-  const [leads, setLeads] = useState<ApiLead[]>([]);
-  const [initialLeads, setInitialLeads] = useState<ApiLead[]>([]);
+  const [leads, setLeads] = useState<QuickSaleBuyer[]>([]);
+  const [initialLeads, setInitialLeads] = useState<QuickSaleBuyer[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [clientId, setClientId] = useState("");
   const [eventId, setEventId] = useState("");
@@ -65,6 +69,7 @@ export function QuickSaleModal({
   const [orderNumber, setOrderNumber] = useState("");
   const [wristband, setWristband] = useState("");
   const [loading, setLoading] = useState(false);
+  const [buyersLoading, setBuyersLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
@@ -111,14 +116,11 @@ export function QuickSaleModal({
     setVehicleId("");
     void Promise.all([
       listEvents({ client_id: clientId }, token),
-      listLeads({ client_id: clientId, take: 100 }, token),
       listClientVehicles(clientId, { status: true }, token),
     ])
-      .then(([eventRows, leadRows, vehicleRows]) => {
+      .then(([eventRows, vehicleRows]) => {
         setEvents(eventRows);
         setVendors([]);
-        setLeads(leadRows);
-        setInitialLeads(leadRows);
         setVehicles(vehicleRows);
       })
       .catch((error) =>
@@ -129,6 +131,20 @@ export function QuickSaleModal({
         ),
       )
       .finally(() => setLoading(false));
+  }, [clientId, open]);
+
+  useEffect(() => {
+    if (!open || !clientId) return;
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+    setBuyersLoading(true);
+    void listQuickSaleBuyers(token, clientId)
+      .then((rows) => {
+        setLeads(rows);
+        setInitialLeads(rows);
+      })
+      .catch(() => setLeads([]))
+      .finally(() => setBuyersLoading(false));
   }, [clientId, open]);
 
   useEffect(() => {
@@ -173,12 +189,16 @@ export function QuickSaleModal({
 
     let active = true;
     const timeout = window.setTimeout(() => {
-      void listLeads({ client_id: clientId, search: query, take: 100 }, token)
+      setBuyersLoading(true);
+      void listQuickSaleBuyers(token, clientId, query)
         .then((rows) => {
           if (active) setLeads(rows);
         })
-        .catch(() => undefined);
-    }, 250);
+        .catch(() => undefined)
+        .finally(() => {
+          if (active) setBuyersLoading(false);
+        });
+    }, 200);
 
     return () => {
       active = false;
@@ -199,7 +219,7 @@ export function QuickSaleModal({
       .sort((a, b) =>
         a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),
       )
-      .slice(0, 100);
+      .slice(0, 50);
   }, [buyerSearch, initialLeads, leads]);
 
   async function submit() {
@@ -401,7 +421,9 @@ export function QuickSaleModal({
 
                     {sortedBuyerResults.length === 0 && (
                       <p className="px-3 py-4 text-center text-sm text-muted-foreground">
-                        Nenhum comprador encontrado.
+                        {buyersLoading
+                          ? "Buscando compradores..."
+                          : "Nenhum comprador encontrado."}
                       </p>
                     )}
                   </div>

@@ -45,6 +45,13 @@ export type EventSaleListItem = VendorSaleListItem & {
   team: { id: string; name: string } | null;
 };
 
+export type QuickSaleBuyer = {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+};
+
 export function createSale(
   token: string,
   body: {
@@ -101,4 +108,17 @@ export function listEventSales(token: string, eventId: string) {
     `/sales?event_id=${encodeURIComponent(eventId)}`,
     { method: "GET", token },
   );
+}
+
+export function listQuickSaleBuyers(
+  token: string,
+  clientId: string,
+  search = "",
+) {
+  const query = new URLSearchParams({ client_id: clientId });
+  if (search.trim()) query.set("search", search.trim());
+  return httpRequest<QuickSaleBuyer[]>(`/sales/buyers?${query.toString()}`, {
+    method: "GET",
+    token,
+  });
 }

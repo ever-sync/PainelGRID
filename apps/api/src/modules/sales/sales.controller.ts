@@ -43,6 +43,17 @@ export class SalesController {
     return this.salesService.listByEvent(user, eventId);
   }
 
+  @Get("buyers")
+  @Roles(Role.GESTOR, Role.RECEPCAO)
+  @ApiOperation({ summary: "Busca compradores para a venda rápida" })
+  listBuyers(
+    @Query("client_id", new ParseUUIDPipe()) clientId: string,
+    @Query("search") search: string | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.salesService.listBuyers(user, clientId, search);
+  }
+
   @Post()
   @Roles(Role.VENDEDOR, Role.RECEPCAO)
   @ApiOperation({ summary: "Cria uma nova venda" })
