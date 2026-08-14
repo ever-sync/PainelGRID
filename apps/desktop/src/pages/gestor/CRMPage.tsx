@@ -190,7 +190,6 @@ export function CRMPage() {
     Record<string, StageMotionKind>
   >({});
   const leadsAbortRef = useRef<AbortController | null>(null);
-  const realtimeReconcileTimerRef = useRef<number | null>(null);
   // Busca aplicada no servidor (ref para nao recriar refreshBoard a cada tecla).
   const searchTermRef = useRef("");
   const searchDebounceMountRef = useRef(false);
@@ -815,7 +814,18 @@ export function CRMPage() {
 
       // Exclusao: remove direto, sem gastar um getLead que retornaria 404.
       if (payload.action === "deleted") {
+        const previousLead = clientLeads.find((lead) => lead.id === leadId);
         setBoardState((prev) => removeLeadFromBoard(prev, leadId));
+        if (previousLead?.crm_stage_id) {
+          setStageCounts((current) => {
+            const stageId = previousLead.crm_stage_id;
+            if (!stageId || current[stageId] == null) return current;
+            return {
+              ...current,
+              [stageId]: Math.max(0, current[stageId] - 1),
+            };
+          });
+        }
         setOpenLead((current) => (current?.id === leadId ? null : current));
         return;
       }
@@ -832,6 +842,21 @@ export function CRMPage() {
         setOpenLead((current) =>
           current?.id === freshLead.id ? freshLead : current,
         );
+
+        const previousStageId = previousLead?.crm_stage_id ?? null;
+        const freshStageId = freshLead.crm_stage_id ?? apiStages[0]?.id ?? null;
+        if (!previousLead && freshStageId && payload.action === "created") {
+          setStageCounts((current) => ({
+            ...current,
+            [freshStageId]: (current[freshStageId] ?? 0) + 1,
+          }));
+        } else if (
+          previousLead &&
+          freshStageId &&
+          previousStageId !== freshStageId
+        ) {
+          adjustStageCounts([{ from: previousStageId, to: freshStageId }]);
+        }
 
         if (payload.action === "created") {
           triggerLiveBoardFx(freshLead.id, "new", [
@@ -858,17 +883,10 @@ export function CRMPage() {
           setOpenLeadHistoryVersion((current) => current + 1);
         }
 
-        // Eco do proprio move: o `getLead` acima ja trouxe a verdade do
-        // servidor para esse lead, entao o resync completo seria redundante.
-        if (!consumeSelfMovedEcho(freshLead.id)) {
-          if (realtimeReconcileTimerRef.current != null) {
-            window.clearTimeout(realtimeReconcileTimerRef.current);
-          }
-          realtimeReconcileTimerRef.current = window.setTimeout(() => {
-            realtimeReconcileTimerRef.current = null;
-            refreshBoard();
-          }, 350);
-        }
+        // O getLead acima ja reconciliou somente o registro alterado. Eventos
+        // sem lead_id e reconexoes continuam responsáveis por uma recarga da
+        // primeira pagina quando realmente necessario.
+        consumeSelfMovedEcho(freshLead.id);
       } catch (error) {
         if (error instanceof HttpError && error.status === 404) {
           setBoardState((prev) => removeLeadFromBoard(prev, leadId));
@@ -879,6 +897,7 @@ export function CRMPage() {
     },
     [
       apiStages,
+      adjustStageCounts,
       clientLeads,
       consumeSelfMovedEcho,
       openLead?.id,
@@ -900,14 +919,10 @@ export function CRMPage() {
     onStatus: setRealtimeStatus,
     // Rede de seguranca lenta: eventos + resync no reconnect (T1) sao o caminho
     // primario; o poll so cobre evento perdido com socket vivo.
-    pollMs: 30_000,
   });
 
   useEffect(() => {
     return () => {
-      if (realtimeReconcileTimerRef.current != null) {
-        window.clearTimeout(realtimeReconcileTimerRef.current);
-      }
       if (liveBoardTimeoutRef.current != null) {
         window.clearTimeout(liveBoardTimeoutRef.current);
       }
