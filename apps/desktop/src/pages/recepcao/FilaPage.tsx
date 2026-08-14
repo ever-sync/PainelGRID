@@ -5,7 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Clock, Flag, UserCheck, Users } from "lucide-react";
+import { Clock, Flag, Radio, UserCheck, Users } from "lucide-react";
 import { useOutletContext } from "react-router-dom";
 import type { User } from "../../types";
 import { PageHeader } from "../../components/shared/PageHeader";
@@ -13,7 +13,9 @@ import { Notice } from "../../components/ui/Notice";
 import { readStoredSession } from "../../services/auth";
 import {
   getReceptionQueue,
+  listVendorAvailability,
   type ReceptionQueueLead,
+  type VendorAvailability,
 } from "../../services/leads";
 import { resolveClientId } from "../../utils/userContext";
 import { useLeadRealtimeSync } from "../../hooks/useLeadRealtimeSync";
@@ -35,6 +37,7 @@ export function FilaPage() {
   const clientId = resolveClientId(user);
   const [eventName, setEventName] = useState("");
   const [leads, setLeads] = useState<ReceptionQueueLead[]>([]);
+  const [vendors, setVendors] = useState<VendorAvailability[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -47,7 +50,12 @@ export function FilaPage() {
     }
 
     try {
-      const queue = await getReceptionQueue(token);
+      const [queue, vendorRows] = await Promise.all([
+        getReceptionQueue(token),
+        user.role === "vendedor"
+          ? listVendorAvailability(token)
+          : Promise.resolve([]),
+      ]);
       if (!queue.event) {
         setError("Nenhum evento disponível para exibir a fila.");
         setLoading(false);
@@ -56,6 +64,7 @@ export function FilaPage() {
 
       setEventName(queue.event.name);
       setLeads(queue.leads);
+      setVendors(vendorRows);
       setError("");
     } catch (cause) {
       setError(
@@ -66,7 +75,7 @@ export function FilaPage() {
     } finally {
       setLoading(false);
     }
-  }, [clientId]);
+  }, [clientId, user.role]);
 
   useEffect(() => {
     void load();
@@ -86,6 +95,29 @@ export function FilaPage() {
     };
   }, [leads]);
 
+  const myQueueStatus = useMemo(() => {
+    if (user.role !== "vendedor") return null;
+    const me = vendors.find((vendor) => vendor.id === user.id);
+    if (!me) return null;
+    const ordered = vendors
+      .filter((vendor) => vendor.eligible)
+      .sort((a, b) => {
+        const timeA = a.last_assigned_at
+          ? new Date(a.last_assigned_at).getTime()
+          : 0;
+        const timeB = b.last_assigned_at
+          ? new Date(b.last_assigned_at).getTime()
+          : 0;
+        return timeA - timeB || a.id.localeCompare(b.id);
+      });
+    const index = ordered.findIndex((vendor) => vendor.id === user.id);
+    return {
+      ...me,
+      position: index >= 0 ? index + 1 : null,
+      queueSize: ordered.length,
+    };
+  }, [user.id, user.role, vendors]);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -97,6 +129,60 @@ export function FilaPage() {
           { label: "Fila" },
         ]}
       />
+
+      {user.role === "vendedor" && myQueueStatus ? (
+        <div className="relative overflow-hidden rounded-3xl border border-[#ff0038]/25 bg-[#0d0d10] p-5 text-white shadow-[0_18px_45px_rgba(0,0,0,0.22)] sm:p-6">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,0,56,0.18),transparent_42%)]" />
+          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#ff0038]/30 bg-[#ff0038]/10 text-[#ff3159]">
+                <Radio size={23} />
+              </span>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#ff6684]">
+                  Sua ordem de atendimento
+                </p>
+                <h2 className="mt-1 text-xl font-black tracking-tight sm:text-2xl">
+                  {myQueueStatus.position
+                    ? myQueueStatus.position === 1
+                      ? "Você é o próximo vendedor"
+                      : `${myQueueStatus.position - 1} vendedor${myQueueStatus.position - 1 === 1 ? "" : "es"} à sua frente`
+                    : myQueueStatus.operational_status === "busy"
+                      ? "Você está em atendimento"
+                      : myQueueStatus.operational_status === "away"
+                        ? "Você está ausente da fila"
+                        : "Conectando você à fila"}
+                </h2>
+                <p className="mt-1 text-xs text-zinc-400">
+                  A ordem é atualizada automaticamente após cada chamada.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 self-start sm:self-auto">
+              {myQueueStatus.position ? (
+                <>
+                  <div className="text-right">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
+                      Posição
+                    </p>
+                    <p className="text-xs font-semibold text-zinc-400">
+                      de {myQueueStatus.queueSize} disponíveis
+                    </p>
+                  </div>
+                  <span className="flex h-16 min-w-16 items-center justify-center rounded-2xl bg-[#ff0038] px-4 text-3xl font-black shadow-[0_12px_30px_rgba(255,0,56,0.3)]">
+                    {myQueueStatus.position}º
+                  </span>
+                </>
+              ) : (
+                <span className="rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-bold text-zinc-300">
+                  Fora da fila
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {error ? <Notice tone="error">{error}</Notice> : null}
 
