@@ -13,9 +13,20 @@ import { PrismaService } from "../../config/prisma.service";
 import type { IntegrationRequest } from "./integration-request";
 
 const HEADER = "x-leadflow-integration-key";
+const CREDENTIAL_CACHE_TTL_MS = 60_000;
+
+type CredentialScope = {
+  clientId: string;
+  allowedClientIds: string[];
+};
 
 @Injectable()
 export class IntegrationKeyGuard implements CanActivate {
+  private readonly credentialScopeCache = new Map<
+    string,
+    CredentialScope & { validUntil: number }
+  >();
+
   constructor(
     private readonly config: ConfigService,
     @Optional() private readonly prisma?: PrismaService,
@@ -68,11 +79,20 @@ export class IntegrationKeyGuard implements CanActivate {
 
   private async findCredentialScope(
     provided: string,
-  ): Promise<{ clientId: string; allowedClientIds: string[] } | null> {
+  ): Promise<CredentialScope | null> {
     if (!this.prisma?.integrationCredential) {
       return null;
     }
     const keyHash = createHash("sha256").update(provided, "utf8").digest("hex");
+    const cached = this.credentialScopeCache.get(keyHash);
+    if (cached && cached.validUntil > Date.now()) {
+      return {
+        clientId: cached.clientId,
+        allowedClientIds: cached.allowedClientIds,
+      };
+    }
+    if (cached) this.credentialScopeCache.delete(keyHash);
+
     const credential = await this.prisma.integrationCredential.findUnique({
       where: { key_hash: keyHash },
       select: {
@@ -103,10 +123,18 @@ export class IntegrationKeyGuard implements CanActivate {
         })
         .catch(() => undefined);
     }
-    return {
+    const scope = {
       clientId: credential.client_id,
       allowedClientIds: credential.allowed_client_ids ?? [],
     };
+    this.credentialScopeCache.set(keyHash, {
+      ...scope,
+      validUntil: Math.min(
+        Date.now() + CREDENTIAL_CACHE_TTL_MS,
+        credential.expires_at?.getTime() ?? Number.POSITIVE_INFINITY,
+      ),
+    });
+    return scope;
   }
 
   private safeEqual(provided: string, expected: string): boolean {
