@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Clock, UserCheck, Users } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { Clock, Flag, UserCheck, Users } from "lucide-react";
 import { useOutletContext } from "react-router-dom";
 import type { User } from "../../types";
 import { PageHeader } from "../../components/shared/PageHeader";
@@ -9,6 +15,7 @@ import { listEvents, mapApiEventToEvent } from "../../services/events";
 import { fetchAllLeads, type ApiLead } from "../../services/leads";
 import { resolveClientId } from "../../utils/userContext";
 import { useLeadRealtimeSync } from "../../hooks/useLeadRealtimeSync";
+import gpLogo from "../../assets/logo.png";
 
 type OutletContext = { user: User };
 
@@ -105,64 +112,198 @@ export function FilaPage() {
         ]}
       />
 
-      {eventName ? (
-        <div className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-              Evento
-            </p>
-            <p className="font-bold text-zinc-900 dark:text-white">
-              {eventName}
-            </p>
-          </div>
-          <span className="rounded-full bg-amber-500/10 px-3 py-1 text-sm font-bold text-amber-600 dark:text-amber-400">
-            {waitingQueue.length} aguardando
-          </span>
-        </div>
-      ) : null}
-
       {error ? <Notice tone="error">{error}</Notice> : null}
 
-      <div className="space-y-3">
-        {loading ? (
-          <p className="py-12 text-center text-sm text-zinc-500">
-            Carregando fila...
-          </p>
-        ) : leads.length === 0 && !error ? (
-          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-zinc-300 py-14 text-zinc-500 dark:border-zinc-700">
-            <Users size={36} />
-            <p className="text-sm font-medium">
-              {user.role === "vendedor"
-                ? "Nenhum cliente está aguardando você."
-                : "Ninguém aguardando atendimento."}
-            </p>
-          </div>
-        ) : (
-          <>
-            {waitingQueue.map((lead, index) => (
-              <QueueLeadRow
-                key={lead.id}
-                lead={lead}
-                position={index + 1}
-                state="waiting"
-              />
-            ))}
+      <div className="relative overflow-hidden rounded-3xl border border-zinc-800 bg-[#09090b] p-4 text-white shadow-[0_24px_60px_rgba(0,0,0,0.28)] sm:p-6">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,rgba(255,0,56,0.09),transparent_32%),repeating-linear-gradient(135deg,transparent_0,transparent_28px,rgba(255,255,255,0.015)_29px,transparent_30px)]" />
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-[#ff0038] via-[#ff0038]/50 to-transparent" />
 
-            {activeService.length > 0 ? (
-              <div className="pt-3">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                  Em atendimento
-                </p>
-                <div className="space-y-3">
-                  {activeService.map((lead) => (
-                    <QueueLeadRow key={lead.id} lead={lead} state="active" />
-                  ))}
-                </div>
+        {eventName ? (
+          <div className="relative mb-5 flex flex-col justify-between gap-4 border-b border-white/[0.08] pb-5 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-[#ff0038]/30 bg-[#ff0038]/10">
+                <img
+                  src={gpLogo}
+                  alt="GP de Vendas"
+                  className="h-10 w-10 object-contain"
+                />
               </div>
-            ) : null}
-          </>
-        )}
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#ff3159]">
+                  GP de Vendas · Atendimento ao vivo
+                </p>
+                <p className="mt-1 text-xl font-black uppercase tracking-tight sm:text-2xl">
+                  {eventName}
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <QueueMetric
+                label="Aguardando"
+                value={waitingQueue.length}
+                tone="waiting"
+              />
+              <QueueMetric
+                label="Em atendimento"
+                value={activeService.length}
+                tone="active"
+              />
+            </div>
+          </div>
+        ) : null}
+
+        <div className="relative">
+          {loading ? (
+            <div className="flex items-center justify-center gap-3 py-16 text-sm text-zinc-500">
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-[#ff0038]" />
+              Carregando fila...
+            </div>
+          ) : leads.length === 0 && !error ? (
+            <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] py-16 text-zinc-500">
+              <Users size={38} className="text-zinc-700" />
+              <p className="text-sm font-medium">
+                {user.role === "vendedor"
+                  ? "Nenhum cliente está aguardando você."
+                  : "Ninguém aguardando atendimento."}
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <QueueSection
+                title="Fila de espera"
+                subtitle="Por ordem de chegada"
+                icon={<Clock size={19} />}
+                count={waitingQueue.length}
+                tone="waiting"
+              >
+                {waitingQueue.length ? (
+                  waitingQueue.map((lead, index) => (
+                    <QueueLeadRow
+                      key={lead.id}
+                      lead={lead}
+                      position={index + 1}
+                      state="waiting"
+                    />
+                  ))
+                ) : (
+                  <QueueEmpty icon={<Flag size={28} />}>
+                    Ninguém aguardando no momento.
+                  </QueueEmpty>
+                )}
+              </QueueSection>
+
+              <QueueSection
+                title="Em atendimento"
+                subtitle="Clientes com vendedor"
+                icon={<UserCheck size={19} />}
+                count={activeService.length}
+                tone="active"
+              >
+                {activeService.length ? (
+                  activeService.map((lead) => (
+                    <QueueLeadRow key={lead.id} lead={lead} state="active" />
+                  ))
+                ) : (
+                  <QueueEmpty icon={<UserCheck size={28} />}>
+                    Nenhum atendimento iniciado.
+                  </QueueEmpty>
+                )}
+              </QueueSection>
+            </div>
+          )}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function QueueMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "waiting" | "active";
+}) {
+  return (
+    <div className="min-w-[118px] rounded-xl border border-white/[0.08] bg-white/[0.035] px-3 py-2">
+      <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-500">
+        {label}
+      </p>
+      <p
+        className={`mt-0.5 text-2xl font-black tabular-nums ${
+          tone === "waiting" ? "text-amber-400" : "text-[#ff3159]"
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function QueueSection({
+  title,
+  subtitle,
+  icon,
+  count,
+  tone,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  icon: ReactNode;
+  count: number;
+  tone: "waiting" | "active";
+  children: ReactNode;
+}) {
+  const active = tone === "active";
+  return (
+    <section className="min-h-[280px] rounded-2xl border border-white/[0.08] bg-[#111114]/95 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.25)]">
+      <div className="mb-4 flex items-center justify-between border-b border-white/[0.07] pb-4">
+        <div className="flex items-center gap-3">
+          <span
+            className={`flex h-10 w-10 items-center justify-center rounded-xl border ${
+              active
+                ? "border-[#ff0038]/25 bg-[#ff0038]/10 text-[#ff3159]"
+                : "border-amber-400/20 bg-amber-400/10 text-amber-400"
+            }`}
+          >
+            {icon}
+          </span>
+          <div>
+            <h2 className="font-black uppercase tracking-tight text-zinc-100">
+              {title}
+            </h2>
+            <p className="text-[11px] text-zinc-500">{subtitle}</p>
+          </div>
+        </div>
+        <span
+          className={`rounded-lg px-3 py-1 text-lg font-black tabular-nums ${
+            active
+              ? "bg-[#ff0038]/10 text-[#ff3159]"
+              : "bg-amber-400/10 text-amber-400"
+          }`}
+        >
+          {count}
+        </span>
+      </div>
+      <div className="space-y-2.5">{children}</div>
+    </section>
+  );
+}
+
+function QueueEmpty({
+  icon,
+  children,
+}: {
+  icon: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex min-h-44 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/[0.08] text-center text-sm text-zinc-600">
+      <span className="text-zinc-700">{icon}</span>
+      {children}
     </div>
   );
 }
@@ -178,18 +319,27 @@ function QueueLeadRow({
 }) {
   const active = state === "active";
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div
+      className={`group relative flex items-center gap-3 overflow-hidden rounded-xl border p-3.5 transition-colors ${
+        active
+          ? "border-[#ff0038]/15 bg-[#ff0038]/[0.045] hover:border-[#ff0038]/30"
+          : "border-white/[0.07] bg-white/[0.025] hover:border-amber-400/20"
+      }`}
+    >
       <span
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-black ${
-          active ? "bg-blue-500 text-white" : "bg-amber-500 text-black"
+        className={`absolute inset-y-0 left-0 w-0.5 ${active ? "bg-[#ff0038]" : "bg-amber-400"}`}
+      />
+      <span
+        className={`ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-sm font-black ${
+          active
+            ? "border-[#ff0038]/25 bg-[#ff0038]/10 text-[#ff3159]"
+            : "border-amber-400/25 bg-amber-400/10 text-amber-300"
         }`}
       >
         {active ? <UserCheck size={18} /> : position}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate font-bold text-zinc-900 dark:text-white">
-          {lead.name}
-        </p>
+        <p className="truncate font-bold text-zinc-100">{lead.name}</p>
         <p className="mt-1 flex items-center gap-1.5 text-xs text-zinc-500">
           <Clock size={13} />
           Check-in às{" "}
@@ -202,8 +352,8 @@ function QueueLeadRow({
       <span
         className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${
           active
-            ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
-            : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+            ? "bg-[#ff0038]/10 text-[#ff6684]"
+            : "bg-amber-400/10 text-amber-300"
         }`}
       >
         <UserCheck size={14} />
