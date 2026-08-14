@@ -47,6 +47,21 @@ export function normalizeBrPhoneToE164(raw: string): string {
   return `+55${localBrazilianPhoneDigits(raw)}`;
 }
 
+/** Máscara progressiva para telefone brasileiro, aceitando também o prefixo +55. */
+export function formatBrPhoneInput(raw: string): string {
+  let digits = raw.replace(/\D/g, "").slice(0, 13);
+  if (digits.length > 11 && digits.startsWith("55")) {
+    digits = digits.slice(2);
+  }
+  digits = digits.slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
 export function phoneDigitsForCompare(raw: string): string {
   const normalized = normalizeBrPhoneToE164(raw);
   if (normalized) {

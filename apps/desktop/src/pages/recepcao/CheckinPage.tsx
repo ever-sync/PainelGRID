@@ -18,6 +18,7 @@ import { Input } from "../../components/ui/Input";
 import { Modal } from "../../components/ui/Modal";
 import { Select } from "../../components/ui/Select";
 import { Notice } from "../../components/ui/Notice";
+import { pushToast } from "../../components/ui/Toast";
 import type { ConfirmationStatus, Lead, User as AuthUser } from "../../types";
 import {
   DASHBOARD_DARK_CHANGE_EVENT,
@@ -46,6 +47,7 @@ import { connectRealtime } from "../../services/realtime";
 import { LazyQrScanner } from "../../components/shared/LazyQrScanner";
 import type { Event } from "../../types";
 import {
+  formatBrPhoneInput,
   normalizeBrPhoneToE164,
   phoneDigitsForCompare,
 } from "../../utils/phone";
@@ -309,11 +311,16 @@ export function CheckinPage() {
     setCurrentPage(1);
   }, [activeTab, search, selectedEventId]);
   const normalizedLeadPhone = normalizeBrPhoneToE164(leadPhone);
+  const normalizedLeadEmail = leadEmail.trim();
+  const isLeadEmailValid =
+    !normalizedLeadEmail ||
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedLeadEmail);
   const duplicatePhoneLead = normalizedLeadPhone
     ? (leadsState.find(
         (lead) =>
+          lead.event_id === selectedEventId &&
           phoneDigitsForCompare(lead.phone) ===
-          phoneDigitsForCompare(normalizedLeadPhone),
+            phoneDigitsForCompare(normalizedLeadPhone),
       ) ?? null)
     : null;
 
@@ -569,8 +576,17 @@ export function CheckinPage() {
   };
 
   const handleCreateLead = async () => {
+    if (createBusy) return;
     const token = readStoredSession()?.accessToken;
     if (!token || !clientId) return;
+    if (!selectedEventId) {
+      setCreateError("Selecione um evento antes de cadastrar o lead.");
+      return;
+    }
+    if (event?.allow_reception_quick_create !== true) {
+      setCreateError("Cadastro rápido desabilitado para este evento.");
+      return;
+    }
     if (!leadName.trim()) {
       setCreateError("Informe o nome do lead.");
       return;
@@ -580,7 +596,11 @@ export function CheckinPage() {
       return;
     }
     if (duplicatePhoneLead) {
-      setCreateError("Este telefone já está cadastrado para este cliente.");
+      setCreateError("Este telefone já está cadastrado neste evento.");
+      return;
+    }
+    if (!isLeadEmailValid) {
+      setCreateError("Informe um e-mail válido ou deixe o campo vazio.");
       return;
     }
     if (!discoverySource) {
@@ -592,19 +612,19 @@ export function CheckinPage() {
       return;
     }
 
-    try {
-      const check = await checkLeadPhone(normalizedLeadPhone, token, clientId);
-      if (check.exists) {
-        setCreateError("Este telefone já está cadastrado para este cliente.");
-        return;
-      }
-    } catch {
-      // Se a checagem falhar, o create continua e o backend valida duplicidade.
-    }
-
     setCreateError("");
     setCreateBusy(true);
     try {
+      const check = await checkLeadPhone(
+        normalizedLeadPhone,
+        token,
+        clientId,
+        selectedEventId,
+      );
+      if (check.exists) {
+        setCreateError("Este telefone já está cadastrado neste evento.");
+        return;
+      }
       const discoveryLabel =
         discoverySource === "outro"
           ? discoverySourceOther.trim()
@@ -615,13 +635,14 @@ export function CheckinPage() {
         {
           client_id: clientId,
           name: leadName.trim(),
-          email: leadEmail.trim() || null,
+          email: normalizedLeadEmail || null,
           phone: normalizedLeadPhone,
           source:
             discoverySource === "instagram" || discoverySource === "facebook"
               ? "facebook_ads"
               : "manual",
-          event_interest_id: selectedEventId || null,
+          event_interest_id: selectedEventId,
+          tags: [`discovery_source:${discoverySource}`],
           notes: `Como ficou sabendo: ${discoveryLabel}`,
         },
         token,
@@ -634,7 +655,16 @@ export function CheckinPage() {
       setDiscoverySource(null);
       setDiscoverySourceOther("");
       setShowModal(false);
-      setTokenHint("Lead cadastrado com sucesso.");
+      setSearch("");
+      setActiveTab("all");
+      setCurrentPage(1);
+      setQuickCheckinError("");
+      setQuickCheckinVendorId("__automatic__");
+      setQuickCheckinLead(mapped);
+      pushToast({
+        type: "success",
+        message: `${mapped.name} foi cadastrado. Confirme agora o check-in e o vendedor.`,
+      });
     } catch (error) {
       setCreateError(
         error instanceof Error
@@ -929,7 +959,7 @@ export function CheckinPage() {
           >
             Escanear QR
           </Button>
-          {event?.allow_reception_quick_create !== false ? (
+          {event?.allow_reception_quick_create === true ? (
             <Button
               icon={<Plus size={16} />}
               onClick={() => setShowModal(true)}
@@ -1192,12 +1222,18 @@ export function CheckinPage() {
 
       <Modal
         open={showModal}
-        onClose={() => setShowModal(false)}
+        onClose={() => {
+          if (!createBusy) setShowModal(false);
+        }}
         title="Cadastrar lead"
         dark={isDarkMode}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setShowModal(false)}>
+            <Button
+              variant="secondary"
+              onClick={() => setShowModal(false)}
+              isDisabled={createBusy}
+            >
               Cancelar
             </Button>
             <Button
@@ -1205,7 +1241,11 @@ export function CheckinPage() {
               loading={createBusy}
               isDisabled={
                 !!duplicatePhoneLead ||
+                !selectedEventId ||
+                event?.allow_reception_quick_create !== true ||
+                !leadName.trim() ||
                 !normalizedLeadPhone ||
+                !isLeadEmailValid ||
                 !discoverySource ||
                 (discoverySource === "outro" && !discoverySourceOther.trim())
               }
@@ -1216,17 +1256,29 @@ export function CheckinPage() {
         }
       >
         <div className="space-y-3">
-          <input
+          <Input
+            label="Nome *"
             value={leadName}
-            onChange={(e) => setLeadName(e.target.value)}
-            placeholder="Nome"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            onChange={(inputEvent) => {
+              setLeadName(inputEvent.target.value.slice(0, 255));
+              setCreateError("");
+            }}
+            placeholder="Nome do cliente"
+            autoComplete="name"
+            isDisabled={createBusy}
           />
-          <input
+          <Input
+            label="Telefone *"
+            type="tel"
+            inputMode="tel"
             value={leadPhone}
-            onChange={(e) => setLeadPhone(e.target.value)}
-            placeholder="+5512981092776"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            onChange={(inputEvent) => {
+              setLeadPhone(formatBrPhoneInput(inputEvent.target.value));
+              setCreateError("");
+            }}
+            placeholder="(12) 98109-2776"
+            autoComplete="tel"
+            isDisabled={createBusy}
           />
           {normalizedLeadPhone ? (
             <p
@@ -1243,12 +1295,22 @@ export function CheckinPage() {
               Telefone já cadastrado para {duplicatePhoneLead.name}.
             </Notice>
           ) : null}
-          <input
+          <Input
+            label="E-mail (opcional)"
             type="email"
             value={leadEmail}
-            onChange={(e) => setLeadEmail(e.target.value)}
-            placeholder="E-mail (opcional)"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            onChange={(inputEvent) => {
+              setLeadEmail(inputEvent.target.value.slice(0, 255));
+              setCreateError("");
+            }}
+            placeholder="cliente@exemplo.com"
+            autoComplete="email"
+            error={
+              normalizedLeadEmail && !isLeadEmailValid
+                ? "Informe um e-mail válido."
+                : undefined
+            }
+            isDisabled={createBusy}
           />
           <fieldset className="space-y-2 pt-1">
             <legend

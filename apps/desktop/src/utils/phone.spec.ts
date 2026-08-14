@@ -1,4 +1,8 @@
-import { brazilianPhoneValidationError, normalizeBrPhoneToE164 } from "./phone";
+import {
+  brazilianPhoneValidationError,
+  formatBrPhoneInput,
+  normalizeBrPhoneToE164,
+} from "./phone";
 
 describe("phone", () => {
   it.each([
@@ -19,5 +23,13 @@ describe("phone", () => {
   ])("rejeita %s", (phone) => {
     expect(brazilianPhoneValidationError(phone)).not.toBe("");
     expect(normalizeBrPhoneToE164(phone)).toBe("");
+  });
+
+  it.each([
+    ["12981092776", "(12) 98109-2776"],
+    ["+5512981092776", "(12) 98109-2776"],
+    ["12345678", "(12) 3456-78"],
+  ])("aplica máscara progressiva em %s", (raw, expected) => {
+    expect(formatBrPhoneInput(raw)).toBe(expected);
   });
 });
