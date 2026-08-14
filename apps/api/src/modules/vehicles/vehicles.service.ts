@@ -104,6 +104,29 @@ export class VehiclesService {
       .toLowerCase();
   }
 
+  private findFipeBrand(brands: FipeBrand[], configuredBrand: string) {
+    const normalized = this.normalizeBrand(configuredBrand);
+    const exactMatch = brands.find(
+      (row) => this.normalizeBrand(row.nome) === normalized,
+    );
+    if (exactMatch) return exactMatch;
+
+    // Algumas marcas têm o nome comercial acompanhado do grupo na FIPE,
+    // por exemplo "VW - VolksWagen" e "GM - Chevrolet".
+    return brands
+      .map((row) => ({ row, normalized: this.normalizeBrand(row.nome) }))
+      .filter(
+        (candidate) =>
+          candidate.normalized.includes(normalized) ||
+          normalized.includes(candidate.normalized),
+      )
+      .sort(
+        (left, right) =>
+          Math.abs(left.normalized.length - normalized.length) -
+          Math.abs(right.normalized.length - normalized.length),
+      )[0]?.row;
+  }
+
   private async fipeFetch<T>(path: string): Promise<T> {
     try {
       const response = await fetch(
@@ -145,10 +168,7 @@ export class VehiclesService {
   async syncCatalog(user: AuthenticatedUser, clientId: string) {
     const configuredBrand = await this.getClientVehicleBrand(user, clientId);
     const brands = await this.fipeFetch<FipeBrand[]>("/carros/marcas");
-    const normalized = this.normalizeBrand(configuredBrand);
-    const brand = brands.find(
-      (row) => this.normalizeBrand(row.nome) === normalized,
-    );
+    const brand = this.findFipeBrand(brands, configuredBrand);
     if (!brand) {
       throw new BadRequestException(
         `A marca ${configuredBrand} não foi encontrada na tabela FIPE.`,

@@ -5280,7 +5280,8 @@ export function ClienteDetailPage() {
                 className={clsx(
                   "rounded-xl border px-4 py-3 text-sm",
                   automaticVehicleImportMessage.includes("Não foi possível") ||
-                    automaticVehicleImportMessage.includes("Defina uma marca")
+                    automaticVehicleImportMessage.includes("Defina uma marca") ||
+                    automaticVehicleImportMessage.includes("não foi encontrada")
                     ? isDarkMode
                       ? "border-red-900/60 bg-red-950/40 text-red-300"
                       : "border-red-200 bg-red-50 text-red-700"
