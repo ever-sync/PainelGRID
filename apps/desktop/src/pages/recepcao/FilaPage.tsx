@@ -34,6 +34,8 @@ import { useLeadRealtimeSync } from "../../hooks/useLeadRealtimeSync";
 import gpLogo from "../../assets/logo.png";
 
 type OutletContext = { user: User };
+type QueueTab = "clients" | "vendors";
+type VendorQueueSegment = "seminovo" | "pcd" | "novo" | "vd" | "assinatura";
 
 function arrivalTime(lead: ReceptionQueueLead) {
   return new Date(lead.confirmation_date || lead.updated_at || lead.created_at);
@@ -63,6 +65,7 @@ export function FilaPage() {
   const [finishingSold, setFinishingSold] = useState<"yes" | "no" | "">("");
   const [finishing, setFinishing] = useState(false);
   const [finishError, setFinishError] = useState("");
+  const [activeQueueTab, setActiveQueueTab] = useState<QueueTab>("clients");
 
   const load = useCallback(async () => {
     const token = readStoredSession()?.accessToken;
@@ -448,131 +451,157 @@ export function FilaPage() {
         </div>
       ) : null}
 
-      <VendorQueuePanel vendors={vendorQueue} currentUserId={user.id} />
-
       {error ? <Notice tone="error">{error}</Notice> : null}
       {success ? <Notice tone="success">{success}</Notice> : null}
 
-      <div className="relative overflow-hidden rounded-3xl border border-zinc-800 bg-[#09090b] p-4 text-white shadow-[0_24px_60px_rgba(0,0,0,0.28)] sm:p-6">
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,rgba(255,0,56,0.09),transparent_32%),repeating-linear-gradient(135deg,transparent_0,transparent_28px,rgba(255,255,255,0.015)_29px,transparent_30px)]" />
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-[#ff0038] via-[#ff0038]/50 to-transparent" />
+      <div className="flex w-full gap-1 rounded-2xl border border-border bg-muted/50 p-1 sm:w-fit">
+        {(
+          [
+            ["clients", "Fila de clientes"],
+            ["vendors", "Fila de vendedores"],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setActiveQueueTab(value)}
+            className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-bold transition-colors sm:flex-none ${
+              activeQueueTab === value
+                ? "bg-[#E51838] text-white shadow-sm"
+                : "text-muted-foreground hover:bg-background hover:text-foreground"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-        {eventName ? (
-          <div className="relative mb-5 flex flex-col justify-between gap-4 border-b border-white/[0.08] pb-5 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-[#ff0038]/30 bg-[#ff0038]/10">
-                <img
-                  src={gpLogo}
-                  alt="GP de Vendas"
-                  className="h-10 w-10 object-contain"
+      {activeQueueTab === "vendors" ? (
+        <VendorQueuePanel vendors={vendorQueue} currentUserId={user.id} />
+      ) : null}
+
+      {activeQueueTab === "clients" ? (
+        <div className="relative overflow-hidden rounded-3xl border border-zinc-800 bg-[#09090b] p-4 text-white shadow-[0_24px_60px_rgba(0,0,0,0.28)] sm:p-6">
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,rgba(255,0,56,0.09),transparent_32%),repeating-linear-gradient(135deg,transparent_0,transparent_28px,rgba(255,255,255,0.015)_29px,transparent_30px)]" />
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-[#ff0038] via-[#ff0038]/50 to-transparent" />
+
+          {eventName ? (
+            <div className="relative mb-5 flex flex-col justify-between gap-4 border-b border-white/[0.08] pb-5 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-[#ff0038]/30 bg-[#ff0038]/10">
+                  <img
+                    src={gpLogo}
+                    alt="GP de Vendas"
+                    className="h-10 w-10 object-contain"
+                  />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#ff3159]">
+                    GP de Vendas · Atendimento ao vivo
+                  </p>
+                  <p className="mt-1 text-xl font-black uppercase tracking-tight sm:text-2xl">
+                    {eventName}
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <QueueMetric
+                  label="Aguardando"
+                  value={queueTotals.waiting}
+                  tone="waiting"
+                />
+                <QueueMetric
+                  label="Em atendimento"
+                  value={queueTotals.active}
+                  tone="active"
                 />
               </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#ff3159]">
-                  GP de Vendas · Atendimento ao vivo
-                </p>
-                <p className="mt-1 text-xl font-black uppercase tracking-tight sm:text-2xl">
-                  {eventName}
-                </p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <QueueMetric
-                label="Aguardando"
-                value={queueTotals.waiting}
-                tone="waiting"
-              />
-              <QueueMetric
-                label="Em atendimento"
-                value={queueTotals.active}
-                tone="active"
-              />
-            </div>
-          </div>
-        ) : null}
-
-        <div className="relative">
-          {loading ? (
-            <div className="flex items-center justify-center gap-3 py-16 text-sm text-zinc-500">
-              <span className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-[#ff0038]" />
-              Carregando fila...
-            </div>
-          ) : leads.length === 0 && !error ? (
-            <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] py-16 text-zinc-500">
-              <Users size={38} className="text-zinc-700" />
-              <p className="text-sm font-medium">
-                {user.role === "vendedor"
-                  ? "Nenhum cliente está aguardando você."
-                  : "Ninguém aguardando atendimento."}
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-4 lg:grid-cols-2">
-              <QueueSection
-                title="Fila de espera"
-                subtitle="Por ordem de chegada"
-                icon={<Clock size={19} />}
-                count={queueTotals.waiting}
-                tone="waiting"
-              >
-                {waitingQueue.length ? (
-                  waitingQueue.map((lead, index) => (
-                    <QueueLeadRow
-                      key={lead.id}
-                      lead={lead}
-                      position={index + 1}
-                      state="waiting"
-                    />
-                  ))
-                ) : (
-                  <QueueEmpty icon={<Flag size={28} />}>
-                    Ninguém aguardando no momento.
-                  </QueueEmpty>
-                )}
-              </QueueSection>
-
-              <QueueSection
-                title="Em atendimento"
-                subtitle="Clientes com vendedor"
-                icon={<UserCheck size={19} />}
-                count={queueTotals.active}
-                tone="active"
-              >
-                {activeService.length ? (
-                  activeService.map((lead) => (
-                    <QueueLeadRow
-                      key={lead.id}
-                      lead={lead}
-                      state="active"
-                      onFinish={
-                        user.role === "recepcao"
-                          ? openFinishAttendance
-                          : undefined
-                      }
-                    />
-                  ))
-                ) : (
-                  <QueueEmpty icon={<UserCheck size={28} />}>
-                    Nenhum atendimento iniciado.
-                  </QueueEmpty>
-                )}
-              </QueueSection>
-            </div>
-          )}
-          {queueHasNextPage && !loading ? (
-            <div className="mt-5 flex justify-center">
-              <Button
-                variant="secondary"
-                size="sm"
-                loading={loadingMore}
-                onClick={() => void loadMore()}
-              >
-                Carregar mais pessoas
-              </Button>
             </div>
           ) : null}
+
+          <div className="relative">
+            {loading ? (
+              <div className="flex items-center justify-center gap-3 py-16 text-sm text-zinc-500">
+                <span className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-[#ff0038]" />
+                Carregando fila...
+              </div>
+            ) : leads.length === 0 && !error ? (
+              <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] py-16 text-zinc-500">
+                <Users size={38} className="text-zinc-700" />
+                <p className="text-sm font-medium">
+                  {user.role === "vendedor"
+                    ? "Nenhum cliente está aguardando você."
+                    : "Ninguém aguardando atendimento."}
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <QueueSection
+                  title="Fila de espera"
+                  subtitle="Por ordem de chegada"
+                  icon={<Clock size={19} />}
+                  count={queueTotals.waiting}
+                  tone="waiting"
+                >
+                  {waitingQueue.length ? (
+                    waitingQueue.map((lead, index) => (
+                      <QueueLeadRow
+                        key={lead.id}
+                        lead={lead}
+                        position={index + 1}
+                        state="waiting"
+                      />
+                    ))
+                  ) : (
+                    <QueueEmpty icon={<Flag size={28} />}>
+                      Ninguém aguardando no momento.
+                    </QueueEmpty>
+                  )}
+                </QueueSection>
+
+                <QueueSection
+                  title="Em atendimento"
+                  subtitle="Clientes com vendedor"
+                  icon={<UserCheck size={19} />}
+                  count={queueTotals.active}
+                  tone="active"
+                >
+                  {activeService.length ? (
+                    activeService.map((lead) => (
+                      <QueueLeadRow
+                        key={lead.id}
+                        lead={lead}
+                        state="active"
+                        onFinish={
+                          user.role === "recepcao"
+                            ? openFinishAttendance
+                            : undefined
+                        }
+                      />
+                    ))
+                  ) : (
+                    <QueueEmpty icon={<UserCheck size={28} />}>
+                      Nenhum atendimento iniciado.
+                    </QueueEmpty>
+                  )}
+                </QueueSection>
+              </div>
+            )}
+            {queueHasNextPage && !loading ? (
+              <div className="mt-5 flex justify-center">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={loadingMore}
+                  onClick={() => void loadMore()}
+                >
+                  Carregar mais pessoas
+                </Button>
+              </div>
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <Modal
         open={Boolean(finishingLead)}
@@ -665,7 +694,26 @@ function VendorQueuePanel({
   >;
   currentUserId: string;
 }) {
+  const [activeSegment, setActiveSegment] =
+    useState<VendorQueueSegment>("novo");
+  const segments: Array<{ value: VendorQueueSegment; label: string }> = [
+    { value: "seminovo", label: "Seminovo" },
+    { value: "pcd", label: "PCD" },
+    { value: "novo", label: "Novo" },
+    { value: "vd", label: "VD" },
+    { value: "assinatura", label: "Assinatura" },
+  ];
+  const vendorsBySegment = useMemo(
+    () =>
+      vendors.filter(
+        (vendor) => resolveVendorSegment(vendor.team_name) === activeSegment,
+      ),
+    [activeSegment, vendors],
+  );
   const availableCount = vendors.filter((vendor) => vendor.eligible).length;
+  const segmentAvailableCount = vendorsBySegment.filter(
+    (vendor) => vendor.eligible,
+  ).length;
 
   return (
     <section className="relative overflow-hidden rounded-3xl border border-zinc-800 bg-[#0d0d10] p-4 text-white shadow-[0_18px_45px_rgba(0,0,0,0.2)] sm:p-6">
@@ -689,9 +737,47 @@ function VendorQueuePanel({
         </span>
       </div>
 
+      <div className="relative mb-5 flex gap-1 overflow-x-auto rounded-2xl border border-white/[0.07] bg-black/20 p-1">
+        {segments.map((segment) => {
+          const count = vendors.filter(
+            (vendor) =>
+              resolveVendorSegment(vendor.team_name) === segment.value,
+          ).length;
+          return (
+            <button
+              key={segment.value}
+              type="button"
+              onClick={() => setActiveSegment(segment.value)}
+              className={`inline-flex min-w-fit flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black uppercase tracking-wide transition-colors ${
+                activeSegment === segment.value
+                  ? "bg-[#ff0038] text-white"
+                  : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200"
+              }`}
+            >
+              {segment.label}
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-[9px] ${
+                  activeSegment === segment.value
+                    ? "bg-white/20 text-white"
+                    : "bg-white/[0.06] text-zinc-500"
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="relative mb-3 text-xs font-semibold text-zinc-500">
+        {segmentAvailableCount} vendedor
+        {segmentAvailableCount === 1 ? "" : "es"} disponível
+        {segmentAvailableCount === 1 ? "" : "is"} nesta fila
+      </div>
+
       <div className="relative grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
-        {vendors.length ? (
-          vendors.map((vendor) => {
+        {vendorsBySegment.length ? (
+          vendorsBySegment.map((vendor) => {
             const isCurrentUser = vendor.id === currentUserId;
             const isBusy = vendor.operational_status === "busy";
             const isAway = vendor.operational_status === "away";
@@ -760,12 +846,31 @@ function VendorQueuePanel({
           })
         ) : (
           <div className="col-span-full rounded-2xl border border-dashed border-white/10 py-8 text-center text-sm text-zinc-500">
-            Nenhum vendedor cadastrado nesta empresa.
+            Nenhum vendedor cadastrado nesta categoria.
           </div>
         )}
       </div>
     </section>
   );
+}
+
+function resolveVendorSegment(teamName: string | null): VendorQueueSegment {
+  const normalized = (teamName ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (normalized.includes("seminovo") || normalized.includes("usado")) {
+    return "seminovo";
+  }
+  if (normalized.includes("pcd") || normalized.includes("pdc")) return "pcd";
+  if (
+    normalized.includes("venda direta") ||
+    /(^|\W)vd($|\W)/.test(normalized)
+  ) {
+    return "vd";
+  }
+  if (normalized.includes("assinatura")) return "assinatura";
+  return "novo";
 }
 
 function QueueMetric({
