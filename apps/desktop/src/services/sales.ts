@@ -40,6 +40,11 @@ export type VendorSaleListItem = SaleResponse & {
   } | null;
 };
 
+export type EventSaleListItem = VendorSaleListItem & {
+  vendor: { id: string; name: string };
+  team: { id: string; name: string } | null;
+};
+
 export function createSale(
   token: string,
   body: {
@@ -89,4 +94,11 @@ export function listVendorSales(token: string) {
     method: "GET",
     token,
   });
+}
+
+export function listEventSales(token: string, eventId: string) {
+  return httpRequest<EventSaleListItem[]>(
+    `/sales?event_id=${encodeURIComponent(eventId)}`,
+    { method: "GET", token },
+  );
 }

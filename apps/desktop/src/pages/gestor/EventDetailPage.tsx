@@ -27,6 +27,7 @@ import {
   Users,
   TrendingUp,
   Tv,
+  ShoppingCart,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import {
@@ -77,6 +78,7 @@ import {
   type TeamMemberUser,
 } from "../../services/salesTeams";
 import { listUsers, type StaffUser } from "../../services/users";
+import { listEventSales, type EventSaleListItem } from "../../services/sales";
 import { dataUrlByteSize, resizeImageToDataUrl } from "../../utils/image";
 import { saveOrShareBlob } from "../../utils/nativeDownload";
 import {
@@ -87,7 +89,7 @@ import type { AppOutletContext } from "../../layouts/AppLayout";
 import { useOutletContext } from "react-router-dom";
 import type { ConfirmationStatus, LeadSource } from "../../types";
 
-type EventDetailTab = "dados" | "leads" | "time" | "configuracoes";
+type EventDetailTab = "dados" | "leads" | "vendas" | "time" | "configuracoes";
 type LeadDrawerTab = "historico" | "dados";
 type LeadDrawerMode = "view" | "edit";
 
@@ -113,6 +115,7 @@ const EVENT_TABS: Array<{
 }> = [
   { id: "dados", label: "Dados", icon: <CalendarDays size={14} /> },
   { id: "leads", label: "Leads", icon: <ArrowUpRight size={14} /> },
+  { id: "vendas", label: "Vendas", icon: <ShoppingCart size={14} /> },
   { id: "time", label: "Time", icon: <Users size={14} /> },
   { id: "configuracoes", label: "Configurações", icon: <Settings size={14} /> },
 ];
@@ -188,6 +191,13 @@ function formatDateTime(value: string | null | undefined) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatCurrency(value: string | number) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(Number(value) || 0);
 }
 
 function formatDateInput(value: string | null | undefined) {
@@ -295,6 +305,8 @@ export function EventDetailPage() {
   const [allStaffRaw, setAllStaffRaw] = useState<StaffUser[]>([]);
   const [eventLeads, setEventLeads] = useState<Lead[]>([]);
   const [leadsLoading, setLeadsLoading] = useState(false);
+  const [eventSales, setEventSales] = useState<EventSaleListItem[]>([]);
+  const [salesLoading, setSalesLoading] = useState(false);
   const [leadSearch, setLeadSearch] = useState("");
   const [leadStatusFilter, setLeadStatusFilter] = useState<
     "all" | ConfirmationStatus
@@ -438,6 +450,7 @@ export function EventDetailPage() {
       setLoading(true);
     }
     setLeadsLoading(true);
+    setSalesLoading(true);
     setError("");
     setLoadWarning("");
     setSettingsError("");
@@ -456,7 +469,7 @@ export function EventDetailPage() {
 
       const failedParts: string[] = [];
 
-      const [apiClient, apiClients, apiTeams, apiStaff, apiLeads] =
+      const [apiClient, apiClients, apiTeams, apiStaff, apiLeads, apiSales] =
         await Promise.all([
           getClient(
             participantClientIds[0] ?? mappedEvent.client_id,
@@ -487,6 +500,10 @@ export function EventDetailPage() {
             failedParts.push("leads");
             return [];
           }),
+          listEventSales(session.accessToken, mappedEvent.id).catch(() => {
+            failedParts.push("vendas");
+            return [];
+          }),
         ]);
 
       if (failedParts.length > 0) {
@@ -505,6 +522,7 @@ export function EventDetailPage() {
           .map(mapApiLeadToLead)
           .filter((lead) => lead.event_id === mappedEvent.id),
       );
+      setEventSales(apiSales);
       setAddMemberTeamId(null);
       setSelectedMemberIds([]);
     } catch (loadError) {
@@ -513,6 +531,7 @@ export function EventDetailPage() {
       );
     } finally {
       setLeadsLoading(false);
+      setSalesLoading(false);
       if (showSpinner) {
         setLoading(false);
       }
@@ -660,6 +679,11 @@ export function EventDetailPage() {
       setEventLeadsPage(eventLeadsPageCount);
     }
   }, [eventLeadsPage, eventLeadsPageCount]);
+
+  const eventSalesRevenue = useMemo(
+    () => eventSales.reduce((total, sale) => total + Number(sale.value), 0),
+    [eventSales],
+  );
 
   const availableParticipantOptions = useMemo(
     () =>
@@ -2178,6 +2202,157 @@ export function EventDetailPage() {
             </>
           )}
         </Card>
+      )}
+
+      {activeTab === "vendas" && (
+        <div className="space-y-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <MetricCard
+              title="Vendas realizadas"
+              value={eventSales.length}
+              helper="Registros deste evento"
+              tone="rose"
+              dark={isDarkMode}
+            />
+            <MetricCard
+              title="Valor vendido"
+              value={formatCurrency(eventSalesRevenue)}
+              helper="Faturamento registrado"
+              tone="emerald"
+              dark={isDarkMode}
+            />
+          </div>
+
+          <Card
+            className={clsx(
+              "rounded-[28px] border",
+              isDarkMode
+                ? "border-zinc-800 bg-[#111111]"
+                : "border-zinc-100 bg-white",
+            )}
+            padding="lg"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3
+                  className={clsx(
+                    "text-lg font-black tracking-tight",
+                    isDarkMode ? "text-zinc-100" : "text-zinc-950",
+                  )}
+                >
+                  Vendas do evento
+                </h3>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Cliente, vendedor, veículo, pedido e valor de cada venda.
+                </p>
+              </div>
+              <Badge>{eventSales.length} vendas</Badge>
+            </div>
+
+            {salesLoading ? (
+              <p className="py-10 text-center text-sm text-zinc-400">
+                Carregando vendas...
+              </p>
+            ) : eventSales.length === 0 ? (
+              <div
+                className={clsx(
+                  "mt-5 rounded-[22px] border border-dashed p-10 text-center",
+                  isDarkMode
+                    ? "border-zinc-700 text-zinc-500"
+                    : "border-zinc-200 text-zinc-500",
+                )}
+              >
+                <ShoppingCart className="mx-auto mb-3" size={30} />
+                <p className="font-semibold">Nenhuma venda registrada</p>
+                <p className="mt-1 text-sm">
+                  As vendas rápidas e as vendas dos vendedores aparecerão aqui.
+                </p>
+              </div>
+            ) : (
+              <div
+                className={clsx(
+                  "mt-5 overflow-x-auto rounded-[24px] border",
+                  isDarkMode ? "border-zinc-800" : "border-zinc-100",
+                )}
+              >
+                <table className="min-w-[960px] w-full text-left text-sm">
+                  <thead
+                    className={clsx(
+                      "text-xs uppercase tracking-[0.14em]",
+                      isDarkMode
+                        ? "bg-[#0b0b0b] text-zinc-500"
+                        : "bg-zinc-50 text-zinc-500",
+                    )}
+                  >
+                    <tr>
+                      <th className="px-5 py-4">Comprador</th>
+                      <th className="px-5 py-4">Vendedor</th>
+                      <th className="px-5 py-4">Time</th>
+                      <th className="px-5 py-4">Carro</th>
+                      <th className="px-5 py-4">Pedido</th>
+                      <th className="px-5 py-4">Data</th>
+                      <th className="px-5 py-4 text-right">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody
+                    className={
+                      isDarkMode
+                        ? "divide-y divide-zinc-800"
+                        : "divide-y divide-zinc-100"
+                    }
+                  >
+                    {eventSales.map((sale) => (
+                      <tr
+                        key={sale.id}
+                        className={clsx(
+                          "transition-colors",
+                          isDarkMode
+                            ? "hover:bg-white/[0.03]"
+                            : "hover:bg-zinc-50",
+                        )}
+                      >
+                        <td className="px-5 py-4">
+                          <p
+                            className={clsx(
+                              "font-bold",
+                              isDarkMode ? "text-zinc-100" : "text-zinc-900",
+                            )}
+                          >
+                            {sale.lead?.name ?? "Cliente não informado"}
+                          </p>
+                          <p className="mt-0.5 text-xs text-zinc-500">
+                            {sale.lead?.phone ?? "Sem telefone"}
+                          </p>
+                        </td>
+                        <td className="px-5 py-4 font-medium">
+                          {sale.vendor.name}
+                        </td>
+                        <td className="px-5 py-4 text-zinc-500">
+                          {sale.team?.name ?? "Sem time"}
+                        </td>
+                        <td className="px-5 py-4">
+                          <p className="font-medium">{sale.product}</p>
+                          <p className="mt-0.5 text-xs text-zinc-500">
+                            {sale.type.replaceAll("_", " ")}
+                          </p>
+                        </td>
+                        <td className="px-5 py-4 font-mono text-xs">
+                          {sale.order_number || "—"}
+                        </td>
+                        <td className="px-5 py-4 text-zinc-500">
+                          {formatDateTime(sale.sold_at)}
+                        </td>
+                        <td className="px-5 py-4 text-right font-black text-emerald-500">
+                          {formatCurrency(sale.value)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
       )}
 
       {activeTab === "time" && (

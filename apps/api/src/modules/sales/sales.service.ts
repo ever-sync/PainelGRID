@@ -443,6 +443,44 @@ export class SalesService {
     return sales.map((sale) => this.toResponse(sale));
   }
 
+  async listByEvent(user: AuthenticatedUser, eventId: string) {
+    if (user.role !== Role.GESTOR) {
+      throw new ForbiddenException(
+        "Apenas gestor pode listar vendas do evento",
+      );
+    }
+
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true },
+    });
+    if (!event) throw new NotFoundException("Evento não encontrado");
+
+    const sales = await this.prisma.sale.findMany({
+      where: { appointment: { event_id: eventId } },
+      include: {
+        lead: { select: { id: true, name: true, phone: true } },
+        vendor: { select: { id: true, name: true } },
+        sales_team: { select: { id: true, name: true } },
+        appointment: {
+          select: {
+            id: true,
+            scheduled_at: true,
+            status: true,
+            event: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: { sold_at: "desc" },
+    });
+
+    return sales.map((sale) => ({
+      ...this.toResponse(sale),
+      vendor: sale.vendor,
+      team: sale.sales_team,
+    }));
+  }
+
   private async resolveVendorBinding(
     vendorId: string,
     appointmentId: string,

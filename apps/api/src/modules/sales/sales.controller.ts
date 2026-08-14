@@ -1,4 +1,11 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  ParseUUIDPipe,
+  Post,
+  Query,
+} from "@nestjs/common";
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -24,6 +31,16 @@ export class SalesController {
   @ApiResponse({ status: 200, description: "Vendas retornadas com sucesso" })
   listMine(@CurrentUser() user: AuthenticatedUser) {
     return this.salesService.listMine(user);
+  }
+
+  @Get()
+  @Roles(Role.GESTOR)
+  @ApiOperation({ summary: "Lista todas as vendas de um evento" })
+  listByEvent(
+    @Query("event_id", new ParseUUIDPipe()) eventId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.salesService.listByEvent(user, eventId);
   }
 
   @Post()
