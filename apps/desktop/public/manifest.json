@@ -1,6 +1,6 @@
 {
-  "short_name": "GRID Recepção",
-  "name": "GRID Recepção - Check-in",
+  "short_name": "GP de Vendas",
+  "name": "GP de Vendas",
   "icons": [
     {
       "src": "/logo.png",
@@ -8,9 +8,12 @@
       "sizes": "1069x1069"
     }
   ],
-  "start_url": "/recepcao/check-in",
-  "background_color": "#09090b",
-  "theme_color": "#e51838",
+  "start_url": "/",
+  "scope": "/",
+  "id": "/",
+  "background_color": "#ffffff",
+  "theme_color": "#c9002b",
   "display": "standalone",
-  "orientation": "portrait"
+  "orientation": "any",
+  "description": "Gestão de leads, eventos, equipes e vendas."
 }

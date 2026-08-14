@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Mail,
@@ -9,6 +9,8 @@ import {
   Loader2,
   ShieldCheck,
   ArrowLeft,
+  Download,
+  Share,
 } from "lucide-react";
 import { Notice } from "../../components/ui/Notice";
 import type { UserRole } from "../../types";
@@ -22,6 +24,19 @@ import { isNativePlatform } from "../../utils/platform";
 
 interface LoginPageProps {
   onLogin: (session: AuthSession, rememberMe: boolean) => void;
+}
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
+function isPwaInstalled() {
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    ("standalone" in navigator &&
+      (navigator as Navigator & { standalone?: boolean }).standalone === true)
+  );
 }
 
 const roleRoutes: Record<UserRole, string> = {
@@ -40,6 +55,42 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [isCapsLockOn, setIsCapsLockOn] = useState(false);
+  const [installPrompt, setInstallPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
+  const [installed, setInstalled] = useState(() =>
+    typeof window !== "undefined" ? isPwaInstalled() : false,
+  );
+
+  useEffect(() => {
+    const handleInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+    const handleInstalled = () => {
+      setInstalled(true);
+      setInstallPrompt(null);
+      setShowInstallHelp(false);
+    };
+    window.addEventListener("beforeinstallprompt", handleInstallPrompt);
+    window.addEventListener("appinstalled", handleInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleInstallPrompt);
+      window.removeEventListener("appinstalled", handleInstalled);
+    };
+  }, []);
+
+  const handleInstall = async () => {
+    if (installPrompt) {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice.outcome === "accepted") {
+        setInstallPrompt(null);
+      }
+      return;
+    }
+    setShowInstallHelp((current) => !current);
+  };
 
   // Estados do fluxo de 2FA obrigatório
   const [step2fa, setStep2fa] = useState(false);
@@ -307,6 +358,41 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                 </Notice>
               )}
             </form>
+          )}
+
+          {!step2fa && !installed && !isNativePlatform() && (
+            <div className="mt-5 border-t border-gray-100 pt-5">
+              <button
+                type="button"
+                onClick={() => void handleInstall()}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-700 shadow-sm transition hover:border-[#C9002B] hover:bg-rose-50 hover:text-[#C9002B]"
+              >
+                <Download size={17} />
+                <span>Baixar aplicativo</span>
+              </button>
+
+              {showInstallHelp && (
+                <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs leading-relaxed text-gray-600">
+                  <div className="flex gap-2">
+                    <Share
+                      size={16}
+                      className="mt-0.5 shrink-0 text-[#C9002B]"
+                    />
+                    <div>
+                      <p className="font-bold text-gray-800">
+                        Instalar neste dispositivo
+                      </p>
+                      <p className="mt-1">
+                        No iPhone/iPad, toque em Compartilhar e depois em
+                        “Adicionar à Tela de Início”. No computador ou Android,
+                        abra o menu do navegador e escolha “Instalar
+                        aplicativo”.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
