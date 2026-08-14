@@ -5,14 +5,25 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Clock, Flag, Radio, UserCheck, Users } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  Flag,
+  Radio,
+  UserCheck,
+  Users,
+} from "lucide-react";
 import { useOutletContext } from "react-router-dom";
 import type { User } from "../../types";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Notice } from "../../components/ui/Notice";
+import { Modal } from "../../components/ui/Modal";
+import { Button } from "../../components/ui/Button";
+import { Select } from "../../components/ui/Select";
 import { readStoredSession } from "../../services/auth";
 import {
   getReceptionQueue,
+  closeLeadAttendance,
   listVendorAvailability,
   type ReceptionQueueLead,
   type VendorAvailability,
@@ -40,6 +51,13 @@ export function FilaPage() {
   const [vendors, setVendors] = useState<VendorAvailability[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [finishingLead, setFinishingLead] =
+    useState<ReceptionQueueLead | null>(null);
+  const [finishingVendorId, setFinishingVendorId] = useState("");
+  const [finishingSold, setFinishingSold] = useState<"yes" | "no" | "">("");
+  const [finishing, setFinishing] = useState(false);
+  const [finishError, setFinishError] = useState("");
 
   const load = useCallback(async () => {
     const token = readStoredSession()?.accessToken;
@@ -52,9 +70,7 @@ export function FilaPage() {
     try {
       const [queue, vendorRows] = await Promise.all([
         getReceptionQueue(token),
-        user.role === "vendedor"
-          ? listVendorAvailability(token)
-          : Promise.resolve([]),
+        listVendorAvailability(token),
       ]);
       if (!queue.event) {
         setError("Nenhum evento disponível para exibir a fila.");
@@ -84,6 +100,68 @@ export function FilaPage() {
   }, [load]);
 
   useLeadRealtimeSync(clientId, load);
+
+  const openFinishAttendance = (lead: ReceptionQueueLead) => {
+    setFinishingLead(lead);
+    setFinishingVendorId(lead.assigned_vendor_id ?? "");
+    setFinishingSold("");
+    setFinishError("");
+  };
+
+  const closeFinishAttendance = () => {
+    if (finishing) return;
+    setFinishingLead(null);
+    setFinishingVendorId("");
+    setFinishingSold("");
+    setFinishError("");
+  };
+
+  const submitFinishAttendance = async () => {
+    const token = readStoredSession()?.accessToken;
+    if (!token || !finishingLead) return;
+    if (!finishingVendorId) {
+      setFinishError("Selecione quem realizou o atendimento.");
+      return;
+    }
+    if (!finishingSold) {
+      setFinishError("Informe se o cliente comprou.");
+      return;
+    }
+
+    setFinishing(true);
+    setFinishError("");
+    try {
+      await closeLeadAttendance(
+        finishingLead.id,
+        {
+          attended_by_vendor_id: finishingVendorId,
+          sold: finishingSold === "yes",
+        },
+        token,
+      );
+      setLeads((current) =>
+        current.filter((lead) => lead.id !== finishingLead.id),
+      );
+      setSuccess(
+        finishingSold === "yes"
+          ? "Atendimento finalizado com venda. Deu certo!"
+          : "Atendimento finalizado sem venda.",
+      );
+      setFinishingLead(null);
+      setFinishingVendorId("");
+      setFinishingSold("");
+      void load();
+      window.setTimeout(() => setSuccess(""), 5000);
+    } catch (cause) {
+      setFinishError(
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível finalizar o atendimento.",
+      );
+    } finally {
+      setFinishing(false);
+    }
+  };
 
   const { waitingQueue, activeService } = useMemo(() => {
     const sorted = [...leads].sort(
@@ -185,6 +263,7 @@ export function FilaPage() {
       ) : null}
 
       {error ? <Notice tone="error">{error}</Notice> : null}
+      {success ? <Notice tone="success">{success}</Notice> : null}
 
       <div className="relative overflow-hidden rounded-3xl border border-zinc-800 bg-[#09090b] p-4 text-white shadow-[0_24px_60px_rgba(0,0,0,0.28)] sm:p-6">
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,rgba(255,0,56,0.09),transparent_32%),repeating-linear-gradient(135deg,transparent_0,transparent_28px,rgba(255,255,255,0.015)_29px,transparent_30px)]" />
@@ -273,7 +352,16 @@ export function FilaPage() {
               >
                 {activeService.length ? (
                   activeService.map((lead) => (
-                    <QueueLeadRow key={lead.id} lead={lead} state="active" />
+                    <QueueLeadRow
+                      key={lead.id}
+                      lead={lead}
+                      state="active"
+                      onFinish={
+                        user.role === "recepcao"
+                          ? openFinishAttendance
+                          : undefined
+                      }
+                    />
                   ))
                 ) : (
                   <QueueEmpty icon={<UserCheck size={28} />}>
@@ -285,6 +373,82 @@ export function FilaPage() {
           )}
         </div>
       </div>
+
+      <Modal
+        open={Boolean(finishingLead)}
+        onClose={closeFinishAttendance}
+        title="Finalizar atendimento"
+        size="sm"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={closeFinishAttendance}
+              disabled={finishing}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => void submitFinishAttendance()}
+              loading={finishing}
+              icon={<CheckCircle2 size={17} />}
+            >
+              Finalizar
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-5">
+          <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+              <CheckCircle2 size={24} />
+            </span>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-emerald-600">
+                Deu certo
+              </p>
+              <p className="font-semibold">{finishingLead?.name}</p>
+            </div>
+          </div>
+
+          {finishError ? <Notice tone="error">{finishError}</Notice> : null}
+
+          <Select
+            label="Atendido por quem?"
+            value={finishingVendorId}
+            placeholder="Selecione a vendedora"
+            onValueChange={setFinishingVendorId}
+            options={vendors.map((vendor) => ({
+              value: vendor.id,
+              label: vendor.name,
+            }))}
+          />
+
+          <fieldset>
+            <legend className="mb-2 text-sm font-medium text-foreground">
+              Comprou?
+            </legend>
+            <div className="grid grid-cols-2 gap-3">
+              {(["yes", "no"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setFinishingSold(value)}
+                  className={`rounded-2xl border px-4 py-3 text-sm font-bold transition-colors ${
+                    finishingSold === value
+                      ? value === "yes"
+                        ? "border-emerald-500 bg-emerald-500 text-white"
+                        : "border-zinc-800 bg-zinc-900 text-white"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  {value === "yes" ? "Sim" : "Não"}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -384,10 +548,12 @@ function QueueLeadRow({
   lead,
   position,
   state,
+  onFinish,
 }: {
   lead: ReceptionQueueLead;
   position?: number;
   state: "waiting" | "active";
+  onFinish?: (lead: ReceptionQueueLead) => void;
 }) {
   const active = state === "active";
   return (
@@ -421,16 +587,30 @@ function QueueLeadRow({
           })}
         </p>
       </div>
-      <span
-        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${
-          active
-            ? "bg-[#ff0038]/10 text-[#ff6684]"
-            : "bg-amber-400/10 text-amber-300"
-        }`}
-      >
-        <UserCheck size={14} />
-        {active ? "Em atendimento" : "Aguardando"}
-      </span>
+      <div className="flex shrink-0 flex-col items-end gap-2">
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${
+            active
+              ? "bg-[#ff0038]/10 text-[#ff6684]"
+              : "bg-amber-400/10 text-amber-300"
+          }`}
+        >
+          <UserCheck size={14} />
+          {active
+            ? lead.assigned_vendor_name || "Em atendimento"
+            : "Aguardando"}
+        </span>
+        {active && onFinish ? (
+          <button
+            type="button"
+            onClick={() => onFinish(lead)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-2 text-xs font-black text-white shadow-[0_8px_20px_rgba(16,185,129,0.22)] transition-colors hover:bg-emerald-400"
+          >
+            <CheckCircle2 size={15} />
+            Finalizar
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

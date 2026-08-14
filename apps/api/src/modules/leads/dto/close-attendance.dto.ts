@@ -1,7 +1,21 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsBoolean, IsNumber, IsOptional, IsString } from "class-validator";
+import {
+  IsBoolean,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from "class-validator";
 
 export class CloseAttendanceDto {
+  @ApiProperty({
+    description: "Vendedor que realizou o atendimento",
+    required: false,
+  })
+  @IsUUID()
+  @IsOptional()
+  attended_by_vendor_id?: string;
+
   @ApiProperty({
     description: "Número da pulseira do atendimento",
     example: "1024",

@@ -353,7 +353,10 @@ describe("LeadsService", () => {
       client_id: clientId,
     });
 
-    expect(result).toEqual({ event, leads: [queueLead] });
+    expect(result).toEqual({
+      event,
+      leads: [{ ...queueLead, assigned_vendor_name: null }],
+    });
     expect(prisma.lead.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
@@ -367,6 +370,7 @@ describe("LeadsService", () => {
           name: true,
           phone: true,
           assigned_vendor_id: true,
+          assigned_vendor: { select: { name: true } },
           confirmation_date: true,
           store_visit_datetime: true,
           created_at: true,

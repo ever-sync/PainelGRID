@@ -987,6 +987,7 @@ export class LeadsService {
         name: true,
         phone: true,
         assigned_vendor_id: true,
+        assigned_vendor: { select: { name: true } },
         confirmation_date: true,
         store_visit_datetime: true,
         created_at: true,
@@ -994,7 +995,13 @@ export class LeadsService {
       },
     });
 
-    return { event, leads };
+    return {
+      event,
+      leads: leads.map(({ assigned_vendor, ...lead }) => ({
+        ...lead,
+        assigned_vendor_name: assigned_vendor?.name ?? null,
+      })),
+    };
   }
 
   /**
@@ -1912,11 +1919,12 @@ export class LeadsService {
     dto: CloseAttendanceDto,
   ) {
     const isVendor = user.role === Role.VENDEDOR;
+    const isReception = user.role === Role.RECEPCAO;
     const wristbandNumber = dto?.wristband_number?.trim();
     const cpf = dto?.cpf?.trim();
     const phone = dto?.phone?.trim();
 
-    if (!isVendor && !cpf) {
+    if (!isVendor && !isReception && !cpf) {
       throw new BadRequestException("CPF é obrigatório.");
     }
 
@@ -1940,6 +1948,31 @@ export class LeadsService {
       throw new NotFoundException("Lead nao encontrado ou sem permissao");
     }
 
+    const attendanceVendorId = isVendor
+      ? user.sub
+      : isReception
+        ? dto.attended_by_vendor_id || lead.assigned_vendor_id
+        : lead.assigned_vendor_id || user.sub;
+
+    if (isReception && !attendanceVendorId) {
+      throw new BadRequestException("Selecione quem realizou o atendimento.");
+    }
+
+    if (isReception && attendanceVendorId) {
+      const attendanceVendor = await this.prisma.user.findFirst({
+        where: {
+          id: attendanceVendorId,
+          client_id: lead.client_id,
+          role: Role.VENDEDOR,
+          is_active: true,
+        },
+        select: { id: true },
+      });
+      if (!attendanceVendor) {
+        throw new BadRequestException("Vendedor inválido para esta empresa.");
+      }
+    }
+
     let requiresWristband = false;
     if (lead.event_interest_id) {
       const evt = await this.prisma.event.findUnique({
@@ -1951,7 +1984,7 @@ export class LeadsService {
       }
     }
 
-    if (!isVendor && requiresWristband && !wristbandNumber) {
+    if (!isVendor && !isReception && requiresWristband && !wristbandNumber) {
       throw new BadRequestException(
         "Número da pulseira é obrigatório para este evento.",
       );
@@ -2001,18 +2034,18 @@ export class LeadsService {
       }
     }
 
-    const activeAttendance = isVendor
+    const activeAttendance = isVendor || isReception
       ? await this.prisma.vendorAttendance.findFirst({
           where: {
             lead_id: lead.id,
-            vendor_id: user.sub,
+            vendor_id: attendanceVendorId!,
             status: VendorAttendanceStatus.accepted,
           },
           select: { id: true },
         })
       : null;
 
-    if (isVendor && !activeAttendance) {
+    if ((isVendor || isReception) && !activeAttendance) {
       throw new ConflictException(
         "Este atendimento não está ativo para o vendedor.",
       );
@@ -2028,7 +2061,9 @@ export class LeadsService {
           ...(wristbandNumber ? { wristband_number: wristbandNumber } : {}),
           ...(cpf ? { cpf } : {}),
           ...(phone ? { phone } : {}),
-          ...(dto.sold ? { sold_by_vendor_id: user.sub } : {}),
+          ...(dto.sold && attendanceVendorId
+            ? { sold_by_vendor_id: attendanceVendorId }
+            : {}),
         },
         select: leadSelect,
       });
@@ -2063,9 +2098,9 @@ export class LeadsService {
           },
         });
         await tx.vendorAvailability.upsert({
-          where: { vendor_id: user.sub },
+          where: { vendor_id: attendanceVendorId! },
           create: {
-            vendor_id: user.sub,
+            vendor_id: attendanceVendorId!,
             client_id: lead.client_id,
             status: VendorOperationalStatus.online,
           },
@@ -2080,18 +2115,19 @@ export class LeadsService {
       this.realtimeEvents.emitVendorAttendanceUpdated(updated.client_id, {
         attendance_id: activeAttendance.id,
         lead_id: updated.id,
-        vendor_id: user.sub,
+        vendor_id: attendanceVendorId!,
         status: VendorAttendanceStatus.finished,
         sold: dto.sold,
       });
       this.realtimeEvents.emitVendorAvailabilityChanged(updated.client_id, {
-        vendor_id: user.sub,
+        vendor_id: attendanceVendorId!,
         status: VendorOperationalStatus.online,
       });
     }
 
     if (dto.sold) {
-      const targetVendorId = lead.assigned_vendor_id || user.sub;
+      const targetVendorId =
+        attendanceVendorId || lead.assigned_vendor_id || user.sub;
       await this.awardAttendanceScoreMilestones({
         clientId: lead.client_id,
         vendorId: targetVendorId,

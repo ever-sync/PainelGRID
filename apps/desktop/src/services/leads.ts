@@ -285,7 +285,7 @@ export type ReceptionQueueLead = Pick<
   | "store_visit_datetime"
   | "created_at"
   | "updated_at"
->;
+> & { assigned_vendor_name?: string | null };
 
 export type ReceptionQueueResponse = {
   event: { id: string; name: string } | null;
@@ -565,6 +565,7 @@ export function closeLeadAttendance(
     phone?: string;
     sold: boolean;
     attendance_duration_seconds?: number;
+    attended_by_vendor_id?: string;
   },
   accessToken: string,
 ) {
