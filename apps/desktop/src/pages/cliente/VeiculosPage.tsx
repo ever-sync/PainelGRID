@@ -11,6 +11,7 @@ import {
   Trash2,
   X,
   Upload,
+  Sparkles,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Card } from "../../components/ui/Card";
@@ -146,6 +147,8 @@ export function VeiculosPage() {
   const [catalogItems, setCatalogItems] = useState<VehicleCatalogItem[]>([]);
   const [selectedCatalogIds, setSelectedCatalogIds] = useState<string[]>([]);
   const [catalogMessage, setCatalogMessage] = useState("");
+  const [automaticImporting, setAutomaticImporting] = useState(false);
+  const [automaticImportMessage, setAutomaticImportMessage] = useState("");
 
   // Sync Dark Mode
   useEffect(() => {
@@ -558,6 +561,38 @@ export function VeiculosPage() {
     }
   };
 
+  const handleAutomaticImport = async () => {
+    const token = readStoredSession()?.accessToken;
+    if (!token || !clientId) return;
+    setAutomaticImporting(true);
+    setAutomaticImportMessage("");
+    try {
+      const catalog = await syncVehicleCatalog(clientId, token);
+      const pendingIds = catalog.items
+        .filter((item) => !item.imported)
+        .map((item) => item.id);
+      if (!pendingIds.length) {
+        setAutomaticImportMessage(
+          `Todos os modelos da ${catalog.brand} já estão cadastrados.`,
+        );
+        return;
+      }
+      const result = await importVehicleCatalog(clientId, pendingIds, token);
+      setAutomaticImportMessage(
+        `${result.imported} modelo${result.imported === 1 ? "" : "s"} da ${catalog.brand} importado${result.imported === 1 ? "" : "s"} automaticamente. Revise os dados antes de ativar.`,
+      );
+      loadVehicles();
+    } catch (error) {
+      setAutomaticImportMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível realizar a importação automática.",
+      );
+    } finally {
+      setAutomaticImporting(false);
+    }
+  };
+
   if (!clientId) return <MissingClientScope />;
 
   return (
@@ -574,6 +609,14 @@ export function VeiculosPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
+              loading={automaticImporting}
+              onClick={() => void handleAutomaticImport()}
+              icon={<Sparkles size={16} />}
+              className="bg-[#E51838] text-white hover:bg-[#c01530]"
+            >
+              Importar automático
+            </Button>
+            <Button
               variant="secondary"
               onClick={() => void handleOpenCatalog()}
               icon={<Database size={16} />}
@@ -581,6 +624,7 @@ export function VeiculosPage() {
               Importar da FIPE
             </Button>
             <Button
+              variant="secondary"
               onClick={() => {
                 setEditingVehicleId(null);
                 setVehicleBrand("");
@@ -602,7 +646,6 @@ export function VeiculosPage() {
                 setVehicleKm("");
                 setIsVehicleModalOpen(true);
               }}
-              className="bg-[#E51838] text-white hover:bg-[#c01530] transition-colors"
               icon={<Plus size={16} />}
             >
               Novo Veículo
@@ -610,6 +653,21 @@ export function VeiculosPage() {
           </div>
         }
       />
+
+      {automaticImportMessage ? (
+        <div
+          className={clsx(
+            "mb-4 rounded-2xl border px-4 py-3 text-sm font-medium",
+            automaticImportMessage.includes("Não foi possível") ||
+              automaticImportMessage.includes("Defina uma marca") ||
+              automaticImportMessage.includes("indisponível")
+              ? "border-red-500/20 bg-red-500/10 text-red-600"
+              : "border-emerald-500/20 bg-emerald-500/10 text-emerald-600",
+          )}
+        >
+          {automaticImportMessage}
+        </div>
+      ) : null}
 
       <Card padding="none" className={clsx(isDarkMode && "card-surface")}>
         <div
