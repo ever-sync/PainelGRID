@@ -42,6 +42,7 @@ import {
   mapApiClientToClient,
 } from "../../services/clients";
 import { listEvents } from "../../services/events";
+import { BRAZIL_CAR_BRANDS } from "../../lib/car-brands";
 
 function formatPhoneBr(raw: string) {
   const digits = raw.replace(/\D/g, "");
@@ -82,6 +83,7 @@ export function ClientesPage() {
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState("");
   const [newClientName, setNewClientName] = useState("");
+  const [newClientVehicleBrand, setNewClientVehicleBrand] = useState("");
   const [newClientCnpj, setNewClientCnpj] = useState("");
   const [newClientPhone, setNewClientPhone] = useState("");
   const [newClientWhatsapp, setNewClientWhatsapp] = useState("");
@@ -169,6 +171,7 @@ export function ClientesPage() {
     try {
       await createClient(session.accessToken, {
         company_name: newClientName.trim(),
+        vehicle_brand: newClientVehicleBrand || undefined,
         cnpj: newClientCnpj.trim() || undefined,
         webhook_url_n8n: newClientWebhook.trim() || undefined,
         phone_number: newClientPhone.trim() || undefined,
@@ -200,6 +203,7 @@ export function ClientesPage() {
       setClients(rows.map(mapApiClientToClient));
       setCreateOpen(false);
       setNewClientName("");
+      setNewClientVehicleBrand("");
       setNewClientCnpj("");
       setNewClientPhone("");
       setNewClientWhatsapp("");
@@ -829,6 +833,35 @@ export function ClientesPage() {
           </div>
 
           {/* 3º TELEFONE & WHATSAPP */}
+          <div className="space-y-1.5">
+            <label
+              className={clsx(
+                "block text-xs font-bold uppercase tracking-wider",
+                isDarkMode ? "text-zinc-400" : "text-zinc-600",
+              )}
+            >
+              Marca principal
+            </label>
+            <select
+              value={newClientVehicleBrand}
+              onChange={(event) => setNewClientVehicleBrand(event.target.value)}
+              className={clsx(
+                "h-11 w-full rounded-2xl border px-3 text-xs font-medium transition-all focus:outline-none focus:ring-2 focus:ring-[#FF0636] sm:text-sm",
+                isDarkMode
+                  ? "border-zinc-800 bg-[#121212] text-zinc-100 focus:border-[#FF0636]"
+                  : "border-zinc-200 bg-white text-zinc-900 shadow-sm focus:border-[#FF0636]",
+              )}
+            >
+              <option value="">Selecione uma marca</option>
+              {BRAZIL_CAR_BRANDS.map((brand) => (
+                <option key={brand} value={brand}>
+                  {brand}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 4º TELEFONE & WHATSAPP */}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <label
@@ -895,7 +928,7 @@ export function ClientesPage() {
             </div>
           </div>
 
-          {/* 4º E-MAIL DE CONTATO */}
+          {/* 5º E-MAIL DE CONTATO */}
           <div className="space-y-1.5">
             <label
               className={clsx(

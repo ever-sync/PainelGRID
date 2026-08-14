@@ -61,6 +61,11 @@ export class UpdateClientDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(80)
+  vehicle_brand?: string | null;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(18)
   cnpj?: string | null;
 

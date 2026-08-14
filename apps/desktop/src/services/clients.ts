@@ -43,6 +43,7 @@ export function getClient(id: string, token: string) {
 
 export type CreateClientPayload = {
   company_name: string;
+  vehicle_brand?: string;
   cnpj?: string;
   webhook_url_n8n?: string;
   phone_number?: string;
@@ -66,7 +67,11 @@ export function createClient(token: string, payload: CreateClientPayload) {
   });
 }
 
-export type UpdateClientPayload = Partial<CreateClientPayload> & {
+export type UpdateClientPayload = Omit<
+  Partial<CreateClientPayload>,
+  "vehicle_brand"
+> & {
+  vehicle_brand?: string | null;
   is_active?: boolean;
   crm_stage_status_rules?: CrmStageStatusRule[] | null;
   score_rules?: {
@@ -261,6 +266,10 @@ export function mapApiClientToClient(row: ApiClient): Client {
     typeof settingsRecord.is_active === "boolean"
       ? settingsRecord.is_active
       : true;
+  const vehicleBrand =
+    typeof settingsRecord.vehicle_brand === "string"
+      ? settingsRecord.vehicle_brand.trim()
+      : "";
   const crmStageStatusRules = Array.isArray(
     settingsRecord.crm_stage_status_rules,
   )
@@ -299,6 +308,7 @@ export function mapApiClientToClient(row: ApiClient): Client {
   return {
     id: row.id,
     company_name: row.company_name,
+    vehicle_brand: vehicleBrand,
     cnpj: row.cnpj ?? "",
     plan: planMap[row.plan] ?? "starter",
     logo_url: row.logo_url,

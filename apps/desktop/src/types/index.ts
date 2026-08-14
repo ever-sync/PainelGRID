@@ -30,6 +30,8 @@ export type PlanType = "starter" | "pro" | "enterprise";
 export interface Client {
   id: string;
   company_name: string;
+  /** Marca principal de veículos comercializada pelo cliente. */
+  vehicle_brand: string;
   cnpj: string;
   plan: PlanType;
   logo_url: string | null;

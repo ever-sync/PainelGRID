@@ -16,6 +16,11 @@ export class CreateClientDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(80)
+  vehicle_brand?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(18)
   cnpj?: string;
 

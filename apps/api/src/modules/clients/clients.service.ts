@@ -80,6 +80,7 @@ export class ClientsService {
     patch: {
       address?: string | null;
       contact_email?: string | null;
+      vehicle_brand?: string | null;
       address_street?: string | null;
       address_number?: string | null;
       address_complement?: string | null;
@@ -115,6 +116,12 @@ export class ClientsService {
       const value = patch.contact_email?.trim() ?? "";
       if (value) base.contact_email = value;
       else delete base.contact_email;
+    }
+
+    if (patch.vehicle_brand !== undefined) {
+      const value = patch.vehicle_brand?.trim() ?? "";
+      if (value) base.vehicle_brand = value;
+      else delete base.vehicle_brand;
     }
 
     if (patch.address_street !== undefined) {
@@ -340,6 +347,7 @@ export class ClientsService {
       {
         address: dto.address ?? undefined,
         contact_email: dto.contact_email ?? undefined,
+        vehicle_brand: dto.vehicle_brand ?? undefined,
         address_street: dto.address_street ?? undefined,
         address_number: dto.address_number ?? undefined,
         address_complement: dto.address_complement ?? undefined,
@@ -410,6 +418,7 @@ export class ClientsService {
     const hasSettingsPatch =
       dto.address !== undefined ||
       dto.contact_email !== undefined ||
+      dto.vehicle_brand !== undefined ||
       dto.address_street !== undefined ||
       dto.address_number !== undefined ||
       dto.address_complement !== undefined ||
@@ -448,6 +457,7 @@ export class ClientsService {
           ? this.buildSettings(current?.settings, {
               address: dto.address,
               contact_email: dto.contact_email,
+              vehicle_brand: dto.vehicle_brand,
               address_street: dto.address_street,
               address_number: dto.address_number,
               address_complement: dto.address_complement,

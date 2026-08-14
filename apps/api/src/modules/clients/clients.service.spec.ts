@@ -208,4 +208,46 @@ describe("ClientsService", () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
+
+  it("grava a marca principal dentro das configuracoes do cliente", async () => {
+    redis.client.get.mockResolvedValue(
+      JSON.stringify({ id: clientId, gestor_id: gestorId }),
+    );
+    prisma.client.findUnique.mockResolvedValue({
+      settings: { is_active: true, address: "Rua A" },
+    });
+    prisma.client.update.mockResolvedValue({
+      id: clientId,
+      gestor_id: gestorId,
+      company_name: "Acme",
+      settings: { is_active: true, address: "Rua A", vehicle_brand: "Toyota" },
+      _count: { leads: 0, event_participations: 0, vehicles: 0 },
+      facebook_ad_accounts: [],
+    });
+
+    await service.updateForUser(
+      {
+        sub: gestorId,
+        role: Role.GESTOR,
+        email: "gestor@example.com",
+        name: "Gestor",
+        client_id: null,
+      },
+      clientId,
+      { vehicle_brand: " Toyota " },
+    );
+
+    expect(prisma.client.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: clientId },
+        data: expect.objectContaining({
+          settings: expect.objectContaining({
+            is_active: true,
+            address: "Rua A",
+            vehicle_brand: "Toyota",
+          }),
+        }),
+      }),
+    );
+  });
 });

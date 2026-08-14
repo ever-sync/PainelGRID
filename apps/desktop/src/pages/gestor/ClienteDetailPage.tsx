@@ -94,6 +94,7 @@ import {
   type IntegrationCredential,
   type IntegrationCredentialWithKey,
 } from "../../services/clients";
+import { BRAZIL_CAR_BRANDS } from "../../lib/car-brands";
 import {
   createPrincipalClientAccess,
   createStaffUser,
@@ -322,6 +323,7 @@ export function ClienteDetailPage() {
   const [companyEditLoading, setCompanyEditLoading] = useState(false);
   const [companyEditError, setCompanyEditError] = useState("");
   const [companyEditName, setCompanyEditName] = useState("");
+  const [companyEditVehicleBrand, setCompanyEditVehicleBrand] = useState("");
   const [companyEditCnpj, setCompanyEditCnpj] = useState("");
   const [companyEditEmail, setCompanyEditEmail] = useState("");
   const [companyEditPhone, setCompanyEditPhone] = useState("");
@@ -2891,6 +2893,7 @@ export function ClienteDetailPage() {
   function handleOpenCompanyEdit() {
     if (!client) return;
     setCompanyEditName(client.company_name);
+    setCompanyEditVehicleBrand(client.vehicle_brand);
     setCompanyEditCnpj(client.cnpj);
     setCompanyEditEmail(client.contact_email);
     setCompanyEditPhone(client.phone_number ?? "");
@@ -2919,6 +2922,7 @@ export function ClienteDetailPage() {
     try {
       const row = await updateClient(resolvedId, session.accessToken, {
         company_name: companyEditName.trim(),
+        vehicle_brand: companyEditVehicleBrand || null,
         cnpj: companyEditCnpj.trim() || undefined,
         contact_email: companyEditEmail.trim() || undefined,
         phone_number: companyEditPhone.trim() || undefined,
@@ -3310,6 +3314,23 @@ export function ClienteDetailPage() {
               />
             </div>
           </div>
+          <div>
+            <p className="mb-1 text-sm text-gray-500">Marca principal</p>
+            <select
+              value={companyEditVehicleBrand}
+              onChange={(event) =>
+                setCompanyEditVehicleBrand(event.target.value)
+              }
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              <option value="">Selecione uma marca</option>
+              {BRAZIL_CAR_BRANDS.map((brand) => (
+                <option key={brand} value={brand}>
+                  {brand}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <p className="mb-1 text-sm text-gray-500">WhatsApp</p>
@@ -3397,6 +3418,12 @@ export function ClienteDetailPage() {
                 <p className="text-gray-400">CNPJ</p>
                 <p className="font-mono font-medium text-gray-900">
                   {client.cnpj}
+                </p>
+              </div>
+              <div>
+                <p className="text-gray-400">Marca principal</p>
+                <p className="font-medium text-gray-900">
+                  {client.vehicle_brand || "—"}
                 </p>
               </div>
               <div>
