@@ -330,8 +330,12 @@ export function FilaPage() {
     if (user.role !== "vendedor") return null;
     const me = vendors.find((vendor) => vendor.id === user.id);
     if (!me) return null;
+    const segment = resolveVendorSegment(me.team_name);
     const ordered = vendors
-      .filter((vendor) => vendor.eligible)
+      .filter(
+        (vendor) =>
+          vendor.eligible && resolveVendorSegment(vendor.team_name) === segment,
+      )
       .sort((a, b) => {
         const timeA = a.last_assigned_at
           ? new Date(a.last_assigned_at).getTime()
@@ -344,6 +348,7 @@ export function FilaPage() {
     const index = ordered.findIndex((vendor) => vendor.id === user.id);
     return {
       ...me,
+      segment,
       position: index >= 0 ? index + 1 : null,
       queueSize: ordered.length,
     };
@@ -407,7 +412,7 @@ export function FilaPage() {
               </span>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#ff6684]">
-                  Sua ordem de atendimento
+                  Sua ordem · {vendorSegmentLabel(myQueueStatus.segment)}
                 </p>
                 <h2 className="mt-1 text-xl font-black tracking-tight sm:text-2xl">
                   {myQueueStatus.position
@@ -703,13 +708,31 @@ function VendorQueuePanel({
     { value: "vd", label: "VD" },
     { value: "assinatura", label: "Assinatura" },
   ];
-  const vendorsBySegment = useMemo(
-    () =>
-      vendors.filter(
-        (vendor) => resolveVendorSegment(vendor.team_name) === activeSegment,
-      ),
-    [activeSegment, vendors],
-  );
+  const vendorsBySegment = useMemo(() => {
+    const segmentVendors = vendors.filter(
+      (vendor) => resolveVendorSegment(vendor.team_name) === activeSegment,
+    );
+    const byLastAssignment = (
+      a: (typeof vendors)[number],
+      b: (typeof vendors)[number],
+    ) => {
+      const timeA = a.last_assigned_at
+        ? new Date(a.last_assigned_at).getTime()
+        : 0;
+      const timeB = b.last_assigned_at
+        ? new Date(b.last_assigned_at).getTime()
+        : 0;
+      return timeA - timeB || a.name.localeCompare(b.name, "pt-BR");
+    };
+    const available = segmentVendors
+      .filter((vendor) => vendor.eligible)
+      .sort(byLastAssignment)
+      .map((vendor, index) => ({ ...vendor, queuePosition: index + 1 }));
+    const unavailable = segmentVendors
+      .filter((vendor) => !vendor.eligible)
+      .map((vendor) => ({ ...vendor, queuePosition: null }));
+    return [...available, ...unavailable];
+  }, [activeSegment, vendors]);
   const availableCount = vendors.filter((vendor) => vendor.eligible).length;
   const segmentAvailableCount = vendorsBySegment.filter(
     (vendor) => vendor.eligible,
@@ -871,6 +894,17 @@ function resolveVendorSegment(teamName: string | null): VendorQueueSegment {
   }
   if (normalized.includes("assinatura")) return "assinatura";
   return "novo";
+}
+
+function vendorSegmentLabel(segment: VendorQueueSegment) {
+  const labels: Record<VendorQueueSegment, string> = {
+    seminovo: "Seminovo",
+    pcd: "PCD",
+    novo: "Novo",
+    vd: "VD",
+    assinatura: "Assinatura",
+  };
+  return labels[segment];
 }
 
 function QueueMetric({
