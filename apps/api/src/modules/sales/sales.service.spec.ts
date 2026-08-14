@@ -39,6 +39,7 @@ describe("SalesService", () => {
       crm_stage_id: null,
       confirmation_status: ConfirmationStatus.pending,
       confirmation_date: null,
+      assigned_vendor_id: vendorId,
     },
   };
 
@@ -103,10 +104,11 @@ describe("SalesService", () => {
     );
   });
 
-  it("bloqueia venda pela recepção mesmo se um evento legado estiver liberado", async () => {
+  it("bloqueia venda pela recepção quando o evento não permite", async () => {
+    prisma.appointment.findUnique.mockResolvedValue(baseAppointment);
     prisma.event.findUnique.mockResolvedValue({
       allow_vendor_create_sale: true,
-      allow_reception_create_sale: true,
+      allow_reception_create_sale: false,
     });
 
     await expect(
@@ -117,7 +119,32 @@ describe("SalesService", () => {
         value: "120000",
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(prisma.appointment.findUnique).not.toHaveBeenCalled();
+    expect(prisma.sale.create).not.toHaveBeenCalled();
+  });
+
+  it("permite venda pela recepção quando o evento está liberado", async () => {
+    prisma.event.findUnique.mockResolvedValue({
+      allow_vendor_create_sale: true,
+      allow_reception_create_sale: true,
+    });
+    prisma.appointment.findUnique.mockResolvedValue(baseAppointment);
+    prisma.salesTeamMember.findFirst.mockResolvedValue({
+      team_id: teamId,
+      user: { client_id: clientId },
+    });
+    prisma.sale.create.mockResolvedValue({ ...sale, order_number: null });
+
+    const result = await service.create(
+      { ...user, sub: "reception-user", role: Role.RECEPCAO } as any,
+      {
+        appointment_id: appointmentId,
+        type: SaleType.NOVO,
+        product: "Onix",
+        value: "120000",
+      },
+    );
+
+    expect(result).toEqual(expect.objectContaining({ vendor_id: vendorId }));
   });
 
   it("permite venda sem check-in e soma compareceu mais vendeu", async () => {

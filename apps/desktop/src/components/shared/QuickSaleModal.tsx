@@ -13,7 +13,11 @@ import { Select } from "../ui/Select";
 import { Button } from "../ui/Button";
 import { Notice } from "../ui/Notice";
 import { readStoredSession } from "../../services/auth";
-import { listClients, mapApiClientToClient } from "../../services/clients";
+import {
+  getClient,
+  listClients,
+  mapApiClientToClient,
+} from "../../services/clients";
 import { listEvents, type ApiEvent } from "../../services/events";
 import { listLeads, type ApiLead } from "../../services/leads";
 import { listClientVehicles, type Vehicle } from "../../services/vehicles";
@@ -32,9 +36,11 @@ function localDateTimeValue() {
 export function QuickSaleModal({
   open,
   onClose,
+  user,
 }: {
   open: boolean;
   onClose: () => void;
+  user: User;
 }) {
   const [clients, setClients] = useState<Client[]>([]);
   const [events, setEvents] = useState<ApiEvent[]>([]);
@@ -73,7 +79,11 @@ export function QuickSaleModal({
     setLoading(true);
     setMessage("");
     setSuccess(false);
-    void listClients(token)
+    const clientsRequest =
+      user.role === "recepcao" && user.client_id
+        ? getClient(user.client_id, token).then((client) => [client])
+        : listClients(token);
+    void clientsRequest
       .then((rows) => {
         const mapped = rows.map(mapApiClientToClient);
         setClients(mapped);
@@ -87,7 +97,7 @@ export function QuickSaleModal({
         ),
       )
       .finally(() => setLoading(false));
-  }, [open]);
+  }, [open, user.client_id, user.role]);
 
   useEffect(() => {
     if (!open || !clientId) return;

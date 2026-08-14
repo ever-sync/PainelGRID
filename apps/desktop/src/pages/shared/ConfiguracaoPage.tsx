@@ -405,7 +405,7 @@ export function ConfiguracaoPage() {
     allow_vendor_delete_sale: false,
     allow_vendor_edit_own_lead: true,
     allow_vendor_delete_own_lead: false,
-    allow_reception_create_sale: false,
+    allow_reception_create_sale: true,
     allow_reception_edit_sale: false,
     allow_reception_delete_sale: false,
     allow_reception_edit_lead: false,
@@ -1382,7 +1382,7 @@ export function ConfiguracaoPage() {
       allow_vendor_delete_own_lead:
         selectedEventSettings.allow_vendor_delete_own_lead ?? false,
       allow_reception_create_sale:
-        selectedEventSettings.allow_reception_create_sale ?? false,
+        selectedEventSettings.allow_reception_create_sale ?? true,
       allow_reception_edit_sale:
         selectedEventSettings.allow_reception_edit_sale ?? false,
       allow_reception_delete_sale:
@@ -2121,6 +2121,11 @@ export function ConfiguracaoPage() {
                         "allow_reception_quick_create",
                         "Recepção pode fazer cadastro rápido",
                         "Permite criar leads pelo painel da recepção.",
+                      ],
+                      [
+                        "allow_reception_create_sale",
+                        "Recepção pode registrar venda",
+                        "Exibe a venda rápida e permite criar vendas neste evento.",
                       ],
                       [
                         "allow_reception_edit_lead",

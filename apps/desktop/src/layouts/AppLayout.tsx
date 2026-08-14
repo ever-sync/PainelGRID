@@ -1911,21 +1911,23 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
         </div>
       </nav>
 
-      {user.role === "gestor" && !isImmersiveChatRoute && (
-        <button
-          type="button"
-          onClick={() => setQuickSaleOpen(true)}
-          className="fixed bottom-[calc(6.25rem+env(safe-area-inset-bottom))] right-5 z-40 flex h-14 items-center gap-2 rounded-full bg-[#E51838] px-5 font-bold text-white shadow-[0_16px_36px_rgba(229,24,56,0.35)] transition hover:-translate-y-0.5 hover:bg-[#c9122e] active:translate-y-0 md:bottom-8 md:right-8"
-          aria-label="Registrar venda rápida"
-        >
-          <DollarSign size={22} strokeWidth={2.5} />
-          <span>Venda rápida</span>
-        </button>
-      )}
+      {(user.role === "gestor" || user.role === "recepcao") &&
+        !isImmersiveChatRoute && (
+          <button
+            type="button"
+            onClick={() => setQuickSaleOpen(true)}
+            className="fixed bottom-[calc(6.25rem+env(safe-area-inset-bottom))] right-5 z-40 flex h-14 items-center gap-2 rounded-full bg-[#E51838] px-5 font-bold text-white shadow-[0_16px_36px_rgba(229,24,56,0.35)] transition hover:-translate-y-0.5 hover:bg-[#c9122e] active:translate-y-0 md:bottom-8 md:right-8"
+            aria-label="Registrar venda rápida"
+          >
+            <DollarSign size={22} strokeWidth={2.5} />
+            <span>Venda rápida</span>
+          </button>
+        )}
 
       <QuickSaleModal
         open={quickSaleOpen}
         onClose={() => setQuickSaleOpen(false)}
+        user={user}
       />
 
       {quickActionOpen &&

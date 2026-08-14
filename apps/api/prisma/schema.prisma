@@ -420,7 +420,7 @@ model Event {
   allow_vendor_delete_sale      Boolean                  @default(false)
   allow_vendor_edit_own_lead    Boolean                  @default(true)
   allow_vendor_delete_own_lead  Boolean                  @default(false)
-  allow_reception_create_sale   Boolean                  @default(false)
+  allow_reception_create_sale   Boolean                  @default(true)
   allow_reception_edit_sale     Boolean                  @default(false)
   allow_reception_delete_sale   Boolean                  @default(false)
   allow_reception_edit_lead     Boolean                  @default(false)

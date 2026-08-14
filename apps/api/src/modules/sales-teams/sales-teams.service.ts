@@ -123,7 +123,7 @@ export class SalesTeamsService {
         if (owned === 0) {
           throw new ForbiddenException("Acesso negado a este evento");
         }
-      } else if (user.role === Role.CLIENTE) {
+      } else if (user.role === Role.CLIENTE || user.role === Role.RECEPCAO) {
         if (!user.client_id)
           throw new ForbiddenException("Usuário sem empresa vinculada");
         if (

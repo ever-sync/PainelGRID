@@ -41,7 +41,7 @@ export class VehiclesController {
   }
 
   @Get()
-  @Roles(Role.GESTOR, Role.CLIENTE)
+  @Roles(Role.GESTOR, Role.CLIENTE, Role.RECEPCAO)
   @ApiOperation({ summary: "Lista os veículos do cliente com filtros" })
   @ApiResponse({ status: 200, description: "Veículos listados com sucesso" })
   @ApiQuery({ name: "client_id", required: true })

@@ -26,14 +26,14 @@ export class VehiclesService {
       await this.clientsService.assertGestorOwnsClient(user.sub, clientId);
       return;
     }
-    if (user.role === Role.CLIENTE) {
+    if (user.role === Role.CLIENTE || user.role === Role.RECEPCAO) {
       if (user.client_id !== clientId) {
         throw new ForbiddenException("Sem permissão para este cliente");
       }
       return;
     }
     throw new ForbiddenException(
-      "Apenas gestores e clientes possuem acesso aos veículos",
+      "Apenas gestores, clientes e recepção possuem acesso aos veículos",
     );
   }
 

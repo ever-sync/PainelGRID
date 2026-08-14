@@ -36,12 +36,6 @@ export class SalesService {
     if (!user.client_id) {
       throw new ForbiddenException("Empresa nao identificada");
     }
-    if (user.role === Role.RECEPCAO) {
-      throw new ForbiddenException(
-        "A recepção registra presença e encaminha para atendimento; vendas são registradas pelo vendedor responsável",
-      );
-    }
-
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: dto.appointment_id },
       include: { lead: true, sale: true },
@@ -63,6 +57,14 @@ export class SalesService {
     ) {
       throw new ForbiddenException(
         "Registro de venda não permitido para este perfil no evento",
+      );
+    }
+    if (
+      user.role === Role.RECEPCAO &&
+      eventPermissions?.allow_reception_create_sale !== true
+    ) {
+      throw new ForbiddenException(
+        "Registro de venda não permitido para a recepção neste evento",
       );
     }
     if (appointment.client_id !== user.client_id) {
@@ -242,8 +244,13 @@ export class SalesService {
   }
 
   async createQuickSale(user: AuthenticatedUser, dto: CreateQuickSaleDto) {
-    if (user.role !== Role.GESTOR) {
-      throw new ForbiddenException("Apenas gestor pode registrar venda rápida");
+    if (user.role !== Role.GESTOR && user.role !== Role.RECEPCAO) {
+      throw new ForbiddenException(
+        "Apenas gestor ou recepção pode registrar venda rápida",
+      );
+    }
+    if (user.role === Role.RECEPCAO && user.client_id !== dto.client_id) {
+      throw new ForbiddenException("Empresa não permitida para este acesso");
     }
 
     const [client, event, vendor, vehicle] = await Promise.all([
@@ -275,6 +282,14 @@ export class SalesService {
     if (!client) throw new NotFoundException("Empresa não encontrada");
     if (!event) {
       throw new NotFoundException("Evento não encontrado para a empresa");
+    }
+    if (
+      user.role === Role.RECEPCAO &&
+      event.allow_reception_create_sale !== true
+    ) {
+      throw new ForbiddenException(
+        "Registro de venda não permitido para a recepção neste evento",
+      );
     }
     if (!vendor) {
       throw new NotFoundException("Vendedor não encontrado para a empresa");

@@ -39,7 +39,7 @@ export class ClientsController {
   }
 
   @Get(":id")
-  @Roles(Role.GESTOR, Role.CLIENTE)
+  @Roles(Role.GESTOR, Role.CLIENTE, Role.RECEPCAO)
   @ApiOperation({ summary: "Busca cliente por ID" })
   @ApiResponse({ status: 200, description: "Cliente encontrado" })
   @ApiResponse({ status: 403, description: "Sem permissão para este cliente" })

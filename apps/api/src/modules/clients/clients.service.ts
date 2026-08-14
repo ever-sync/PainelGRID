@@ -483,7 +483,10 @@ export class ClientsService {
       return;
     }
 
-    if (user.role === Role.CLIENTE && user.client_id === clientId) {
+    if (
+      (user.role === Role.CLIENTE || user.role === Role.RECEPCAO) &&
+      user.client_id === clientId
+    ) {
       return;
     }
 

@@ -52,8 +52,8 @@ export class SalesController {
   }
 
   @Post("quick")
-  @Roles(Role.GESTOR)
-  @ApiOperation({ summary: "Registra venda rápida pelo gestor" })
+  @Roles(Role.GESTOR, Role.RECEPCAO)
+  @ApiOperation({ summary: "Registra venda rápida pelo gestor ou recepção" })
   quickSale(
     @Body() dto: CreateQuickSaleDto,
     @CurrentUser() user: AuthenticatedUser,

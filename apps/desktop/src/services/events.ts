@@ -362,7 +362,7 @@ export function mapApiEventToEvent(row: ApiEvent): Event {
     allow_vendor_delete_sale: row.allow_vendor_delete_sale ?? false,
     allow_vendor_edit_own_lead: row.allow_vendor_edit_own_lead ?? true,
     allow_vendor_delete_own_lead: row.allow_vendor_delete_own_lead ?? false,
-    allow_reception_create_sale: row.allow_reception_create_sale ?? false,
+    allow_reception_create_sale: row.allow_reception_create_sale ?? true,
     allow_reception_edit_sale: row.allow_reception_edit_sale ?? false,
     allow_reception_delete_sale: row.allow_reception_delete_sale ?? false,
     allow_reception_edit_lead: row.allow_reception_edit_lead ?? false,

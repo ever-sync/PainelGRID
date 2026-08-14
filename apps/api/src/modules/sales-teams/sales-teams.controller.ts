@@ -32,6 +32,7 @@ export class SalesTeamsController {
   constructor(private readonly service: SalesTeamsService) {}
 
   @Get()
+  @Roles(Role.GESTOR, Role.CLIENTE, Role.RECEPCAO)
   @ApiQuery({ name: "event_id", required: false })
   @ApiQuery({ name: "client_id", required: false })
   @ApiOperation({ summary: "Lista times de vendas do evento ou cliente" })
