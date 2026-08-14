@@ -5214,9 +5214,18 @@ export class MetaService implements OnModuleInit {
       );
     }
 
-    const businesses = await this.fetchBusinesses(
-      user.meta_gestor_access_token,
-    );
+    let businesses: MetaBusinessSummary[];
+    try {
+      businesses = await this.fetchBusinesses(user.meta_gestor_access_token);
+    } catch (error) {
+      const message = this.getErrorMessage(error);
+      if (message.includes("Application request limit reached")) {
+        throw new BadRequestException(
+          "A Meta atingiu temporariamente o limite de consultas. A conta continua conectada; aguarde alguns minutos e tente Atualizar Meta novamente.",
+        );
+      }
+      throw error;
+    }
 
     return {
       accessToken: user.meta_gestor_access_token,
