@@ -170,7 +170,7 @@ export function ForgotPasswordPage() {
                 </label>
                 <Mail
                   size={15}
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600"
                 />
                 <input
                   id="password-reset-email"
@@ -181,7 +181,7 @@ export function ForgotPasswordPage() {
                   placeholder="Digite seu e-mail"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 py-3 pl-9 pr-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-[#FF0636] focus:outline-none focus:ring-2 focus:ring-[#FF0636]/20"
+                  className="w-full rounded-xl border border-zinc-400 py-3 pl-9 pr-4 text-sm text-zinc-900 placeholder:text-zinc-600 focus:border-[#FF0636] focus:outline-none focus:ring-2 focus:ring-[#FF0636]/20"
                 />
               </div>
 
@@ -213,7 +213,7 @@ export function ForgotPasswordPage() {
                 </label>
                 <Lock
                   size={15}
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600"
                 />
                 <input
                   id="new-password"
@@ -224,7 +224,7 @@ export function ForgotPasswordPage() {
                   placeholder="Nova senha"
                   value={newPassword}
                   onChange={(event) => setNewPassword(event.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 py-3 pl-9 pr-11 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-[#FF0636] focus:outline-none focus:ring-2 focus:ring-[#FF0636]/20"
+                  className="w-full rounded-xl border border-zinc-400 py-3 pl-9 pr-11 text-sm text-zinc-900 placeholder:text-zinc-600 focus:border-[#FF0636] focus:outline-none focus:ring-2 focus:ring-[#FF0636]/20"
                 />
                 <button
                   type="button"
@@ -244,7 +244,7 @@ export function ForgotPasswordPage() {
                 </label>
                 <Lock
                   size={15}
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600"
                 />
                 <input
                   id="confirm-new-password"
@@ -255,7 +255,7 @@ export function ForgotPasswordPage() {
                   placeholder="Confirmar nova senha"
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 py-3 pl-9 pr-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-[#FF0636] focus:outline-none focus:ring-2 focus:ring-[#FF0636]/20"
+                  className="w-full rounded-xl border border-zinc-400 py-3 pl-9 pr-4 text-sm text-zinc-900 placeholder:text-zinc-600 focus:border-[#FF0636] focus:outline-none focus:ring-2 focus:ring-[#FF0636]/20"
                 />
               </div>
 
