@@ -45,7 +45,11 @@ import {
   moveCrmLead,
   type ApiCrmStage,
 } from "../../services/crm";
-import { fetchAllLeads, getLead, mapApiLeadToLead } from "../../services/leads";
+import {
+  fetchLeadsPage,
+  getLead,
+  mapApiLeadToLead,
+} from "../../services/leads";
 import { HttpError } from "../../services/http";
 import {
   apiStagesToColumns,
@@ -174,6 +178,9 @@ export function CRMPage() {
   const [bulkTargetStageId, setBulkTargetStageId] = useState("");
   const [bulkMoving, setBulkMoving] = useState(false);
   const [boardLoading, setBoardLoading] = useState(false);
+  const [boardLoadingMore, setBoardLoadingMore] = useState(false);
+  const [boardNextCursor, setBoardNextCursor] = useState<string | null>(null);
+  const [boardHasNextPage, setBoardHasNextPage] = useState(false);
   const [realtimeStatus, setRealtimeStatus] =
     useState<RealtimeStatus>("reconnecting");
   const [liveLeadKinds, setLiveLeadKinds] = useState<
@@ -615,6 +622,8 @@ export function CRMPage() {
     const accessToken = session?.accessToken ?? "";
     if (!accessToken || !selectedClient || !isUuid(selectedClient)) {
       setBoardState({});
+      setBoardNextCursor(null);
+      setBoardHasNextPage(false);
       setBoardLoading(false);
       return;
     }
@@ -629,26 +638,31 @@ export function CRMPage() {
 
     let active = true;
     setBoardLoading(true);
+    setBoardNextCursor(null);
+    setBoardHasNextPage(false);
 
-    // Carrega todos os cards e a contagem oficial antes de publicar o novo
-    // estado. Atualizar a cada pagina fazia os badges oscilarem durante o fetch.
+    // Publica somente a primeira pagina. As contagens oficiais continuam vindo
+    // separadamente, e as paginas seguintes sao carregadas sob demanda.
     void Promise.all([
-      fetchAllLeads(
+      fetchLeadsPage(
         {
           client_id: selectedClient,
           search: searchTermRef.current || undefined,
+          take: 100,
         },
         accessToken,
-        { signal: abort.signal },
+        abort.signal,
       ),
       getCrmStageCounts(selectedClient, accessToken).catch(() => null),
     ])
-      .then(([rows, stageCountResult]) => {
+      .then(([page, stageCountResult]) => {
         if (!active || abort.signal.aborted) return;
-        const mappedRows = rows.map(mapApiLeadToLead);
+        const mappedRows = page.items.map(mapApiLeadToLead);
         const nextBoard = distributeLeadsByStageId(mappedRows, apiStages);
 
         setBoardState(nextBoard);
+        setBoardNextCursor(page.page_info.next_cursor);
+        setBoardHasNextPage(page.page_info.has_next_page);
         setStageCounts(
           stageCountResult?.counts ??
             Object.fromEntries(
@@ -678,6 +692,51 @@ export function CRMPage() {
       abort.abort();
     };
   }, [apiStages, selectedClient]);
+
+  const loadMoreBoardLeads = useCallback(() => {
+    const accessToken = readStoredSession()?.accessToken ?? "";
+    if (
+      !accessToken ||
+      !selectedClient ||
+      !boardNextCursor ||
+      boardLoadingMore
+    ) {
+      return;
+    }
+
+    setBoardLoadingMore(true);
+    void fetchLeadsPage(
+      {
+        client_id: selectedClient,
+        search: searchTermRef.current || undefined,
+        cursor: boardNextCursor,
+        take: 100,
+      },
+      accessToken,
+    )
+      .then((page) => {
+        const nextPageBoard = distributeLeadsByStageId(
+          page.items.map(mapApiLeadToLead),
+          apiStages,
+        );
+        setBoardState((current) =>
+          Object.fromEntries(
+            apiStages.map((stage) => {
+              const existing = current[stage.id] ?? [];
+              const existingIds = new Set(existing.map((lead) => lead.id));
+              const additions = (nextPageBoard[stage.id] ?? []).filter(
+                (lead) => !existingIds.has(lead.id),
+              );
+              return [stage.id, [...existing, ...additions]];
+            }),
+          ),
+        );
+        setBoardNextCursor(page.page_info.next_cursor);
+        setBoardHasNextPage(page.page_info.has_next_page);
+      })
+      .catch(() => showToast("Falha ao carregar mais leads.", "error"))
+      .finally(() => setBoardLoadingMore(false));
+  }, [apiStages, boardLoadingMore, boardNextCursor, selectedClient]);
 
   const refreshBoardRef = useRef(refreshBoard);
   useEffect(() => {
@@ -930,10 +989,22 @@ export function CRMPage() {
     const requestedLead = clientLeads.find(
       (lead) => lead.id === requestedLeadId,
     );
-    if (!requestedLead) return;
+    if (requestedLead) {
+      setOpenLead(requestedLead);
+      requestedLeadHandledRef.current = requestedLeadId;
+      return;
+    }
 
-    setOpenLead(requestedLead);
-    requestedLeadHandledRef.current = requestedLeadId;
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+    void getLead(requestedLeadId, token)
+      .then((row) => {
+        const lead = mapApiLeadToLead(row);
+        if (lead.client_id !== selectedClient) return;
+        setOpenLead(lead);
+        requestedLeadHandledRef.current = requestedLeadId;
+      })
+      .catch(() => undefined);
   }, [clientLeads, requestedLeadId, selectedClient]);
 
   useEffect(() => {
@@ -1659,6 +1730,26 @@ export function CRMPage() {
                   <Loader2 size={11} className="animate-spin" />
                   Carregando
                 </span>
+              )}
+              {boardHasNextPage && !boardLoading && (
+                <button
+                  type="button"
+                  onClick={loadMoreBoardLeads}
+                  disabled={boardLoadingMore}
+                  className={clsx(
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-[10px] font-bold uppercase tracking-wide transition-colors disabled:cursor-wait disabled:opacity-60",
+                    isDarkMode
+                      ? "bg-[#1a1a1a] text-zinc-300 hover:bg-[#262626]"
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200",
+                  )}
+                >
+                  {boardLoadingMore ? (
+                    <Loader2 size={11} className="animate-spin" />
+                  ) : (
+                    <ArrowDownWideNarrow size={11} />
+                  )}
+                  {boardLoadingMore ? "Carregando" : "Carregar mais"}
+                </button>
               )}
               {(
                 [

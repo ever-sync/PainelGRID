@@ -2034,16 +2034,17 @@ export class LeadsService {
       }
     }
 
-    const activeAttendance = isVendor || isReception
-      ? await this.prisma.vendorAttendance.findFirst({
-          where: {
-            lead_id: lead.id,
-            vendor_id: attendanceVendorId!,
-            status: VendorAttendanceStatus.accepted,
-          },
-          select: { id: true },
-        })
-      : null;
+    const activeAttendance =
+      isVendor || isReception
+        ? await this.prisma.vendorAttendance.findFirst({
+            where: {
+              lead_id: lead.id,
+              vendor_id: attendanceVendorId!,
+              status: VendorAttendanceStatus.accepted,
+            },
+            select: { id: true },
+          })
+        : null;
 
     if ((isVendor || isReception) && !activeAttendance) {
       throw new ConflictException(

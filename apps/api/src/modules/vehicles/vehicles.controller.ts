@@ -24,6 +24,8 @@ import { CreateVehicleDto } from "./dto/create-vehicle.dto";
 import { UpdateVehicleDto } from "./dto/update-vehicle.dto";
 import { SyncVehicleCatalogDto } from "./dto/sync-vehicle-catalog.dto";
 import { ImportVehicleCatalogDto } from "./dto/import-vehicle-catalog.dto";
+import { FindVehiclesQueryDto } from "./dto/find-vehicles-query.dto";
+import { BulkUpdateVehicleStatusDto } from "./dto/bulk-update-vehicle-status.dto";
 
 @ApiTags("vehicles")
 @ApiBearerAuth()
@@ -32,7 +34,7 @@ export class VehiclesController {
   constructor(private readonly vehiclesService: VehiclesService) {}
 
   @Post()
-  @Roles(Role.GESTOR, Role.CLIENTE)
+  @Roles(Role.GESTOR, Role.CLIENTE, Role.RECEPCAO)
   @ApiOperation({ summary: "Cria um novo veículo" })
   @ApiResponse({ status: 201, description: "Veículo criado com sucesso" })
   create(
@@ -50,19 +52,13 @@ export class VehiclesController {
   @ApiQuery({ name: "search", required: false })
   @ApiQuery({ name: "status", required: false })
   @ApiQuery({ name: "tag", required: false })
+  @ApiQuery({ name: "page", required: false })
+  @ApiQuery({ name: "take", required: false })
   findAll(
     @CurrentUser() user: AuthenticatedUser,
-    @Query("client_id") clientId: string,
-    @Query("search") search?: string,
-    @Query("status") status?: string,
-    @Query("tag") tag?: string,
+    @Query() query: FindVehiclesQueryDto,
   ) {
-    const isStatusBool = status !== undefined ? status === "true" : undefined;
-    return this.vehiclesService.findAll(user, clientId, {
-      search,
-      status: isStatusBool,
-      tag,
-    });
+    return this.vehiclesService.findAll(user, query.client_id, query);
   }
 
   @Post("catalog/sync")
@@ -83,6 +79,16 @@ export class VehiclesController {
     @Body() dto: ImportVehicleCatalogDto,
   ) {
     return this.vehiclesService.importCatalog(user, dto);
+  }
+
+  @Patch("bulk-status")
+  @Roles(Role.GESTOR, Role.CLIENTE)
+  @ApiOperation({ summary: "Ativa ou desativa vários veículos" })
+  bulkUpdateStatus(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: BulkUpdateVehicleStatusDto,
+  ) {
+    return this.vehiclesService.bulkUpdateStatus(user, dto);
   }
 
   @Get(":id")

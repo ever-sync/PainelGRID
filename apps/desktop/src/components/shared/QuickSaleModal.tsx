@@ -19,7 +19,11 @@ import {
   mapApiClientToClient,
 } from "../../services/clients";
 import { listEvents, type ApiEvent } from "../../services/events";
-import { listClientVehicles, type Vehicle } from "../../services/vehicles";
+import {
+  createVehicle,
+  listClientVehicles,
+  type Vehicle,
+} from "../../services/vehicles";
 import {
   createQuickSale,
   listQuickSaleBuyers,
@@ -30,6 +34,7 @@ import { listSalesTeams } from "../../services/salesTeams";
 import type { Client, User } from "../../types";
 
 const NEW_LEAD = "__new__";
+const NEW_VEHICLE = "__new_vehicle__";
 
 function localDateTimeValue() {
   const now = new Date();
@@ -62,7 +67,9 @@ export function QuickSaleModal({
   const [buyerSearch, setBuyerSearch] = useState("");
   const [buyerResultsOpen, setBuyerResultsOpen] = useState(false);
   const [vehicleId, setVehicleId] = useState("");
-  const [product, setProduct] = useState("");
+  const [newVehicleBrand, setNewVehicleBrand] = useState("");
+  const [newVehicleModel, setNewVehicleModel] = useState("");
+  const [newVehicleYearOrKm, setNewVehicleYearOrKm] = useState("");
   const [saleType, setSaleType] = useState<SaleType>("NOVO");
   const [value, setValue] = useState("");
   const [soldAt, setSoldAt] = useState(localDateTimeValue);
@@ -114,6 +121,9 @@ export function QuickSaleModal({
     setLeadId("");
     setBuyerSearch("");
     setVehicleId("");
+    setNewVehicleBrand("");
+    setNewVehicleModel("");
+    setNewVehicleYearOrKm("");
     void Promise.all([
       listEvents({ client_id: clientId }, token),
       listClientVehicles(clientId, { status: true }, token),
@@ -242,8 +252,15 @@ export function QuickSaleModal({
       setMessage("Informe nome e telefone para cadastrar o comprador.");
       return;
     }
-    if (!vehicleId && !product.trim()) {
-      setMessage("Selecione um veículo ou informe o modelo vendido.");
+    if (!vehicleId) {
+      setMessage("Selecione um veículo ou cadastre um novo carro.");
+      return;
+    }
+    if (
+      vehicleId === NEW_VEHICLE &&
+      (!newVehicleBrand.trim() || !newVehicleModel.trim())
+    ) {
+      setMessage("Informe a marca e o modelo do novo carro.");
       return;
     }
     if (selectedEvent?.require_wristband && !wristband.trim()) {
@@ -253,6 +270,26 @@ export function QuickSaleModal({
     setSaving(true);
     setMessage("");
     try {
+      let selectedVehicleId = vehicleId;
+      if (vehicleId === NEW_VEHICLE) {
+        const createdVehicle = await createVehicle(
+          {
+            client_id: clientId,
+            brand: newVehicleBrand.trim(),
+            model: newVehicleModel.trim(),
+            year_or_km: newVehicleYearOrKm.trim() || "A definir",
+            price: value,
+            stores: "Cadastrado na venda rápida",
+            status: true,
+            tags: ["Venda rápida"],
+            condition: saleType === "SEMINOVO" ? "seminovo" : "novo",
+          },
+          token,
+        );
+        selectedVehicleId = createdVehicle.id;
+        setVehicles((current) => [...current, createdVehicle]);
+        setVehicleId(createdVehicle.id);
+      }
       await createQuickSale(token, {
         client_id: clientId,
         event_id: eventId,
@@ -264,8 +301,7 @@ export function QuickSaleModal({
               lead_email: leadEmail.trim() || undefined,
             }
           : { lead_id: leadId }),
-        vehicle_id: vehicleId || undefined,
-        product: vehicleId ? undefined : product.trim(),
+        vehicle_id: selectedVehicleId,
         type: saleType,
         value,
         sold_at: new Date(soldAt).toISOString(),
@@ -456,22 +492,61 @@ export function QuickSaleModal({
               <Select
                 label="Carro"
                 value={vehicleId}
-                onValueChange={setVehicleId}
-                options={vehicles.map((vehicle) => ({
-                  value: vehicle.id,
-                  label: `${vehicle.brand} ${vehicle.model} · ${vehicle.year_or_km}`,
-                }))}
+                onValueChange={(next) => {
+                  setVehicleId(next);
+                  if (next !== NEW_VEHICLE) {
+                    setNewVehicleBrand("");
+                    setNewVehicleModel("");
+                    setNewVehicleYearOrKm("");
+                  }
+                }}
+                options={[
+                  ...vehicles.map((vehicle) => ({
+                    value: vehicle.id,
+                    label: `${vehicle.brand} ${vehicle.model} · ${vehicle.year_or_km}`,
+                  })),
+                  {
+                    value: NEW_VEHICLE,
+                    label: "+ Cadastrar carro que não está na lista",
+                  },
+                ]}
                 placeholder="Selecione do estoque"
                 disabled={loading || !clientId}
               />
-              {!vehicleId && (
-                <Input
-                  label="Ou informe o carro"
-                  value={product}
-                  onChange={(event) => setProduct(event.target.value)}
-                  placeholder="Ex.: Volkswagen T-Cross"
-                />
-              )}
+              {vehicleId === NEW_VEHICLE ? (
+                <div className="rounded-2xl border border-[#E51838]/20 bg-[#E51838]/5 p-4 md:col-span-2">
+                  <div className="mb-3 flex items-center gap-2 text-sm font-bold text-[#E51838]">
+                    <Plus size={16} />
+                    Cadastrar novo carro na vitrine
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <Input
+                      label="Marca"
+                      value={newVehicleBrand}
+                      onChange={(event) =>
+                        setNewVehicleBrand(event.target.value)
+                      }
+                      placeholder="Ex.: Volkswagen"
+                    />
+                    <Input
+                      label="Modelo"
+                      value={newVehicleModel}
+                      onChange={(event) =>
+                        setNewVehicleModel(event.target.value)
+                      }
+                      placeholder="Ex.: T-Cross Highline"
+                    />
+                    <Input
+                      label="Ano / KM (opcional)"
+                      value={newVehicleYearOrKm}
+                      onChange={(event) =>
+                        setNewVehicleYearOrKm(event.target.value)
+                      }
+                      placeholder="Ex.: 2026 / 0 km"
+                    />
+                  </div>
+                </div>
+              ) : null}
               <Select
                 label="Tipo da venda"
                 value={saleType}

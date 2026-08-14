@@ -13,6 +13,7 @@ import { CreateVehicleDto } from "./dto/create-vehicle.dto";
 import { UpdateVehicleDto } from "./dto/update-vehicle.dto";
 import { Prisma } from "@prisma/client";
 import { ImportVehicleCatalogDto } from "./dto/import-vehicle-catalog.dto";
+import { BulkUpdateVehicleStatusDto } from "./dto/bulk-update-vehicle-status.dto";
 
 type FipeBrand = { codigo: string; nome: string };
 type FipeModels = { modelos?: Array<{ codigo: number; nome: string }> };
@@ -69,7 +70,13 @@ export class VehiclesService {
   async findAll(
     user: AuthenticatedUser,
     clientId: string,
-    filters?: { search?: string; status?: boolean; tag?: string },
+    filters?: {
+      search?: string;
+      status?: boolean;
+      tag?: string;
+      page?: number;
+      take?: number;
+    },
   ) {
     await this.assertGestorClientAccess(user, clientId);
 
@@ -90,10 +97,30 @@ export class VehiclesService {
       ];
     }
 
-    return this.prisma.vehicle.findMany({
-      where,
-      orderBy: { brand: "asc" },
-    });
+    const page = Math.max(filters?.page ?? 1, 1);
+    const take = Math.min(Math.max(filters?.take ?? 50, 1), 100);
+    const skip = (page - 1) * take;
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.vehicle.findMany({
+        where,
+        orderBy: [{ brand: "asc" }, { model: "asc" }, { id: "asc" }],
+        skip,
+        take,
+      }),
+      this.prisma.vehicle.count({ where }),
+    ]);
+
+    return {
+      items,
+      page_info: {
+        page,
+        take,
+        total,
+        total_pages: Math.ceil(total / take),
+        has_next_page: skip + items.length < total,
+      },
+    };
   }
 
   private normalizeBrand(value: string) {
@@ -274,6 +301,33 @@ export class VehiclesService {
 
     await this.assertGestorClientAccess(user, vehicle.client_id);
     return vehicle;
+  }
+
+  async bulkUpdateStatus(
+    user: AuthenticatedUser,
+    dto: BulkUpdateVehicleStatusDto,
+  ) {
+    const vehicles = await this.prisma.vehicle.findMany({
+      where: { id: { in: dto.vehicle_ids } },
+      select: { id: true, client_id: true },
+    });
+    if (vehicles.length !== new Set(dto.vehicle_ids).size) {
+      throw new NotFoundException("Um ou mais veículos não foram encontrados");
+    }
+
+    const clientIds = [...new Set(vehicles.map((vehicle) => vehicle.client_id))];
+    if (clientIds.length !== 1) {
+      throw new BadRequestException(
+        "Selecione veículos pertencentes à mesma empresa.",
+      );
+    }
+    await this.assertGestorClientAccess(user, clientIds[0]);
+
+    const result = await this.prisma.vehicle.updateMany({
+      where: { id: { in: dto.vehicle_ids }, client_id: clientIds[0] },
+      data: { status: dto.status },
+    });
+    return { updated: result.count, status: dto.status };
   }
 
   async update(user: AuthenticatedUser, id: string, dto: UpdateVehicleDto) {

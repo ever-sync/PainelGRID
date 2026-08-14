@@ -79,6 +79,17 @@ export type CreateVehicleDto = {
 
 export type UpdateVehicleDto = Partial<CreateVehicleDto>;
 
+export type VehicleListResponse = {
+  items: Vehicle[];
+  page_info: {
+    page: number;
+    take: number;
+    total: number;
+    total_pages: number;
+    has_next_page: boolean;
+  };
+};
+
 const FIPE_BASE = "https://parallelum.com.br/fipe/api/v1";
 
 async function fipeFetch<T>(path: string): Promise<T> {
@@ -120,20 +131,40 @@ export async function listCarYearsByBrandAndModel(
     .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
 }
 
-export function listClientVehicles(
+export function listClientVehiclesPage(
   clientId: string,
-  params: { search?: string; status?: boolean; tag?: string },
+  params: {
+    search?: string;
+    status?: boolean;
+    tag?: string;
+    page?: number;
+    take?: number;
+  },
   token: string,
 ) {
   const qs = new URLSearchParams({ client_id: clientId });
   if (params.search) qs.append("search", params.search);
   if (params.status !== undefined) qs.append("status", String(params.status));
   if (params.tag) qs.append("tag", params.tag);
+  if (params.page) qs.append("page", String(params.page));
+  if (params.take) qs.append("take", String(params.take));
 
-  return httpRequest<Vehicle[]>(`/vehicles?${qs.toString()}`, {
+  return httpRequest<VehicleListResponse>(`/vehicles?${qs.toString()}`, {
     method: "GET",
     token,
   });
+}
+
+export function listClientVehicles(
+  clientId: string,
+  params: { search?: string; status?: boolean; tag?: string },
+  token: string,
+) {
+  return listClientVehiclesPage(
+    clientId,
+    { ...params, page: 1, take: 100 },
+    token,
+  ).then((response) => response.items);
 }
 
 export function getVehicle(id: string, token: string) {
@@ -181,6 +212,21 @@ export function updateVehicle(
     token,
     body: dto,
   });
+}
+
+export function bulkUpdateVehicleStatus(
+  vehicleIds: string[],
+  status: boolean,
+  token: string,
+) {
+  return httpRequest<{ updated: number; status: boolean }>(
+    "/vehicles/bulk-status",
+    {
+      method: "PATCH",
+      token,
+      body: { vehicle_ids: vehicleIds, status },
+    },
+  );
 }
 
 export function deleteVehicle(id: string, token: string) {

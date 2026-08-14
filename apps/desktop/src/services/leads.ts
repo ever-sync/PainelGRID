@@ -185,6 +185,16 @@ export type ListLeadsParams = {
   event_id?: string;
   unassigned_only?: boolean;
   take?: number;
+  cursor?: string;
+};
+
+export type LeadsPageResponse = {
+  items: ApiLead[];
+  page_info: {
+    take: number;
+    next_cursor: string | null;
+    has_next_page: boolean;
+  };
 };
 
 export type FetchAllLeadsOptions = {
@@ -201,6 +211,41 @@ type ApiLeadsListResponse =
       items: ApiLead[];
       page_info?: unknown;
     };
+
+export function fetchLeadsPage(
+  params: ListLeadsParams,
+  token: string,
+  signal?: AbortSignal,
+) {
+  const qs = new URLSearchParams();
+  if (params.client_id) qs.set("client_id", params.client_id);
+  if (params.source) qs.set("source", params.source);
+  if (params.confirmation_status)
+    qs.set("confirmation_status", params.confirmation_status);
+  if (params.search?.trim()) qs.set("search", params.search.trim());
+  if (params.event_id) qs.set("event_id", params.event_id);
+  if (params.unassigned_only) qs.set("unassigned_only", "true");
+  if (params.take) qs.set("take", String(params.take));
+  if (params.cursor) qs.set("cursor", params.cursor);
+
+  return httpRequest<LeadsPageResponse | ApiLead[]>(`/leads?${qs.toString()}`, {
+    method: "GET",
+    token,
+    signal,
+  }).then((payload): LeadsPageResponse => {
+    if (Array.isArray(payload)) {
+      return {
+        items: payload,
+        page_info: {
+          take: payload.length,
+          next_cursor: null,
+          has_next_page: false,
+        },
+      };
+    }
+    return payload;
+  });
+}
 
 export async function fetchAllLeads(
   params: ListLeadsParams,

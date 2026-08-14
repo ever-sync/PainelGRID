@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import clsx from "clsx";
 import {
@@ -25,7 +25,7 @@ import type { User } from "../../types";
 import { resolveClientId } from "../../utils/userContext";
 import { readStoredSession } from "../../services/auth";
 import {
-  listClientVehicles,
+  listClientVehiclesPage,
   createVehicle,
   updateVehicle,
   deleteVehicle,
@@ -69,11 +69,17 @@ export function VeiculosPage() {
   // States for vehicles showcase
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [vehiclesLoading, setVehiclesLoading] = useState(false);
+  const [vehiclesLoadingMore, setVehiclesLoadingMore] = useState(false);
+  const [vehiclesPage, setVehiclesPage] = useState(1);
+  const [vehiclesTotal, setVehiclesTotal] = useState(0);
+  const [vehiclesHasNextPage, setVehiclesHasNextPage] = useState(false);
   const [vehiclesSearch, setVehiclesSearch] = useState("");
+  const [debouncedVehiclesSearch, setDebouncedVehiclesSearch] = useState("");
   const [vehiclesStatusFilter, setVehiclesStatusFilter] = useState<
     "all" | "available" | "hidden"
   >("all");
   const [vehiclesTagFilter, setVehiclesTagFilter] = useState("all");
+  const vehiclesRequestIdRef = useRef(0);
   const [selectedVehicleIds, setSelectedVehicleIds] = useState<string[]>([]);
   const [bulkActivatingVehicles, setBulkActivatingVehicles] = useState(false);
   const [bulkVehicleMessage, setBulkVehicleMessage] = useState("");
@@ -174,19 +180,64 @@ export function VeiculosPage() {
   }, [user.id]);
 
   // Load vehicles
-  const loadVehicles = useCallback(() => {
-    if (!clientId) return;
-    const session = readStoredSession();
-    if (!session?.accessToken) return;
+  useEffect(() => {
+    const timeout = window.setTimeout(
+      () => setDebouncedVehiclesSearch(vehiclesSearch.trim()),
+      300,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [vehiclesSearch]);
 
-    setVehiclesLoading(true);
-    listClientVehicles(clientId, {}, session.accessToken)
-      .then((data) => setVehicles(data))
-      .catch((err) => {
-        console.error("Erro ao carregar veículos:", err);
-      })
-      .finally(() => setVehiclesLoading(false));
-  }, [clientId]);
+  const loadVehicles = useCallback(
+    (page = 1, append = false) => {
+      if (!clientId) return;
+      const session = readStoredSession();
+      if (!session?.accessToken) return;
+
+      const requestId = ++vehiclesRequestIdRef.current;
+      if (append) setVehiclesLoadingMore(true);
+      else setVehiclesLoading(true);
+
+      listClientVehiclesPage(
+        clientId,
+        {
+          search: debouncedVehiclesSearch || undefined,
+          status:
+            vehiclesStatusFilter === "all"
+              ? undefined
+              : vehiclesStatusFilter === "available",
+          tag: vehiclesTagFilter === "all" ? undefined : vehiclesTagFilter,
+          page,
+          take: 50,
+        },
+        session.accessToken,
+      )
+        .then((data) => {
+          if (requestId !== vehiclesRequestIdRef.current) return;
+          setVehicles((current) =>
+            append ? [...current, ...data.items] : data.items,
+          );
+          setVehiclesPage(data.page_info.page);
+          setVehiclesTotal(data.page_info.total);
+          setVehiclesHasNextPage(data.page_info.has_next_page);
+        })
+        .catch((err) => {
+          if (requestId !== vehiclesRequestIdRef.current) return;
+          console.error("Erro ao carregar veículos:", err);
+        })
+        .finally(() => {
+          if (requestId !== vehiclesRequestIdRef.current) return;
+          setVehiclesLoading(false);
+          setVehiclesLoadingMore(false);
+        });
+    },
+    [
+      clientId,
+      debouncedVehiclesSearch,
+      vehiclesStatusFilter,
+      vehiclesTagFilter,
+    ],
+  );
 
   useEffect(() => {
     loadVehicles();
@@ -501,24 +552,8 @@ export function VeiculosPage() {
   };
 
   const filteredVehicles = useMemo(() => {
-    return vehicles.filter((v) => {
-      const matchesSearch =
-        v.brand.toLowerCase().includes(vehiclesSearch.toLowerCase()) ||
-        v.model.toLowerCase().includes(vehiclesSearch.toLowerCase());
-
-      const matchesStatus =
-        vehiclesStatusFilter === "all"
-          ? true
-          : vehiclesStatusFilter === "available"
-            ? v.status === true
-            : v.status === false;
-
-      const matchesTag =
-        vehiclesTagFilter === "all" ? true : v.tags.includes(vehiclesTagFilter);
-
-      return matchesSearch && matchesStatus && matchesTag;
-    });
-  }, [vehicles, vehiclesSearch, vehiclesStatusFilter, vehiclesTagFilter]);
+    return vehicles;
+  }, [vehicles]);
 
   const allVehicleTags = useMemo(() => {
     const tagsSet = new Set<string>();
@@ -732,9 +767,9 @@ export function VeiculosPage() {
               >
                 {vehiclesLoading
                   ? "Carregando veículos..."
-                  : filteredVehicles.length === 1
+                  : vehiclesTotal === 1
                     ? "1 veículo encontrado"
-                    : `${filteredVehicles.length} veículos encontrados`}
+                    : `${vehiclesTotal} veículos encontrados`}
               </p>
             </div>
           </div>
@@ -893,226 +928,269 @@ export function VeiculosPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr
-                  className={clsx(
-                    "border-b text-left text-xs font-medium",
-                    isDarkMode
-                      ? "border-zinc-800 bg-zinc-900/30 text-zinc-400"
-                      : "border-gray-100 bg-gray-50 text-gray-500",
-                  )}
-                >
-                  <th className="px-4 py-3">Marca</th>
-                  <th className="px-4 py-3">Modelo</th>
-                  <th className="px-4 py-3">Categoria</th>
-                  <th className="px-4 py-3">Ano</th>
-                  <th className="px-4 py-3">KM</th>
-                  <th className="px-4 py-3">Condição</th>
-                  <th className="px-4 py-3">Valor</th>
-                  <th className="px-4 py-3">Lojas</th>
-                  <th className="px-4 py-3">Tags</th>
-                  <th className="px-4 py-3">Disponível</th>
-                  <th className="px-4 py-3 text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody
-                className={clsx(
-                  "divide-y",
-                  isDarkMode ? "divide-zinc-800" : "divide-gray-50",
-                )}
-              >
-                {filteredVehicles.map((vehicle) => (
+          <div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
                   <tr
-                    key={vehicle.id}
                     className={clsx(
-                      "transition-colors",
+                      "border-b text-left text-xs font-medium",
                       isDarkMode
-                        ? "hover:bg-zinc-900/20"
-                        : "hover:bg-gray-50/60",
+                        ? "border-zinc-800 bg-zinc-900/30 text-zinc-400"
+                        : "border-gray-100 bg-gray-50 text-gray-500",
                     )}
                   >
-                    <td
+                    <th className="w-10 px-4 py-3">
+                      <span className="sr-only">Selecionar</span>
+                    </th>
+                    <th className="px-4 py-3">Marca</th>
+                    <th className="px-4 py-3">Modelo</th>
+                    <th className="px-4 py-3">Categoria</th>
+                    <th className="px-4 py-3">Ano</th>
+                    <th className="px-4 py-3">KM</th>
+                    <th className="px-4 py-3">Condição</th>
+                    <th className="px-4 py-3">Valor</th>
+                    <th className="px-4 py-3">Lojas</th>
+                    <th className="px-4 py-3">Tags</th>
+                    <th className="px-4 py-3">Disponível</th>
+                    <th className="px-4 py-3 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody
+                  className={clsx(
+                    "divide-y",
+                    isDarkMode ? "divide-zinc-800" : "divide-gray-50",
+                  )}
+                >
+                  {filteredVehicles.map((vehicle) => (
+                    <tr
+                      key={vehicle.id}
                       className={clsx(
-                        "px-4 py-3 font-semibold",
-                        isDarkMode ? "text-zinc-200" : "text-gray-900",
+                        "transition-colors",
+                        isDarkMode
+                          ? "hover:bg-zinc-900/20"
+                          : "hover:bg-gray-50/60",
                       )}
                     >
-                      <div className="flex items-center gap-3">
-                        {vehicle.image_url ? (
-                          <img
-                            src={vehicle.image_url}
-                            alt={`${vehicle.brand} ${vehicle.model}`}
-                            className="h-10 w-14 rounded-lg object-cover bg-gray-100 dark:bg-zinc-800 border dark:border-zinc-700 shadow-sm shrink-0"
-                          />
-                        ) : (
-                          <div
-                            className={clsx(
-                              "flex h-10 w-14 items-center justify-center rounded-lg border shadow-sm shrink-0",
-                              isDarkMode
-                                ? "bg-zinc-800 border-zinc-700 text-zinc-400"
-                                : "bg-gray-50 border-gray-100 text-gray-400",
-                            )}
-                          >
-                            <Car size={16} />
-                          </div>
-                        )}
-                        <span>{vehicle.brand}</span>
-                      </div>
-                    </td>
-                    <td
-                      className={clsx(
-                        "px-4 py-3 font-medium",
-                        isDarkMode ? "text-zinc-300" : "text-gray-700",
-                      )}
-                    >
-                      {vehicle.model}
-                    </td>
-                    <td
-                      className={clsx(
-                        "px-4 py-3 font-medium",
-                        isDarkMode ? "text-zinc-350" : "text-gray-600",
-                      )}
-                    >
-                      {vehicle.category || (
-                        <span className="text-gray-400 text-xs">-</span>
-                      )}
-                    </td>
-                    <td
-                      className={clsx(
-                        "px-4 py-3",
-                        isDarkMode ? "text-zinc-400" : "text-gray-600",
-                      )}
-                    >
-                      {vehicle.manufacturing_year && vehicle.model_year
-                        ? `${vehicle.manufacturing_year}/${vehicle.model_year}`
-                        : vehicle.model_year ||
-                          vehicle.manufacturing_year ||
-                          vehicle.year_or_km?.split("-")[0]?.trim() ||
-                          "-"}
-                    </td>
-                    <td
-                      className={clsx(
-                        "px-4 py-3",
-                        isDarkMode ? "text-zinc-400" : "text-gray-600",
-                      )}
-                    >
-                      {vehicle.condition === "novo"
-                        ? "0 km"
-                        : vehicle.km
-                          ? `${formatKM(vehicle.km)} km`
-                          : vehicle.year_or_km?.includes("km")
-                            ? vehicle.year_or_km.split("-")[1]?.trim() ||
-                              vehicle.year_or_km
-                            : "-"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {vehicle.condition === "novo" ? (
-                        <Badge variant="green">Novo</Badge>
-                      ) : vehicle.condition === "seminovo" ? (
-                        <Badge variant="gray">Seminovo</Badge>
-                      ) : vehicle.year_or_km?.toLowerCase().includes("novo") ? (
-                        <Badge variant="green">Novo</Badge>
-                      ) : (
-                        <span className="text-zinc-500 dark:text-zinc-400 text-xs">
-                          -
-                        </span>
-                      )}
-                    </td>
-                    <td
-                      className={clsx(
-                        "px-4 py-3 font-medium text-emerald-600",
-                        isDarkMode && "text-emerald-400",
-                      )}
-                    >
-                      {new Intl.NumberFormat("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      }).format(parseFloat(vehicle.price) || 0)}
-                    </td>
-                    <td
-                      className={clsx(
-                        "px-4 py-3",
-                        isDarkMode ? "text-zinc-400" : "text-gray-600",
-                      )}
-                    >
-                      {vehicle.stores}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {vehicle.tags &&
-                          vehicle.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className={clsx(
-                                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition",
-                                isDarkMode
-                                  ? "bg-zinc-850 text-zinc-300"
-                                  : "bg-gray-100 text-gray-600",
-                              )}
-                            >
-                              <Tag size={8} />
-                              {tag}
-                            </span>
-                          ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => void handleToggleVehicleStatus(vehicle)}
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          aria-label={`Selecionar ${vehicle.brand} ${vehicle.model}`}
+                          checked={selectedVehicleIds.includes(vehicle.id)}
+                          onChange={(event) =>
+                            setSelectedVehicleIds((current) =>
+                              event.target.checked
+                                ? [...new Set([...current, vehicle.id])]
+                                : current.filter((id) => id !== vehicle.id),
+                            )
+                          }
+                          className="h-4 w-4 rounded border-gray-300 accent-[#E51838]"
+                        />
+                      </td>
+                      <td
                         className={clsx(
-                          "relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
-                          vehicle.status
-                            ? "bg-[#E51838]"
-                            : isDarkMode
-                              ? "bg-zinc-700"
-                              : "bg-gray-200",
+                          "px-4 py-3 font-semibold",
+                          isDarkMode ? "text-zinc-200" : "text-gray-900",
                         )}
                       >
-                        <span
-                          className={clsx(
-                            "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-                            vehicle.status ? "translate-x-4" : "translate-x-0",
+                        <div className="flex items-center gap-3">
+                          {vehicle.image_url ? (
+                            <img
+                              src={vehicle.image_url}
+                              alt={`${vehicle.brand} ${vehicle.model}`}
+                              className="h-10 w-14 rounded-lg object-cover bg-gray-100 dark:bg-zinc-800 border dark:border-zinc-700 shadow-sm shrink-0"
+                            />
+                          ) : (
+                            <div
+                              className={clsx(
+                                "flex h-10 w-14 items-center justify-center rounded-lg border shadow-sm shrink-0",
+                                isDarkMode
+                                  ? "bg-zinc-800 border-zinc-700 text-zinc-400"
+                                  : "bg-gray-50 border-gray-100 text-gray-400",
+                              )}
+                            >
+                              <Car size={16} />
+                            </div>
                           )}
-                        />
-                      </button>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-1.5">
+                          <span>{vehicle.brand}</span>
+                        </div>
+                      </td>
+                      <td
+                        className={clsx(
+                          "px-4 py-3 font-medium",
+                          isDarkMode ? "text-zinc-300" : "text-gray-700",
+                        )}
+                      >
+                        {vehicle.model}
+                      </td>
+                      <td
+                        className={clsx(
+                          "px-4 py-3 font-medium",
+                          isDarkMode ? "text-zinc-350" : "text-gray-600",
+                        )}
+                      >
+                        {vehicle.category || (
+                          <span className="text-gray-400 text-xs">-</span>
+                        )}
+                      </td>
+                      <td
+                        className={clsx(
+                          "px-4 py-3",
+                          isDarkMode ? "text-zinc-400" : "text-gray-600",
+                        )}
+                      >
+                        {vehicle.manufacturing_year && vehicle.model_year
+                          ? `${vehicle.manufacturing_year}/${vehicle.model_year}`
+                          : vehicle.model_year ||
+                            vehicle.manufacturing_year ||
+                            vehicle.year_or_km?.split("-")[0]?.trim() ||
+                            "-"}
+                      </td>
+                      <td
+                        className={clsx(
+                          "px-4 py-3",
+                          isDarkMode ? "text-zinc-400" : "text-gray-600",
+                        )}
+                      >
+                        {vehicle.condition === "novo"
+                          ? "0 km"
+                          : vehicle.km
+                            ? `${formatKM(vehicle.km)} km`
+                            : vehicle.year_or_km?.includes("km")
+                              ? vehicle.year_or_km.split("-")[1]?.trim() ||
+                                vehicle.year_or_km
+                              : "-"}
+                      </td>
+                      <td className="px-4 py-3">
+                        {vehicle.condition === "novo" ? (
+                          <Badge variant="green">Novo</Badge>
+                        ) : vehicle.condition === "seminovo" ? (
+                          <Badge variant="gray">Seminovo</Badge>
+                        ) : vehicle.year_or_km
+                            ?.toLowerCase()
+                            .includes("novo") ? (
+                          <Badge variant="green">Novo</Badge>
+                        ) : (
+                          <span className="text-zinc-500 dark:text-zinc-400 text-xs">
+                            -
+                          </span>
+                        )}
+                      </td>
+                      <td
+                        className={clsx(
+                          "px-4 py-3 font-medium text-emerald-600",
+                          isDarkMode && "text-emerald-400",
+                        )}
+                      >
+                        {new Intl.NumberFormat("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        }).format(parseFloat(vehicle.price) || 0)}
+                      </td>
+                      <td
+                        className={clsx(
+                          "px-4 py-3",
+                          isDarkMode ? "text-zinc-400" : "text-gray-600",
+                        )}
+                      >
+                        {vehicle.stores}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {vehicle.tags &&
+                            vehicle.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className={clsx(
+                                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition",
+                                  isDarkMode
+                                    ? "bg-zinc-850 text-zinc-300"
+                                    : "bg-gray-100 text-gray-600",
+                                )}
+                              >
+                                <Tag size={8} />
+                                {tag}
+                              </span>
+                            ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
                         <button
                           type="button"
-                          title="Editar veículo"
-                          onClick={() => openEditVehicleModal(vehicle)}
+                          onClick={() =>
+                            void handleToggleVehicleStatus(vehicle)
+                          }
                           className={clsx(
-                            "rounded-lg p-1.5 transition-colors",
-                            isDarkMode
-                              ? "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-                              : "text-gray-500 hover:bg-gray-100 hover:text-gray-700",
+                            "relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                            vehicle.status
+                              ? "bg-[#E51838]"
+                              : isDarkMode
+                                ? "bg-zinc-700"
+                                : "bg-gray-200",
                           )}
                         >
-                          <Pencil size={14} />
+                          <span
+                            className={clsx(
+                              "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                              vehicle.status
+                                ? "translate-x-4"
+                                : "translate-x-0",
+                            )}
+                          />
                         </button>
-                        <button
-                          type="button"
-                          title="Excluir veículo"
-                          onClick={() => setVehicleToDelete(vehicle)}
-                          className={clsx(
-                            "rounded-lg p-1.5 transition-colors",
-                            isDarkMode
-                              ? "text-zinc-400 hover:bg-zinc-800 hover:text-red-400"
-                              : "text-gray-500 hover:bg-red-50 hover:text-[#E51838]",
-                          )}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            type="button"
+                            title="Editar veículo"
+                            onClick={() => openEditVehicleModal(vehicle)}
+                            className={clsx(
+                              "rounded-lg p-1.5 transition-colors",
+                              isDarkMode
+                                ? "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                                : "text-gray-500 hover:bg-gray-100 hover:text-gray-700",
+                            )}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Excluir veículo"
+                            onClick={() => setVehicleToDelete(vehicle)}
+                            className={clsx(
+                              "rounded-lg p-1.5 transition-colors",
+                              isDarkMode
+                                ? "text-zinc-400 hover:bg-zinc-800 hover:text-red-400"
+                                : "text-gray-500 hover:bg-red-50 hover:text-[#E51838]",
+                            )}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {vehiclesHasNextPage && (
+              <div
+                className={clsx(
+                  "flex justify-center border-t px-4 py-4",
+                  isDarkMode ? "border-zinc-800" : "border-gray-100",
+                )}
+              >
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={vehiclesLoadingMore}
+                  onClick={() => loadVehicles(vehiclesPage + 1, true)}
+                >
+                  Carregar mais veículos
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </Card>

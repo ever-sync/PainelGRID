@@ -52,8 +52,9 @@ export function FilaPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [finishingLead, setFinishingLead] =
-    useState<ReceptionQueueLead | null>(null);
+  const [finishingLead, setFinishingLead] = useState<ReceptionQueueLead | null>(
+    null,
+  );
   const [finishingVendorId, setFinishingVendorId] = useState("");
   const [finishingSold, setFinishingSold] = useState<"yes" | "no" | "">("");
   const [finishing, setFinishing] = useState(false);
@@ -226,9 +227,8 @@ export function FilaPage() {
       ...vendor,
       activeLeadName:
         vendor.operational_status === "busy"
-          ? activeService.find(
-              (lead) => lead.assigned_vendor_id === vendor.id,
-            )?.name ?? null
+          ? (activeService.find((lead) => lead.assigned_vendor_id === vendor.id)
+              ?.name ?? null)
           : null,
     }));
   }, [activeService, vendors]);
