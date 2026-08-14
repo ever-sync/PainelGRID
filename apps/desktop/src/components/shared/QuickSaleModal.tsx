@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Plus, ShoppingCart } from "lucide-react";
+import {
+  Check,
+  CheckCircle2,
+  Plus,
+  Search,
+  ShoppingCart,
+  UserPlus,
+} from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { Input } from "../ui/Input";
 import { Select } from "../ui/Select";
@@ -33,6 +40,7 @@ export function QuickSaleModal({
   const [events, setEvents] = useState<ApiEvent[]>([]);
   const [vendors, setVendors] = useState<User[]>([]);
   const [leads, setLeads] = useState<ApiLead[]>([]);
+  const [initialLeads, setInitialLeads] = useState<ApiLead[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [clientId, setClientId] = useState("");
   const [eventId, setEventId] = useState("");
@@ -41,6 +49,8 @@ export function QuickSaleModal({
   const [leadName, setLeadName] = useState("");
   const [leadPhone, setLeadPhone] = useState("");
   const [leadEmail, setLeadEmail] = useState("");
+  const [buyerSearch, setBuyerSearch] = useState("");
+  const [buyerResultsOpen, setBuyerResultsOpen] = useState(false);
   const [vehicleId, setVehicleId] = useState("");
   const [product, setProduct] = useState("");
   const [saleType, setSaleType] = useState<SaleType>("NOVO");
@@ -87,6 +97,7 @@ export function QuickSaleModal({
     setEventId("");
     setVendorId("");
     setLeadId("");
+    setBuyerSearch("");
     setVehicleId("");
     void Promise.all([
       listEvents({ client_id: clientId }, token),
@@ -97,6 +108,7 @@ export function QuickSaleModal({
         setEvents(eventRows);
         setVendors([]);
         setLeads(leadRows);
+        setInitialLeads(leadRows);
         setVehicles(vehicleRows);
       })
       .catch((error) =>
@@ -142,6 +154,43 @@ export function QuickSaleModal({
     () => events.map((event) => ({ value: event.id, label: event.name })),
     [events],
   );
+
+  useEffect(() => {
+    const query = buyerSearch.trim();
+    if (!open || !clientId || !query || leadId === NEW_LEAD) return;
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+
+    let active = true;
+    const timeout = window.setTimeout(() => {
+      void listLeads({ client_id: clientId, search: query, take: 100 }, token)
+        .then((rows) => {
+          if (active) setLeads(rows);
+        })
+        .catch(() => undefined);
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [buyerSearch, clientId, leadId, open]);
+
+  const sortedBuyerResults = useMemo(() => {
+    const query = buyerSearch.trim().toLocaleLowerCase("pt-BR");
+    const source = query ? leads : initialLeads;
+    return [...source]
+      .filter((lead) => {
+        if (!query) return true;
+        return `${lead.name} ${lead.phone ?? ""} ${lead.email ?? ""}`
+          .toLocaleLowerCase("pt-BR")
+          .includes(query);
+      })
+      .sort((a, b) =>
+        a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),
+      )
+      .slice(0, 100);
+  }, [buyerSearch, initialLeads, leads]);
 
   async function submit() {
     const token = readStoredSession()?.accessToken;
@@ -260,20 +309,94 @@ export function QuickSaleModal({
                 placeholder="Selecione o vendedor"
                 disabled={loading || !clientId}
               />
-              <Select
-                label="Comprador"
-                value={leadId}
-                onValueChange={setLeadId}
-                options={[
-                  { value: NEW_LEAD, label: "+ Cadastrar novo comprador" },
-                  ...leads.map((lead) => ({
-                    value: lead.id,
-                    label: `${lead.name}${lead.phone ? ` · ${lead.phone}` : ""}`,
-                  })),
-                ]}
-                placeholder="Localize ou cadastre"
-                disabled={loading || !clientId}
-              />
+              <div className="relative flex flex-col gap-1">
+                <label
+                  htmlFor="quick-sale-buyer"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Comprador
+                </label>
+                <div className="relative">
+                  <Search
+                    size={16}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  />
+                  <input
+                    id="quick-sale-buyer"
+                    value={buyerSearch}
+                    disabled={loading || !clientId}
+                    autoComplete="off"
+                    placeholder="Digite o nome ou telefone"
+                    onFocus={() => setBuyerResultsOpen(true)}
+                    onBlur={() =>
+                      window.setTimeout(() => setBuyerResultsOpen(false), 150)
+                    }
+                    onChange={(event) => {
+                      setBuyerSearch(event.target.value);
+                      setLeadId("");
+                      setBuyerResultsOpen(true);
+                    }}
+                    className="h-9 w-full rounded-2xl border border-input bg-background py-2 pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </div>
+
+                {buyerResultsOpen && !loading && clientId && (
+                  <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-y-auto rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-2xl">
+                    <button
+                      type="button"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setLeadId(NEW_LEAD);
+                        setBuyerSearch("");
+                        setBuyerResultsOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-[#E51838] transition hover:bg-muted"
+                    >
+                      <UserPlus size={16} />
+                      Cadastrar novo comprador
+                    </button>
+
+                    {sortedBuyerResults.map((lead) => (
+                      <button
+                        key={lead.id}
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setLeadId(lead.id);
+                          setBuyerSearch(
+                            `${lead.name}${lead.phone ? ` · ${lead.phone}` : ""}`,
+                          );
+                          setBuyerResultsOpen(false);
+                        }}
+                        className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition hover:bg-muted"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate font-semibold">
+                            {lead.name}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {lead.phone ||
+                              lead.email ||
+                              "Sem contato informado"}
+                          </span>
+                        </span>
+                        {leadId === lead.id && (
+                          <Check
+                            size={16}
+                            className="shrink-0 text-[#E51838]"
+                          />
+                        )}
+                      </button>
+                    ))}
+
+                    {sortedBuyerResults.length === 0 && (
+                      <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+                        Nenhum comprador encontrado.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {creatingLead && (
