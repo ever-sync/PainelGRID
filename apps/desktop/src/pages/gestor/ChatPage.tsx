@@ -886,44 +886,63 @@ export function ChatPage({ clientMode = false }: { clientMode?: boolean }) {
     }
 
     const lead = leadsById.get(requestedLeadId);
-    if (lead) {
-      if (!token) return;
-      requestedLeadHandledRef.current = requestKey;
-      void ensureConversation(
-        effectiveClientId,
-        requestedLeadId,
+    if (!token) return;
+    requestedLeadHandledRef.current = requestKey;
+
+    const ensureAndOpenRequestedLead = (requestedLead: Lead) => {
+      const clientId = requestedLead.client_id || effectiveClientId;
+      if (!clientId) {
+        return Promise.reject(new Error("Cliente do lead não identificado."));
+      }
+
+      return ensureConversation(
+        clientId,
+        requestedLead.id,
         token,
         "whatsapp",
-      )
-        .then((row) => {
-          const ensured = conversationFromListRow(row);
-          setConversations((current) => {
-            const existing = current.find(
-              (conversation) => conversation.id === ensured.id,
+      ).then((row) => {
+        const ensured = conversationFromListRow(row);
+        setConversations((current) => {
+          const existing = current.find(
+            (conversation) => conversation.id === ensured.id,
+          );
+          if (existing) {
+            return current.map((conversation) =>
+              conversation.id === ensured.id
+                ? {
+                    ...ensured,
+                    messages: existing.messages,
+                    unread_count: existing.unread_count,
+                  }
+                : conversation,
             );
-            if (existing) {
-              return current.map((conversation) =>
-                conversation.id === ensured.id
-                  ? {
-                      ...ensured,
-                      messages: existing.messages,
-                      unread_count: existing.unread_count,
-                    }
-                  : conversation,
-              );
-            }
-            return [ensured, ...current];
-          });
-          openConversation(ensured.id);
-          setSearch("");
-          setViewFilter("all");
-        })
-        .catch(() => {
-          requestedLeadHandledRef.current = "";
-          setSearch(lead.name);
-          setViewFilter("whatsapp");
+          }
+          return [ensured, ...current];
         });
-    }
+        openConversation(ensured.id);
+        setSearch("");
+        setViewFilter("all");
+      });
+    };
+
+    const requestedLeadPromise = lead
+      ? Promise.resolve(lead)
+      : getLead(requestedLeadId, token).then((row) => {
+          const mapped = mapApiLeadToLead(row);
+          setLeads((current) => {
+            if (current.some((currentLead) => currentLead.id === mapped.id)) {
+              return current;
+            }
+            return [mapped, ...current];
+          });
+          return mapped;
+        });
+
+    void requestedLeadPromise.then(ensureAndOpenRequestedLead).catch(() => {
+      requestedLeadHandledRef.current = "";
+      if (lead) setSearch(lead.name);
+      setViewFilter("whatsapp");
+    });
   }, [
     conversationsByLeadId,
     leadsById,
