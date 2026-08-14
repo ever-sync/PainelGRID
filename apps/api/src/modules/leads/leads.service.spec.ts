@@ -29,9 +29,14 @@ describe("LeadsService", () => {
     crmPipeline: { findFirst: jest.Mock };
     crmHistory: { create: jest.Mock; deleteMany: jest.Mock };
     event: { findFirst: jest.Mock };
-    user: { findFirst: jest.Mock; findUnique: jest.Mock };
-    vendorAttendance: { findFirst: jest.Mock; update: jest.Mock };
-    vendorAvailability: { upsert: jest.Mock };
+    user: { findMany: jest.Mock; findFirst: jest.Mock; findUnique: jest.Mock };
+    vendorAttendance: {
+      findMany: jest.Mock;
+      findFirst: jest.Mock;
+      update: jest.Mock;
+      updateMany: jest.Mock;
+    };
+    vendorAvailability: { upsert: jest.Mock; updateMany: jest.Mock };
     salesTeamMember: { findFirst: jest.Mock };
     metaAssetSelection: { findMany: jest.Mock; findFirst: jest.Mock };
     metaLeadRoutingRule: { findMany: jest.Mock };
@@ -79,6 +84,8 @@ describe("LeadsService", () => {
     emitVendorAttendanceUpdated: jest.Mock;
     emitVendorAvailabilityChanged: jest.Mock;
     emitNewMessage: jest.Mock;
+    getOnlineUserIds: jest.Mock;
+    isUserOnline: jest.Mock;
   };
   let leadTimeline: { record: jest.Mock; originFromSource: jest.Mock };
   let metaService: {
@@ -105,12 +112,18 @@ describe("LeadsService", () => {
       crmPipeline: { findFirst: jest.fn() },
       crmHistory: { create: jest.fn(), deleteMany: jest.fn() },
       event: { findFirst: jest.fn() },
-      user: { findFirst: jest.fn(), findUnique: jest.fn() },
+      user: {
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+      },
       vendorAttendance: {
+        findMany: jest.fn(),
         findFirst: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
       },
-      vendorAvailability: { upsert: jest.fn() },
+      vendorAvailability: { upsert: jest.fn(), updateMany: jest.fn() },
       salesTeamMember: { findFirst: jest.fn() },
       metaAssetSelection: { findMany: jest.fn(), findFirst: jest.fn() },
       metaLeadRoutingRule: { findMany: jest.fn() },
@@ -159,9 +172,13 @@ describe("LeadsService", () => {
     prisma.crmHistory.deleteMany.mockResolvedValue({ count: 0 });
     prisma.event.findFirst.mockResolvedValue(null);
     prisma.user.findUnique.mockResolvedValue({ id: gestorId });
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.vendorAttendance.findMany.mockResolvedValue([]);
     prisma.vendorAttendance.findFirst.mockResolvedValue(null);
     prisma.vendorAttendance.update.mockResolvedValue({});
+    prisma.vendorAttendance.updateMany.mockResolvedValue({ count: 0 });
     prisma.vendorAvailability.upsert.mockResolvedValue({});
+    prisma.vendorAvailability.updateMany.mockResolvedValue({ count: 0 });
     prisma.metaAssetSelection.findMany.mockResolvedValue([
       {
         form_id: "27515534804767924",
@@ -225,6 +242,8 @@ describe("LeadsService", () => {
       emitVendorAttendanceUpdated: jest.fn(),
       emitVendorAvailabilityChanged: jest.fn(),
       emitNewMessage: jest.fn(),
+      getOnlineUserIds: jest.fn().mockReturnValue([]),
+      isUserOnline: jest.fn().mockReturnValue(false),
     };
     leadTimeline = {
       record: jest.fn().mockResolvedValue(undefined),
@@ -271,6 +290,44 @@ describe("LeadsService", () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it("mantem elegivel o vendedor ONLINE mesmo sem socket conectado", async () => {
+    prisma.user.findMany.mockResolvedValue([
+      {
+        id: vendorId,
+        name: "Vendedor online",
+        vendor_availability: { status: "online", last_assigned_at: null },
+        sales_team_memberships: [],
+      },
+      {
+        id: "vendor-away",
+        name: "Vendedor ausente",
+        vendor_availability: { status: "away", last_assigned_at: null },
+        sales_team_memberships: [],
+      },
+    ]);
+
+    const result = await service.listVendorAvailability({
+      sub: gestorId,
+      role: Role.CLIENTE,
+      client_id: clientId,
+    } as never);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: vendorId,
+        connected: false,
+        operational_status: "online",
+        eligible: true,
+      }),
+      expect.objectContaining({
+        id: "vendor-away",
+        connected: false,
+        operational_status: "away",
+        eligible: false,
+      }),
+    ]);
   });
 
   it("carrega a fila da recepcao em uma consulta enxuta de leads", async () => {

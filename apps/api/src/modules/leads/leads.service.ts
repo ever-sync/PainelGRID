@@ -4648,7 +4648,9 @@ export class LeadsService {
         team_name: vendor.sales_team_memberships[0]?.team.name ?? null,
         connected,
         operational_status,
-        eligible: connected && operational_status === "online",
+        // ONLINE é uma decisão persistente do vendedor. Fechar ou bloquear o
+        // celular não deve removê-lo da fila de atendimento.
+        eligible: operational_status === "online",
         last_assigned_at: vendor.vendor_availability?.last_assigned_at ?? null,
       };
     });
@@ -4717,7 +4719,6 @@ export class LeadsService {
     await this.assertLeadAccess(user, lead);
 
     await this.expireStaleVendorAttendances(lead.client_id);
-    const connectedIds = this.realtimeEvents.getOnlineUserIds(lead.client_id);
     const requestedVendorId =
       dto.vendor_id ??
       (dto.mode === VendorCallMode.MANUAL ? lead.assigned_vendor_id : null);
@@ -4726,13 +4727,7 @@ export class LeadsService {
         client_id: lead.client_id,
         role: Role.VENDEDOR,
         is_active: true,
-        id: requestedVendorId
-          ? requestedVendorId
-          : {
-              in: connectedIds.length
-                ? connectedIds
-                : ["00000000-0000-0000-0000-000000000000"],
-            },
+        id: requestedVendorId ?? undefined,
         OR: [
           { vendor_availability: null },
           { vendor_availability: { status: "online" } },
@@ -4752,11 +4747,9 @@ export class LeadsService {
         { id: "asc" },
       ],
     });
-    const vendor = candidates.find((candidate) =>
-      this.realtimeEvents.isUserOnline(lead.client_id, candidate.id),
-    );
+    const vendor = candidates[0];
     if (!vendor) {
-      throw new BadRequestException("Nenhum vendedor online e disponível");
+      throw new BadRequestException("Nenhum vendedor disponível");
     }
 
     const now = new Date();

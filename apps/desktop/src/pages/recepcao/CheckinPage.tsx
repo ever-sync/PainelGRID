@@ -165,10 +165,6 @@ export function CheckinPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [, setScannerTab] = useState<"qr" | "manual">("qr");
-  const [onlineVendorIds, setOnlineVendorIds] = useState<string[]>([]);
-  const [vendorStatuses, setVendorStatuses] = useState<
-    Record<string, "online" | "away" | "offline">
-  >({});
   const [scannerKey, setScannerKey] = useState(0);
   const [quickCheckinLead, setQuickCheckinLead] = useState<Lead | null>(null);
   const [quickCheckinVendorId, setQuickCheckinVendorId] =
@@ -230,29 +226,11 @@ export function CheckinPage() {
     refreshCheckinData();
   }, [refreshCheckinData]);
 
-  useLeadRealtimeSync(clientId, refreshCheckinData, {
-    onOnlineVendors: setOnlineVendorIds,
-  });
+  useLeadRealtimeSync(clientId, refreshCheckinData);
 
   useEffect(() => {
     if (!clientId) return;
     const socket = connectRealtime(clientId);
-    const handleStatusChange = (data: {
-      vendor_id: string;
-      status: "online" | "away" | "offline";
-    }) => {
-      if (data?.vendor_id && data?.status) {
-        setVendorStatuses((prev) => ({
-          ...prev,
-          [data.vendor_id]: data.status,
-        }));
-        try {
-          localStorage.setItem(`vendor_status_${data.vendor_id}`, data.status);
-        } catch {
-          /* ignore */
-        }
-      }
-    };
     const handleAvailabilityChange = () => {
       const token = readStoredSession()?.accessToken;
       if (!token) return;
@@ -260,11 +238,9 @@ export function CheckinPage() {
         .then(setVendorAvailability)
         .catch(() => setVendorAvailability([]));
     };
-    socket.on("vendor_status_change", handleStatusChange);
     socket.on("vendor_availability_changed", handleAvailabilityChange);
     socket.on("vendor_attendance_updated", handleAvailabilityChange);
     return () => {
-      socket.off("vendor_status_change", handleStatusChange);
       socket.off("vendor_availability_changed", handleAvailabilityChange);
       socket.off("vendor_attendance_updated", handleAvailabilityChange);
       socket.disconnect();
@@ -879,8 +855,13 @@ export function CheckinPage() {
       </div>
 
       {(() => {
-        const onlineStaff = staffList.filter((s) =>
-          onlineVendorIds.includes(s.id),
+        const availableIds = new Set(
+          vendorAvailability
+            .filter((vendor) => vendor.eligible)
+            .map((vendor) => vendor.id),
+        );
+        const onlineStaff = staffList.filter((staff) =>
+          availableIds.has(staff.id),
         );
         return (
           <div
@@ -1099,19 +1080,14 @@ export function CheckinPage() {
 
                         {(() => {
                           const vId = lead.assigned_vendor_id!;
-                          const storedStatus =
-                            vendorStatuses[vId] ||
-                            (localStorage.getItem(`vendor_status_${vId}`) as
-                              "online" | "away" | "offline" | null);
-                          const isOnlineNetwork = onlineVendorIds.includes(vId);
-
-                          const finalStatus =
-                            storedStatus === "offline" ||
-                            (!isOnlineNetwork && storedStatus !== "away")
-                              ? "offline"
-                              : storedStatus === "away"
-                                ? "away"
-                                : "online";
+                          const availability = vendorAvailability.find(
+                            (vendor) => vendor.id === vId,
+                          );
+                          const finalStatus = !availability
+                            ? "offline"
+                            : availability.operational_status === "away"
+                              ? "away"
+                              : "online";
 
                           if (finalStatus === "offline") {
                             return (
