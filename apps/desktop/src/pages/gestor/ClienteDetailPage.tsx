@@ -153,6 +153,8 @@ import {
   deleteVehicle,
   listCarBrands,
   listCarModelsByBrand,
+  syncVehicleCatalog,
+  importVehicleCatalog,
   type Vehicle,
   type VehicleOption,
 } from "../../services/vehicles";
@@ -232,6 +234,10 @@ export function ClienteDetailPage() {
     "all" | "available" | "hidden"
   >("all");
   const [vehiclesTagFilter, setVehiclesTagFilter] = useState("all");
+  const [automaticVehicleImporting, setAutomaticVehicleImporting] =
+    useState(false);
+  const [automaticVehicleImportMessage, setAutomaticVehicleImportMessage] =
+    useState("");
 
   // Form/Modal states for vehicles
   const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
@@ -1121,6 +1127,50 @@ export function ClienteDetailPage() {
       })
       .finally(() => setVehiclesLoading(false));
   }, [resolvedId]);
+
+  const handleAutomaticVehicleImport = useCallback(async () => {
+    const session = readStoredSession();
+    if (!session?.accessToken || !isUuid(resolvedId)) return;
+
+    setAutomaticVehicleImporting(true);
+    setAutomaticVehicleImportMessage("");
+
+    try {
+      const catalog = await syncVehicleCatalog(
+        resolvedId,
+        session.accessToken,
+      );
+      const pendingCatalogIds = catalog.items
+        .filter((item) => !item.imported)
+        .map((item) => item.id);
+
+      if (pendingCatalogIds.length === 0) {
+        setAutomaticVehicleImportMessage(
+          `Todos os modelos ${catalog.brand} já estão na vitrine.`,
+        );
+        return;
+      }
+
+      const result = await importVehicleCatalog(
+        resolvedId,
+        pendingCatalogIds,
+        session.accessToken,
+      );
+      setAutomaticVehicleImportMessage(
+        `${result.imported} modelos ${catalog.brand} importados com sucesso.`,
+      );
+      loadVehicles();
+    } catch (error) {
+      setAutomaticVehicleImportMessage(
+        getErrorMessage(
+          error,
+          "Não foi possível importar os veículos automaticamente.",
+        ),
+      );
+    } finally {
+      setAutomaticVehicleImporting(false);
+    }
+  }, [loadVehicles, resolvedId]);
 
   useEffect(() => {
     if (activeTab === "veiculos") {
@@ -5193,6 +5243,15 @@ export function ClienteDetailPage() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button
+                  onClick={() => void handleAutomaticVehicleImport()}
+                  loading={automaticVehicleImporting}
+                  className="bg-[#E51838] text-white transition-colors hover:bg-[#c01530]"
+                  size="sm"
+                  icon={<Sparkles size={14} />}
+                >
+                  Importar automático
+                </Button>
+                <Button
                   onClick={() => {
                     setEditingVehicleId(null);
                     setVehicleBrand("");
@@ -5210,7 +5269,7 @@ export function ClienteDetailPage() {
                     setUploadError("");
                     setIsVehicleModalOpen(true);
                   }}
-                  className="bg-[#E51838] text-white hover:bg-[#c01530] transition-colors"
+                  variant="secondary"
                   size="sm"
                   icon={<Plus size={14} />}
                 >
@@ -5218,6 +5277,24 @@ export function ClienteDetailPage() {
                 </Button>
               </div>
             </div>
+
+            {automaticVehicleImportMessage && (
+              <div
+                className={clsx(
+                  "rounded-xl border px-4 py-3 text-sm",
+                  automaticVehicleImportMessage.includes("Não foi possível") ||
+                    automaticVehicleImportMessage.includes("Defina uma marca")
+                    ? isDarkMode
+                      ? "border-red-900/60 bg-red-950/40 text-red-300"
+                      : "border-red-200 bg-red-50 text-red-700"
+                    : isDarkMode
+                      ? "border-emerald-900/60 bg-emerald-950/30 text-emerald-300"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-700",
+                )}
+              >
+                {automaticVehicleImportMessage}
+              </div>
+            )}
 
             <div className="grid gap-3 sm:grid-cols-[minmax(220px,1fr)_180px_180px]">
               <label className="relative">
