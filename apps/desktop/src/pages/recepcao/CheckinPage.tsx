@@ -65,8 +65,39 @@ type OutletContext = {
 
 type DiscoverySource =
   "instagram" | "facebook" | "indicacao" | "passagem" | "outro";
+type VendorQueueCategory = "seminovo" | "pcd" | "novo" | "vd" | "assinatura";
 
 const CHECKIN_PAGE_SIZE = 25;
+
+const VENDOR_CATEGORY_OPTIONS: Array<{
+  value: VendorQueueCategory;
+  label: string;
+}> = [
+  { value: "seminovo", label: "Seminovo" },
+  { value: "pcd", label: "PCD" },
+  { value: "novo", label: "Novo" },
+  { value: "vd", label: "Venda direta (VD)" },
+  { value: "assinatura", label: "Assinatura" },
+];
+
+function resolveVendorCategory(teamName: string | null): VendorQueueCategory {
+  const normalized = (teamName ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (normalized.includes("seminovo") || normalized.includes("usado")) {
+    return "seminovo";
+  }
+  if (normalized.includes("pcd") || normalized.includes("pdc")) return "pcd";
+  if (
+    normalized.includes("venda direta") ||
+    /(^|\W)vd($|\W)/.test(normalized)
+  ) {
+    return "vd";
+  }
+  if (normalized.includes("assinatura")) return "assinatura";
+  return "novo";
+}
 
 const DISCOVERY_SOURCE_OPTIONS: Array<{
   value: DiscoverySource;
@@ -177,6 +208,9 @@ export function CheckinPage() {
   const [quickCheckinLead, setQuickCheckinLead] = useState<Lead | null>(null);
   const [quickCheckinVendorId, setQuickCheckinVendorId] =
     useState("__automatic__");
+  const [quickCheckinCategory, setQuickCheckinCategory] = useState<
+    VendorQueueCategory | ""
+  >("");
   const [quickCheckinWristbands, setQuickCheckinWristbands] = useState([""]);
   const [quickCheckinBusy, setQuickCheckinBusy] = useState(false);
   const [quickCheckinError, setQuickCheckinError] = useState("");
@@ -470,6 +504,9 @@ export function CheckinPage() {
   };
 
   const openQuickCheckin = (lead: Lead) => {
+    const linkedVendor = vendorAvailability.find(
+      (vendor) => vendor.id === lead.assigned_vendor_id,
+    );
     const linkedVendorIsAvailable =
       Boolean(lead.assigned_vendor_id) &&
       vendorAvailability.some(
@@ -481,6 +518,9 @@ export function CheckinPage() {
       linkedVendorIsAvailable
         ? (lead.assigned_vendor_id ?? "__automatic__")
         : "__automatic__",
+    );
+    setQuickCheckinCategory(
+      linkedVendor ? resolveVendorCategory(linkedVendor.team_name) : "",
     );
     setQuickCheckinLead(lead);
   };
@@ -585,6 +625,10 @@ export function CheckinPage() {
       setQuickCheckinError(wristbandError);
       return;
     }
+    if (sendToQueue && !linkedVendorId && !quickCheckinCategory) {
+      setQuickCheckinError("Selecione a categoria de interesse do cliente.");
+      return;
+    }
 
     setQuickCheckinBusy(true);
     setQuickCheckinError("");
@@ -623,7 +667,10 @@ export function CheckinPage() {
           quickCheckinLead.id,
           t,
           quickCheckinVendorId === "__automatic__"
-            ? { mode: "automatic" }
+            ? {
+                mode: "automatic",
+                category: quickCheckinCategory || undefined,
+              }
             : { mode: "manual", vendor_id: quickCheckinVendorId },
         );
       }
@@ -1604,6 +1651,22 @@ export function CheckinPage() {
               Este cliente ainda não possui vendedor vinculado.
             </Notice>
           )}
+          {!linkedVendorId ? (
+            <Select
+              label="Categoria de interesse *"
+              value={quickCheckinCategory}
+              onChange={(event) => {
+                setQuickCheckinCategory(
+                  event.target.value as VendorQueueCategory,
+                );
+                setQuickCheckinVendorId("__automatic__");
+                setQuickCheckinError("");
+              }}
+              dark={isDarkMode}
+              options={VENDOR_CATEGORY_OPTIONS}
+              placeholder="Selecione a categoria desejada"
+            />
+          ) : null}
           <Select
             label="Vendedor para atendimento"
             value={quickCheckinVendorId}
@@ -1618,7 +1681,13 @@ export function CheckinPage() {
                 label: "Próximo vendedor disponível (automático)",
               },
               ...vendorAvailability
-                .filter((vendor) => vendor.eligible)
+                .filter(
+                  (vendor) =>
+                    vendor.eligible &&
+                    (!quickCheckinCategory ||
+                      resolveVendorCategory(vendor.team_name) ===
+                        quickCheckinCategory),
+                )
                 .map((vendor) => ({
                   value: vendor.id,
                   label: vendor.name,
@@ -1631,7 +1700,15 @@ export function CheckinPage() {
               isDarkMode ? "text-zinc-400" : "text-zinc-500",
             )}
           >
-            {vendorAvailability.filter((vendor) => vendor.eligible).length}{" "}
+            {
+              vendorAvailability.filter(
+                (vendor) =>
+                  vendor.eligible &&
+                  (!quickCheckinCategory ||
+                    resolveVendorCategory(vendor.team_name) ===
+                      quickCheckinCategory),
+              ).length
+            }{" "}
             vendedor(es) online e disponível(is).
           </p>
           {quickCheckinError ? (

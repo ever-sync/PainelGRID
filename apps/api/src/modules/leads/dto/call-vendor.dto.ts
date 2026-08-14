@@ -5,6 +5,14 @@ export enum VendorCallMode {
   AUTOMATIC = "automatic",
 }
 
+export enum VendorQueueCategory {
+  SEMINOVO = "seminovo",
+  PCD = "pcd",
+  NOVO = "novo",
+  VD = "vd",
+  ASSINATURA = "assinatura",
+}
+
 export class CallVendorDto {
   @IsOptional()
   @IsEnum(VendorCallMode)
@@ -13,4 +21,8 @@ export class CallVendorDto {
   @IsOptional()
   @IsUUID()
   vendor_id?: string;
+
+  @IsOptional()
+  @IsEnum(VendorQueueCategory)
+  category?: VendorQueueCategory;
 }

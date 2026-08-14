@@ -57,7 +57,11 @@ import { ImportLeadsDto } from "./dto/import-leads.dto";
 import { IntegrationPatchLeadDto } from "./dto/integration-patch-lead.dto";
 import { ReconcileLeadsDto } from "./dto/reconcile-leads.dto";
 import { UpdateLeadDto } from "./dto/update-lead.dto";
-import { CallVendorDto, VendorCallMode } from "./dto/call-vendor.dto";
+import {
+  CallVendorDto,
+  VendorCallMode,
+  VendorQueueCategory,
+} from "./dto/call-vendor.dto";
 import { MailService } from "../../mail/mail.service";
 import {
   buildLeadPhoneCandidates,
@@ -4702,7 +4706,7 @@ export class LeadsService {
         vendor_availability: true,
         sales_team_memberships: {
           take: 1,
-          select: { team: { select: { name: true } } },
+          select: { team_id: true, team: { select: { name: true } } },
         },
       },
       orderBy: { name: "asc" },
@@ -4714,6 +4718,7 @@ export class LeadsService {
       return {
         id: vendor.id,
         name: vendor.name,
+        team_id: vendor.sales_team_memberships[0]?.team_id ?? null,
         team_name: vendor.sales_team_memberships[0]?.team.name ?? null,
         connected,
         operational_status,
@@ -4807,7 +4812,7 @@ export class LeadsService {
         name: true,
         vendor_availability: true,
         sales_team_memberships: {
-          select: { team: { select: { name: true } } },
+          select: { team_id: true, team: { select: { name: true } } },
           take: 1,
         },
       },
@@ -4816,9 +4821,28 @@ export class LeadsService {
         { id: "asc" },
       ],
     });
-    const vendor = candidates[0];
+    const vendor = requestedVendorId
+      ? candidates[0]
+      : dto.category
+        ? candidates.find(
+            (candidate) =>
+              this.resolveVendorQueueCategory(
+                candidate.sales_team_memberships[0]?.team.name ?? null,
+              ) === dto.category,
+          )
+        : lead.team_id
+          ? candidates.find((candidate) =>
+              candidate.sales_team_memberships.some(
+                (membership) => membership.team_id === lead.team_id,
+              ),
+            )
+          : candidates[0];
     if (!vendor) {
-      throw new BadRequestException("Nenhum vendedor disponível");
+      throw new BadRequestException(
+        dto.category
+          ? "Nenhum vendedor disponível nesta categoria"
+          : "Nenhum vendedor disponível",
+      );
     }
 
     const now = new Date();
@@ -4850,7 +4874,11 @@ export class LeadsService {
           });
           await tx.lead.update({
             where: { id: lead.id },
-            data: { assigned_vendor_id: vendor.id },
+            data: {
+              assigned_vendor_id: vendor.id,
+              team_id:
+                vendor.sales_team_memberships[0]?.team_id ?? lead.team_id,
+            },
           });
           return tx.vendorAttendance.create({
             data: {
@@ -4892,6 +4920,31 @@ export class LeadsService {
 
     this.realtimeEvents.emitVendorCalled(lead.client_id, callPayload);
     return { success: true, ...callPayload };
+  }
+
+  private resolveVendorQueueCategory(
+    teamName: string | null,
+  ): VendorQueueCategory {
+    const normalized = (teamName ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    if (normalized.includes("seminovo") || normalized.includes("usado")) {
+      return VendorQueueCategory.SEMINOVO;
+    }
+    if (normalized.includes("pcd") || normalized.includes("pdc")) {
+      return VendorQueueCategory.PCD;
+    }
+    if (
+      normalized.includes("venda direta") ||
+      /(^|\W)vd($|\W)/.test(normalized)
+    ) {
+      return VendorQueueCategory.VD;
+    }
+    if (normalized.includes("assinatura")) {
+      return VendorQueueCategory.ASSINATURA;
+    }
+    return VendorQueueCategory.NOVO;
   }
 
   async acceptVendorCall(user: AuthenticatedUser, leadId: string) {

@@ -428,6 +428,7 @@ export type VendorOperationalStatus = "online" | "away" | "busy";
 export type VendorAvailability = {
   id: string;
   name: string;
+  team_id: string | null;
   team_name: string | null;
   connected: boolean;
   operational_status: VendorOperationalStatus;
@@ -476,7 +477,11 @@ export function updateVendorStatus(
 export function notifyVendorCall(
   id: string,
   token: string,
-  options: { mode: "automatic" | "manual"; vendor_id?: string },
+  options: {
+    mode: "automatic" | "manual";
+    vendor_id?: string;
+    category?: "seminovo" | "pcd" | "novo" | "vd" | "assinatura";
+  },
 ) {
   return httpRequest<VendorAttendance>(`/leads/${id}/call-vendor`, {
     method: "POST",
