@@ -74,20 +74,6 @@ function warmUpApi() {
 
 warmUpApi();
 
-/**
- * O `user-scalable=no` da viewport nao vale no iOS: o Safari e o WKWebView o
- * ignoram de proposito. Os eventos `gesture*` sao a unica trava que o WebKit
- * respeita para a pinca.
- */
-function blockPinchZoom() {
-  const cancel = (event: Event) => event.preventDefault();
-  for (const name of ["gesturestart", "gesturechange", "gestureend"]) {
-    document.addEventListener(name, cancel, { passive: false });
-  }
-}
-
-blockPinchZoom();
-
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />
