@@ -244,12 +244,19 @@ export class SalesService {
   }
 
   async createQuickSale(user: AuthenticatedUser, dto: CreateQuickSaleDto) {
-    if (user.role !== Role.GESTOR && user.role !== Role.RECEPCAO) {
+    if (
+      user.role !== Role.GESTOR &&
+      user.role !== Role.CLIENTE &&
+      user.role !== Role.RECEPCAO
+    ) {
       throw new ForbiddenException(
-        "Apenas gestor ou recepção pode registrar venda rápida",
+        "Apenas gestor, cliente ou recepção pode registrar venda rápida",
       );
     }
-    if (user.role === Role.RECEPCAO && user.client_id !== dto.client_id) {
+    if (
+      (user.role === Role.CLIENTE || user.role === Role.RECEPCAO) &&
+      user.client_id !== dto.client_id
+    ) {
       throw new ForbiddenException("Empresa não permitida para este acesso");
     }
 
@@ -497,10 +504,17 @@ export class SalesService {
   }
 
   async listBuyers(user: AuthenticatedUser, clientId: string, search?: string) {
-    if (user.role !== Role.GESTOR && user.role !== Role.RECEPCAO) {
+    if (
+      user.role !== Role.GESTOR &&
+      user.role !== Role.CLIENTE &&
+      user.role !== Role.RECEPCAO
+    ) {
       throw new ForbiddenException("Sem permissão para buscar compradores");
     }
-    if (user.role === Role.RECEPCAO && user.client_id !== clientId) {
+    if (
+      (user.role === Role.CLIENTE || user.role === Role.RECEPCAO) &&
+      user.client_id !== clientId
+    ) {
       throw new ForbiddenException("Empresa não permitida para este acesso");
     }
 

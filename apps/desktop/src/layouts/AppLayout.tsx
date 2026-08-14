@@ -1911,7 +1911,9 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
         </div>
       </nav>
 
-      {(user.role === "gestor" || user.role === "recepcao") &&
+      {(user.role === "gestor" ||
+        user.role === "cliente" ||
+        user.role === "recepcao") &&
         !isImmersiveChatRoute && (
           <button
             type="button"

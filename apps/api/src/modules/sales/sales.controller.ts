@@ -44,7 +44,7 @@ export class SalesController {
   }
 
   @Get("buyers")
-  @Roles(Role.GESTOR, Role.RECEPCAO)
+  @Roles(Role.GESTOR, Role.CLIENTE, Role.RECEPCAO)
   @ApiOperation({ summary: "Busca compradores para a venda rápida" })
   listBuyers(
     @Query("client_id", new ParseUUIDPipe()) clientId: string,
@@ -63,8 +63,10 @@ export class SalesController {
   }
 
   @Post("quick")
-  @Roles(Role.GESTOR, Role.RECEPCAO)
-  @ApiOperation({ summary: "Registra venda rápida pelo gestor ou recepção" })
+  @Roles(Role.GESTOR, Role.CLIENTE, Role.RECEPCAO)
+  @ApiOperation({
+    summary: "Registra venda rápida pelo gestor, cliente ou recepção",
+  })
   quickSale(
     @Body() dto: CreateQuickSaleDto,
     @CurrentUser() user: AuthenticatedUser,

@@ -93,7 +93,7 @@ export function QuickSaleModal({
     setMessage("");
     setSuccess(false);
     const clientsRequest =
-      user.role === "recepcao" && user.client_id
+      (user.role === "recepcao" || user.role === "cliente") && user.client_id
         ? getClient(user.client_id, token).then((client) => [client])
         : listClients(token);
     void clientsRequest
