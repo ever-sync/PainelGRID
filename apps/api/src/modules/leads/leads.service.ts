@@ -2039,19 +2039,12 @@ export class LeadsService {
 
     if (dto.sold) {
       const targetVendorId = lead.assigned_vendor_id || user.sub;
-      await this.scoreEvents
-        .award({
-          client_id: lead.client_id,
-          vendor_id: targetVendorId,
-          lead_id: lead.id,
-          kind: "sold",
-          earned_at: new Date(),
-        })
-        .catch((err) => {
-          this.logger.warn(
-            `Erro ao pontuar venda para o vendedor: ${(err as Error).message}`,
-          );
-        });
+      await this.awardAttendanceScoreMilestones({
+        clientId: lead.client_id,
+        vendorId: targetVendorId,
+        leadId: lead.id,
+        includeSale: true,
+      });
     }
 
     this.realtimeEvents.emitLeadUpdated(updated.client_id, {
@@ -4806,7 +4799,65 @@ export class LeadsService {
       vendor_id: user.sub,
       status: "accepted",
     });
+    await this.awardAttendanceScoreMilestones({
+      clientId: user.client_id,
+      vendorId: user.sub,
+      leadId,
+      includeSale: false,
+    });
     return updated;
+  }
+
+  private async awardAttendanceScoreMilestones(params: {
+    clientId: string;
+    vendorId: string;
+    leadId: string;
+    includeSale: boolean;
+  }) {
+    try {
+      const appointment = await this.prisma.appointment.findFirst({
+        where: {
+          client_id: params.clientId,
+          lead_id: params.leadId,
+          status: { not: "cancelled" },
+        },
+        orderBy: { created_at: "desc" },
+        select: { id: true },
+      });
+      const earnedAt = new Date();
+      if (appointment) {
+        await this.scoreEvents.award({
+          client_id: params.clientId,
+          vendor_id: params.vendorId,
+          lead_id: params.leadId,
+          appointment_id: appointment.id,
+          kind: "scheduled",
+          earned_at: earnedAt,
+        });
+      }
+      await this.scoreEvents.award({
+        client_id: params.clientId,
+        vendor_id: params.vendorId,
+        lead_id: params.leadId,
+        appointment_id: appointment?.id,
+        kind: "checked_in",
+        earned_at: earnedAt,
+      });
+      if (params.includeSale) {
+        await this.scoreEvents.award({
+          client_id: params.clientId,
+          vendor_id: params.vendorId,
+          lead_id: params.leadId,
+          appointment_id: appointment?.id,
+          kind: "sold",
+          earned_at: earnedAt,
+        });
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Erro ao pontuar marcos do atendimento: ${(err as Error).message}`,
+      );
+    }
   }
 
   async rejectVendorCall(user: AuthenticatedUser, leadId: string) {

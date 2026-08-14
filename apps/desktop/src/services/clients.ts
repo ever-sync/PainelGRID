@@ -69,6 +69,11 @@ export function createClient(token: string, payload: CreateClientPayload) {
 export type UpdateClientPayload = Partial<CreateClientPayload> & {
   is_active?: boolean;
   crm_stage_status_rules?: CrmStageStatusRule[] | null;
+  score_rules?: {
+    scheduled_points: number;
+    checkin_points: number;
+    sold_points: number;
+  };
 };
 
 export function updateClient(
@@ -274,6 +279,22 @@ export function mapApiClientToClient(row: ApiClient): Client {
         }))
         .filter((item) => item.stage_id)
     : [];
+  const rawScoreRules =
+    settingsRecord.score_rules &&
+    typeof settingsRecord.score_rules === "object" &&
+    !Array.isArray(settingsRecord.score_rules)
+      ? (settingsRecord.score_rules as Record<string, unknown>)
+      : null;
+  const scoreRules = rawScoreRules
+    ? {
+        scheduled_points: Math.max(
+          0,
+          Number(rawScoreRules.scheduled_points ?? 2),
+        ),
+        checkin_points: Math.max(0, Number(rawScoreRules.checkin_points ?? 3)),
+        sold_points: Math.max(0, Number(rawScoreRules.sold_points ?? 7)),
+      }
+    : undefined;
 
   return {
     id: row.id,
@@ -294,6 +315,7 @@ export function mapApiClientToClient(row: ApiClient): Client {
     events_count: row.events_count ?? 0,
     vehicles_count: row.vehicles_count ?? 0,
     crm_stage_status_rules: crmStageStatusRules,
+    score_rules: scoreRules,
     created_at: row.created_at,
   };
 }

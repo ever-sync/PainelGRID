@@ -5,11 +5,14 @@ import {
   IsBoolean,
   IsEmail,
   IsEnum,
+  IsInt,
   IsOptional,
   IsString,
   IsUrl,
   IsUUID,
   MaxLength,
+  Max,
+  Min,
   MinLength,
   ValidateNested,
 } from "class-validator";
@@ -30,6 +33,23 @@ class CrmStageStatusRuleDto {
   @IsString()
   @MaxLength(100)
   stage_name?: string | null;
+}
+
+class ScoreRulesDto {
+  @IsInt()
+  @Min(0)
+  @Max(1000)
+  scheduled_points!: number;
+
+  @IsInt()
+  @Min(0)
+  @Max(1000)
+  checkin_points!: number;
+
+  @IsInt()
+  @Min(0)
+  @Max(1000)
+  sold_points!: number;
 }
 
 export class UpdateClientDto {
@@ -124,4 +144,9 @@ export class UpdateClientDto {
   @ValidateNested({ each: true })
   @Type(() => CrmStageStatusRuleDto)
   crm_stage_status_rules?: CrmStageStatusRuleDto[] | null;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ScoreRulesDto)
+  score_rules?: ScoreRulesDto;
 }

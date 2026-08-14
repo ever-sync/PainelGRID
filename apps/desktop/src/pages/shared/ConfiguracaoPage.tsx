@@ -424,6 +424,13 @@ export function ConfiguracaoPage() {
 
   useEffect(() => {
     if (!selectedScoreClientId) return;
+    const clientRules = crmClients.find(
+      (client) => client.id === selectedScoreClientId,
+    )?.score_rules;
+    if (clientRules) {
+      setScoreRules(clientRules);
+      return;
+    }
     try {
       const raw = window.localStorage.getItem(
         `painelgrid:score_rules:${selectedScoreClientId}`,
@@ -441,20 +448,39 @@ export function ConfiguracaoPage() {
       // ignore
     }
     setScoreRules(DEFAULT_SCORE_RULES);
-  }, [selectedScoreClientId]);
+  }, [crmClients, selectedScoreClientId]);
 
-  function handleSaveScoreRules() {
+  async function handleSaveScoreRules() {
     if (!selectedScoreClientId) return;
+    const accessToken = readStoredSession()?.accessToken ?? "";
+    if (!accessToken) {
+      setScoreMessage("Sessão expirada. Entre novamente para salvar.");
+      return;
+    }
     setScoreSaving(true);
+    setScoreMessage("");
     try {
-      window.localStorage.setItem(
+      const updated = mapApiClientToClient(
+        await updateClient(selectedScoreClientId, accessToken, {
+          score_rules: scoreRules,
+        }),
+      );
+      setCrmClients((current) =>
+        current.map((client) => (client.id === updated.id ? updated : client)),
+      );
+      window.localStorage.removeItem(
         `painelgrid:score_rules:${selectedScoreClientId}`,
-        JSON.stringify(scoreRules),
       );
       setScoreMessage(
         "Regras de pontuação salvas com sucesso para esta empresa!",
       );
       setTimeout(() => setScoreMessage(""), 3500);
+    } catch (error) {
+      setScoreMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar as regras de pontuação.",
+      );
     } finally {
       setScoreSaving(false);
     }

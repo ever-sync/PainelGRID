@@ -47,6 +47,11 @@ export interface Client {
   events_count: number;
   vehicles_count: number;
   crm_stage_status_rules?: CrmStageStatusRule[];
+  score_rules?: {
+    scheduled_points: number;
+    checkin_points: number;
+    sold_points: number;
+  };
   created_at: string;
 }
 

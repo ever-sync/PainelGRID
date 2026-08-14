@@ -89,6 +89,11 @@ export class ClientsService {
       address_zipcode?: string | null;
       is_active?: boolean;
       crm_stage_status_rules?: CrmStageStatusRule[] | null;
+      score_rules?: {
+        scheduled_points: number;
+        checkin_points: number;
+        sold_points: number;
+      };
     },
   ): Prisma.InputJsonValue {
     const base =
@@ -156,6 +161,10 @@ export class ClientsService {
 
     if (patch.is_active !== undefined) {
       base.is_active = patch.is_active;
+    }
+
+    if (patch.score_rules !== undefined) {
+      base.score_rules = patch.score_rules;
     }
 
     return withCrmStageStatusRules(base, patch.crm_stage_status_rules);
@@ -382,7 +391,8 @@ export class ClientsService {
         dto.plan !== undefined ||
         dto.is_active !== undefined ||
         dto.webhook_url_n8n !== undefined ||
-        dto.crm_stage_status_rules !== undefined
+        dto.crm_stage_status_rules !== undefined ||
+        dto.score_rules !== undefined
       ) {
         throw new ForbiddenException(
           "Campos administrativos exigem acesso de gestor",
@@ -408,7 +418,8 @@ export class ClientsService {
       dto.address_state !== undefined ||
       dto.address_zipcode !== undefined ||
       dto.is_active !== undefined ||
-      dto.crm_stage_status_rules !== undefined;
+      dto.crm_stage_status_rules !== undefined ||
+      dto.score_rules !== undefined;
 
     const webhookUrl =
       dto.webhook_url_n8n === undefined
@@ -446,6 +457,7 @@ export class ClientsService {
               address_zipcode: dto.address_zipcode,
               is_active: dto.is_active,
               crm_stage_status_rules: dto.crm_stage_status_rules ?? undefined,
+              score_rules: dto.score_rules,
             })
           : undefined,
       },
