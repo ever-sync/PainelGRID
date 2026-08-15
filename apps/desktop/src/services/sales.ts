@@ -45,6 +45,17 @@ export type EventSaleListItem = VendorSaleListItem & {
   team: { id: string; name: string } | null;
 };
 
+export type PendingEventSale = {
+  id: string;
+  lead_id: string;
+  lead_name: string;
+  lead_phone: string | null;
+  wristband_number: string | null;
+  vendor_id: string;
+  vendor_name: string;
+  finished_at: string | null;
+};
+
 export type QuickSaleBuyer = {
   id: string;
   name: string;
@@ -107,6 +118,13 @@ export function listVendorSales(token: string) {
 export function listEventSales(token: string, eventId: string) {
   return httpRequest<EventSaleListItem[]>(
     `/sales?event_id=${encodeURIComponent(eventId)}`,
+    { method: "GET", token },
+  );
+}
+
+export function listPendingEventSales(token: string, eventId: string) {
+  return httpRequest<PendingEventSale[]>(
+    `/sales/pending?event_id=${encodeURIComponent(eventId)}`,
     { method: "GET", token },
   );
 }

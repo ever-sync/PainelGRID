@@ -509,6 +509,51 @@ export class SalesService {
     }));
   }
 
+  async listPendingByEvent(user: AuthenticatedUser, eventId: string) {
+    if (user.role !== Role.GESTOR) {
+      throw new ForbiddenException(
+        "Apenas gestor pode listar vendas aguardando baixa",
+      );
+    }
+
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true },
+    });
+    if (!event) throw new NotFoundException("Evento não encontrado");
+
+    const rows = await this.prisma.vendorAttendance.findMany({
+      where: {
+        event_id: eventId,
+        status: "finished",
+        sold: true,
+        lead: {
+          sales: { none: { appointment: { event_id: eventId } } },
+        },
+      },
+      select: {
+        id: true,
+        lead_id: true,
+        vendor_id: true,
+        finished_at: true,
+        lead: { select: { name: true, phone: true, wristband_number: true } },
+        vendor: { select: { name: true } },
+      },
+      orderBy: { finished_at: "desc" },
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      lead_id: row.lead_id,
+      lead_name: row.lead.name,
+      lead_phone: row.lead.phone,
+      wristband_number: row.lead.wristband_number,
+      vendor_id: row.vendor_id,
+      vendor_name: row.vendor.name,
+      finished_at: row.finished_at?.toISOString() ?? null,
+    }));
+  }
+
   async listBuyers(user: AuthenticatedUser, clientId: string, search?: string) {
     if (
       user.role !== Role.GESTOR &&

@@ -80,7 +80,12 @@ import {
   type TeamMemberUser,
 } from "../../services/salesTeams";
 import { listUsers, type StaffUser } from "../../services/users";
-import { listEventSales, type EventSaleListItem } from "../../services/sales";
+import {
+  listEventSales,
+  listPendingEventSales,
+  type EventSaleListItem,
+  type PendingEventSale,
+} from "../../services/sales";
 import { dataUrlByteSize, resizeImageToDataUrl } from "../../utils/image";
 import { saveOrShareBlob } from "../../utils/nativeDownload";
 import {
@@ -313,6 +318,12 @@ export function EventDetailPage() {
   const [eventLeadsHasNextPage, setEventLeadsHasNextPage] = useState(false);
   const [eventLeadsLoadingMore, setEventLeadsLoadingMore] = useState(false);
   const [eventSales, setEventSales] = useState<EventSaleListItem[]>([]);
+  const [pendingEventSales, setPendingEventSales] = useState<
+    PendingEventSale[]
+  >([]);
+  const [salesView, setSalesView] = useState<"completed" | "pending">(
+    "completed",
+  );
   const [salesLoading, setSalesLoading] = useState(false);
   const [leadSearch, setLeadSearch] = useState("");
   const [leadStatusFilter, setLeadStatusFilter] = useState<
@@ -465,40 +476,51 @@ export function EventDetailPage() {
 
     try {
       const failedParts: string[] = [];
-      const [apiEvent, apiClients, apiTeams, apiStaff, apiLeads, apiSales] =
-        await Promise.all([
-          getEvent(eventId, session.accessToken),
-          listClients(session.accessToken).catch(() => {
-            failedParts.push("lista de clientes");
-            return [];
-          }),
-          listSalesTeams(session.accessToken, eventId).catch(() => {
-            failedParts.push("times");
-            return [];
-          }),
-          listUsers(session.accessToken).catch(() => {
-            failedParts.push("vendedores");
-            return [];
-          }),
-          fetchLeadsPage(
-            { event_id: eventId, take: 100 },
-            session.accessToken,
-          ).catch(() => {
-            failedParts.push("leads");
-            return {
-              items: [],
-              page_info: {
-                take: 100,
-                next_cursor: null,
-                has_next_page: false,
-              },
-            };
-          }),
-          listEventSales(session.accessToken, eventId).catch(() => {
-            failedParts.push("vendas");
-            return [];
-          }),
-        ]);
+      const [
+        apiEvent,
+        apiClients,
+        apiTeams,
+        apiStaff,
+        apiLeads,
+        apiSales,
+        apiPendingSales,
+      ] = await Promise.all([
+        getEvent(eventId, session.accessToken),
+        listClients(session.accessToken).catch(() => {
+          failedParts.push("lista de clientes");
+          return [];
+        }),
+        listSalesTeams(session.accessToken, eventId).catch(() => {
+          failedParts.push("times");
+          return [];
+        }),
+        listUsers(session.accessToken).catch(() => {
+          failedParts.push("vendedores");
+          return [];
+        }),
+        fetchLeadsPage(
+          { event_id: eventId, take: 100 },
+          session.accessToken,
+        ).catch(() => {
+          failedParts.push("leads");
+          return {
+            items: [],
+            page_info: {
+              take: 100,
+              next_cursor: null,
+              has_next_page: false,
+            },
+          };
+        }),
+        listEventSales(session.accessToken, eventId).catch(() => {
+          failedParts.push("vendas");
+          return [];
+        }),
+        listPendingEventSales(session.accessToken, eventId).catch(() => {
+          failedParts.push("vendas sem baixa");
+          return [];
+        }),
+      ]);
       const mappedEvent = mapApiEventToEvent(apiEvent);
       const participantClientIds = mappedEvent.participant_client_ids;
 
@@ -531,6 +553,7 @@ export function EventDetailPage() {
       setEventLeadsNextCursor(apiLeads.page_info.next_cursor);
       setEventLeadsHasNextPage(apiLeads.page_info.has_next_page);
       setEventSales(apiSales);
+      setPendingEventSales(apiPendingSales);
       setAddMemberTeamId(null);
       setSelectedMemberIds([]);
     } catch (loadError) {
@@ -2311,152 +2334,285 @@ export function EventDetailPage() {
 
       {activeTab === "vendas" && (
         <div className="space-y-5">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <MetricCard
-              title="Vendas realizadas"
-              value={eventSales.length}
-              helper="Registros deste evento"
-              tone="rose"
-              dark={isDarkMode}
-            />
-            <MetricCard
-              title="Valor vendido"
-              value={formatCurrency(eventSalesRevenue)}
-              helper="Faturamento registrado"
-              tone="emerald"
-              dark={isDarkMode}
-            />
-          </div>
-
-          <Card
+          <div
             className={clsx(
-              "rounded-[28px] border",
+              "inline-flex rounded-2xl border p-1",
               isDarkMode
                 ? "border-zinc-800 bg-[#111111]"
-                : "border-zinc-100 bg-white",
+                : "border-zinc-200 bg-zinc-50",
             )}
-            padding="lg"
           >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3
-                  className={clsx(
-                    "text-lg font-black tracking-tight",
-                    isDarkMode ? "text-zinc-100" : "text-zinc-950",
-                  )}
-                >
-                  Vendas do evento
-                </h3>
-                <p className="mt-1 text-sm text-zinc-500">
-                  Cliente, vendedor, veículo, pedido e valor de cada venda.
-                </p>
-              </div>
-              <Badge>{eventSales.length} vendas</Badge>
-            </div>
+            <button
+              type="button"
+              onClick={() => setSalesView("completed")}
+              className={clsx(
+                "rounded-xl px-5 py-2.5 text-sm font-bold transition",
+                salesView === "completed"
+                  ? "bg-red-500 text-white shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-900",
+              )}
+            >
+              Vendas ({eventSales.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSalesView("pending")}
+              className={clsx(
+                "rounded-xl px-5 py-2.5 text-sm font-bold transition",
+                salesView === "pending"
+                  ? "bg-amber-500 text-zinc-950 shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-900",
+              )}
+            >
+              Vendas sem dar baixa ({pendingEventSales.length})
+            </button>
+          </div>
 
-            {salesLoading ? (
-              <p className="py-10 text-center text-sm text-zinc-400">
-                Carregando vendas...
-              </p>
-            ) : eventSales.length === 0 ? (
-              <div
-                className={clsx(
-                  "mt-5 rounded-[22px] border border-dashed p-10 text-center",
-                  isDarkMode
-                    ? "border-zinc-700 text-zinc-500"
-                    : "border-zinc-200 text-zinc-500",
-                )}
-              >
-                <ShoppingCart className="mx-auto mb-3" size={30} />
-                <p className="font-semibold">Nenhuma venda registrada</p>
-                <p className="mt-1 text-sm">
-                  As vendas rápidas e as vendas dos vendedores aparecerão aqui.
-                </p>
+          {salesView === "completed" ? (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <MetricCard
+                  title="Vendas realizadas"
+                  value={eventSales.length}
+                  helper="Registros deste evento"
+                  tone="rose"
+                  dark={isDarkMode}
+                />
+                <MetricCard
+                  title="Valor vendido"
+                  value={formatCurrency(eventSalesRevenue)}
+                  helper="Faturamento registrado"
+                  tone="emerald"
+                  dark={isDarkMode}
+                />
               </div>
-            ) : (
-              <div
+
+              <Card
                 className={clsx(
-                  "mt-5 overflow-x-auto rounded-[24px] border",
-                  isDarkMode ? "border-zinc-800" : "border-zinc-100",
+                  "rounded-[28px] border",
+                  isDarkMode
+                    ? "border-zinc-800 bg-[#111111]"
+                    : "border-zinc-100 bg-white",
                 )}
+                padding="lg"
               >
-                <table className="min-w-[960px] w-full text-left text-sm">
-                  <thead
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3
+                      className={clsx(
+                        "text-lg font-black tracking-tight",
+                        isDarkMode ? "text-zinc-100" : "text-zinc-950",
+                      )}
+                    >
+                      Vendas do evento
+                    </h3>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      Cliente, vendedor, veículo, pedido e valor de cada venda.
+                    </p>
+                  </div>
+                  <Badge>{eventSales.length} vendas</Badge>
+                </div>
+
+                {salesLoading ? (
+                  <p className="py-10 text-center text-sm text-zinc-400">
+                    Carregando vendas...
+                  </p>
+                ) : eventSales.length === 0 ? (
+                  <div
                     className={clsx(
-                      "text-xs uppercase tracking-[0.14em]",
+                      "mt-5 rounded-[22px] border border-dashed p-10 text-center",
                       isDarkMode
-                        ? "bg-[#0b0b0b] text-zinc-500"
-                        : "bg-zinc-50 text-zinc-500",
+                        ? "border-zinc-700 text-zinc-500"
+                        : "border-zinc-200 text-zinc-500",
                     )}
                   >
-                    <tr>
-                      <th className="px-5 py-4">Comprador</th>
-                      <th className="px-5 py-4">Vendedor</th>
-                      <th className="px-5 py-4">Time</th>
-                      <th className="px-5 py-4">Carro</th>
-                      <th className="px-5 py-4">Pedido</th>
-                      <th className="px-5 py-4">Data</th>
-                      <th className="px-5 py-4 text-right">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody
-                    className={
-                      isDarkMode
-                        ? "divide-y divide-zinc-800"
-                        : "divide-y divide-zinc-100"
-                    }
+                    <ShoppingCart className="mx-auto mb-3" size={30} />
+                    <p className="font-semibold">Nenhuma venda registrada</p>
+                    <p className="mt-1 text-sm">
+                      As vendas rápidas e as vendas dos vendedores aparecerão
+                      aqui.
+                    </p>
+                  </div>
+                ) : (
+                  <div
+                    className={clsx(
+                      "mt-5 overflow-x-auto rounded-[24px] border",
+                      isDarkMode ? "border-zinc-800" : "border-zinc-100",
+                    )}
                   >
-                    {eventSales.map((sale) => (
-                      <tr
-                        key={sale.id}
+                    <table className="min-w-[960px] w-full text-left text-sm">
+                      <thead
                         className={clsx(
-                          "transition-colors",
+                          "text-xs uppercase tracking-[0.14em]",
                           isDarkMode
-                            ? "hover:bg-white/[0.03]"
-                            : "hover:bg-zinc-50",
+                            ? "bg-[#0b0b0b] text-zinc-500"
+                            : "bg-zinc-50 text-zinc-500",
                         )}
                       >
-                        <td className="px-5 py-4">
-                          <p
+                        <tr>
+                          <th className="px-5 py-4">Comprador</th>
+                          <th className="px-5 py-4">Vendedor</th>
+                          <th className="px-5 py-4">Time</th>
+                          <th className="px-5 py-4">Carro</th>
+                          <th className="px-5 py-4">Pedido</th>
+                          <th className="px-5 py-4">Data</th>
+                          <th className="px-5 py-4 text-right">Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody
+                        className={
+                          isDarkMode
+                            ? "divide-y divide-zinc-800"
+                            : "divide-y divide-zinc-100"
+                        }
+                      >
+                        {eventSales.map((sale) => (
+                          <tr
+                            key={sale.id}
                             className={clsx(
-                              "font-bold",
-                              isDarkMode ? "text-zinc-100" : "text-zinc-900",
+                              "transition-colors",
+                              isDarkMode
+                                ? "hover:bg-white/[0.03]"
+                                : "hover:bg-zinc-50",
                             )}
                           >
-                            {sale.lead?.name ?? "Cliente não informado"}
-                          </p>
-                          <p className="mt-0.5 text-xs text-zinc-500">
-                            {sale.lead?.phone ?? "Sem telefone"}
-                          </p>
-                        </td>
-                        <td className="px-5 py-4 font-medium">
-                          {sale.vendor.name}
-                        </td>
-                        <td className="px-5 py-4 text-zinc-500">
-                          {sale.team?.name ?? "Sem time"}
-                        </td>
-                        <td className="px-5 py-4">
-                          <p className="font-medium">{sale.product}</p>
-                          <p className="mt-0.5 text-xs text-zinc-500">
-                            {sale.type.replace(/_/g, " ")}
-                          </p>
-                        </td>
-                        <td className="px-5 py-4 font-mono text-xs">
-                          {sale.order_number || "—"}
-                        </td>
-                        <td className="px-5 py-4 text-zinc-500">
-                          {formatDateTime(sale.sold_at)}
-                        </td>
-                        <td className="px-5 py-4 text-right font-black text-emerald-500">
-                          {formatCurrency(sale.value)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                            <td className="px-5 py-4">
+                              <p
+                                className={clsx(
+                                  "font-bold",
+                                  isDarkMode
+                                    ? "text-zinc-100"
+                                    : "text-zinc-900",
+                                )}
+                              >
+                                {sale.lead?.name ?? "Cliente não informado"}
+                              </p>
+                              <p className="mt-0.5 text-xs text-zinc-500">
+                                {sale.lead?.phone ?? "Sem telefone"}
+                              </p>
+                            </td>
+                            <td className="px-5 py-4 font-medium">
+                              {sale.vendor.name}
+                            </td>
+                            <td className="px-5 py-4 text-zinc-500">
+                              {sale.team?.name ?? "Sem time"}
+                            </td>
+                            <td className="px-5 py-4">
+                              <p className="font-medium">{sale.product}</p>
+                              <p className="mt-0.5 text-xs text-zinc-500">
+                                {sale.type.replace(/_/g, " ")}
+                              </p>
+                            </td>
+                            <td className="px-5 py-4 font-mono text-xs">
+                              {sale.order_number || "—"}
+                            </td>
+                            <td className="px-5 py-4 text-zinc-500">
+                              {formatDateTime(sale.sold_at)}
+                            </td>
+                            <td className="px-5 py-4 text-right font-black text-emerald-500">
+                              {formatCurrency(sale.value)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Card>
+            </>
+          ) : (
+            <Card
+              className={clsx(
+                "rounded-[28px] border",
+                isDarkMode
+                  ? "border-zinc-800 bg-[#111111]"
+                  : "border-zinc-100 bg-white",
+              )}
+              padding="lg"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-black tracking-tight">
+                    Clientes que informaram compra
+                  </h3>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    Atendimentos finalizados com “Comprou: sim” que ainda não
+                    possuem o registro completo da venda.
+                  </p>
+                </div>
+                <Badge>{pendingEventSales.length} pendentes</Badge>
               </div>
-            )}
-          </Card>
+
+              {pendingEventSales.length === 0 ? (
+                <div className="mt-5 rounded-[22px] border border-dashed border-zinc-200 p-10 text-center text-zinc-500">
+                  <ShoppingCart className="mx-auto mb-3" size={30} />
+                  <p className="font-semibold">
+                    Nenhuma venda aguardando baixa
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-5 overflow-x-auto rounded-[24px] border border-zinc-100">
+                  <table className="min-w-[760px] w-full text-left text-sm">
+                    <thead className="bg-zinc-50 text-xs uppercase tracking-[0.14em] text-zinc-500">
+                      <tr>
+                        <th className="px-5 py-4">Comprador</th>
+                        <th className="px-5 py-4">Vendedor</th>
+                        <th className="px-5 py-4">Pulseira</th>
+                        <th className="px-5 py-4">Atendimento finalizado</th>
+                        <th className="px-5 py-4">Situação</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      {pendingEventSales.map((pending) => (
+                        <tr key={pending.id}>
+                          <td className="px-5 py-4">
+                            <p className="font-bold">{pending.lead_name}</p>
+                            <p className="text-xs text-zinc-500">
+                              {pending.lead_phone ?? "Sem telefone"}
+                            </p>
+                          </td>
+                          <td className="px-5 py-4 font-medium">
+                            {pending.vendor_name}
+                          </td>
+                          <td className="px-5 py-4">
+                            {pending.wristband_number ?? "—"}
+                          </td>
+                          <td className="px-5 py-4 text-zinc-500">
+                            {pending.finished_at
+                              ? formatDateTime(pending.finished_at)
+                              : "—"}
+                          </td>
+                          <td className="px-5 py-4">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() =>
+                                window.dispatchEvent(
+                                  new CustomEvent("open-quick-sale", {
+                                    detail: {
+                                      clientId: event?.client_id ?? "",
+                                      eventId: eventId ?? "",
+                                      vendorId: pending.vendor_id,
+                                      leadId: pending.lead_id,
+                                      leadName: pending.lead_name,
+                                      leadPhone: pending.lead_phone,
+                                      wristband: pending.wristband_number,
+                                    },
+                                  }),
+                                )
+                              }
+                            >
+                              Dar baixa na venda
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+          )}
         </div>
       )}
 

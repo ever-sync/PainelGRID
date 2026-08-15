@@ -79,6 +79,9 @@ describe("SalesService", () => {
         create: jest.fn(),
         findMany: jest.fn(),
       },
+      vendorAttendance: {
+        findMany: jest.fn(),
+      },
       salesTeamMember: {
         findFirst: jest.fn(),
       },
@@ -230,6 +233,46 @@ describe("SalesService", () => {
     );
     expect(result).toEqual(
       expect.objectContaining({ id: saleId, value: "120000.00" }),
+    );
+  });
+
+  it("lista clientes que informaram compra mas ainda aguardam baixa", async () => {
+    prisma.event.findUnique.mockResolvedValue({ id: baseAppointment.event_id });
+    prisma.vendorAttendance.findMany.mockResolvedValue([
+      {
+        id: "attendance-pending-sale",
+        lead_id: leadId,
+        vendor_id: vendorId,
+        finished_at: soldAt,
+        lead: {
+          name: "Cliente Teste",
+          phone: "12999999999",
+          wristband_number: "37",
+        },
+        vendor: { name: "Vendedor Teste" },
+      },
+    ]);
+
+    const result = await service.listPendingByEvent(
+      { ...user, role: Role.GESTOR } as any,
+      baseAppointment.event_id,
+    );
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        lead_id: leadId,
+        lead_name: "Cliente Teste",
+        vendor_name: "Vendedor Teste",
+      }),
+    ]);
+    expect(prisma.vendorAttendance.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          event_id: baseAppointment.event_id,
+          status: "finished",
+          sold: true,
+        }),
+      }),
     );
   });
 

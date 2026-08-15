@@ -46,10 +46,20 @@ export function QuickSaleModal({
   open,
   onClose,
   user,
+  prefill,
 }: {
   open: boolean;
   onClose: () => void;
   user: User;
+  prefill?: {
+    clientId: string;
+    eventId: string;
+    vendorId: string;
+    leadId: string;
+    leadName: string;
+    leadPhone: string | null;
+    wristband: string | null;
+  } | null;
 }) {
   const [clients, setClients] = useState<Client[]>([]);
   const [events, setEvents] = useState<ApiEvent[]>([]);
@@ -100,7 +110,7 @@ export function QuickSaleModal({
       .then((rows) => {
         const mapped = rows.map(mapApiClientToClient);
         setClients(mapped);
-        setClientId((current) => current || mapped[0]?.id || "");
+        setClientId(prefill?.clientId || mapped[0]?.id || "");
       })
       .catch((error) =>
         setMessage(
@@ -110,7 +120,7 @@ export function QuickSaleModal({
         ),
       )
       .finally(() => setLoading(false));
-  }, [open, user.client_id, user.role]);
+  }, [open, prefill, user.client_id, user.role]);
 
   useEffect(() => {
     if (!open || !clientId) return;
@@ -134,6 +144,14 @@ export function QuickSaleModal({
         setEvents(eventRows);
         setVendors([]);
         setVehicles(vehicleRows);
+        if (prefill?.clientId === clientId) {
+          setEventId(prefill.eventId);
+          setLeadId(prefill.leadId);
+          setBuyerSearch(
+            `${prefill.leadName}${prefill.leadPhone ? ` · ${prefill.leadPhone}` : ""}`,
+          );
+          setWristband(prefill.wristband ?? "");
+        }
       })
       .catch((error) =>
         setMessage(
@@ -143,7 +161,7 @@ export function QuickSaleModal({
         ),
       )
       .finally(() => setLoading(false));
-  }, [clientId, open]);
+  }, [clientId, open, prefill]);
 
   useEffect(() => {
     if (!open || !clientId) return;
@@ -177,6 +195,7 @@ export function QuickSaleModal({
           }
         }
         setVendors([...uniqueVendors.values()]);
+        if (prefill?.eventId === eventId) setVendorId(prefill.vendorId);
       })
       .catch((error) =>
         setMessage(
@@ -186,7 +205,7 @@ export function QuickSaleModal({
         ),
       )
       .finally(() => setLoading(false));
-  }, [eventId, open]);
+  }, [eventId, open, prefill]);
 
   const eventOptions = useMemo(
     () => events.map((event) => ({ value: event.id, label: event.name })),

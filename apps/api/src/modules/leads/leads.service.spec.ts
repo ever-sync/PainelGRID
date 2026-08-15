@@ -34,6 +34,7 @@ describe("LeadsService", () => {
     vendorAttendance: {
       findMany: jest.Mock;
       findFirst: jest.Mock;
+      create: jest.Mock;
       update: jest.Mock;
       updateMany: jest.Mock;
     };
@@ -122,6 +123,7 @@ describe("LeadsService", () => {
       vendorAttendance: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
+        create: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
       },
@@ -1982,6 +1984,58 @@ describe("LeadsService", () => {
       }),
     );
     expect(result.confirmation_status).toBe(ConfirmationStatus.closed);
+  });
+
+  it("inicia o atendimento automaticamente ao encaminhar para o vendedor", async () => {
+    const acceptedAt = new Date("2026-08-15T13:00:00.000Z");
+    jest.useFakeTimers().setSystemTime(acceptedAt);
+    prisma.lead.findFirst.mockResolvedValueOnce({
+      ...baseExistingLead,
+      event_interest_id: eventId,
+      assigned_vendor_id: null,
+      team_id: teamId,
+    });
+    prisma.user.findMany.mockResolvedValueOnce([
+      {
+        id: vendorId,
+        name: "Vendedor",
+        vendor_category: "novo",
+        vendor_categories: ["novo"],
+        vendor_availability: null,
+        sales_team_memberships: [{ team_id: teamId, team: { name: "Time" } }],
+      },
+    ]);
+    prisma.vendorAttendance.findFirst.mockResolvedValueOnce(null);
+    prisma.vendorAttendance.create.mockResolvedValueOnce({
+      id: "attendance-auto",
+    });
+
+    const result = await service.callVendor(
+      {
+        sub: gestorId,
+        role: Role.GESTOR,
+        name: "Gestor",
+        email: "gestor@example.com",
+        client_id: clientId,
+      } as never,
+      baseExistingLead.id,
+      { vendor_id: vendorId } as never,
+    );
+
+    expect(prisma.vendorAttendance.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        vendor_id: vendorId,
+        status: "accepted",
+        accepted_at: acceptedAt,
+      }),
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: "accepted",
+        accepted_at: acceptedAt.toISOString(),
+      }),
+    );
+    jest.useRealTimers();
   });
 
   it("closeAttendance: move para COMPRARAM quando o vendedor confirma a venda", async () => {

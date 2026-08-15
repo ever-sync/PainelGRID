@@ -347,6 +347,26 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
   const isBoardRoute = location.pathname.startsWith("/gestor/crm");
   const [quickActionOpen, setQuickActionOpen] = useState(false);
   const [quickSaleOpen, setQuickSaleOpen] = useState(false);
+  const [quickSalePrefill, setQuickSalePrefill] = useState<{
+    clientId: string;
+    eventId: string;
+    vendorId: string;
+    leadId: string;
+    leadName: string;
+    leadPhone: string | null;
+    wristband: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    const openQuickSale = (event: Event) => {
+      const detail = (event as CustomEvent<typeof quickSalePrefill>).detail;
+      if (!detail) return;
+      setQuickSalePrefill(detail);
+      setQuickSaleOpen(true);
+    };
+    window.addEventListener("open-quick-sale", openQuickSale);
+    return () => window.removeEventListener("open-quick-sale", openQuickSale);
+  }, []);
   const [quickAction, setQuickAction] = useState<MobileQuickAction | null>(
     null,
   );
@@ -495,6 +515,8 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     vendor_name: string;
     team_name?: string;
     expires_at?: string | null;
+    status?: "pending" | "accepted";
+    accepted_at?: string | null;
   } | null>(null);
   const [rejectingVendorCall, setRejectingVendorCall] = useState(false);
   const [acceptingVendorCall, setAcceptingVendorCall] = useState(false);
@@ -535,12 +557,33 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       vendor_name: string;
       team_name?: string;
       expires_at?: string | null;
+      status?: "pending" | "accepted";
+      accepted_at?: string | null;
     }) => {
       // Exibe pop-up se a chamada for para o usuario logado (ou se for perfil de gestor/testes)
       const vendorIsBusy =
         user.role === "vendedor" &&
         Boolean(localStorage.getItem("active_vendor_attendance"));
       if (payload.vendor_id === user.id && !vendorIsBusy) {
+        if (payload.status === "accepted") {
+          const session = {
+            attendance_id: payload.attendance_id ?? payload.id,
+            lead_id: payload.lead_id,
+            lead_name: payload.lead_name,
+            vendor_id: payload.vendor_id,
+            startedAt: payload.accepted_at
+              ? new Date(payload.accepted_at).getTime()
+              : Date.now(),
+          };
+          setActiveAttendance(session);
+          localStorage.setItem(
+            "active_vendor_attendance",
+            JSON.stringify(session),
+          );
+          setVendorCallAlert(null);
+          triggerHapticFeedback();
+          return;
+        }
         setVendorCallAlert(payload);
         triggerHapticFeedback();
 
@@ -1917,7 +1960,10 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
         !isImmersiveChatRoute && (
           <button
             type="button"
-            onClick={() => setQuickSaleOpen(true)}
+            onClick={() => {
+              setQuickSalePrefill(null);
+              setQuickSaleOpen(true);
+            }}
             className="fixed bottom-[calc(6.25rem+env(safe-area-inset-bottom))] right-5 z-40 flex h-14 items-center gap-2 rounded-full bg-[#E51838] px-5 font-bold text-white shadow-[0_16px_36px_rgba(229,24,56,0.35)] transition hover:-translate-y-0.5 hover:bg-[#c9122e] active:translate-y-0 md:bottom-8 md:right-8"
             aria-label="Registrar venda rápida"
           >
@@ -1928,8 +1974,12 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
 
       <QuickSaleModal
         open={quickSaleOpen}
-        onClose={() => setQuickSaleOpen(false)}
+        onClose={() => {
+          setQuickSaleOpen(false);
+          setQuickSalePrefill(null);
+        }}
         user={user}
+        prefill={quickSalePrefill}
       />
 
       {quickActionOpen &&

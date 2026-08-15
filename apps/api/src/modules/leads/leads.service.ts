@@ -4778,7 +4778,13 @@ export class LeadsService {
       },
       orderBy: { called_at: "desc" },
     });
-    return attendance;
+    if (!attendance) return null;
+    return {
+      ...attendance,
+      lead_name: attendance.lead.name,
+      lead_phone: attendance.lead.phone,
+      event_name: attendance.event?.name ?? null,
+    };
   }
 
   async callVendor(
@@ -4835,7 +4841,7 @@ export class LeadsService {
             this.vendorMatchesQueueCategory(
               candidate.vendor_category,
               candidate.vendor_categories,
-                dto.category!,
+              dto.category!,
             ),
           )
         : lead.team_id
@@ -4854,6 +4860,9 @@ export class LeadsService {
     }
 
     const now = new Date();
+    // O encaminhamento da recepção já inicia o atendimento. O campo continua
+    // preenchido por compatibilidade com o schema, mas atendimentos aceitos não
+    // são expirados pelo processo de limpeza.
     const expiresAt = new Date(now.getTime() + 30_000);
     let attendance;
     try {
@@ -4894,6 +4903,8 @@ export class LeadsService {
               lead_id: lead.id,
               vendor_id: vendor.id,
               event_id: lead.event_interest_id,
+              status: VendorAttendanceStatus.accepted,
+              accepted_at: now,
               expires_at: expiresAt,
               created_by_id: user.sub,
             },
@@ -4924,9 +4935,15 @@ export class LeadsService {
       team_name: vendor?.sales_team_memberships?.[0]?.team?.name || null,
       timestamp: now.toISOString(),
       expires_at: expiresAt.toISOString(),
+      status: VendorAttendanceStatus.accepted,
+      accepted_at: now.toISOString(),
     };
 
     this.realtimeEvents.emitVendorCalled(lead.client_id, callPayload);
+    this.realtimeEvents.emitVendorAttendanceUpdated(lead.client_id, {
+      ...callPayload,
+      status: VendorAttendanceStatus.accepted,
+    });
     return { success: true, ...callPayload };
   }
 

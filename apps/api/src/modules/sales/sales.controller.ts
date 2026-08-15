@@ -54,6 +54,16 @@ export class SalesController {
     return this.salesService.listBuyers(user, clientId, search);
   }
 
+  @Get("pending")
+  @Roles(Role.GESTOR)
+  @ApiOperation({ summary: "Lista atendimentos com venda aguardando baixa" })
+  listPendingByEvent(
+    @Query("event_id", new ParseUUIDPipe()) eventId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.salesService.listPendingByEvent(user, eventId);
+  }
+
   @Post()
   @Roles(Role.VENDEDOR, Role.RECEPCAO)
   @ApiOperation({ summary: "Cria uma nova venda" })
