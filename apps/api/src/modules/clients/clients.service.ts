@@ -474,6 +474,23 @@ export class ClientsService {
       include: clientListInclude,
     });
 
+    if (dto.score_rules) {
+      await Promise.all([
+        this.prisma.scoreEvent.updateMany({
+          where: { client_id: id, kind: "scheduled" },
+          data: { points: dto.score_rules.scheduled_points },
+        }),
+        this.prisma.scoreEvent.updateMany({
+          where: { client_id: id, kind: "checked_in" },
+          data: { points: dto.score_rules.checkin_points },
+        }),
+        this.prisma.scoreEvent.updateMany({
+          where: { client_id: id, kind: "sold" },
+          data: { points: dto.score_rules.sold_points },
+        }),
+      ]);
+    }
+
     return this.toListItem(row);
   }
 

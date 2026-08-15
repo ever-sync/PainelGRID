@@ -99,6 +99,7 @@ export class ScoreEventsService {
       update: {
         appointment_id: input.appointment_id ?? undefined,
         sale_id: input.sale_id ?? undefined,
+        points,
       },
     });
   }

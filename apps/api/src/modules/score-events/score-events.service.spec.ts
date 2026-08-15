@@ -1,6 +1,38 @@
 import { ScoreEventsService } from "./score-events.service";
 
 describe("ScoreEventsService", () => {
+  it("atualiza os pontos ao reaplicar um marco ja existente", async () => {
+    const prisma = {
+      client: {
+        findUnique: jest.fn().mockResolvedValue({
+          settings: {
+            score_rules: {
+              scheduled_points: 0,
+              checkin_points: 5,
+              sold_points: 8,
+            },
+          },
+        }),
+      },
+      scoreEvent: { upsert: jest.fn().mockResolvedValue({ id: "score-1" }) },
+    };
+    const service = new ScoreEventsService(prisma as never);
+
+    await service.award({
+      client_id: "client-1",
+      vendor_id: "vendor-1",
+      lead_id: "lead-1",
+      kind: "checked_in",
+    });
+
+    expect(prisma.scoreEvent.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ points: 5 }),
+        update: expect.objectContaining({ points: 5 }),
+      }),
+    );
+  });
+
   it("deve montar ranking com totais, campos do time e limite", async () => {
     const prisma = {
       scoreEvent: {

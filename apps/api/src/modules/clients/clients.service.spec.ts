@@ -19,6 +19,7 @@ describe("ClientsService", () => {
         create: jest.fn(),
         update: jest.fn(),
       },
+      scoreEvent: { updateMany: jest.fn() },
     };
 
     redis = {
@@ -249,5 +250,52 @@ describe("ClientsService", () => {
         }),
       }),
     );
+  });
+
+  it("recalcula os pontos existentes quando a regra muda", async () => {
+    redis.client.get.mockResolvedValue(
+      JSON.stringify({ id: clientId, gestor_id: gestorId }),
+    );
+    prisma.client.findUnique.mockResolvedValue({ settings: {} });
+    prisma.client.update.mockResolvedValue({
+      id: clientId,
+      gestor_id: gestorId,
+      company_name: "Acme",
+      settings: {},
+      _count: { leads: 0, event_participations: 0, vehicles: 0 },
+      facebook_ad_accounts: [],
+    });
+    prisma.scoreEvent.updateMany.mockResolvedValue({ count: 1 });
+
+    await service.updateForUser(
+      {
+        sub: gestorId,
+        role: Role.GESTOR,
+        email: "gestor@example.com",
+        name: "Gestor",
+        client_id: null,
+      },
+      clientId,
+      {
+        score_rules: {
+          scheduled_points: 0,
+          checkin_points: 5,
+          sold_points: 8,
+        },
+      },
+    );
+
+    expect(prisma.scoreEvent.updateMany).toHaveBeenNthCalledWith(1, {
+      where: { client_id: clientId, kind: "scheduled" },
+      data: { points: 0 },
+    });
+    expect(prisma.scoreEvent.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { client_id: clientId, kind: "checked_in" },
+      data: { points: 5 },
+    });
+    expect(prisma.scoreEvent.updateMany).toHaveBeenNthCalledWith(3, {
+      where: { client_id: clientId, kind: "sold" },
+      data: { points: 8 },
+    });
   });
 });
