@@ -14,6 +14,8 @@ import {
   AppointmentSource,
   AppointmentStatus,
   ConfirmationStatus,
+  CrmTaskStatus,
+  CrmTaskType,
   Lead,
   Prisma,
 } from "@prisma/client";
@@ -35,6 +37,11 @@ import { FindPipelinesQueryDto } from "./dto/find-pipelines-query.dto";
 import { GetDashboardReportQueryDto } from "./dto/get-dashboard-report-query.dto";
 import { MoveLeadDto } from "./dto/move-lead.dto";
 import {
+  CreateCrmTaskDto,
+  ListCrmTasksQueryDto,
+  UpdateCrmTaskDto,
+} from "./dto/crm-task.dto";
+import {
   clientIdToPipelineCode,
   clientIdToStageCode,
   getDefaultStageInputs,
@@ -55,6 +62,252 @@ export class CrmService {
     private readonly scoreEvents: ScoreEventsService,
     private readonly leadTimeline: LeadTimelineService,
   ) {}
+
+  private crmTaskInclude() {
+    return {
+      lead: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true,
+          crm_stage_id: true,
+          assigned_vendor_id: true,
+          crm_stage: { select: { id: true, name: true, color: true } },
+          assigned_vendor: { select: { id: true, name: true } },
+        },
+      },
+      assigned_user: { select: { id: true, name: true, email: true } },
+      created_by: { select: { id: true, name: true } },
+    } satisfies Prisma.CrmTaskInclude;
+  }
+
+  private saoPauloDay(day?: string) {
+    if (day) return day;
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  }
+
+  async listTasks(query: ListCrmTasksQueryDto, user: AuthenticatedUser) {
+    await this.assertUserCanAccessPipelineClient(user, query.client_id);
+
+    const day = this.saoPauloDay(query.day);
+    const start = new Date(`${day}T00:00:00-03:00`);
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    const dueFilter: Prisma.DateTimeFilter | undefined =
+      query.scope === "today"
+        ? { gte: start, lt: end }
+        : query.scope === "overdue"
+          ? { lt: start }
+          : query.scope === "upcoming"
+            ? { gte: end }
+            : undefined;
+
+    const where: Prisma.CrmTaskWhereInput = {
+      client_id: query.client_id,
+      ...(query.lead_id ? { lead_id: query.lead_id } : {}),
+      ...(query.assigned_user_id
+        ? { assigned_user_id: query.assigned_user_id }
+        : {}),
+      ...(query.status
+        ? { status: query.status }
+        : query.lead_id
+          ? {}
+          : { status: CrmTaskStatus.pending }),
+      ...(dueFilter ? { due_at: dueFilter } : {}),
+    };
+
+    if (user.role === Role.VENDEDOR) {
+      where.assigned_user_id = user.sub;
+    }
+
+    const tasks = await this.prisma.crmTask.findMany({
+      where,
+      include: this.crmTaskInclude(),
+      orderBy: [{ due_at: "asc" }, { created_at: "asc" }],
+      take: 500,
+    });
+
+    const now = new Date();
+    return {
+      day,
+      total: tasks.length,
+      overdue: tasks.filter(
+        (task) => task.status === CrmTaskStatus.pending && task.due_at < now,
+      ).length,
+      tasks,
+    };
+  }
+
+  async createTask(dto: CreateCrmTaskDto, user: AuthenticatedUser) {
+    await this.assertUserCanAccessPipelineClient(user, dto.client_id);
+    const lead = await this.prisma.lead.findFirst({
+      where: { id: dto.lead_id, client_id: dto.client_id, deleted_at: null },
+      select: { id: true, client_id: true, assigned_vendor_id: true },
+    });
+    if (!lead) throw new NotFoundException("Lead nao encontrado");
+    if (
+      user.role === Role.VENDEDOR &&
+      lead.assigned_vendor_id !== user.sub
+    ) {
+      throw new ForbiddenException("Sem permissao para criar tarefa neste lead");
+    }
+
+    const assignedUserId =
+      dto.assigned_user_id ?? lead.assigned_vendor_id ?? user.sub;
+    const assignee = await this.prisma.user.findFirst({
+      where: {
+        id: assignedUserId,
+        is_active: true,
+        OR: [{ client_id: dto.client_id }, { id: user.sub }],
+      },
+      select: { id: true },
+    });
+    if (!assignee) {
+      throw new BadRequestException("Responsavel invalido para este cliente");
+    }
+
+    const dueAt = new Date(dto.due_at);
+    if (Number.isNaN(dueAt.getTime())) {
+      throw new BadRequestException("Data de vencimento invalida");
+    }
+
+    const task = await this.prisma.crmTask.create({
+      data: {
+        client_id: dto.client_id,
+        lead_id: dto.lead_id,
+        assigned_user_id: assignedUserId,
+        created_by_id: user.sub,
+        type: dto.type,
+        title: dto.title.trim(),
+        notes: dto.notes?.trim() || null,
+        due_at: dueAt,
+      },
+      include: this.crmTaskInclude(),
+    });
+
+    await this.leadTimeline.record({
+      clientId: dto.client_id,
+      leadId: dto.lead_id,
+      eventType: "task_created",
+      origin: user.role === Role.VENDEDOR ? "vendor" : "gestor",
+      actorId: user.sub,
+      actorLabel: user.name,
+      notes: task.title,
+      metadata: {
+        task_id: task.id,
+        task_type: task.type,
+        due_at: task.due_at.toISOString(),
+        assigned_user_id: task.assigned_user_id,
+      },
+    });
+    this.realtimeEvents.emitLeadUpdated(dto.client_id, {
+      client_id: dto.client_id,
+      lead_id: dto.lead_id,
+      action: "task_created",
+      updated_at: new Date().toISOString(),
+    });
+    return task;
+  }
+
+  async updateTask(
+    taskId: string,
+    dto: UpdateCrmTaskDto,
+    user: AuthenticatedUser,
+  ) {
+    const current = await this.prisma.crmTask.findUnique({
+      where: { id: taskId },
+      include: { lead: { select: { assigned_vendor_id: true } } },
+    });
+    if (!current) throw new NotFoundException("Tarefa nao encontrada");
+    await this.assertUserCanAccessPipelineClient(user, current.client_id);
+    if (
+      user.role === Role.VENDEDOR &&
+      current.assigned_user_id !== user.sub &&
+      current.lead.assigned_vendor_id !== user.sub
+    ) {
+      throw new ForbiddenException("Sem permissao para atualizar esta tarefa");
+    }
+
+    if (dto.assigned_user_id) {
+      const validAssignee = await this.prisma.user.count({
+        where: {
+          id: dto.assigned_user_id,
+          client_id: current.client_id,
+          is_active: true,
+        },
+      });
+      if (!validAssignee) {
+        throw new BadRequestException("Responsavel invalido para este cliente");
+      }
+    }
+
+    const completedAt =
+      dto.status === CrmTaskStatus.completed
+        ? new Date()
+        : dto.status === CrmTaskStatus.pending
+          ? null
+          : current.completed_at;
+    const task = await this.prisma.crmTask.update({
+      where: { id: taskId },
+      data: {
+        ...(dto.status ? { status: dto.status, completed_at: completedAt } : {}),
+        ...(dto.assigned_user_id
+          ? { assigned_user_id: dto.assigned_user_id }
+          : {}),
+        ...(dto.due_at ? { due_at: new Date(dto.due_at) } : {}),
+        ...(dto.title ? { title: dto.title.trim() } : {}),
+        ...(dto.notes !== undefined
+          ? { notes: dto.notes.trim() || null }
+          : {}),
+      },
+      include: this.crmTaskInclude(),
+    });
+
+    if (
+      dto.status === CrmTaskStatus.completed &&
+      current.status !== CrmTaskStatus.completed
+    ) {
+      if (
+        current.type === CrmTaskType.call ||
+        current.type === CrmTaskType.whatsapp
+      ) {
+        const contactAt = task.completed_at ?? new Date();
+        await this.prisma.lead.update({
+          where: { id: current.lead_id },
+          data: {
+            last_contact_at: contactAt,
+            ...(await this.prisma.lead.count({
+              where: { id: current.lead_id, first_contact_at: null },
+            }))
+              ? { first_contact_at: contactAt }
+              : {},
+          },
+        });
+      }
+      await this.leadTimeline.record({
+        clientId: current.client_id,
+        leadId: current.lead_id,
+        eventType: "task_completed",
+        origin: user.role === Role.VENDEDOR ? "vendor" : "gestor",
+        actorId: user.sub,
+        actorLabel: user.name,
+        notes: task.title,
+        metadata: { task_id: task.id, task_type: task.type },
+      });
+    }
+    this.realtimeEvents.emitLeadUpdated(current.client_id, {
+      client_id: current.client_id,
+      lead_id: current.lead_id,
+      action: "task_updated",
+      updated_at: new Date().toISOString(),
+    });
+    return task;
+  }
 
   private confirmationStatusLabel(status: string) {
     if (status === "pending") return "Pendente";

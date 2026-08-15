@@ -44,6 +44,8 @@ model User {
   managed_clients              Client[]            @relation("GestorClients")
   course_progress              CourseProgress[]
   crm_changes                  CrmHistory[]
+  crm_tasks_assigned           CrmTask[]           @relation("CrmTaskAssignee")
+  crm_tasks_created            CrmTask[]           @relation("CrmTaskCreator")
   assigned_leads               Lead[]              @relation("VendorLeads")
   attended_leads               Lead[]              @relation("LeadAttendantUser")
   registered_leads             Lead[]              @relation("LeadRegisteredBy")
@@ -275,6 +277,7 @@ model Client {
   notifications               Notification[]
   vendor_availabilities       VendorAvailability[]
   vendor_attendances          VendorAttendance[]
+  crm_tasks                   CrmTask[]
 
   @@index([gestor_id])
   @@map("clients")
@@ -357,6 +360,7 @@ model Lead {
   conversation_states         ConversationState[]
   conversations               Conversation[]
   crm_history                 CrmHistory[]
+  crm_tasks                   CrmTask[]
   lead_timeline               LeadTimeline[]
   dispatch_events             DispatchEvent[]
   assigned_vendor             User?                      @relation("VendorLeads", fields: [assigned_vendor_id], references: [id])
@@ -557,6 +561,31 @@ model LeadTimeline {
   @@index([lead_id, occurred_at])
   @@index([client_id])
   @@map("lead_timeline")
+}
+
+model CrmTask {
+  id               String        @id @default(uuid()) @db.Uuid
+  client_id        String        @db.Uuid
+  lead_id          String        @db.Uuid
+  assigned_user_id String?       @db.Uuid
+  created_by_id    String        @db.Uuid
+  type             CrmTaskType
+  title            String        @db.VarChar(160)
+  notes            String?
+  due_at           DateTime
+  status           CrmTaskStatus @default(pending)
+  completed_at     DateTime?
+  created_at       DateTime      @default(now())
+  updated_at       DateTime      @updatedAt
+  lead             Lead          @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+  client           Client        @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  assigned_user    User?         @relation("CrmTaskAssignee", fields: [assigned_user_id], references: [id], onDelete: SetNull)
+  created_by       User          @relation("CrmTaskCreator", fields: [created_by_id], references: [id], onDelete: Restrict)
+
+  @@index([client_id, status, due_at])
+  @@index([assigned_user_id, status, due_at])
+  @@index([lead_id, created_at])
+  @@map("crm_tasks")
 }
 
 model Campaign {
@@ -1686,6 +1715,24 @@ enum LeadTimelineEventType {
   tag_removed
   note
   message
+  task_created
+  task_completed
+  action_recorded
+}
+
+enum CrmTaskType {
+  call
+  whatsapp
+  appointment
+  proposal
+  follow_up
+  other
+}
+
+enum CrmTaskStatus {
+  pending
+  completed
+  cancelled
 }
 
 enum LeadTimelineOrigin {

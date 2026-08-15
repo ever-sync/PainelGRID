@@ -1,4 +1,5 @@
 import { ConflictException, NotFoundException } from "@nestjs/common";
+import { CrmTaskType } from "@prisma/client";
 import { Role } from "../../common/types";
 import { CrmService } from "./crm.service";
 
@@ -13,16 +14,20 @@ describe("CrmService", () => {
   let config: any;
   let webhookDispatch: any;
   let realtimeEvents: any;
+  let leadTimeline: any;
   let service: CrmService;
 
   beforeEach(() => {
     prisma = {
       lead: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         update: jest.fn(),
       },
       user: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
+        count: jest.fn(),
       },
       client: {
         count: jest.fn(),
@@ -45,6 +50,12 @@ describe("CrmService", () => {
       crmHistory: {
         create: jest.fn(),
       },
+      crmTask: {
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
       $transaction: jest.fn(async (callback: (tx: any) => Promise<unknown>) =>
         callback(prisma),
       ),
@@ -64,7 +75,7 @@ describe("CrmService", () => {
     };
 
     const scoreEvents = { award: jest.fn() };
-    const leadTimeline = {
+    leadTimeline = {
       record: jest.fn(),
       originFromSource: jest.fn(() => "crm"),
     };
@@ -75,6 +86,51 @@ describe("CrmService", () => {
       realtimeEvents,
       scoreEvents as any,
       leadTimeline as any,
+    );
+  });
+
+  it("cria proxima acao vinculada ao lead e registra na timeline", async () => {
+    prisma.client.count.mockResolvedValue(1);
+    prisma.lead.findFirst.mockResolvedValue({
+      id: leadId,
+      client_id: clientId,
+      assigned_vendor_id: userId,
+    });
+    prisma.user.findFirst.mockResolvedValue({ id: userId });
+    prisma.crmTask.create.mockImplementation(({ data }: any) =>
+      Promise.resolve({
+        id: "66666666-6666-4666-8666-666666666666",
+        ...data,
+        status: "pending",
+        assigned_user: { id: userId, name: "Vendedor" },
+        created_by: { id: userId, name: "Gestor" },
+      }),
+    );
+
+    const result = await service.createTask(
+      {
+        client_id: clientId,
+        lead_id: leadId,
+        type: CrmTaskType.follow_up,
+        title: "Retornar proposta",
+        due_at: "2026-08-16T10:00:00-03:00",
+      },
+      {
+        sub: userId,
+        email: "gestor@teste.com",
+        name: "Gestor",
+        role: Role.GESTOR,
+      },
+    );
+
+    expect(result.title).toBe("Retornar proposta");
+    expect(prisma.crmTask.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ assigned_user_id: userId }),
+      }),
+    );
+    expect(leadTimeline.record).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "task_created", leadId }),
     );
   });
 

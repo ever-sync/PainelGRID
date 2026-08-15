@@ -10,6 +10,7 @@ import {
   Mail,
   MessageCircle,
   Phone,
+  Plus,
   Tag,
   Target,
   TrendingUp,
@@ -23,7 +24,12 @@ import type { Lead } from "../../../types";
 import type { KanbanColumn } from "../../../lib/crm-kanban";
 import { readStoredSession } from "../../../services/auth";
 import {
+  createCrmTask,
+  listCrmTasks,
   listLeadTimeline,
+  updateCrmTask,
+  type ApiCrmTask,
+  type CrmTaskType,
   type ApiLeadTimelineItem,
 } from "../../../services/crm";
 import { updateLead } from "../../../services/leads";
@@ -70,6 +76,7 @@ export function LeadDetailModal({
     | "qualificacao"
     | "veiculo"
     | "meta"
+    | "tarefas"
     | "historico"
   >("pessoais");
   const [lead, setLead] = useState(initialLead);
@@ -101,6 +108,18 @@ export function LeadDetailModal({
   >(lead.qualification ?? {});
   const [history, setHistory] = useState<ApiLeadTimelineItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [tasks, setTasks] = useState<ApiCrmTask[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [taskSaving, setTaskSaving] = useState(false);
+  const [taskType, setTaskType] = useState<CrmTaskType>("follow_up");
+  const [taskTitle, setTaskTitle] = useState("Retornar contato");
+  const [taskDueAt, setTaskDueAt] = useState(() => {
+    const value = new Date(Date.now() + 60 * 60 * 1000);
+    value.setMinutes(0, 0, 0);
+    return new Date(value.getTime() - value.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16);
+  });
   const [movingStageId, setMovingStageId] = useState<string | null>(null);
 
   const vendorName = lead.assigned_vendor_id
@@ -174,6 +193,55 @@ export function LeadDetailModal({
       .catch(() => setHistory([]))
       .finally(() => setHistoryLoading(false));
   }, [historyVersion, lead.id]);
+
+  const loadTasks = async () => {
+    const token = readStoredSession()?.accessToken;
+    if (!token || !lead.client_id) return;
+    setTasksLoading(true);
+    try {
+      const response = await listCrmTasks(
+        { client_id: lead.client_id, lead_id: lead.id },
+        token,
+      );
+      setTasks(response.tasks);
+    } finally {
+      setTasksLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "tarefas") void loadTasks();
+  }, [activeTab, lead.id]);
+
+  const handleCreateTask = async () => {
+    const token = readStoredSession()?.accessToken;
+    if (!token || !lead.client_id || !taskTitle.trim() || !taskDueAt) return;
+    setTaskSaving(true);
+    try {
+      await createCrmTask(
+        {
+          client_id: lead.client_id,
+          lead_id: lead.id,
+          assigned_user_id: lead.assigned_vendor_id ?? undefined,
+          type: taskType,
+          title: taskTitle.trim(),
+          due_at: new Date(taskDueAt).toISOString(),
+        },
+        token,
+      );
+      await loadTasks();
+      setHistory((current) => current);
+    } finally {
+      setTaskSaving(false);
+    }
+  };
+
+  const handleCompleteTask = async (taskId: string) => {
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+    await updateCrmTask(taskId, { status: "completed" }, token);
+    await loadTasks();
+  };
 
   const handleSave = async () => {
     const token = readStoredSession()?.accessToken;
@@ -958,6 +1026,7 @@ export function LeadDetailModal({
                   { id: "qualificacao", label: "Qualificação" },
                   { id: "veiculo", label: "Veículo" },
                   { id: "meta", label: "Origem Meta" },
+                  { id: "tarefas", label: "Próxima ação" },
                   { id: "historico", label: "Histórico" },
                 ] as const
               ).map((tab) => (
@@ -1104,6 +1173,118 @@ export function LeadDetailModal({
                 </div>
               )}
 
+              {activeTab === "tarefas" && (
+                <div className="space-y-5">
+                  <section
+                    className={clsx(
+                      "rounded-2xl border p-4",
+                      dark
+                        ? "border-zinc-800 bg-[#111]"
+                        : "border-zinc-200 bg-zinc-50",
+                    )}
+                  >
+                    <div className="mb-4 flex items-center gap-2">
+                      <Clock size={16} className="text-[#FF0636]" />
+                      <h3 className="text-sm font-black">Agendar próxima ação</h3>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <select
+                        value={taskType}
+                        onChange={(event) =>
+                          setTaskType(event.target.value as CrmTaskType)
+                        }
+                        className={clsx(
+                          "rounded-xl border px-3 py-2.5 text-sm",
+                          dark
+                            ? "border-zinc-700 bg-[#0b0b0b]"
+                            : "border-zinc-200 bg-white",
+                        )}
+                      >
+                        <option value="follow_up">Retorno</option>
+                        <option value="call">Ligação</option>
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="appointment">Agendamento</option>
+                        <option value="proposal">Proposta</option>
+                        <option value="other">Outra ação</option>
+                      </select>
+                      <input
+                        type="datetime-local"
+                        value={taskDueAt}
+                        onChange={(event) => setTaskDueAt(event.target.value)}
+                        className={clsx(
+                          "rounded-xl border px-3 py-2.5 text-sm",
+                          dark
+                            ? "border-zinc-700 bg-[#0b0b0b]"
+                            : "border-zinc-200 bg-white",
+                        )}
+                      />
+                      <input
+                        value={taskTitle}
+                        onChange={(event) => setTaskTitle(event.target.value)}
+                        placeholder="Ex.: retornar proposta"
+                        className={clsx(
+                          "rounded-xl border px-3 py-2.5 text-sm sm:col-span-2",
+                          dark
+                            ? "border-zinc-700 bg-[#0b0b0b]"
+                            : "border-zinc-200 bg-white",
+                        )}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCreateTask}
+                      disabled={taskSaving || !taskTitle.trim() || !taskDueAt}
+                      className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#FF0636] px-4 py-2.5 text-xs font-black text-white disabled:opacity-50"
+                    >
+                      <Plus size={15} />
+                      {taskSaving ? "Salvando…" : "Criar próxima ação"}
+                    </button>
+                  </section>
+
+                  <section className="space-y-2">
+                    <h3 className="text-xs font-black uppercase tracking-[0.16em]">
+                      Histórico de tarefas
+                    </h3>
+                    {tasksLoading ? (
+                      <p className="py-4 text-sm text-zinc-500">Carregando…</p>
+                    ) : tasks.length === 0 ? (
+                      <p className="rounded-2xl border border-dashed p-5 text-sm text-zinc-500">
+                        Nenhuma próxima ação cadastrada.
+                      </p>
+                    ) : (
+                      tasks.map((task) => (
+                        <article
+                          key={task.id}
+                          className={clsx(
+                            "flex items-center justify-between gap-3 rounded-2xl border p-4",
+                            dark ? "border-zinc-800" : "border-zinc-200",
+                            task.status !== "pending" && "opacity-55",
+                          )}
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold">{task.title}</p>
+                            <p className="mt-1 text-xs text-zinc-500">
+                              {new Date(task.due_at).toLocaleString("pt-BR")} · {task.assigned_user?.name ?? "Sem responsável"}
+                            </p>
+                          </div>
+                          {task.status === "pending" ? (
+                            <button
+                              type="button"
+                              onClick={() => handleCompleteTask(task.id)}
+                              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-2 text-xs font-black text-white"
+                            >
+                              <Check size={14} /> Concluir
+                            </button>
+                          ) : (
+                            <span className="text-xs font-bold text-emerald-500">Concluída</span>
+                          )}
+                        </article>
+                      ))
+                    )}
+                  </section>
+                </div>
+              )}
+
               {activeTab === "qualificacao" && editing && (
                 <div className="grid gap-4 sm:grid-cols-2">
                   {[
@@ -1196,6 +1377,7 @@ export function LeadDetailModal({
               )}
 
               {activeTab !== "historico" &&
+                activeTab !== "tarefas" &&
                 !(activeTab === "qualificacao" && editing) && (
                   <div className="grid gap-3 sm:grid-cols-2">
                     {tabRows.map(({ label, value, icon: Icon }) => (

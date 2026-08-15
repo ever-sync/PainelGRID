@@ -95,6 +95,12 @@ export function timelineTitle(item: ApiLeadTimelineItem) {
       return "Anotação";
     case "message":
       return "Mensagem";
+    case "task_created":
+      return "Próxima ação criada";
+    case "task_completed":
+      return "Próxima ação concluída";
+    case "action_recorded":
+      return "Contato registrado";
     default:
       return item.event_type;
   }

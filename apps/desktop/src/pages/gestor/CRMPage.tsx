@@ -34,6 +34,7 @@ import {
   LayoutGrid,
   List,
   EyeOff,
+  CalendarCheck,
 } from "lucide-react";
 import { Card } from "../../components/ui/Card";
 import { ConfirmationBadge, SourceBadge } from "../../components/ui/Badge";
@@ -104,6 +105,7 @@ import { LeadDetailModal } from "./crm/LeadDetailModal";
 
 import { StageColumn } from "./crm/StageColumn";
 import { readCrmPreferences, writeCrmPreferences } from "./crm/crm-preferences";
+import { MyDayPanel } from "./crm/MyDayPanel";
 
 export function CRMPage() {
   const { user, setGestorClientId } = useGestorClient();
@@ -153,6 +155,7 @@ export function CRMPage() {
     confirmationFilter !== "all";
   const [activeId, setActiveId] = useState<string | null>(null);
   const [openLead, setOpenLead] = useState<Lead | null>(null);
+  const [myDayOpen, setMyDayOpen] = useState(false);
   const [openLeadHistoryVersion, setOpenLeadHistoryVersion] = useState(0);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastCounterRef = useRef(0);
@@ -1890,6 +1893,20 @@ export function CRMPage() {
                   {boardLoadingMore ? "Carregando" : "Carregar mais"}
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => setMyDayOpen(true)}
+                disabled={!selectedClient}
+                className={clsx(
+                  "inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-black transition-colors disabled:opacity-40",
+                  isDarkMode
+                    ? "bg-[#FF0636]/15 text-[#ff5272] hover:bg-[#FF0636]/25"
+                    : "bg-[#FF0636] text-white hover:bg-[#dc002c]",
+                )}
+              >
+                <CalendarCheck size={15} />
+                Meu Dia
+              </button>
               {(
                 [
                   ["kanban", "Kanban", KanbanSquare],
@@ -2428,6 +2445,27 @@ export function CRMPage() {
               return next;
             });
             showToast("Lead atualizado com sucesso.", "success");
+          }}
+        />
+      )}
+      {myDayOpen && selectedClient && (
+        <MyDayPanel
+          clientId={selectedClient}
+          dark={isDarkMode}
+          onClose={() => setMyDayOpen(false)}
+          onOpenLead={(leadId) => {
+            const existing = clientLeads.find((lead) => lead.id === leadId);
+            if (existing) {
+              setOpenLead(existing);
+              setMyDayOpen(false);
+              return;
+            }
+            const token = readStoredSession()?.accessToken;
+            if (!token) return;
+            void getLead(leadId, token).then((row) => {
+              setOpenLead(mapApiLeadToLead(row));
+              setMyDayOpen(false);
+            });
           }}
         />
       )}

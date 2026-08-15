@@ -73,7 +73,10 @@ export type ApiLeadTimelineEventType =
   | "tag_added"
   | "tag_removed"
   | "note"
-  | "message";
+  | "message"
+  | "task_created"
+  | "task_completed"
+  | "action_recorded";
 
 export type ApiLeadTimelineOrigin =
   | "crm"
@@ -102,6 +105,103 @@ export function listLeadTimeline(leadId: string, token: string) {
   return httpRequest<ApiLeadTimelineItem[]>(`/crm/leads/${leadId}/timeline`, {
     method: "GET",
     token,
+  });
+}
+
+export type CrmTaskType =
+  | "call"
+  | "whatsapp"
+  | "appointment"
+  | "proposal"
+  | "follow_up"
+  | "other";
+export type CrmTaskStatus = "pending" | "completed" | "cancelled";
+export type ApiCrmTask = {
+  id: string;
+  client_id: string;
+  lead_id: string;
+  assigned_user_id: string | null;
+  created_by_id: string;
+  type: CrmTaskType;
+  title: string;
+  notes: string | null;
+  due_at: string;
+  status: CrmTaskStatus;
+  completed_at: string | null;
+  created_at: string;
+  lead: {
+    id: string;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    crm_stage_id: string | null;
+    assigned_vendor_id: string | null;
+    crm_stage: { id: string; name: string; color: string } | null;
+    assigned_vendor: { id: string; name: string } | null;
+  };
+  assigned_user: { id: string; name: string; email: string } | null;
+  created_by: { id: string; name: string };
+};
+
+export type CrmTasksResponse = {
+  day: string;
+  total: number;
+  overdue: number;
+  tasks: ApiCrmTask[];
+};
+
+export function listCrmTasks(
+  query: {
+    client_id: string;
+    lead_id?: string;
+    assigned_user_id?: string;
+    status?: CrmTaskStatus;
+    scope?: "all" | "today" | "overdue" | "upcoming";
+    day?: string;
+  },
+  token: string,
+) {
+  const qs = new URLSearchParams(
+    Object.entries(query).filter((entry): entry is [string, string] =>
+      Boolean(entry[1]),
+    ),
+  );
+  return httpRequest<CrmTasksResponse>(`/crm/tasks?${qs.toString()}`, {
+    method: "GET",
+    token,
+  });
+}
+
+export function createCrmTask(
+  body: {
+    client_id: string;
+    lead_id: string;
+    assigned_user_id?: string;
+    type: CrmTaskType;
+    title: string;
+    notes?: string;
+    due_at: string;
+  },
+  token: string,
+) {
+  return httpRequest<ApiCrmTask>("/crm/tasks", { method: "POST", token, body });
+}
+
+export function updateCrmTask(
+  taskId: string,
+  body: Partial<{
+    status: CrmTaskStatus;
+    assigned_user_id: string;
+    due_at: string;
+    title: string;
+    notes: string;
+  }>,
+  token: string,
+) {
+  return httpRequest<ApiCrmTask>(`/crm/tasks/${taskId}`, {
+    method: "PATCH",
+    token,
+    body,
   });
 }
 

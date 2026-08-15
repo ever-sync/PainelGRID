@@ -5,6 +5,7 @@ import {
   Headers,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from "@nestjs/common";
@@ -26,12 +27,48 @@ import { FindPipelinesQueryDto } from "./dto/find-pipelines-query.dto";
 import { GetDashboardReportQueryDto } from "./dto/get-dashboard-report-query.dto";
 import { BulkMoveLeadsDto } from "./dto/bulk-move-leads.dto";
 import { MoveLeadDto } from "./dto/move-lead.dto";
+import {
+  CreateCrmTaskDto,
+  ListCrmTasksQueryDto,
+  UpdateCrmTaskDto,
+} from "./dto/crm-task.dto";
 
 @ApiTags("crm")
 @ApiBearerAuth()
 @Controller("crm")
 export class CrmController {
   constructor(private readonly crmService: CrmService) {}
+
+  @Get("tasks")
+  @Roles(Role.GESTOR, Role.CLIENTE, Role.VENDEDOR)
+  @ApiOperation({ summary: "Lista tarefas e proximas acoes do CRM" })
+  listTasks(
+    @Query() query: ListCrmTasksQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.crmService.listTasks(query, user);
+  }
+
+  @Post("tasks")
+  @Roles(Role.GESTOR, Role.CLIENTE, Role.VENDEDOR)
+  @ApiOperation({ summary: "Cria uma tarefa ou proxima acao para o lead" })
+  createTask(
+    @Body() dto: CreateCrmTaskDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.crmService.createTask(dto, user);
+  }
+
+  @Patch("tasks/:taskId")
+  @Roles(Role.GESTOR, Role.CLIENTE, Role.VENDEDOR)
+  @ApiOperation({ summary: "Atualiza ou conclui uma tarefa do CRM" })
+  updateTask(
+    @Param("taskId", new ParseUUIDPipe()) taskId: string,
+    @Body() dto: UpdateCrmTaskDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.crmService.updateTask(taskId, dto, user);
+  }
 
   @Get("pipelines")
   @Roles(Role.GESTOR)
