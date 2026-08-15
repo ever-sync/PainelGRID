@@ -907,6 +907,58 @@ describe("LeadsService", () => {
     );
   });
 
+  it("move automaticamente o lead para Presenca Confirmada no check-in da recepcao", async () => {
+    const presenceStage = {
+      id: "stage-presenca-confirmada",
+      client_id: clientId,
+      pipeline_id: "pipeline-principal",
+    };
+    prisma.lead.findFirst.mockResolvedValue({
+      ...baseExistingLead,
+      crm_pipeline_id: "pipeline-principal",
+      crm_stage_id: "stage-novo-lead",
+    });
+    prisma.crmStage.findFirst.mockResolvedValue(presenceStage);
+    prisma.lead.update.mockImplementation(async ({ data }) => ({
+      ...baseExistingLead,
+      ...data,
+      crm_pipeline_id: presenceStage.pipeline_id,
+      crm_stage_id: presenceStage.id,
+    }));
+
+    await service.update(
+      {
+        sub: "reception-1",
+        role: Role.RECEPCAO,
+        name: "Recepcao",
+        email: "recepcao@teste.com",
+        client_id: clientId,
+      },
+      baseExistingLead.id,
+      { confirmation_status: ConfirmationStatus.checked_in },
+    );
+
+    expect(prisma.lead.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: baseExistingLead.id },
+        data: expect.objectContaining({
+          confirmation_status: ConfirmationStatus.checked_in,
+          confirmation_date: expect.any(Date),
+          crm_pipeline_id: presenceStage.pipeline_id,
+          crm_stage_id: presenceStage.id,
+        }),
+      }),
+    );
+    expect(prisma.crmHistory.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        lead_id: baseExistingLead.id,
+        from_stage_id: "stage-novo-lead",
+        to_stage_id: presenceStage.id,
+        notes: "Lead chegou à loja — check-in realizado pela recepção",
+      }),
+    });
+  });
+
   it("impede vendedor de assumir lead ja cadastrado no evento", async () => {
     prisma.lead.findFirst.mockResolvedValue({
       ...baseExistingLead,

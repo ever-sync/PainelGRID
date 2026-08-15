@@ -1876,19 +1876,75 @@ export class LeadsService {
     if (user.role !== Role.VENDEDOR && user.role !== Role.RECEPCAO) {
       await this.syncLeadVendorBinding(lead, dto, data);
     }
-    const stageWasChanged =
-      nextStageId != null && nextStageId !== lead.crm_stage_id;
-    let stageChangedWithAutoStatus = false;
-    let targetStage: {
+
+    // O check-in feito pela recepção precisa produzir a mesma transição de CRM
+    // em todos os fluxos (QR Code, agendamento e check-in rápido). Antes, a
+    // atualização genérica alterava somente o status e o card permanecia em
+    // "Novo Lead".
+    const isReceptionCheckin =
+      user.role === Role.RECEPCAO &&
+      dto.confirmation_status === ConfirmationStatus.checked_in &&
+      lead.confirmation_status !== ConfirmationStatus.checked_in;
+    let effectiveStageId = nextStageId;
+    let receptionPresenceStage: {
       id: string;
       client_id: string;
       pipeline_id: string;
     } | null = null;
 
-    if (stageWasChanged) {
+    if (isReceptionCheckin) {
+      data.confirmation_date = new Date();
+      const presenceCode = clientIdToStageCode(
+        targetClientId,
+        "PRESENCA_CONFIRMADA",
+      );
+      const pipelineFilter = lead.crm_pipeline_id
+        ? { pipeline_id: lead.crm_pipeline_id }
+        : {};
+
+      receptionPresenceStage =
+        (await this.prisma.crmStage.findFirst({
+          where: {
+            client_id: targetClientId,
+            ...pipelineFilter,
+            code: presenceCode,
+          },
+          select: { id: true, client_id: true, pipeline_id: true },
+        })) ??
+        (await this.prisma.crmStage.findFirst({
+          where: {
+            client_id: targetClientId,
+            ...pipelineFilter,
+            code: { endsWith: "_PRESENCA_CONFIRMADA" },
+          },
+          orderBy: { display_order: "asc" },
+          select: { id: true, client_id: true, pipeline_id: true },
+        }));
+
+      if (receptionPresenceStage) {
+        effectiveStageId = receptionPresenceStage.id;
+        data.crm_pipeline_id = receptionPresenceStage.pipeline_id;
+        data.crm_stage_id = receptionPresenceStage.id;
+      } else {
+        this.logger.warn(
+          `Etapa Presença Confirmada não encontrada no check-in da recepção: lead=${lead.id} client=${targetClientId}`,
+        );
+      }
+    }
+
+    const stageWasChanged =
+      effectiveStageId != null && effectiveStageId !== lead.crm_stage_id;
+    let stageChangedWithAutoStatus = false;
+    let targetStage: {
+      id: string;
+      client_id: string;
+      pipeline_id: string;
+    } | null = receptionPresenceStage;
+
+    if (stageWasChanged && !targetStage) {
       targetStage = await this.prisma.crmStage.findFirst({
         where: {
-          id: nextStageId,
+          id: effectiveStageId!,
           client_id: targetClientId,
           ...(dto.crm_pipeline_id || lead.crm_pipeline_id
             ? {
@@ -1939,11 +1995,13 @@ export class LeadsService {
                 from_stage_id: lead.crm_stage_id,
                 to_stage_id: targetStage.id,
                 changed_by_user_id: user.sub,
-                notes: stageChangedWithAutoStatus
-                  ? dto.notes?.trim()
-                    ? `${dto.notes.trim()}\nStatus automático atualizado pela etapa do CRM`
-                    : "Status automático atualizado pela etapa do CRM"
-                  : dto.notes?.trim() || null,
+                notes: isReceptionCheckin
+                  ? "Lead chegou à loja — check-in realizado pela recepção"
+                  : stageChangedWithAutoStatus
+                    ? dto.notes?.trim()
+                      ? `${dto.notes.trim()}\nStatus automático atualizado pela etapa do CRM`
+                      : "Status automático atualizado pela etapa do CRM"
+                    : dto.notes?.trim() || null,
               },
             });
 
@@ -4747,6 +4805,7 @@ export class LeadsService {
       where: { id: lead.id },
       data: {
         confirmation_status: ConfirmationStatus.checked_in,
+        confirmation_date: lead.confirmation_date ?? checkedInAt,
         ...(targetStageId
           ? {
               crm_pipeline_id: pipelineId,
