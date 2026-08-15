@@ -21,6 +21,7 @@ import { ScoreEventsService } from "../score-events/score-events.service";
 import { resolveConfirmationStatusForStage } from "../clients/client-settings";
 import { CreateSaleDto } from "./dto/create-sale.dto";
 import { CreateQuickSaleDto } from "./dto/create-quick-sale.dto";
+import { UpdateSaleDto } from "./dto/update-sale.dto";
 import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.service";
 
 @Injectable()
@@ -552,6 +553,130 @@ export class SalesService {
       vendor_name: row.vendor.name,
       finished_at: row.finished_at?.toISOString() ?? null,
     }));
+  }
+
+  async update(user: AuthenticatedUser, saleId: string, dto: UpdateSaleDto) {
+    if (user.role !== Role.GESTOR) {
+      throw new ForbiddenException("Apenas gestor pode editar vendas");
+    }
+
+    const sale = await this.prisma.sale.findUnique({
+      where: { id: saleId },
+      include: { appointment: { select: { event_id: true } } },
+    });
+    if (!sale) throw new NotFoundException("Venda não encontrada");
+
+    const [lead, membership] = await Promise.all([
+      this.prisma.lead.findFirst({
+        where: { id: dto.lead_id, client_id: sale.client_id, deleted_at: null },
+        select: { id: true },
+      }),
+      this.prisma.salesTeamMember.findFirst({
+        where: {
+          user_id: dto.vendor_id,
+          team: { event_id: sale.appointment.event_id },
+        },
+        select: { team_id: true, user: { select: { client_id: true } } },
+      }),
+    ]);
+    if (!lead) throw new NotFoundException("Comprador não encontrado");
+    if (!membership || membership.user.client_id !== sale.client_id) {
+      throw new BadRequestException("Vendedor não participa deste evento");
+    }
+
+    const soldAt = new Date(dto.sold_at);
+    const product = dto.product.trim();
+    if (!product) throw new BadRequestException("Produto da venda inválido");
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.sale.update({
+        where: { id: saleId },
+        data: {
+          lead_id: dto.lead_id,
+          vendor_id: dto.vendor_id,
+          team_id: membership.team_id,
+          type: dto.type,
+          model: product,
+          value: this.parseCurrency(dto.value),
+          sold_at: soldAt,
+          order_number: dto.order_number?.trim() || null,
+          notes: dto.notes?.trim() || null,
+        },
+      });
+      await tx.appointment.update({
+        where: { id: sale.appointment_id },
+        data: { lead_id: dto.lead_id },
+      });
+      await tx.scoreEvent.updateMany({
+        where: {
+          appointment_id: sale.appointment_id,
+          kind: { in: ["checked_in", "sold"] },
+        },
+        data: {
+          client_id: sale.client_id,
+          lead_id: dto.lead_id,
+          vendor_id: dto.vendor_id,
+          earned_at: soldAt,
+        },
+      });
+      await tx.lead.update({
+        where: { id: dto.lead_id },
+        data: {
+          assigned_vendor_id: dto.vendor_id,
+          sold_by_vendor_id: dto.vendor_id,
+          team_id: membership.team_id,
+        },
+      });
+      if (sale.lead_id !== dto.lead_id) {
+        const oldLeadStillSold = await tx.sale.count({
+          where: { lead_id: sale.lead_id, id: { not: saleId } },
+        });
+        if (oldLeadStillSold === 0) {
+          await tx.lead.update({
+            where: { id: sale.lead_id },
+            data: { sold_by_vendor_id: null },
+          });
+        }
+      }
+      return next;
+    });
+
+    this.realtimeEvents.emitLeadUpdated(sale.client_id, {
+      client_id: sale.client_id,
+      lead_id: dto.lead_id,
+      action: "sale_updated",
+      updated_at: new Date().toISOString(),
+    });
+    return this.toResponse(updated);
+  }
+
+  async remove(user: AuthenticatedUser, saleId: string) {
+    if (user.role !== Role.GESTOR) {
+      throw new ForbiddenException("Apenas gestor pode excluir vendas");
+    }
+    const sale = await this.prisma.sale.findUnique({ where: { id: saleId } });
+    if (!sale) throw new NotFoundException("Venda não encontrada");
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.sale.delete({ where: { id: saleId } });
+      const remainingSales = await tx.sale.count({
+        where: { lead_id: sale.lead_id },
+      });
+      if (remainingSales === 0) {
+        await tx.lead.update({
+          where: { id: sale.lead_id },
+          data: { sold_by_vendor_id: null },
+        });
+      }
+    });
+
+    this.realtimeEvents.emitLeadUpdated(sale.client_id, {
+      client_id: sale.client_id,
+      lead_id: sale.lead_id,
+      action: "sale_deleted",
+      updated_at: new Date().toISOString(),
+    });
+    return { deleted: true };
   }
 
   async listBuyers(user: AuthenticatedUser, clientId: string, search?: string) {

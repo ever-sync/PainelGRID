@@ -129,6 +129,36 @@ export function listPendingEventSales(token: string, eventId: string) {
   );
 }
 
+export type UpdateSalePayload = {
+  lead_id: string;
+  vendor_id: string;
+  type: SaleType;
+  product: string;
+  value: string;
+  sold_at: string;
+  order_number?: string;
+  notes?: string;
+};
+
+export function updateSale(
+  token: string,
+  saleId: string,
+  body: UpdateSalePayload,
+) {
+  return httpRequest<SaleResponse>(`/sales/${saleId}`, {
+    method: "PATCH",
+    token,
+    body,
+  });
+}
+
+export function deleteSale(token: string, saleId: string) {
+  return httpRequest<{ deleted: boolean }>(`/sales/${saleId}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
 export function listQuickSaleBuyers(
   token: string,
   clientId: string,

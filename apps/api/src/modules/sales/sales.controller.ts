@@ -1,8 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from "@nestjs/common";
@@ -17,6 +20,7 @@ import { Role } from "../../common/types";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { CreateSaleDto } from "./dto/create-sale.dto";
 import { CreateQuickSaleDto } from "./dto/create-quick-sale.dto";
+import { UpdateSaleDto } from "./dto/update-sale.dto";
 import { SalesService } from "./sales.service";
 
 @ApiTags("sales")
@@ -82,5 +86,26 @@ export class SalesController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.salesService.createQuickSale(user, dto);
+  }
+
+  @Patch(":id")
+  @Roles(Role.GESTOR)
+  @ApiOperation({ summary: "Atualiza uma venda registrada" })
+  update(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: UpdateSaleDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.salesService.update(user, id, dto);
+  }
+
+  @Delete(":id")
+  @Roles(Role.GESTOR)
+  @ApiOperation({ summary: "Exclui uma venda registrada" })
+  remove(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.salesService.remove(user, id);
   }
 }
