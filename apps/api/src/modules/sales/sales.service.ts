@@ -32,7 +32,11 @@ export class SalesService {
     private readonly dispatchTracking: DispatchTrackingService,
   ) {}
 
-  async create(user: AuthenticatedUser, dto: CreateSaleDto) {
+  async create(
+    user: AuthenticatedUser,
+    dto: CreateSaleDto,
+    options: { authorizedQuickSale?: boolean } = {},
+  ) {
     if (!user.client_id) {
       throw new ForbiddenException("Empresa nao identificada");
     }
@@ -53,6 +57,7 @@ export class SalesService {
     });
     if (
       user.role === Role.VENDEDOR &&
+      !options.authorizedQuickSale &&
       eventPermissions?.allow_vendor_create_sale === false
     ) {
       throw new ForbiddenException(
@@ -422,6 +427,7 @@ export class SalesService {
         order_number: dto.order_number,
         notes: dto.notes,
       },
+      { authorizedQuickSale: true },
     );
   }
 

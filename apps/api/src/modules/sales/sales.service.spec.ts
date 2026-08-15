@@ -122,6 +122,34 @@ describe("SalesService", () => {
     expect(prisma.sale.create).not.toHaveBeenCalled();
   });
 
+  it("mantém a venda rápida do gestor autorizada quando a venda direta do vendedor está bloqueada", async () => {
+    prisma.appointment.findUnique.mockResolvedValue(baseAppointment);
+    prisma.event.findUnique.mockResolvedValue({
+      allow_vendor_create_sale: false,
+      allow_reception_create_sale: false,
+    });
+    prisma.salesTeamMember.findFirst.mockResolvedValue({
+      team_id: teamId,
+      user: { client_id: clientId },
+    });
+    prisma.sale.create.mockResolvedValue({ ...sale, order_number: "PEDIDO-1" });
+
+    const result = await service.create(
+      user as any,
+      {
+        appointment_id: appointmentId,
+        type: SaleType.NOVO,
+        product: "Onix",
+        value: "120000",
+        order_number: "PEDIDO-1",
+      },
+      { authorizedQuickSale: true },
+    );
+
+    expect(result).toEqual(expect.objectContaining({ vendor_id: vendorId }));
+    expect(prisma.sale.create).toHaveBeenCalled();
+  });
+
   it("permite venda pela recepção quando o evento está liberado", async () => {
     prisma.event.findUnique.mockResolvedValue({
       allow_vendor_create_sale: true,
