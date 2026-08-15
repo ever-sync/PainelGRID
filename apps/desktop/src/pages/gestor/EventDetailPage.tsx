@@ -1392,6 +1392,8 @@ export function EventDetailPage() {
     const session = readStoredSession();
     if (!session?.accessToken) return;
     const previousTeams = teams;
+    setSettingsError("");
+    setSettingsSuccess("");
     setQueueSaving(memberId);
     setTeams((current) =>
       current.map((team) => ({
@@ -1416,6 +1418,10 @@ export function EventDetailPage() {
         orderedCategoryMembers.map((member) => member.user_id),
         queueCategory,
       );
+      const confirmedTeams = await listSalesTeams(session.accessToken, eventId);
+      setTeams(confirmedTeams);
+      setSettingsSuccess("Ordem da fila salva com sucesso.");
+      window.setTimeout(() => setSettingsSuccess(""), 3500);
     } catch (queueError) {
       setTeams(previousTeams);
       setSettingsError(
@@ -2828,7 +2834,8 @@ export function EventDetailPage() {
                         onClick={() =>
                           void handleReorderCategoryMember(member.user_id, -1)
                         }
-                        className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 disabled:opacity-30 dark:hover:bg-zinc-800"
+                        title="Mover uma posição para cima"
+                        className="rounded-lg border border-transparent p-2 text-zinc-500 transition-colors hover:border-zinc-200 hover:bg-zinc-100 hover:text-[#E51838] disabled:opacity-30 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
                       >
                         <ChevronUp size={16} />
                       </button>
@@ -2842,7 +2849,8 @@ export function EventDetailPage() {
                         onClick={() =>
                           void handleReorderCategoryMember(member.user_id, 1)
                         }
-                        className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 disabled:opacity-30 dark:hover:bg-zinc-800"
+                        title="Mover uma posição para baixo"
+                        className="rounded-lg border border-transparent p-2 text-zinc-500 transition-colors hover:border-zinc-200 hover:bg-zinc-100 hover:text-[#E51838] disabled:opacity-30 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
                       >
                         <ChevronDown size={16} />
                       </button>
