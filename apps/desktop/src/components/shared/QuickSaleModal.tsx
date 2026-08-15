@@ -88,6 +88,7 @@ export function QuickSaleModal({
   const [wristband, setWristband] = useState("");
   const [loading, setLoading] = useState(false);
   const [buyersLoading, setBuyersLoading] = useState(false);
+  const [vehiclesLoading, setVehiclesLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
@@ -136,14 +137,10 @@ export function QuickSaleModal({
     setNewVehicleBrand("");
     setNewVehicleModel("");
     setNewVehicleYearOrKm("");
-    void Promise.all([
-      listEvents({ client_id: clientId }, token),
-      listClientVehicles(clientId, { status: true }, token),
-    ])
-      .then(([eventRows, vehicleRows]) => {
+    void listEvents({ client_id: clientId }, token)
+      .then((eventRows) => {
         setEvents(eventRows);
         setVendors([]);
-        setVehicles(vehicleRows);
         if (prefill?.clientId === clientId) {
           setEventId(prefill.eventId);
           setLeadId(prefill.leadId);
@@ -236,6 +233,48 @@ export function QuickSaleModal({
       window.clearTimeout(timeout);
     };
   }, [buyerSearch, clientId, leadId, open]);
+
+  useEffect(() => {
+    if (!open || !clientId) return;
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+
+    let active = true;
+    const timeout = window.setTimeout(
+      () => {
+        setVehiclesLoading(true);
+        void listClientVehicles(
+          clientId,
+          {
+            status: true,
+            ...(vehicleSearch.trim() ? { search: vehicleSearch.trim() } : {}),
+          },
+          token,
+        )
+          .then((rows) => {
+            if (active) setVehicles(rows);
+          })
+          .catch((error) => {
+            if (active) {
+              setMessage(
+                error instanceof Error
+                  ? error.message
+                  : "Falha ao buscar os veículos.",
+              );
+            }
+          })
+          .finally(() => {
+            if (active) setVehiclesLoading(false);
+          });
+      },
+      vehicleSearch.trim() ? 220 : 0,
+    );
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [clientId, open, vehicleSearch]);
 
   const sortedBuyerResults = useMemo(() => {
     const query = buyerSearch.trim().toLocaleLowerCase("pt-BR");
@@ -529,47 +568,90 @@ export function QuickSaleModal({
               </div>
             )}
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <section className="space-y-3 rounded-2xl border border-border bg-muted/20 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-foreground">Veículo</p>
+                  <p className="text-xs text-muted-foreground">
+                    Busque pelo nome, marca ou modelo e clique para selecionar.
+                  </p>
+                </div>
+                <span className="rounded-full bg-background px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                  {vehiclesLoading
+                    ? "Buscando..."
+                    : `${filteredVehicles.length} encontrado(s)`}
+                </span>
+              </div>
               <Input
-                label="Buscar carro"
+                label="Buscar veículo"
                 value={vehicleSearch}
                 onChange={(event) => setVehicleSearch(event.target.value)}
-                placeholder="Digite a marca ou o nome do carro"
+                placeholder="Ex.: Nivus, T-Cross, Volkswagen..."
                 icon={<Search size={16} />}
                 disabled={loading || !clientId}
               />
-              <Select
-                label="Carro"
-                value={vehicleId}
-                onValueChange={(next) => {
-                  setVehicleId(next);
-                  if (next !== NEW_VEHICLE) {
-                    setNewVehicleBrand("");
-                    setNewVehicleModel("");
-                    setNewVehicleYearOrKm("");
-                  }
-                }}
-                options={[
-                  ...filteredVehicles.map((vehicle) => ({
-                    value: vehicle.id,
-                    label: `${vehicle.brand} ${vehicle.model} · ${vehicle.year_or_km}`,
-                  })),
-                  {
-                    value: NEW_VEHICLE,
-                    label: "+ Cadastrar carro que não está na lista",
-                  },
-                ]}
-                placeholder="Selecione do estoque"
-                disabled={loading || !clientId}
-              />
-              {vehicleSearch.trim() && filteredVehicles.length === 0 ? (
-                <p className="-mt-2 text-xs text-muted-foreground md:col-span-2">
-                  Nenhum carro encontrado. Use a opção de cadastrar um novo
-                  carro.
-                </p>
-              ) : null}
+              <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
+                {filteredVehicles.map((vehicle) => {
+                  const selected = vehicleId === vehicle.id;
+                  return (
+                    <button
+                      key={vehicle.id}
+                      type="button"
+                      onClick={() => {
+                        setVehicleId(vehicle.id);
+                        setNewVehicleBrand("");
+                        setNewVehicleModel("");
+                        setNewVehicleYearOrKm("");
+                        if (!value && Number(vehicle.price) > 0) {
+                          setValue(vehicle.price);
+                        }
+                      }}
+                      className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-3 text-left transition-colors ${
+                        selected
+                          ? "border-[#E51838] bg-[#E51838]/10"
+                          : "border-border bg-background hover:border-[#E51838]/40"
+                      }`}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-bold text-foreground">
+                          {vehicle.brand} {vehicle.model}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {vehicle.year_or_km || "Ano a definir"}
+                          {Number(vehicle.price) > 0
+                            ? ` · R$ ${Number(vehicle.price).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                            : ""}
+                        </span>
+                      </span>
+                      {selected ? (
+                        <CheckCircle2
+                          size={19}
+                          className="shrink-0 text-[#E51838]"
+                        />
+                      ) : null}
+                    </button>
+                  );
+                })}
+                {!vehiclesLoading && filteredVehicles.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
+                    Nenhum veículo encontrado com esta busca.
+                  </p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => setVehicleId(NEW_VEHICLE)}
+                className={`flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-bold transition-colors ${
+                  vehicleId === NEW_VEHICLE
+                    ? "border-[#E51838] bg-[#E51838]/10 text-[#E51838]"
+                    : "border-dashed border-[#E51838]/40 text-[#E51838] hover:bg-[#E51838]/5"
+                }`}
+              >
+                <Plus size={16} />
+                Cadastrar carro que não está na lista
+              </button>
               {vehicleId === NEW_VEHICLE ? (
-                <div className="rounded-2xl border border-[#E51838]/20 bg-[#E51838]/5 p-4 md:col-span-2">
+                <div className="rounded-2xl border border-[#E51838]/20 bg-[#E51838]/5 p-4">
                   <div className="mb-3 flex items-center gap-2 text-sm font-bold text-[#E51838]">
                     <Plus size={16} />
                     Cadastrar novo carro na vitrine
@@ -602,6 +684,9 @@ export function QuickSaleModal({
                   </div>
                 </div>
               ) : null}
+            </section>
+
+            <div className="grid gap-4 md:grid-cols-2">
               <Select
                 label="Tipo da venda"
                 value={saleType}
