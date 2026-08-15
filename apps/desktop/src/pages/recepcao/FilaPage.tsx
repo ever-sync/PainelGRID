@@ -24,7 +24,6 @@ import { Select } from "../../components/ui/Select";
 import { readStoredSession } from "../../services/auth";
 import {
   getReceptionQueue,
-  getLead,
   closeLeadAttendance,
   changeAttendanceVendor,
   listVendorAvailability,
@@ -47,7 +46,6 @@ export function FilaPage() {
   const { user } = useOutletContext<OutletContext>();
   const clientId = resolveClientId(user);
   const [eventName, setEventName] = useState("");
-  const [eventId, setEventId] = useState("");
   const [leads, setLeads] = useState<ReceptionQueueLead[]>([]);
   const [vendors, setVendors] = useState<VendorAvailability[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +53,8 @@ export function FilaPage() {
   const [queuePage, setQueuePage] = useState(1);
   const [queueHasNextPage, setQueueHasNextPage] = useState(false);
   const [queueTotals, setQueueTotals] = useState({
-    waiting: 0,
+    generalWaiting: 0,
+    personalWaiting: 0,
     active: 0,
   });
   const [error, setError] = useState("");
@@ -95,17 +94,21 @@ export function FilaPage() {
       }
 
       setEventName(queue.event.name);
-      setEventId(queue.event.id);
       setLeads(queue.leads);
       setQueuePage(queue.page_info?.page ?? 1);
       setQueueHasNextPage(queue.page_info?.has_next_page ?? false);
       setQueueTotals({
-        waiting:
-          queue.page_info?.waiting_total ??
-          queue.leads.filter((lead) => !lead.assigned_vendor_id).length,
+        generalWaiting:
+          queue.page_info?.general_waiting_total ??
+          queue.leads.filter((lead) => lead.queue_state === "general_waiting")
+            .length,
+        personalWaiting:
+          queue.page_info?.personal_waiting_total ??
+          queue.leads.filter((lead) => lead.queue_state === "personal_waiting")
+            .length,
         active:
           queue.page_info?.active_total ??
-          queue.leads.filter((lead) => Boolean(lead.assigned_vendor_id)).length,
+          queue.leads.filter((lead) => lead.queue_state === "active").length,
       });
       setVendors(vendorRows);
       setError("");
@@ -124,108 +127,9 @@ export function FilaPage() {
     void load();
   }, [load]);
 
-  const applyRealtimeQueueLead = useCallback(
-    async (leadId: string, action?: string, isNewQueueEntry = false) => {
-      const token = readStoredSession()?.accessToken;
-      if (!token || !eventId) return;
-
-      if (action === "deleted") {
-        const previous = leads.find((lead) => lead.id === leadId);
-        if (previous) {
-          setQueueTotals((totals) => ({
-            waiting: Math.max(
-              0,
-              totals.waiting - (previous.assigned_vendor_id ? 0 : 1),
-            ),
-            active: Math.max(
-              0,
-              totals.active - (previous.assigned_vendor_id ? 1 : 0),
-            ),
-          }));
-          setLeads((current) => current.filter((lead) => lead.id !== leadId));
-        }
-        return;
-      }
-
-      try {
-        const [row, freshVendors] = await Promise.all([
-          getLead(leadId, token),
-          listVendorAvailability(token),
-        ]);
-        setVendors(freshVendors);
-        const belongsToQueue =
-          row.client_id === clientId &&
-          (row.event_interest_id ?? row.event_id) === eventId &&
-          row.confirmation_status === "checked_in" &&
-          (user.role !== "vendedor" || row.assigned_vendor_id === user.id);
-
-        const previous = leads.find((lead) => lead.id === leadId);
-        if (!belongsToQueue) {
-          if (!previous) return;
-          setQueueTotals((totals) => ({
-            waiting: Math.max(
-              0,
-              totals.waiting - (previous.assigned_vendor_id ? 0 : 1),
-            ),
-            active: Math.max(
-              0,
-              totals.active - (previous.assigned_vendor_id ? 1 : 0),
-            ),
-          }));
-          setLeads((current) => current.filter((lead) => lead.id !== leadId));
-          return;
-        }
-
-        const nextLead: ReceptionQueueLead = {
-          id: row.id,
-          name: row.name,
-          assigned_vendor_id: row.assigned_vendor_id,
-          assigned_vendor_name:
-            freshVendors.find((vendor) => vendor.id === row.assigned_vendor_id)
-              ?.name ?? null,
-          confirmation_date: row.confirmation_date,
-          created_at: row.created_at,
-          updated_at: row.updated_at,
-        };
-        const wasActive = Boolean(previous?.assigned_vendor_id);
-        const isActive = Boolean(nextLead.assigned_vendor_id);
-        if ((previous && wasActive !== isActive) || isNewQueueEntry) {
-          setQueueTotals((totals) => ({
-            waiting: Math.max(
-              0,
-              totals.waiting +
-                (!previous ? (isActive ? 0 : 1) : isActive ? -1 : 1),
-            ),
-            active: Math.max(
-              0,
-              totals.active +
-                (!previous ? (isActive ? 1 : 0) : isActive ? 1 : -1),
-            ),
-          }));
-        }
-        setLeads((current) =>
-          previous
-            ? current.map((lead) => (lead.id === leadId ? nextLead : lead))
-            : [...current, nextLead],
-        );
-      } catch {
-        // Uma falha pontual no getLead nao deve apagar a fila confirmada.
-      }
-    },
-    [clientId, eventId, leads, user.id, user.role],
-  );
-
   useLeadRealtimeSync(clientId, load, {
     refreshOnEvent: false,
-    onEvent: (eventName, payload) => {
-      if (payload.lead_id) {
-        void applyRealtimeQueueLead(
-          payload.lead_id,
-          payload.action,
-          eventName === "lead_checkin" || payload.action === "created",
-        );
-      }
-    },
+    onEvent: () => void load(),
   });
 
   const loadMore = useCallback(async () => {
@@ -248,7 +152,8 @@ export function FilaPage() {
       setQueuePage(queue.page_info.page);
       setQueueHasNextPage(queue.page_info.has_next_page);
       setQueueTotals({
-        waiting: queue.page_info.waiting_total,
+        generalWaiting: queue.page_info.general_waiting_total,
+        personalWaiting: queue.page_info.personal_waiting_total,
         active: queue.page_info.active_total,
       });
     } catch (cause) {
@@ -360,13 +265,18 @@ export function FilaPage() {
     }
   };
 
-  const { waitingQueue, activeService } = useMemo(() => {
+  const { generalQueue, personalQueue, activeService } = useMemo(() => {
     const sorted = [...leads].sort(
       (a, b) => arrivalTime(a).getTime() - arrivalTime(b).getTime(),
     );
     return {
-      waitingQueue: sorted.filter((lead) => !lead.assigned_vendor_id),
-      activeService: sorted.filter((lead) => Boolean(lead.assigned_vendor_id)),
+      generalQueue: sorted.filter(
+        (lead) => lead.queue_state === "general_waiting",
+      ),
+      personalQueue: sorted.filter(
+        (lead) => lead.queue_state === "personal_waiting",
+      ),
+      activeService: sorted.filter((lead) => lead.queue_state === "active"),
     };
   }, [leads]);
 
@@ -430,8 +340,11 @@ export function FilaPage() {
           ? (activeService.find((lead) => lead.assigned_vendor_id === vendor.id)
               ?.name ?? null)
           : null,
+      waitingLeadNames: personalQueue
+        .filter((lead) => lead.assigned_vendor_id === vendor.id)
+        .map((lead) => lead.name),
     }));
-  }, [activeService, vendors]);
+  }, [activeService, personalQueue, vendors]);
 
   return (
     <div className="space-y-4 pb-28 sm:space-y-6 sm:pb-6">
@@ -552,10 +465,15 @@ export function FilaPage() {
                   </p>
                 </div>
               </div>
-              <div className="grid w-full grid-cols-2 gap-2 sm:w-auto">
+              <div className="grid w-full grid-cols-3 gap-2 sm:w-auto">
                 <QueueMetric
-                  label="Aguardando"
-                  value={queueTotals.waiting}
+                  label="Fila geral"
+                  value={queueTotals.generalWaiting}
+                  tone="waiting"
+                />
+                <QueueMetric
+                  label="Fila interna"
+                  value={queueTotals.personalWaiting}
                   tone="waiting"
                 />
                 <QueueMetric
@@ -583,16 +501,16 @@ export function FilaPage() {
                 </p>
               </div>
             ) : (
-              <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
+              <div className="grid gap-3 sm:gap-4 xl:grid-cols-3">
                 <QueueSection
-                  title="Fila de espera"
-                  subtitle="Por ordem de chegada"
+                  title="Fila geral"
+                  subtitle="Leads sem vendedor vinculado"
                   icon={<Clock size={19} />}
-                  count={queueTotals.waiting}
+                  count={queueTotals.generalWaiting}
                   tone="waiting"
                 >
-                  {waitingQueue.length ? (
-                    waitingQueue.map((lead, index) => (
+                  {generalQueue.length ? (
+                    generalQueue.map((lead, index) => (
                       <QueueLeadRow
                         key={lead.id}
                         lead={lead}
@@ -603,6 +521,33 @@ export function FilaPage() {
                   ) : (
                     <QueueEmpty icon={<Flag size={28} />}>
                       Ninguém aguardando no momento.
+                    </QueueEmpty>
+                  )}
+                </QueueSection>
+
+                <QueueSection
+                  title={
+                    user.role === "vendedor"
+                      ? "Sua fila interna"
+                      : "Filas internas"
+                  }
+                  subtitle="Leads próprios aguardando o responsável"
+                  icon={<Users size={19} />}
+                  count={queueTotals.personalWaiting}
+                  tone="waiting"
+                >
+                  {personalQueue.length ? (
+                    personalQueue.map((lead, index) => (
+                      <QueueLeadRow
+                        key={lead.id}
+                        lead={lead}
+                        position={index + 1}
+                        state="personal"
+                      />
+                    ))
+                  ) : (
+                    <QueueEmpty icon={<Users size={28} />}>
+                      Nenhum lead próprio aguardando.
                     </QueueEmpty>
                   )}
                 </QueueSection>
@@ -792,6 +737,7 @@ function VendorQueuePanel({
     VendorAvailability & {
       queuePosition: number | null;
       activeLeadName: string | null;
+      waitingLeadNames: string[];
     }
   >;
   currentUserId: string;
@@ -942,6 +888,12 @@ function VendorQueuePanel({
                       ? `Atendendo ${vendor.activeLeadName}`
                       : vendor.team_name || "Sem equipe informada"}
                   </p>
+                  {vendor.waitingLeadNames.length ? (
+                    <p className="mt-1 truncate text-[10px] font-semibold text-sky-300">
+                      Fila interna: {vendor.waitingLeadNames.length} ·{" "}
+                      {vendor.waitingLeadNames.join(", ")}
+                    </p>
+                  ) : null}
                 </div>
                 <span
                   className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${
@@ -1100,27 +1052,32 @@ function QueueLeadRow({
 }: {
   lead: ReceptionQueueLead;
   position?: number;
-  state: "waiting" | "active";
+  state: "waiting" | "personal" | "active";
   onFinish?: (lead: ReceptionQueueLead) => void;
   onChangeVendor?: (lead: ReceptionQueueLead) => void;
 }) {
   const active = state === "active";
+  const personal = state === "personal";
   return (
     <div
       className={`group relative flex flex-wrap items-start gap-3 overflow-hidden rounded-xl border p-3 transition-colors sm:flex-nowrap sm:items-center sm:p-3.5 ${
         active
           ? "border-[#ff0038]/15 bg-[#ff0038]/[0.045] hover:border-[#ff0038]/30"
-          : "border-white/[0.07] bg-white/[0.025] hover:border-amber-400/20"
+          : personal
+            ? "border-sky-400/15 bg-sky-400/[0.045] hover:border-sky-400/30"
+            : "border-white/[0.07] bg-white/[0.025] hover:border-amber-400/20"
       }`}
     >
       <span
-        className={`absolute inset-y-0 left-0 w-0.5 ${active ? "bg-[#ff0038]" : "bg-amber-400"}`}
+        className={`absolute inset-y-0 left-0 w-0.5 ${active ? "bg-[#ff0038]" : personal ? "bg-sky-400" : "bg-amber-400"}`}
       />
       <span
         className={`ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-sm font-black ${
           active
             ? "border-[#ff0038]/25 bg-[#ff0038]/10 text-[#ff3159]"
-            : "border-amber-400/25 bg-amber-400/10 text-amber-300"
+            : personal
+              ? "border-sky-400/25 bg-sky-400/10 text-sky-300"
+              : "border-amber-400/25 bg-amber-400/10 text-amber-300"
         }`}
       >
         {active ? <UserCheck size={18} /> : position}
@@ -1141,14 +1098,18 @@ function QueueLeadRow({
           className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${
             active
               ? "bg-[#ff0038]/10 text-[#ff6684]"
-              : "bg-amber-400/10 text-amber-300"
+              : personal
+                ? "bg-sky-400/10 text-sky-300"
+                : "bg-amber-400/10 text-amber-300"
           }`}
         >
           <UserCheck size={14} />
           <span className="truncate">
             {active
               ? lead.assigned_vendor_name || "Em atendimento"
-              : "Aguardando"}
+              : personal
+                ? `Mérito · ${lead.assigned_vendor_name || "vendedor responsável"}`
+                : "Aguardando rodízio"}
           </span>
         </span>
         {active && (onFinish || onChangeVendor) ? (

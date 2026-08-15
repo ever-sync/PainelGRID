@@ -328,7 +328,13 @@ export type ReceptionQueueLead = Pick<
   | "confirmation_date"
   | "created_at"
   | "updated_at"
-> & { assigned_vendor_name?: string | null };
+> & {
+  assigned_vendor_name?: string | null;
+  attendance_id?: string | null;
+  attendance_started_at?: string | null;
+  queue_state: "general_waiting" | "personal_waiting" | "active";
+  queue_origin: "merit" | "rotation";
+};
 
 export type ReceptionQueueResponse = {
   event: { id: string; name: string } | null;
@@ -338,6 +344,8 @@ export type ReceptionQueueResponse = {
     take: number;
     total: number;
     waiting_total: number;
+    general_waiting_total: number;
+    personal_waiting_total: number;
     active_total: number;
     has_next_page: boolean;
   };
@@ -488,7 +496,17 @@ export function notifyVendorCall(
     category?: "seminovo" | "pcd" | "novo" | "vd" | "assinatura";
   },
 ) {
-  return httpRequest<VendorAttendance>(`/leads/${id}/call-vendor`, {
+  return httpRequest<
+    | VendorAttendance
+    | {
+        success: true;
+        queued: true;
+        queue_state: "personal_waiting";
+        lead_id: string;
+        vendor_id: string;
+        vendor_name: string;
+      }
+  >(`/leads/${id}/call-vendor`, {
     method: "POST",
     token,
     body: options,

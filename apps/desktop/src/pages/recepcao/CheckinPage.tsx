@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import {
   Search,
@@ -168,6 +168,7 @@ function borderForStatus(status: ConfirmationStatus, dark: boolean) {
 }
 
 export function CheckinPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useOutletContext<OutletContext>();
   const clientId = resolveClientId(user);
   const [isDarkMode, setIsDarkMode] = useState(() =>
@@ -182,6 +183,14 @@ export function CheckinPage() {
   >([]);
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("cadastro") !== "rapido") return;
+    setShowModal(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete("cadastro");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
   const [leadName, setLeadName] = useState("");
   const [leadPhone, setLeadPhone] = useState("");
   const [leadEmail, setLeadEmail] = useState("");
@@ -653,7 +662,7 @@ export function CheckinPage() {
       }
 
       if (sendToQueue) {
-        await notifyVendorCall(
+        const callResult = await notifyVendorCall(
           quickCheckinLead.id,
           t,
           linkedVendorId
@@ -665,6 +674,15 @@ export function CheckinPage() {
                 }
               : { mode: "manual", vendor_id: quickCheckinVendorId },
         );
+        if ("queued" in callResult && callResult.queued) {
+          pushToast({
+            type: "success",
+            message: `${quickCheckinLead.name} entrou na fila interna de ${callResult.vendor_name}.`,
+          });
+          setQuickCheckinLead(null);
+          refreshCheckinData();
+          return;
+        }
       }
 
       pushToast({

@@ -43,6 +43,7 @@ import {
   ChevronRight,
   Bell,
   ShieldAlert,
+  Plus,
 } from "lucide-react";
 import clsx from "clsx";
 import type { User } from "../types";
@@ -376,11 +377,6 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     () => localStorage.getItem("reception:selected-event") ?? "",
   );
   const [menuOpen, setMenuOpen] = useState(false);
-  const [checkinLeadMode, setCheckinLeadMode] = useState<"existing" | "new">(
-    "existing",
-  );
-  const [checkinMethod, setCheckinMethod] = useState<"qr" | "manual">("qr");
-  const [checkinToken, setCheckinToken] = useState("");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   useEffect(() => {
@@ -1064,7 +1060,6 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
         type: "success",
         text: `Check-in realizado! ${response.name} confirmado.`,
       });
-      setCheckinToken("");
       setScannerActive(false);
       setTimeout(() => {
         closeQuickAction();
@@ -1169,9 +1164,6 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
   const closeQuickAction = () => {
     setQuickActionOpen(false);
     setQuickAction(null);
-    setCheckinLeadMode("existing");
-    setCheckinMethod("qr");
-    setCheckinToken("");
     setCheckinResult(null);
     setScannerActive(false);
     setFipePlate("");
@@ -1182,9 +1174,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
   const goToQuickActionFlow = () => {
     if (quickAction === "checkin") {
       closeQuickAction();
-      navigate(
-        `/recepcao/checkin?cliente=${checkinLeadMode}&modo=${checkinMethod}`,
-      );
+      navigate("/recepcao/checkin?cadastro=rapido");
       return;
     }
     const params = quickAction ? `?acao=${quickAction}` : "";
@@ -1941,7 +1931,6 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
             aria-label="Escanear QR Code"
             onClick={() => {
               setQuickAction("checkin");
-              setCheckinMethod("qr");
               setScannerActive(true);
               setQuickActionOpen(true);
             }}
@@ -2140,109 +2129,56 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
               <div className="space-y-4">
                 {quickAction === "checkin" ? (
                   <div className="space-y-4">
-                    {/* Select Mode Tabs */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCheckinMethod("qr");
-                          setCheckinResult(null);
-                        }}
-                        className={clsx(
-                          "flex items-center justify-center gap-2 rounded-2xl border py-3 text-sm font-bold transition-colors",
-                          checkinMethod === "qr"
-                            ? "border-[#E51838] bg-[#E51838]/5 text-[#E51838]"
-                            : "border-zinc-100 bg-zinc-50 text-zinc-600",
-                        )}
-                      >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-center gap-2 rounded-2xl border border-[#E51838] bg-[#E51838]/5 py-3 text-sm font-bold text-[#E51838]">
                         <QrCode size={16} />
-                        Escanear QR
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCheckinMethod("manual");
-                          setScannerActive(false);
-                          setCheckinResult(null);
-                        }}
-                        className={clsx(
-                          "flex items-center justify-center gap-2 rounded-2xl border py-3 text-sm font-bold transition-colors",
-                          checkinMethod === "manual"
-                            ? "border-[#E51838] bg-[#E51838]/5 text-[#E51838]"
-                            : "border-zinc-100 bg-zinc-50 text-zinc-600",
-                        )}
-                      >
-                        <Menu size={16} />
-                        Código Manual
-                      </button>
-                    </div>
-
-                    {checkinMethod === "qr" ? (
-                      <div className="space-y-3">
-                        {scannerActive ? (
-                          <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-2 relative">
-                            <LazyQrScanner
-                              onScan={(val) => void handleCheckinSubmit(val)}
-                              onClose={() => setScannerActive(false)}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setScannerActive(false)}
-                              className="mt-2 w-full py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-xs font-bold transition-colors"
-                            >
-                              Cancelar Câmera
-                            </button>
-                          </div>
-                        ) : (
+                        Escanear QR Code
+                      </div>
+                      {scannerActive ? (
+                        <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-2 relative">
+                          <LazyQrScanner
+                            onScan={(val) => void handleCheckinSubmit(val)}
+                            onClose={() => setScannerActive(false)}
+                          />
                           <button
                             type="button"
-                            onClick={() => {
-                              setScannerActive(true);
-                              setCheckinResult(null);
-                            }}
-                            className="flex w-full flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-zinc-200 bg-zinc-50/50 py-10 hover:bg-zinc-50 transition-colors active:scale-[0.99]"
+                            onClick={() => setScannerActive(false)}
+                            className="mt-2 w-full py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-xs font-bold transition-colors"
                           >
-                            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#E51838]/10 text-[#E51838]">
-                              <Camera size={24} />
-                            </span>
-                            <div className="text-center">
-                              <span className="block text-sm font-bold text-zinc-950">
-                                Escanear com Câmera
-                              </span>
-                              <span className="block text-xs text-zinc-500 mt-1">
-                                Toque para abrir a câmera
-                              </span>
-                            </div>
+                            Cancelar Câmera
                           </button>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-xs font-bold text-zinc-500">
-                            Código / Link do Convite
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="Digite o código curto ou cole o link inteiro"
-                            value={checkinToken}
-                            onChange={(e) => setCheckinToken(e.target.value)}
-                            disabled={checkinLoading}
-                            className="w-full rounded-2xl border border-zinc-200 px-4 py-3 text-sm focus:border-[#E51838] focus:outline-none bg-white text-zinc-950"
-                          />
                         </div>
+                      ) : (
                         <button
                           type="button"
-                          onClick={() => void handleCheckinSubmit(checkinToken)}
-                          disabled={checkinLoading || !checkinToken.trim()}
-                          className="flex w-full items-center justify-center rounded-2xl bg-[#E51838] px-4 py-3 text-sm font-bold text-white shadow-[0_12px_28px_rgba(229,24,56,0.25)] hover:bg-[#c91432] disabled:opacity-50 disabled:pointer-events-none transition-colors"
+                          onClick={() => {
+                            setScannerActive(true);
+                            setCheckinResult(null);
+                          }}
+                          className="flex w-full flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-zinc-200 bg-zinc-50/50 py-10 hover:bg-zinc-50 transition-colors active:scale-[0.99]"
                         >
-                          {checkinLoading
-                            ? "Verificando..."
-                            : "Confirmar Check-in"}
+                          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#E51838]/10 text-[#E51838]">
+                            <Camera size={24} />
+                          </span>
+                          <div className="text-center">
+                            <span className="block text-sm font-bold text-zinc-950">
+                              Escanear com Câmera
+                            </span>
+                            <span className="block text-xs text-zinc-500 mt-1">
+                              Toque para abrir a câmera
+                            </span>
+                          </div>
                         </button>
-                      </div>
-                    )}
+                      )}
+                      <button
+                        type="button"
+                        onClick={goToQuickActionFlow}
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-bold text-zinc-800 transition-colors active:bg-zinc-100"
+                      >
+                        <Plus size={17} />
+                        Sem QR Code · Cadastro rápido
+                      </button>
+                    </div>
 
                     {checkinResult && (
                       <div

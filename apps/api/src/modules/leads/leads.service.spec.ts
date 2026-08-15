@@ -346,8 +346,19 @@ describe("LeadsService", () => {
       updated_at: new Date("2026-08-14T12:00:00.000Z"),
     };
     prisma.event.findFirst.mockResolvedValue(event);
-    prisma.lead.findMany.mockResolvedValue([queueLead]);
-    prisma.lead.count.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+    prisma.lead.findMany.mockResolvedValue([
+      {
+        ...queueLead,
+        assigned_vendor: null,
+        vendor_attendances: [],
+        registered_by_id: null,
+      },
+    ]);
+    prisma.lead.count
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0);
 
     const result = await service.getReceptionQueue({
       sub: "reception-1",
@@ -359,12 +370,23 @@ describe("LeadsService", () => {
 
     expect(result).toEqual({
       event,
-      leads: [{ ...queueLead, assigned_vendor_name: null }],
+      leads: [
+        {
+          ...queueLead,
+          assigned_vendor_name: null,
+          attendance_id: null,
+          attendance_started_at: null,
+          queue_state: "general_waiting",
+          queue_origin: "rotation",
+        },
+      ],
       page_info: {
         page: 1,
         take: 50,
         total: 1,
         waiting_total: 1,
+        general_waiting_total: 1,
+        personal_waiting_total: 0,
         active_total: 0,
         has_next_page: false,
       },
@@ -382,6 +404,13 @@ describe("LeadsService", () => {
           name: true,
           assigned_vendor_id: true,
           assigned_vendor: { select: { name: true } },
+          vendor_attendances: {
+            where: { status: "accepted" },
+            select: { id: true, accepted_at: true },
+            orderBy: { accepted_at: "desc" },
+            take: 1,
+          },
+          registered_by_id: true,
           confirmation_date: true,
           created_at: true,
           updated_at: true,

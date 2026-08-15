@@ -998,7 +998,33 @@ export class LeadsService {
       deleted_at: null,
       ...(user.role === Role.VENDEDOR ? { assigned_vendor_id: user.sub } : {}),
     };
-    const [leads, total, waitingTotal] = await Promise.all([
+    const activeWhere: Prisma.LeadWhereInput = {
+      ...where,
+      vendor_attendances: {
+        some: { status: VendorAttendanceStatus.accepted },
+      },
+    };
+    const generalWaitingWhere: Prisma.LeadWhereInput = {
+      ...where,
+      assigned_vendor_id: null,
+      vendor_attendances: {
+        none: { status: VendorAttendanceStatus.accepted },
+      },
+    };
+    const personalWaitingWhere: Prisma.LeadWhereInput = {
+      ...where,
+      assigned_vendor_id: { not: null },
+      vendor_attendances: {
+        none: { status: VendorAttendanceStatus.accepted },
+      },
+    };
+    const [
+      leads,
+      total,
+      activeTotal,
+      generalWaitingTotal,
+      personalWaitingTotal,
+    ] = await Promise.all([
       this.prisma.lead.findMany({
         where,
         orderBy: [
@@ -1013,29 +1039,61 @@ export class LeadsService {
           name: true,
           assigned_vendor_id: true,
           assigned_vendor: { select: { name: true } },
+          vendor_attendances: {
+            where: { status: VendorAttendanceStatus.accepted },
+            select: { id: true, accepted_at: true },
+            orderBy: { accepted_at: "desc" },
+            take: 1,
+          },
+          registered_by_id: true,
           confirmation_date: true,
           created_at: true,
           updated_at: true,
         },
       }),
       this.prisma.lead.count({ where }),
-      this.prisma.lead.count({
-        where: { ...where, assigned_vendor_id: null },
-      }),
+      this.prisma.lead.count({ where: activeWhere }),
+      this.prisma.lead.count({ where: generalWaitingWhere }),
+      this.prisma.lead.count({ where: personalWaitingWhere }),
     ]);
 
     return {
       event,
-      leads: leads.map(({ assigned_vendor, ...lead }) => ({
-        ...lead,
-        assigned_vendor_name: assigned_vendor?.name ?? null,
-      })),
+      leads: leads.map(
+        ({
+          assigned_vendor,
+          vendor_attendances,
+          registered_by_id,
+          ...lead
+        }) => {
+          const activeAttendance = vendor_attendances?.[0];
+          const queueState = activeAttendance
+            ? "active"
+            : lead.assigned_vendor_id
+              ? "personal_waiting"
+              : "general_waiting";
+          return {
+            ...lead,
+            assigned_vendor_name: assigned_vendor?.name ?? null,
+            attendance_id: activeAttendance?.id ?? null,
+            attendance_started_at: activeAttendance?.accepted_at ?? null,
+            queue_state: queueState,
+            queue_origin:
+              queueState === "personal_waiting" ||
+              (registered_by_id && registered_by_id === lead.assigned_vendor_id)
+                ? "merit"
+                : "rotation",
+          };
+        },
+      ),
       page_info: {
         page,
         take,
         total,
-        waiting_total: waitingTotal,
-        active_total: total - waitingTotal,
+        waiting_total: generalWaitingTotal + personalWaitingTotal,
+        general_waiting_total: generalWaitingTotal,
+        personal_waiting_total: personalWaitingTotal,
+        active_total: activeTotal,
         has_next_page: page * take < total,
       },
     };
@@ -4852,6 +4910,33 @@ export class LeadsService {
             )
           : candidates[0];
     if (!vendor) {
+      if (requestedVendorId && requestedVendorId === lead.assigned_vendor_id) {
+        const responsibleVendor = await this.prisma.user.findFirst({
+          where: {
+            id: requestedVendorId,
+            client_id: lead.client_id,
+            role: Role.VENDEDOR,
+            is_active: true,
+          },
+          select: { id: true, name: true },
+        });
+        if (responsibleVendor) {
+          this.realtimeEvents.emitLeadUpdated(lead.client_id, {
+            client_id: lead.client_id,
+            lead_id: lead.id,
+            action: "personal_queue_waiting",
+            updated_at: new Date().toISOString(),
+          });
+          return {
+            success: true,
+            queued: true,
+            queue_state: "personal_waiting",
+            lead_id: lead.id,
+            vendor_id: responsibleVendor.id,
+            vendor_name: responsibleVendor.name,
+          };
+        }
+      }
       throw new BadRequestException(
         dto.category
           ? "Nenhum vendedor disponível nesta categoria"
