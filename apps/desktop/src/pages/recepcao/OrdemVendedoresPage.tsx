@@ -153,7 +153,7 @@ export function OrdemVendedoresPage() {
   const selectedEvent = events.find((item) => item.id === eventId);
 
   return (
-    <div className="min-h-full bg-[#fafafa] p-4 md:p-8">
+    <div className="min-h-full bg-[#fafafa]">
       <PageHeader
         title="Ordem dos vendedores"
         subtitle="Defina a prioridade da fila por categoria para o evento selecionado na recepção."
