@@ -13,49 +13,54 @@ BEGIN
   LOOP
     new_code := regexp_replace(current_stage.code, '_PRESENCA_AGENDADA$', '_PRE_AGENDADO');
 
-    IF EXISTS (SELECT 1 FROM crm_stages WHERE code = new_code) THEN
-      CONTINUE;
-    END IF;
-
-    -- Evita colisao no indice unico (pipeline_id, display_order).
+    -- Coloca as etapas em uma faixa temporaria para permitir a reorganizacao
+    -- sem colisao no indice unico (pipeline_id, display_order).
     UPDATE crm_stages
-    SET display_order = display_order + 1000
+    SET display_order = display_order + 100000
     WHERE pipeline_id = current_stage.pipeline_id;
 
-    new_stage_id := gen_random_uuid();
-    INSERT INTO crm_stages (
-      id, client_id, pipeline_id, code, name, display_order, color, is_final_stage,
-      created_at, updated_at
-    ) VALUES (
-      new_stage_id,
-      current_stage.client_id,
-      current_stage.pipeline_id,
-      new_code,
-      'Pré-agendado',
-      current_stage.display_order,
-      COALESCE(current_stage.color, '#6366F1'),
-      false,
-      NOW(),
-      NOW()
-    );
+    IF NOT EXISTS (SELECT 1 FROM crm_stages WHERE code = new_code) THEN
+      new_stage_id := gen_random_uuid();
+      INSERT INTO crm_stages (
+        id, client_id, pipeline_id, code, name, display_order, color,
+        is_final_stage, created_at, updated_at
+      ) VALUES (
+        new_stage_id, current_stage.client_id, current_stage.pipeline_id,
+        new_code, 'Pré-agendado', 100006,
+        COALESCE(current_stage.color, '#6366F1'), false, NOW(), NOW()
+      );
+    END IF;
 
+    -- Ordem operacional: Pré-agendado vem antes de Agendado.
     UPDATE crm_stages
-    SET display_order = display_order + 10000
-    WHERE pipeline_id = current_stage.pipeline_id
-      AND id <> new_stage_id
-      AND display_order >= current_stage.display_order + 1000;
-
-    UPDATE crm_stages
-    SET display_order = display_order - 999 - 10000
-    WHERE pipeline_id = current_stage.pipeline_id
-      AND id <> new_stage_id
-      AND display_order >= current_stage.display_order + 1000 + 10000;
-
-    UPDATE crm_stages
-    SET display_order = display_order - 1000
-    WHERE pipeline_id = current_stage.pipeline_id
-      AND id <> new_stage_id
-      AND display_order < current_stage.display_order + 1000;
+    SET display_order = CASE
+      WHEN code ~ '_NOVO_LEAD$' THEN 1
+      WHEN code ~ '_TENTATIVA_CONTATO$' THEN 2
+      WHEN code ~ '_TENTATIVA_2_EMAIL$' THEN 3
+      WHEN code ~ '_LIGACAO$' THEN 4
+      WHEN code ~ '_EM_CONTATO$' THEN 5
+      WHEN code ~ '_PRE_AGENDADO$' THEN 6
+      WHEN code ~ '_PRESENCA_AGENDADA$' THEN 7
+      WHEN code ~ '_ENVIAR_CONFIRMACAO$' THEN 8
+      WHEN code ~ '_AGENDADOS_CONFIRMADOS$' THEN 9
+      WHEN code ~ '_PRESENCA_REAGENDADA$' THEN 10
+      WHEN code ~ '_PRESENCA_CANCELADA$' THEN 11
+      WHEN code ~ '_LEMBRETE$' THEN 12
+      WHEN code ~ '_RECUPERACAO_VENDA$' THEN 13
+      WHEN code ~ '_RECUPERACAO_PRESENCA$' THEN 14
+      WHEN code ~ '_RECUPERACAO_RESPONDIDA$' THEN 15
+      WHEN code ~ '_DESINTERESSE$' THEN 16
+      WHEN code ~ '_AGUARDANDO$' THEN 17
+      WHEN code ~ '_PRESENCA_CONFIRMADA$' THEN 18
+      WHEN code ~ '_COMPRARAM$' THEN 19
+      WHEN code ~ '_LEAD_PERDIDO$' THEN 20
+      WHEN code ~ '_LEAD_AUSENTE$' THEN 21
+      WHEN code ~ '_ATENDIMENTO_ENCERRADO$' THEN 22
+      WHEN code ~ '_FEEDBACK$' THEN 23
+      WHEN code ~ '_RESPONDEU_FEEDBACK$' THEN 24
+      ELSE display_order
+    END
+    WHERE pipeline_id = current_stage.pipeline_id;
   END LOOP;
 END $$;
 
