@@ -1990,10 +1990,12 @@ export class EventDashboardService {
       human_manual: bucketStats(),
     };
     for (const appointment of appointments) {
-      const leadTags = appointment.lead.tags.map((tag) => tag.toLowerCase());
+      const leadTags = (appointment.lead?.tags ?? []).map((tag) =>
+        tag.toLowerCase(),
+      );
       const leadBelongsToRubinho =
-        appointment.lead.source === LeadSource.facebook_ads ||
-        appointment.lead.source === LeadSource.whatsapp ||
+        appointment.lead?.source === LeadSource.facebook_ads ||
+        appointment.lead?.source === LeadSource.whatsapp ||
         leadTags.some(
           (tag) => tag.includes("facebook") || tag.includes("whatsapp"),
         );

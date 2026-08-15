@@ -77,7 +77,14 @@ describe("SalesService", () => {
       },
       sale: {
         create: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+        count: jest.fn(),
+        findUnique: jest.fn(),
         findMany: jest.fn(),
+      },
+      scoreEvent: {
+        updateMany: jest.fn(),
       },
       vendorAttendance: {
         findMany: jest.fn(),
@@ -274,6 +281,64 @@ describe("SalesService", () => {
         }),
       }),
     );
+  });
+
+  it("edita venda e transfere venda e pontuação para o vendedor escolhido", async () => {
+    prisma.sale.findUnique.mockResolvedValue({
+      ...sale,
+      appointment: { event_id: baseAppointment.event_id },
+    });
+    prisma.lead.findFirst = jest.fn().mockResolvedValue({ id: leadId });
+    prisma.salesTeamMember.findFirst.mockResolvedValue({
+      team_id: teamId,
+      user: { client_id: clientId },
+    });
+    prisma.sale.update.mockResolvedValue({
+      ...sale,
+      model: "Nivus",
+      order_number: "PED-2",
+    });
+
+    await service.update({ ...user, role: Role.GESTOR } as any, saleId, {
+      lead_id: leadId,
+      vendor_id: vendorId,
+      type: SaleType.NOVO,
+      product: "Nivus",
+      value: "R$ 130.000,00",
+      sold_at: soldAt.toISOString(),
+      order_number: "PED-2",
+    });
+
+    expect(prisma.sale.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: saleId },
+        data: expect.objectContaining({
+          vendor_id: vendorId,
+          team_id: teamId,
+          model: "Nivus",
+        }),
+      }),
+    );
+    expect(prisma.scoreEvent.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ vendor_id: vendorId, lead_id: leadId }),
+      }),
+    );
+  });
+
+  it("exclui venda e remove o crédito de vendido quando não há outra venda", async () => {
+    prisma.sale.findUnique.mockResolvedValue(sale);
+    prisma.sale.count.mockResolvedValue(0);
+
+    await expect(
+      service.remove({ ...user, role: Role.GESTOR } as any, saleId),
+    ).resolves.toEqual({ deleted: true });
+
+    expect(prisma.sale.delete).toHaveBeenCalledWith({ where: { id: saleId } });
+    expect(prisma.lead.update).toHaveBeenCalledWith({
+      where: { id: leadId },
+      data: { sold_by_vendor_id: null },
+    });
   });
 
   it("bloqueia venda para status sem agendamento ativo", async () => {

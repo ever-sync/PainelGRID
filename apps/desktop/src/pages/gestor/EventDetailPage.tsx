@@ -84,8 +84,10 @@ import {
 } from "../../services/salesTeams";
 import { listUsers, type StaffUser } from "../../services/users";
 import {
+  deleteSale,
   listEventSales,
   listPendingEventSales,
+  updateSale,
   type EventSaleListItem,
   type PendingEventSale,
 } from "../../services/sales";
@@ -339,6 +341,22 @@ export function EventDetailPage() {
     "completed",
   );
   const [salesLoading, setSalesLoading] = useState(false);
+  const [editingSale, setEditingSale] = useState<EventSaleListItem | null>(
+    null,
+  );
+  const [saleDeleteTarget, setSaleDeleteTarget] =
+    useState<EventSaleListItem | null>(null);
+  const [saleActionLoading, setSaleActionLoading] = useState(false);
+  const [saleActionError, setSaleActionError] = useState("");
+  const [saleEditLeadId, setSaleEditLeadId] = useState("");
+  const [saleEditVendorId, setSaleEditVendorId] = useState("");
+  const [saleEditProduct, setSaleEditProduct] = useState("");
+  const [saleEditType, setSaleEditType] =
+    useState<EventSaleListItem["type"]>("NOVO");
+  const [saleEditValue, setSaleEditValue] = useState("");
+  const [saleEditSoldAt, setSaleEditSoldAt] = useState("");
+  const [saleEditOrderNumber, setSaleEditOrderNumber] = useState("");
+  const [saleEditNotes, setSaleEditNotes] = useState("");
   const [leadSearch, setLeadSearch] = useState("");
   const [leadStatusFilter, setLeadStatusFilter] = useState<
     "all" | ConfirmationStatus
@@ -674,6 +692,73 @@ export function EventDetailPage() {
       );
     } finally {
       setEventLeadsLoadingMore(false);
+    }
+  }
+
+  function openSaleEditor(sale: EventSaleListItem) {
+    setEditingSale(sale);
+    setSaleEditLeadId(sale.lead_id);
+    setSaleEditVendorId(sale.vendor_id);
+    setSaleEditProduct(sale.product);
+    setSaleEditType(sale.type);
+    setSaleEditValue(sale.value);
+    setSaleEditSoldAt(formatDateTimeInput(sale.sold_at));
+    setSaleEditOrderNumber(sale.order_number ?? "");
+    setSaleEditNotes(sale.notes ?? "");
+    setSaleActionError("");
+  }
+
+  async function handleUpdateSale() {
+    if (!editingSale) return;
+    const token = readStoredSession()?.accessToken;
+    if (!token) {
+      setSaleActionError("Faça login novamente para editar a venda.");
+      return;
+    }
+    if (!saleEditLeadId || !saleEditVendorId || !saleEditProduct.trim()) {
+      setSaleActionError("Preencha comprador, vendedor e veículo.");
+      return;
+    }
+    setSaleActionLoading(true);
+    setSaleActionError("");
+    try {
+      await updateSale(token, editingSale.id, {
+        lead_id: saleEditLeadId,
+        vendor_id: saleEditVendorId,
+        type: saleEditType,
+        product: saleEditProduct.trim(),
+        value: saleEditValue,
+        sold_at: new Date(saleEditSoldAt).toISOString(),
+        order_number: saleEditOrderNumber.trim() || undefined,
+        notes: saleEditNotes.trim() || undefined,
+      });
+      setEditingSale(null);
+      await loadPage(false);
+    } catch (actionError) {
+      setSaleActionError(
+        getErrorMessage(actionError, "Não foi possível atualizar a venda."),
+      );
+    } finally {
+      setSaleActionLoading(false);
+    }
+  }
+
+  async function handleDeleteSale() {
+    if (!saleDeleteTarget) return;
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+    setSaleActionLoading(true);
+    setSaleActionError("");
+    try {
+      await deleteSale(token, saleDeleteTarget.id);
+      setSaleDeleteTarget(null);
+      await loadPage(false);
+    } catch (actionError) {
+      setSaleActionError(
+        getErrorMessage(actionError, "Não foi possível excluir a venda."),
+      );
+    } finally {
+      setSaleActionLoading(false);
     }
   }
 
@@ -2574,6 +2659,7 @@ export function EventDetailPage() {
                           <th className="px-5 py-4">Pedido</th>
                           <th className="px-5 py-4">Data</th>
                           <th className="px-5 py-4 text-right">Valor</th>
+                          <th className="px-5 py-4 text-right">Ações</th>
                         </tr>
                       </thead>
                       <tbody
@@ -2628,6 +2714,31 @@ export function EventDetailPage() {
                             </td>
                             <td className="px-5 py-4 text-right font-black text-emerald-500">
                               {formatCurrency(sale.value)}
+                            </td>
+                            <td className="px-5 py-4">
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => openSaleEditor(sale)}
+                                  className="rounded-lg border border-zinc-200 p-2 text-zinc-500 transition hover:border-zinc-400 hover:text-zinc-900 dark:border-zinc-700 dark:hover:text-white"
+                                  title="Editar venda"
+                                  aria-label={`Editar venda de ${sale.lead?.name ?? "cliente"}`}
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSaleActionError("");
+                                    setSaleDeleteTarget(sale);
+                                  }}
+                                  className="rounded-lg border border-rose-200 p-2 text-rose-500 transition hover:bg-rose-50 dark:border-rose-900/60 dark:hover:bg-rose-950/30"
+                                  title="Excluir venda"
+                                  aria-label={`Excluir venda de ${sale.lead?.name ?? "cliente"}`}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -3563,6 +3674,146 @@ export function EventDetailPage() {
           </div>
         </form>
       )}
+
+      <Modal
+        open={Boolean(editingSale)}
+        onClose={() => !saleActionLoading && setEditingSale(null)}
+        title="Editar venda"
+        dark={isDarkMode}
+        size="xl"
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setEditingSale(null)}
+              isDisabled={saleActionLoading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => void handleUpdateSale()}
+              loading={saleActionLoading}
+            >
+              Salvar alterações
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Select
+            label="Comprador"
+            value={saleEditLeadId}
+            onValueChange={setSaleEditLeadId}
+            options={Array.from(
+              new Map(
+                [
+                  ...(editingSale?.lead
+                    ? [
+                        {
+                          id: editingSale.lead.id,
+                          name: editingSale.lead.name,
+                          phone: editingSale.lead.phone,
+                        },
+                      ]
+                    : []),
+                  ...eventLeads,
+                ].map((lead) => [lead.id, lead]),
+              ).values(),
+            )
+              .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+              .map((lead) => ({
+                value: lead.id,
+                label: `${lead.name}${lead.phone ? ` · ${lead.phone}` : ""}`,
+              }))}
+          />
+          <Select
+            label="Vendedor"
+            value={saleEditVendorId}
+            onValueChange={setSaleEditVendorId}
+            options={staff
+              .slice()
+              .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+              .map((vendor) => ({ value: vendor.id, label: vendor.name }))}
+          />
+          <Input
+            label="Veículo"
+            value={saleEditProduct}
+            onChange={(event) => setSaleEditProduct(event.target.value)}
+            placeholder="Marca e modelo"
+          />
+          <Select
+            label="Tipo da venda"
+            value={saleEditType}
+            onValueChange={(value) =>
+              setSaleEditType(value as EventSaleListItem["type"])
+            }
+            options={[
+              { value: "NOVO", label: "Novo" },
+              { value: "SEMINOVO", label: "Seminovo" },
+              { value: "VENDA_DIRETA", label: "Venda direta" },
+              { value: "PCD", label: "PCD" },
+            ]}
+          />
+          <Input
+            label="Valor do carro"
+            value={saleEditValue}
+            onChange={(event) => setSaleEditValue(event.target.value)}
+            placeholder="R$ 0,00"
+          />
+          <Input
+            label="Data da venda"
+            type="datetime-local"
+            value={saleEditSoldAt}
+            onChange={(event) => setSaleEditSoldAt(event.target.value)}
+          />
+          <Input
+            label="Número do pedido"
+            value={saleEditOrderNumber}
+            onChange={(event) => setSaleEditOrderNumber(event.target.value)}
+          />
+          <div className="flex flex-col gap-1 sm:col-span-2">
+            <label
+              className="text-sm font-medium text-foreground"
+              htmlFor="sale-edit-notes"
+            >
+              Observações
+            </label>
+            <textarea
+              id="sale-edit-notes"
+              value={saleEditNotes}
+              onChange={(event) => setSaleEditNotes(event.target.value)}
+              rows={3}
+              maxLength={2000}
+              className="w-full rounded-2xl border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+            />
+          </div>
+          {saleActionError && (
+            <div className="sm:col-span-2">
+              <Notice tone="error">{saleActionError}</Notice>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      <ConfirmationModal
+        open={Boolean(saleDeleteTarget)}
+        onClose={() => !saleActionLoading && setSaleDeleteTarget(null)}
+        onConfirm={() => void handleDeleteSale()}
+        loading={saleActionLoading}
+        dark={isDarkMode}
+        title="Excluir venda"
+        description={
+          <p className="text-sm text-zinc-600 dark:text-zinc-300">
+            Excluir a venda de{" "}
+            <span className="font-semibold">
+              {saleDeleteTarget?.lead?.name ?? "cliente não informado"}
+            </span>
+            ? Ela será removida do faturamento, ranking e pontuação. Esta ação
+            não pode ser desfeita.
+          </p>
+        }
+        confirmLabel="Excluir venda"
+      />
 
       <Modal
         open={Boolean(editingTeam)}
