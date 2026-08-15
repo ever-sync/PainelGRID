@@ -1042,7 +1042,7 @@ function QueueSection({
 }) {
   const active = tone === "active";
   return (
-    <section className="min-h-[280px] rounded-2xl border border-white/[0.08] bg-[#111114]/95 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.25)]">
+    <section className="min-h-0 rounded-2xl border border-white/[0.08] bg-[#111114]/95 p-3 shadow-[0_18px_45px_rgba(0,0,0,0.25)] sm:min-h-[280px] sm:p-4">
       <div className="mb-4 flex items-center justify-between border-b border-white/[0.07] pb-4">
         <div className="flex items-center gap-3">
           <span
@@ -1107,7 +1107,7 @@ function QueueLeadRow({
   const active = state === "active";
   return (
     <div
-      className={`group relative flex items-center gap-3 overflow-hidden rounded-xl border p-3.5 transition-colors ${
+      className={`group relative flex flex-wrap items-start gap-3 overflow-hidden rounded-xl border p-3 transition-colors sm:flex-nowrap sm:items-center sm:p-3.5 ${
         active
           ? "border-[#ff0038]/15 bg-[#ff0038]/[0.045] hover:border-[#ff0038]/30"
           : "border-white/[0.07] bg-white/[0.025] hover:border-amber-400/20"
@@ -1125,7 +1125,7 @@ function QueueLeadRow({
       >
         {active ? <UserCheck size={18} /> : position}
       </span>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 basis-[calc(100%-3rem)] sm:basis-auto">
         <p className="truncate font-bold text-zinc-100">{lead.name}</p>
         <p className="mt-1 flex items-center gap-1.5 text-xs text-zinc-500">
           <Clock size={13} />
@@ -1136,18 +1136,20 @@ function QueueLeadRow({
           })}
         </p>
       </div>
-      <div className="flex shrink-0 flex-col items-end gap-2">
+      <div className="ml-12 flex w-[calc(100%-3rem)] shrink-0 flex-col items-start gap-2 sm:ml-0 sm:w-auto sm:items-end">
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${
+          className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${
             active
               ? "bg-[#ff0038]/10 text-[#ff6684]"
               : "bg-amber-400/10 text-amber-300"
           }`}
         >
           <UserCheck size={14} />
-          {active
-            ? lead.assigned_vendor_name || "Em atendimento"
-            : "Aguardando"}
+          <span className="truncate">
+            {active
+              ? lead.assigned_vendor_name || "Em atendimento"
+              : "Aguardando"}
+          </span>
         </span>
         {active && (onFinish || onChangeVendor) ? (
           <div className="flex gap-2">
