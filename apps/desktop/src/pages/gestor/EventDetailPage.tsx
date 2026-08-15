@@ -100,6 +100,7 @@ import {
 import type { AppOutletContext } from "../../layouts/AppLayout";
 import { useOutletContext } from "react-router-dom";
 import type { ConfirmationStatus, LeadSource } from "../../types";
+import { maskCurrencyInput } from "../../utils/currency";
 
 type EventDetailTab =
   "dados" | "leads" | "vendas" | "time" | "fila" | "configuracoes";
@@ -701,7 +702,7 @@ export function EventDetailPage() {
     setSaleEditVendorId(sale.vendor_id);
     setSaleEditProduct(sale.product);
     setSaleEditType(sale.type);
-    setSaleEditValue(sale.value);
+    setSaleEditValue(maskCurrencyInput(sale.value));
     setSaleEditSoldAt(formatDateTimeInput(sale.sold_at));
     setSaleEditOrderNumber(sale.order_number ?? "");
     setSaleEditNotes(sale.notes ?? "");
@@ -3757,8 +3758,12 @@ export function EventDetailPage() {
           <Input
             label="Valor do carro"
             value={saleEditValue}
-            onChange={(event) => setSaleEditValue(event.target.value)}
+            onChange={(event) =>
+              setSaleEditValue(maskCurrencyInput(event.target.value))
+            }
             placeholder="R$ 0,00"
+            inputMode="numeric"
+            autoComplete="off"
           />
           <Input
             label="Data da venda"

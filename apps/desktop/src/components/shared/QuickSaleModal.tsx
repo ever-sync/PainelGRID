@@ -34,6 +34,7 @@ import {
 } from "../../services/sales";
 import { listSalesTeams } from "../../services/salesTeams";
 import type { Client, User } from "../../types";
+import { maskCurrencyInput } from "../../utils/currency";
 
 const NEW_LEAD = "__new__";
 const NEW_VEHICLE = "__new_vehicle__";
@@ -657,7 +658,7 @@ export function QuickSaleModal({
                           setNewVehicleModel("");
                           setNewVehicleYearOrKm("");
                           if (!value && Number(vehicle.price) > 0) {
-                            setValue(vehicle.price);
+                            setValue(maskCurrencyInput(vehicle.price));
                           }
                         }}
                         className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-3 text-left transition-colors ${
@@ -757,9 +758,12 @@ export function QuickSaleModal({
                 <Input
                   label="Valor do carro"
                   value={value}
-                  onChange={(event) => setValue(event.target.value)}
+                  onChange={(event) =>
+                    setValue(maskCurrencyInput(event.target.value))
+                  }
                   placeholder="R$ 120.000,00"
-                  inputMode="decimal"
+                  inputMode="numeric"
+                  autoComplete="off"
                 />
                 <Input
                   label="Data da venda"
