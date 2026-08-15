@@ -954,16 +954,33 @@ export class EventDashboardService {
 
     const eventIds = events.map((event) => event.id);
 
-    const [leadGroups, sales, appointments] = await Promise.all([
+    const [leadGroups, eventLeads, sales, appointments] = await Promise.all([
       this.prisma.lead.groupBy({
         by: ["event_interest_id", "confirmation_status"],
         where: { event_interest_id: { in: eventIds }, deleted_at: null },
         _count: { _all: true },
       }),
+      this.prisma.lead.findMany({
+        where: { event_interest_id: { in: eventIds }, deleted_at: null },
+        select: {
+          id: true,
+          event_interest_id: true,
+          source: true,
+          tags: true,
+          confirmation_status: true,
+          confirmation_date: true,
+        },
+      }),
       this.prisma.sale.findMany({
         where: { appointment: { event_id: { in: eventIds } } },
         select: {
-          appointment: { select: { event_id: true, source: true } },
+          appointment: {
+            select: {
+              event_id: true,
+              source: true,
+              lead: { select: { source: true, tags: true } },
+            },
+          },
         },
       }),
       this.prisma.appointment.findMany({
@@ -980,7 +997,14 @@ export class EventDashboardService {
           scheduled_at: true,
           confirmed_at: true,
           completed_at: true,
-          lead: { select: { confirmation_status: true } },
+          lead: {
+            select: {
+              source: true,
+              tags: true,
+              confirmation_status: true,
+              confirmation_date: true,
+            },
+          },
         },
       }),
     ]);
@@ -1062,9 +1086,10 @@ export class EventDashboardService {
 
     type DashboardChannel = "rubinho" | "vendedores";
     type ChannelLead = {
+      scheduled: boolean;
       confirmed: boolean;
       checkedIn: boolean;
-      scheduledAt: Date;
+      scheduledAt: Date | null;
     };
     const channelsByEvent = new Map<
       string,
@@ -1074,28 +1099,61 @@ export class EventDashboardService {
       string,
       Record<DashboardChannel, number>
     >();
-    const resolveChannel = (
-      source: AppointmentSource,
-    ): DashboardChannel | null =>
-      source === AppointmentSource.n8n_ai_agent
-        ? "rubinho"
-        : source === AppointmentSource.vendedor
-          ? "vendedores"
-          : null;
+    const resolveChannel = (lead: {
+      source: LeadSource;
+      tags: string[];
+    }): DashboardChannel => {
+      if (lead.source === LeadSource.manual) return "vendedores";
+      const tags = lead.tags.map((tag) => tag.toLowerCase());
+      if (
+        lead.source === LeadSource.facebook_ads ||
+        tags.some((tag) => tag.includes("facebook") || tag.includes("whatsapp"))
+      ) {
+        return "rubinho";
+      }
+      return "rubinho";
+    };
+    const wasCheckedIn = (lead: {
+      confirmation_status: ConfirmationStatus;
+      confirmation_date: Date | null;
+    }) =>
+      Boolean(lead.confirmation_date) ||
+      lead.confirmation_status === ConfirmationStatus.checked_in ||
+      lead.confirmation_status === ConfirmationStatus.closed;
+
+    eventLeads.forEach((lead) => {
+      if (!lead.event_interest_id) return;
+      const channel = resolveChannel(lead);
+      let eventChannels = channelsByEvent.get(lead.event_interest_id);
+      if (!eventChannels) {
+        eventChannels = { rubinho: new Map(), vendedores: new Map() };
+        channelsByEvent.set(lead.event_interest_id, eventChannels);
+      }
+      eventChannels[channel].set(lead.id, {
+        scheduled:
+          lead.confirmation_status === ConfirmationStatus.scheduled ||
+          lead.confirmation_status === ConfirmationStatus.confirmed ||
+          wasCheckedIn(lead),
+        confirmed:
+          lead.confirmation_status === ConfirmationStatus.confirmed ||
+          wasCheckedIn(lead),
+        checkedIn: wasCheckedIn(lead),
+        scheduledAt: null,
+      });
+    });
 
     appointments.forEach((appointment) => {
-      const channel = resolveChannel(appointment.source);
-      if (!channel) return;
+      const channel = resolveChannel(appointment.lead);
       let eventChannels = channelsByEvent.get(appointment.event_id);
       if (!eventChannels) {
         eventChannels = { rubinho: new Map(), vendedores: new Map() };
         channelsByEvent.set(appointment.event_id, eventChannels);
       }
       const checkedIn =
-        Boolean(appointment.completed_at) ||
-        appointment.lead.confirmation_status === ConfirmationStatus.checked_in;
+        Boolean(appointment.completed_at) || wasCheckedIn(appointment.lead);
       const current = eventChannels[channel].get(appointment.lead_id);
       eventChannels[channel].set(appointment.lead_id, {
+        scheduled: true,
         confirmed:
           Boolean(current?.confirmed) ||
           Boolean(appointment.confirmed_at) ||
@@ -1107,7 +1165,7 @@ export class EventDashboardService {
     sales.forEach((sale) => {
       const eventId = sale.appointment?.event_id;
       const channel = sale.appointment
-        ? resolveChannel(sale.appointment.source)
+        ? resolveChannel(sale.appointment.lead)
         : null;
       if (!eventId || !channel) return;
       const counts = channelSalesByEvent.get(eventId) ?? {
@@ -1125,6 +1183,7 @@ export class EventDashboardService {
       const salesCount = channelSalesByEvent.get(eventId)?.[channel] ?? 0;
       const daily = new Map<string, { expected: number; came: number }>();
       rows.forEach((row) => {
+        if (!row.scheduledAt) return;
         const date = this.toIsoDate(row.scheduledAt);
         const bucket = daily.get(date) ?? { expected: 0, came: 0 };
         bucket.expected += 1;
@@ -1134,7 +1193,7 @@ export class EventDashboardService {
       return {
         funnel: {
           leads: rows.length,
-          scheduled: rows.length,
+          scheduled: rows.filter((row) => row.scheduled).length,
           confirmed: rows.filter((row) => row.confirmed).length,
           checked_in: rows.filter((row) => row.checkedIn).length,
           sold: salesCount,
