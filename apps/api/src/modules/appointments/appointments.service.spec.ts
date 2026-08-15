@@ -121,6 +121,7 @@ describe("AppointmentsService", () => {
         create: jest.fn(),
         update: jest.fn(),
         findFirst: jest.fn(),
+        findMany: jest.fn(),
       },
       user: {
         findUnique: jest.fn(),
@@ -130,6 +131,7 @@ describe("AppointmentsService", () => {
         upsert: jest.fn(),
       },
       dispatchEvent: {
+        findUnique: jest.fn(),
         upsert: jest.fn(),
       },
       $transaction: jest.fn(async (callback: (tx: any) => Promise<unknown>) =>
@@ -1240,5 +1242,76 @@ describe("AppointmentsService", () => {
     await expect(service.noShow(appointmentId, {})).rejects.toBeInstanceOf(
       BadRequestException,
     );
+  });
+
+  describe("runNoShowRescue", () => {
+    const scheduledStageId = "77777777-7777-4777-8777-777777777777";
+
+    const rescueAppointment = {
+      ...baseAppointment,
+      scheduled_at: new Date("2020-01-01T15:00:00.000Z"),
+      channel: AppointmentChannel.whatsapp,
+      status: AppointmentStatus.scheduled,
+      lead: {
+        id: leadId,
+        name: "Lead ausente",
+        phone: "+5512999999999",
+        deleted_at: null,
+        crm_stage_id: scheduledStageId,
+        confirmation_status: ConfirmationStatus.scheduled,
+        store_visit_datetime: new Date("2020-01-01T15:00:00.000Z"),
+      },
+      event: {
+        id: eventId,
+        name: "Evento encerrado",
+        event_date: new Date("2020-01-01T12:00:00.000Z"),
+        event_end_date: new Date("2020-01-01T22:00:00.000Z"),
+      },
+    };
+
+    beforeEach(() => {
+      prisma.crmStage.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: scheduledStageId });
+    });
+
+    it("seleciona o ausente somente depois do encerramento do evento", async () => {
+      prisma.appointment.findMany.mockResolvedValue([rescueAppointment]);
+
+      const result = await service.runNoShowRescue({
+        client_id: clientId,
+        target_date: "2020-01-01",
+        dry_run: true,
+      });
+
+      expect(result).toEqual(
+        expect.objectContaining({ eligible: 1, sent: 0, failed: 0 }),
+      );
+      expect(result.results).toEqual([
+        expect.objectContaining({ lead_id: leadId, status: "eligible" }),
+      ]);
+    });
+
+    it("nao seleciona o ausente antes do encerramento do evento", async () => {
+      prisma.appointment.findMany.mockResolvedValue([
+        {
+          ...rescueAppointment,
+          event: {
+            ...rescueAppointment.event,
+            event_end_date: new Date("2999-01-01T22:00:00.000Z"),
+          },
+        },
+      ]);
+
+      const result = await service.runNoShowRescue({
+        client_id: clientId,
+        target_date: "2020-01-01",
+        dry_run: true,
+      });
+
+      expect(result).toEqual(
+        expect.objectContaining({ eligible: 0, sent: 0, failed: 0 }),
+      );
+    });
   });
 });
