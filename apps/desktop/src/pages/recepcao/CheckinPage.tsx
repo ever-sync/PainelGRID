@@ -195,9 +195,6 @@ export function CheckinPage() {
   const [tokenHint, setTokenHint] = useState("");
   const [tokenBusy, setTokenBusy] = useState(false);
   const [scannedToken, setScannedToken] = useState("");
-  const [activeTab, setActiveTab] = useState<
-    "all" | "expected" | "arrived" | "absent"
-  >("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [, setScannerTab] = useState<"qr" | "manual">("qr");
@@ -233,6 +230,8 @@ export function CheckinPage() {
         const mapped = eventRows.map(mapApiEventToEvent);
         setEvents(mapped);
         setSelectedEventId((prev) => {
+          const stored = localStorage.getItem("reception:selected-event");
+          if (stored && mapped.some((e) => e.id === stored)) return stored;
           if (prev && mapped.some((e) => e.id === prev)) return prev;
           const active = mapped.find((e) => e.status === "active");
           return active?.id ?? mapped[0]?.id ?? "";
@@ -265,6 +264,17 @@ export function CheckinPage() {
   useEffect(() => {
     refreshCheckinData();
   }, [refreshCheckinData]);
+
+  useEffect(() => {
+    const handleEventChange = (browserEvent: globalThis.Event) => {
+      const eventId = (browserEvent as CustomEvent<{ eventId: string }>).detail
+        ?.eventId;
+      if (eventId) setSelectedEventId(eventId);
+    };
+    window.addEventListener("reception-event-changed", handleEventChange);
+    return () =>
+      window.removeEventListener("reception-event-changed", handleEventChange);
+  }, []);
 
   useLeadRealtimeSync(clientId, refreshCheckinData);
 
@@ -328,29 +338,29 @@ export function CheckinPage() {
 
   const today = new Date();
 
-  const filtered = useMemo(() => {
-    const matchedSearch = leadsForEvent.filter(
-      (l) =>
-        l.name.toLowerCase().includes(search.toLowerCase()) ||
-        l.phone.includes(search),
-    );
-    if (activeTab === "expected") {
-      return matchedSearch.filter(
-        (l) =>
-          l.confirmation_status === "scheduled" ||
-          l.confirmation_status === "confirmed",
-      );
-    }
-    if (activeTab === "arrived") {
-      return matchedSearch.filter(
-        (l) => l.confirmation_status === "checked_in",
-      );
-    }
-    if (activeTab === "absent") {
-      return matchedSearch.filter((l) => l.confirmation_status === "cancelled");
-    }
-    return matchedSearch;
-  }, [leadsForEvent, search, activeTab]);
+  const filtered = useMemo(
+    () =>
+      leadsForEvent
+        .filter(
+          (lead) =>
+            lead.confirmation_status === "scheduled" ||
+            lead.confirmation_status === "confirmed" ||
+            lead.confirmation_status === "checked_in",
+        )
+        .filter(
+          (lead) =>
+            lead.name.toLowerCase().includes(search.toLowerCase()) ||
+            lead.phone.includes(search),
+        )
+        .sort((a, b) => {
+          const priority = (lead: Lead) =>
+            lead.confirmation_status === "checked_in" ? 0 : 1;
+          return (
+            priority(a) - priority(b) || a.name.localeCompare(b.name, "pt-BR")
+          );
+        }),
+    [leadsForEvent, search],
+  );
   const totalPages = Math.max(
     1,
     Math.ceil(filtered.length / CHECKIN_PAGE_SIZE),
@@ -363,7 +373,7 @@ export function CheckinPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, search, selectedEventId]);
+  }, [search, selectedEventId]);
   const normalizedLeadPhone = normalizeBrPhoneToE164(leadPhone);
   const normalizedLeadEmail = leadEmail.trim();
   const isLeadEmailValid =
@@ -377,18 +387,6 @@ export function CheckinPage() {
             phoneDigitsForCompare(normalizedLeadPhone),
       ) ?? null)
     : null;
-
-  const expected = leadsForEvent.filter(
-    (l) =>
-      l.confirmation_status === "scheduled" ||
-      l.confirmation_status === "confirmed",
-  ).length;
-  const arrived = leadsForEvent.filter(
-    (l) => l.confirmation_status === "checked_in",
-  ).length;
-  const notCame = leadsForEvent.filter(
-    (l) => l.confirmation_status === "cancelled",
-  ).length;
 
   const [pendingCount, setPendingCount] = useState(0);
 
@@ -772,7 +770,6 @@ export function CheckinPage() {
       setDiscoverySourceOther("");
       setShowModal(false);
       setSearch("");
-      setActiveTab("all");
       setCurrentPage(1);
       openQuickCheckin(mapped);
       pushToast({
@@ -867,11 +864,14 @@ export function CheckinPage() {
         </div>
       )}
 
-      <div className="mb-4 max-w-md">
+      <div className="mb-4 hidden max-w-md md:block">
         <Select
           placeholder="Evento"
           value={selectedEventId}
-          onChange={(e) => setSelectedEventId(e.target.value)}
+          onChange={(e) => {
+            setSelectedEventId(e.target.value);
+            localStorage.setItem("reception:selected-event", e.target.value);
+          }}
           options={events.map((ev) => ({
             value: ev.id,
             label: `${ev.name} (${ev.status})`,
@@ -911,55 +911,16 @@ export function CheckinPage() {
         </div>
       </div>
 
-      <div className="mb-6 flex border-b border-zinc-200 dark:border-zinc-850 overflow-x-auto whitespace-nowrap">
-        <button
-          type="button"
-          onClick={() => setActiveTab("all")}
-          className={clsx(
-            "px-4 py-2.5 text-sm font-bold border-b-2 -mb-px transition-colors shrink-0",
-            activeTab === "all"
-              ? "border-[#e51838] text-[#e51838]"
-              : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200",
-          )}
-        >
-          Todos ({leadsForEvent.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("expected")}
-          className={clsx(
-            "px-4 py-2.5 text-sm font-bold border-b-2 -mb-px transition-colors shrink-0",
-            activeTab === "expected"
-              ? "border-[#e51838] text-[#e51838]"
-              : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200",
-          )}
-        >
-          Esperados ({expected})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("arrived")}
-          className={clsx(
-            "px-4 py-2.5 text-sm font-bold border-b-2 -mb-px transition-colors shrink-0",
-            activeTab === "arrived"
-              ? "border-[#e51838] text-[#e51838]"
-              : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200",
-          )}
-        >
-          Chegaram ({arrived})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("absent")}
-          className={clsx(
-            "px-4 py-2.5 text-sm font-bold border-b-2 -mb-px transition-colors shrink-0",
-            activeTab === "absent"
-              ? "border-[#e51838] text-[#e51838]"
-              : "border-transparent text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200",
-          )}
-        >
-          Não Vieram ({notCame})
-        </button>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-bold">Atendimento da recepção</h2>
+          <p className="text-xs text-zinc-500">
+            Agendados, confirmados e clientes que já fizeram check-in.
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+          {filtered.length} clientes
+        </span>
       </div>
 
       <div className="space-y-3">

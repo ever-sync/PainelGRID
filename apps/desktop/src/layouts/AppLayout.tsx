@@ -71,7 +71,7 @@ import {
   markNotificationRead,
   type ApiNotification,
 } from "../services/notifications";
-import { listEvents } from "../services/events";
+import { listEvents, type ApiEvent } from "../services/events";
 import { connectRealtime } from "../services/realtime";
 import { resolveClientId } from "../utils/userContext";
 import { createAudioContext } from "../utils/audioContext";
@@ -371,6 +371,10 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     null,
   );
   const [profileOpen, setProfileOpen] = useState(false);
+  const [receptionEvents, setReceptionEvents] = useState<ApiEvent[]>([]);
+  const [receptionEventId, setReceptionEventId] = useState(
+    () => localStorage.getItem("reception:selected-event") ?? "",
+  );
   const [menuOpen, setMenuOpen] = useState(false);
   const [checkinLeadMode, setCheckinLeadMode] = useState<"existing" | "new">(
     "existing",
@@ -378,6 +382,35 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
   const [checkinMethod, setCheckinMethod] = useState<"qr" | "manual">("qr");
   const [checkinToken, setCheckinToken] = useState("");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    if (user.role !== "recepcao") return;
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+    void listEvents({}, token)
+      .then((rows) => {
+        const sorted = [...rows].sort(
+          (a, b) =>
+            new Date(b.event_date).getTime() - new Date(a.event_date).getTime(),
+        );
+        setReceptionEvents(sorted);
+        setReceptionEventId((current) => {
+          const selected = sorted.some((event) => event.id === current)
+            ? current
+            : (sorted.find((event) => event.status === "active")?.id ??
+              sorted[0]?.id ??
+              "");
+          if (selected)
+            localStorage.setItem("reception:selected-event", selected);
+          return selected;
+        });
+      })
+      .catch(() => setReceptionEvents([]));
+  }, [user.role]);
+
+  const selectedReceptionEvent = receptionEvents.find(
+    (event) => event.id === receptionEventId,
+  );
 
   // ── Atalho Global Cmd + K / Ctrl + K ─────────────────────────────────────
   useEffect(() => {
@@ -1956,7 +1989,8 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
 
       {(user.role === "gestor" ||
         user.role === "cliente" ||
-        user.role === "recepcao") &&
+        (user.role === "recepcao" &&
+          selectedReceptionEvent?.allow_reception_create_sale === true)) &&
         !isImmersiveChatRoute && (
           <button
             type="button"
@@ -2405,6 +2439,35 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
                     <span>Ausente</span>
                   </button>
                 </div>
+              </div>
+            )}
+
+            {user.role === "recepcao" && receptionEvents.length > 0 && (
+              <div className="mb-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+                <label className="mb-2 block text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">
+                  Evento da recepção
+                </label>
+                <select
+                  value={receptionEventId}
+                  onChange={(event) => {
+                    const nextId = event.target.value;
+                    setReceptionEventId(nextId);
+                    localStorage.setItem("reception:selected-event", nextId);
+                    window.dispatchEvent(
+                      new CustomEvent("reception-event-changed", {
+                        detail: { eventId: nextId },
+                      }),
+                    );
+                    setProfileOpen(false);
+                  }}
+                  className="w-full rounded-xl border border-white/10 bg-[#202020] px-3 py-3 text-sm font-semibold text-white outline-none"
+                >
+                  {receptionEvents.map((event) => (
+                    <option key={event.id} value={event.id}>
+                      {event.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
 
