@@ -831,8 +831,10 @@ export function CRMPage() {
       }
 
       try {
-        leadsAbortRef.current?.abort();
-        setBoardLoading(false);
+        // A atualizacao pontual do realtime nao deve cancelar o carregamento da
+        // lista. Em clientes com entrada frequente de leads, isso interrompia a
+        // primeira pagina antes de ela preencher o kanban e o CRM permanecia
+        // vazio, embora a API tivesse respondido normalmente.
         const previousLead =
           clientLeads.find((lead) => lead.id === leadId) ?? null;
         const freshLead = mapApiLeadToLead(await getLead(leadId, token));
