@@ -37,6 +37,16 @@ import gpLogo from "../../assets/logo.png";
 type OutletContext = { user: User };
 type QueueTab = "clients" | "vendors";
 type VendorQueueSegment = "seminovo" | "pcd" | "novo" | "vd" | "assinatura";
+const QUEUE_CATEGORIES: Array<{
+  value: VendorQueueSegment;
+  label: string;
+}> = [
+  { value: "novo", label: "Novo" },
+  { value: "seminovo", label: "Seminovo" },
+  { value: "pcd", label: "PCD" },
+  { value: "vd", label: "VD" },
+  { value: "assinatura", label: "Assinatura" },
+];
 
 function arrivalTime(lead: ReceptionQueueLead) {
   return new Date(lead.confirmation_date || lead.updated_at || lead.created_at);
@@ -53,8 +63,7 @@ export function FilaPage() {
   const [queuePage, setQueuePage] = useState(1);
   const [queueHasNextPage, setQueueHasNextPage] = useState(false);
   const [queueTotals, setQueueTotals] = useState({
-    generalWaiting: 0,
-    personalWaiting: 0,
+    waiting: 0,
     active: 0,
   });
   const [error, setError] = useState("");
@@ -73,6 +82,8 @@ export function FilaPage() {
   const [changingVendor, setChangingVendor] = useState(false);
   const [changeVendorError, setChangeVendorError] = useState("");
   const [activeQueueTab, setActiveQueueTab] = useState<QueueTab>("clients");
+  const [activeClientCategory, setActiveClientCategory] =
+    useState<VendorQueueSegment>("novo");
 
   const load = useCallback(async () => {
     const token = readStoredSession()?.accessToken;
@@ -98,14 +109,9 @@ export function FilaPage() {
       setQueuePage(queue.page_info?.page ?? 1);
       setQueueHasNextPage(queue.page_info?.has_next_page ?? false);
       setQueueTotals({
-        generalWaiting:
-          queue.page_info?.general_waiting_total ??
-          queue.leads.filter((lead) => lead.queue_state === "general_waiting")
-            .length,
-        personalWaiting:
-          queue.page_info?.personal_waiting_total ??
-          queue.leads.filter((lead) => lead.queue_state === "personal_waiting")
-            .length,
+        waiting:
+          queue.page_info?.waiting_total ??
+          queue.leads.filter((lead) => lead.queue_state !== "active").length,
         active:
           queue.page_info?.active_total ??
           queue.leads.filter((lead) => lead.queue_state === "active").length,
@@ -152,8 +158,7 @@ export function FilaPage() {
       setQueuePage(queue.page_info.page);
       setQueueHasNextPage(queue.page_info.has_next_page);
       setQueueTotals({
-        generalWaiting: queue.page_info.general_waiting_total,
-        personalWaiting: queue.page_info.personal_waiting_total,
+        waiting: queue.page_info.waiting_total,
         active: queue.page_info.active_total,
       });
     } catch (cause) {
@@ -265,17 +270,12 @@ export function FilaPage() {
     }
   };
 
-  const { generalQueue, personalQueue, activeService } = useMemo(() => {
+  const { waitingQueue, activeService } = useMemo(() => {
     const sorted = [...leads].sort(
       (a, b) => arrivalTime(a).getTime() - arrivalTime(b).getTime(),
     );
     return {
-      generalQueue: sorted.filter(
-        (lead) => lead.queue_state === "general_waiting",
-      ),
-      personalQueue: sorted.filter(
-        (lead) => lead.queue_state === "personal_waiting",
-      ),
+      waitingQueue: sorted.filter((lead) => lead.queue_state !== "active"),
       activeService: sorted.filter((lead) => lead.queue_state === "active"),
     };
   }, [leads]);
@@ -340,11 +340,16 @@ export function FilaPage() {
           ? (activeService.find((lead) => lead.assigned_vendor_id === vendor.id)
               ?.name ?? null)
           : null,
-      waitingLeadNames: personalQueue
-        .filter((lead) => lead.assigned_vendor_id === vendor.id)
-        .map((lead) => lead.name),
     }));
-  }, [activeService, personalQueue, vendors]);
+  }, [activeService, vendors]);
+
+  const categoryQueue = useMemo(
+    () =>
+      waitingQueue.filter(
+        (lead) => (lead.queue_category ?? "novo") === activeClientCategory,
+      ),
+    [activeClientCategory, waitingQueue],
+  );
 
   return (
     <div className="space-y-4 pb-28 sm:space-y-6 sm:pb-6">
@@ -465,15 +470,10 @@ export function FilaPage() {
                   </p>
                 </div>
               </div>
-              <div className="grid w-full grid-cols-3 gap-2 sm:w-auto">
+              <div className="grid w-full grid-cols-2 gap-2 sm:w-auto">
                 <QueueMetric
-                  label="Fila geral"
-                  value={queueTotals.generalWaiting}
-                  tone="waiting"
-                />
-                <QueueMetric
-                  label="Fila interna"
-                  value={queueTotals.personalWaiting}
+                  label="Aguardando hoje"
+                  value={queueTotals.waiting}
                   tone="waiting"
                 />
                 <QueueMetric
@@ -501,16 +501,38 @@ export function FilaPage() {
                 </p>
               </div>
             ) : (
-              <div className="grid gap-3 sm:gap-4 xl:grid-cols-3">
+              <>
+              <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+                {QUEUE_CATEGORIES.map((category) => {
+                  const count = waitingQueue.filter(
+                    (lead) => (lead.queue_category ?? "novo") === category.value,
+                  ).length;
+                  return (
+                    <button
+                      key={category.value}
+                      type="button"
+                      onClick={() => setActiveClientCategory(category.value)}
+                      className={`shrink-0 rounded-xl border px-4 py-2 text-xs font-black uppercase tracking-wide transition-colors ${
+                        activeClientCategory === category.value
+                          ? "border-[#ff3159] bg-[#ff0038] text-white"
+                          : "border-white/10 bg-white/[0.035] text-zinc-400 hover:border-white/20"
+                      }`}
+                    >
+                      {category.label} · {count}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="grid gap-3 sm:gap-4 xl:grid-cols-2">
                 <QueueSection
-                  title="Fila geral"
-                  subtitle="Leads sem vendedor vinculado"
+                  title={`Fila ${QUEUE_CATEGORIES.find((item) => item.value === activeClientCategory)?.label ?? "Novo"}`}
+                  subtitle="Clientes aguardando atendimento nesta categoria"
                   icon={<Clock size={19} />}
-                  count={queueTotals.generalWaiting}
+                  count={categoryQueue.length}
                   tone="waiting"
                 >
-                  {generalQueue.length ? (
-                    generalQueue.map((lead, index) => (
+                  {categoryQueue.length ? (
+                    categoryQueue.map((lead, index) => (
                       <QueueLeadRow
                         key={lead.id}
                         lead={lead}
@@ -520,34 +542,7 @@ export function FilaPage() {
                     ))
                   ) : (
                     <QueueEmpty icon={<Flag size={28} />}>
-                      Ninguém aguardando no momento.
-                    </QueueEmpty>
-                  )}
-                </QueueSection>
-
-                <QueueSection
-                  title={
-                    user.role === "vendedor"
-                      ? "Sua fila interna"
-                      : "Filas internas"
-                  }
-                  subtitle="Leads próprios aguardando o responsável"
-                  icon={<Users size={19} />}
-                  count={queueTotals.personalWaiting}
-                  tone="waiting"
-                >
-                  {personalQueue.length ? (
-                    personalQueue.map((lead, index) => (
-                      <QueueLeadRow
-                        key={lead.id}
-                        lead={lead}
-                        position={index + 1}
-                        state="personal"
-                      />
-                    ))
-                  ) : (
-                    <QueueEmpty icon={<Users size={28} />}>
-                      Nenhum lead próprio aguardando.
+                      Ninguém aguardando nesta categoria.
                     </QueueEmpty>
                   )}
                 </QueueSection>
@@ -584,6 +579,7 @@ export function FilaPage() {
                   )}
                 </QueueSection>
               </div>
+              </>
             )}
             {queueHasNextPage && !loading ? (
               <div className="mt-5 flex justify-center">
@@ -737,20 +733,13 @@ function VendorQueuePanel({
     VendorAvailability & {
       queuePosition: number | null;
       activeLeadName: string | null;
-      waitingLeadNames: string[];
     }
   >;
   currentUserId: string;
 }) {
   const [activeSegment, setActiveSegment] =
     useState<VendorQueueSegment>("novo");
-  const segments: Array<{ value: VendorQueueSegment; label: string }> = [
-    { value: "seminovo", label: "Seminovo" },
-    { value: "pcd", label: "PCD" },
-    { value: "novo", label: "Novo" },
-    { value: "vd", label: "VD" },
-    { value: "assinatura", label: "Assinatura" },
-  ];
+  const segments = QUEUE_CATEGORIES;
   const vendorsBySegment = useMemo(() => {
     const segmentVendors = vendors.filter((vendor) =>
       vendorSegments(vendor).includes(activeSegment),
@@ -888,12 +877,6 @@ function VendorQueuePanel({
                       ? `Atendendo ${vendor.activeLeadName}`
                       : vendor.team_name || "Sem equipe informada"}
                   </p>
-                  {vendor.waitingLeadNames.length ? (
-                    <p className="mt-1 truncate text-[10px] font-semibold text-sky-300">
-                      Fila interna: {vendor.waitingLeadNames.length} ·{" "}
-                      {vendor.waitingLeadNames.join(", ")}
-                    </p>
-                  ) : null}
                 </div>
                 <span
                   className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${

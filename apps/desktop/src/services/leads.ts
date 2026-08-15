@@ -334,6 +334,7 @@ export type ReceptionQueueLead = Pick<
   attendance_started_at?: string | null;
   queue_state: "general_waiting" | "personal_waiting" | "active";
   queue_origin: "merit" | "rotation";
+  queue_category: "seminovo" | "pcd" | "novo" | "vd" | "assinatura";
 };
 
 export type ReceptionQueueResponse = {
