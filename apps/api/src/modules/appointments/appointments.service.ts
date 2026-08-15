@@ -136,6 +136,16 @@ export class AppointmentsService {
       },
       select: { id: true },
     });
+    // O resgate diário começa exclusivamente na coluna "Presença agendada".
+    // Leads que já avançaram para confirmação, reagendamento ou outra etapa
+    // não devem receber esse template novamente.
+    const scheduledStage = await this.prisma.crmStage.findFirst({
+      where: {
+        client_id: dto.client_id,
+        code: { endsWith: "_PRESENCA_AGENDADA" },
+      },
+      select: { id: true },
+    });
     const appointments = await this.prisma.appointment.findMany({
       where: {
         client_id: dto.client_id,
@@ -186,6 +196,8 @@ export class AppointmentsService {
           group[0].event.event_end_date != null &&
           group[0].event.event_end_date >= end;
         return Boolean(
+          scheduledStage != null &&
+          lead.crm_stage_id === scheduledStage.id &&
           hasTrustedActiveAppointment &&
           !attended &&
           visitMatches &&
