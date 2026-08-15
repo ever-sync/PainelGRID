@@ -1382,6 +1382,7 @@ export class EventDashboardService {
           created_by_type: true,
           completed_at: true,
           created_at: true,
+          lead: { select: { source: true, tags: true } },
         },
       }),
       this.prisma.metaCampaignAssignment.findMany({
@@ -1989,7 +1990,15 @@ export class EventDashboardService {
       human_manual: bucketStats(),
     };
     for (const appointment of appointments) {
+      const leadTags = appointment.lead.tags.map((tag) => tag.toLowerCase());
+      const leadBelongsToRubinho =
+        appointment.lead.source === LeadSource.facebook_ads ||
+        appointment.lead.source === LeadSource.whatsapp ||
+        leadTags.some(
+          (tag) => tag.includes("facebook") || tag.includes("whatsapp"),
+        );
       const owner: AppointmentOwner =
+        leadBelongsToRubinho ||
         appointment.source === "n8n_ai_agent" ||
         appointment.created_by_type === "external_agent"
           ? "rubinho"
