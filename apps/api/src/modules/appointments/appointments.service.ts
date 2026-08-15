@@ -1994,7 +1994,9 @@ export class AppointmentsService {
       : (resolveConfirmationStatusForStage(client?.settings, targetStage.id) ??
         (targetStage.code.endsWith("_PRESENCA_AGENDADA")
           ? ConfirmationStatus.scheduled
-          : null));
+          : targetStage.code.endsWith("_PRE_AGENDADO")
+            ? ConfirmationStatus.pending
+            : null));
     const notesWithStatus =
       mappedStatus != null
         ? `${historyNote}\nStatus automático atualizado pela etapa do CRM`
@@ -2042,7 +2044,7 @@ export class AppointmentsService {
     source?: AppointmentSource | null,
   ) {
     const isVendor = source === AppointmentSource.vendedor;
-    const suffixes = ["PRESENCA_AGENDADA", "PRE_AGENDAMENTO"];
+    const suffixes = ["PRE_AGENDADO", "PRESENCA_AGENDADA", "PRE_AGENDAMENTO"];
 
     return this.syncCrmStage(
       tx,

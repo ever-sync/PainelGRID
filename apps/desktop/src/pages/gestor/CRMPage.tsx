@@ -1095,13 +1095,13 @@ export function CRMPage() {
                   color: "#7C3AED",
                 },
                 {
-                  name: "Pré-agendamento",
-                  code: `${idBase}_PRE_AGENDAMENTO`,
+                  name: "Pré-agendado",
+                  code: `${idBase}_PRE_AGENDADO`,
                   display_order: 7,
                   color: "#6366F1",
                 },
                 {
-                  name: "Presença agendada",
+                  name: "Agendado",
                   code: `${idBase}_PRESENCA_AGENDADA`,
                   display_order: 8,
                   color: "#10B981",
