@@ -4695,14 +4695,24 @@ export class LeadsService {
         .toUpperCase()
         .slice(0, 16);
       const codes = [`${idBase}_PRESENCA_CONFIRMADA`];
-      const targetStage = await this.prisma.crmStage.findFirst({
-        where: {
-          client_id: lead.client_id,
-          pipeline_id: pipelineId,
-          code: { in: codes },
-        },
-        select: { id: true },
-      });
+      const targetStage =
+        (await this.prisma.crmStage.findFirst({
+          where: {
+            client_id: lead.client_id,
+            pipeline_id: pipelineId,
+            code: { in: codes },
+          },
+          select: { id: true },
+        })) ??
+        (await this.prisma.crmStage.findFirst({
+          where: {
+            client_id: lead.client_id,
+            pipeline_id: pipelineId,
+            code: { endsWith: "_PRESENCA_CONFIRMADA" },
+          },
+          orderBy: { display_order: "asc" },
+          select: { id: true },
+        }));
       if (targetStage) {
         targetStageId = targetStage.id;
       }
