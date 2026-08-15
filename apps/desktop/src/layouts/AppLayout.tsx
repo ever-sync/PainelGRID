@@ -305,7 +305,12 @@ function getNavItems(user: User): NavItem[] {
         {
           href: "/recepcao/fila",
           icon: <Users size={18} />,
-          label: "Fila",
+          label: "Fila de clientes",
+        },
+        {
+          href: "/recepcao/fila?tab=vendedores",
+          icon: <UserCheck size={18} />,
+          label: "Fila de vendedores",
         },
         {
           href: "/recepcao/ordem-vendedores",

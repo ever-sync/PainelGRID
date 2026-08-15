@@ -14,7 +14,7 @@ import {
   UserCheck,
   Users,
 } from "lucide-react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useSearchParams } from "react-router-dom";
 import type { User } from "../../types";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Notice } from "../../components/ui/Notice";
@@ -54,6 +54,7 @@ function arrivalTime(lead: ReceptionQueueLead) {
 
 export function FilaPage() {
   const { user } = useOutletContext<OutletContext>();
+  const [searchParams] = useSearchParams();
   const clientId = resolveClientId(user);
   const [eventName, setEventName] = useState("");
   const [leads, setLeads] = useState<ReceptionQueueLead[]>([]);
@@ -81,7 +82,15 @@ export function FilaPage() {
   const [nextVendorId, setNextVendorId] = useState("");
   const [changingVendor, setChangingVendor] = useState(false);
   const [changeVendorError, setChangeVendorError] = useState("");
-  const [activeQueueTab, setActiveQueueTab] = useState<QueueTab>("clients");
+  const [activeQueueTab, setActiveQueueTab] = useState<QueueTab>(() =>
+    searchParams.get("tab") === "vendedores" ? "vendors" : "clients",
+  );
+
+  useEffect(() => {
+    setActiveQueueTab(
+      searchParams.get("tab") === "vendedores" ? "vendors" : "clients",
+    );
+  }, [searchParams]);
   const [activeClientCategory, setActiveClientCategory] =
     useState<VendorQueueSegment>("novo");
 
