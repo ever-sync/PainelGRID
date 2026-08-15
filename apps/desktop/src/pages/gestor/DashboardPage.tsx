@@ -282,20 +282,26 @@ function MetricCard({
 
 function ActiveEventFunnelCard({
   event,
+  channel,
   isTopPerformer,
 }: {
   event: ActiveEventSummary;
+  channel: "rubinho" | "vendedores";
   isTopPerformer?: boolean;
 }) {
+  const channelData = event.channels?.[channel] ?? {
+    funnel: event.funnel,
+    attendance_by_day: event.attendance_by_day,
+  };
   const stages = [
-    { label: "Leads", value: event.funnel.leads },
-    { label: "Agend.", value: event.funnel.scheduled },
-    { label: "Confirm.", value: event.funnel.confirmed },
-    { label: "Check-in", value: event.funnel.checked_in },
-    { label: "Vend.", value: event.funnel.sold },
+    { label: "Leads", value: channelData.funnel.leads },
+    { label: "Agend.", value: channelData.funnel.scheduled },
+    { label: "Confirm.", value: channelData.funnel.confirmed },
+    { label: "Check-in", value: channelData.funnel.checked_in },
+    { label: "Vend.", value: channelData.funnel.sold },
   ];
-  const maxValue = Math.max(event.funnel.leads, 1);
-  const conversionRate = Math.round((event.funnel.sold / maxValue) * 100);
+  const maxValue = Math.max(channelData.funnel.leads, 1);
+  const conversionRate = Math.round((channelData.funnel.sold / maxValue) * 100);
   const isExpired =
     new Date(event.event_date).getTime() < new Date().setHours(0, 0, 0, 0);
   const dayFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -351,13 +357,13 @@ function ActiveEventFunnelCard({
         ))}
       </div>
 
-      {event.attendance_by_day.length > 0 && (
+      {channelData.attendance_by_day.length > 0 && (
         <div className="mt-5 space-y-2 border-t border-zinc-100 pt-4">
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400">
             Presença por dia
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
-            {event.attendance_by_day.map((day) => (
+            {channelData.attendance_by_day.map((day) => (
               <div
                 key={day.date}
                 className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3"
@@ -915,6 +921,9 @@ export function DashboardGestorPage() {
   const [activeEventsSummary, setActiveEventsSummary] = useState<
     ActiveEventSummary[]
   >([]);
+  const [activeEventsChannel, setActiveEventsChannel] = useState<
+    "rubinho" | "vendedores"
+  >("rubinho");
   const [calendarCursor, setCalendarCursor] = useState(
     new Date(today.getFullYear(), today.getMonth(), 1),
   );
@@ -1151,13 +1160,18 @@ export function DashboardGestorPage() {
 
   const topPerformerEventId = activeEventsSummary.reduce<string | null>(
     (topId, current) => {
-      if (!current.funnel.leads) return topId;
-      const currentRate = (current.funnel.sold / current.funnel.leads) * 100;
+      const currentFunnel =
+        current.channels?.[activeEventsChannel]?.funnel ?? current.funnel;
+      if (!currentFunnel.leads) return topId;
+      const currentRate = (currentFunnel.sold / currentFunnel.leads) * 100;
       if (currentRate <= 0) return topId;
       if (!topId) return current.id;
       const topEvent = activeEventsSummary.find((e) => e.id === topId);
-      const topRate = topEvent
-        ? (topEvent.funnel.sold / Math.max(topEvent.funnel.leads, 1)) * 100
+      const topFunnel = topEvent
+        ? (topEvent.channels?.[activeEventsChannel]?.funnel ?? topEvent.funnel)
+        : null;
+      const topRate = topFunnel
+        ? (topFunnel.sold / Math.max(topFunnel.leads, 1)) * 100
         : 0;
       return currentRate > topRate ? current.id : topId;
     },
@@ -1712,12 +1726,39 @@ export function DashboardGestorPage() {
         {/* 2. Active Events Row */}
         {activeEventsSummary.length > 0 && (
           <div className="space-y-3">
-            <SectionTitle title="Eventos ativos" />
+            <SectionTitle
+              title="Eventos ativos"
+              action={
+                <div className="inline-flex rounded-xl border border-zinc-200 bg-zinc-50 p-1">
+                  {(
+                    [
+                      ["rubinho", "Rubinho"],
+                      ["vendedores", "Vendedores"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setActiveEventsChannel(value)}
+                      className={clsx(
+                        "rounded-lg px-4 py-2 text-xs font-bold transition",
+                        activeEventsChannel === value
+                          ? "bg-[#FF0636] text-white shadow-sm"
+                          : "text-zinc-500 hover:text-zinc-900",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              }
+            />
             <div className="-mx-1 flex gap-4 overflow-x-auto px-1 pb-2">
               {activeEventsSummary.map((event) => (
                 <ActiveEventFunnelCard
                   key={event.id}
                   event={event}
+                  channel={activeEventsChannel}
                   isTopPerformer={event.id === topPerformerEventId}
                 />
               ))}

@@ -962,7 +962,9 @@ export class EventDashboardService {
       }),
       this.prisma.sale.findMany({
         where: { appointment: { event_id: { in: eventIds } } },
-        select: { appointment: { select: { event_id: true } } },
+        select: {
+          appointment: { select: { event_id: true, source: true } },
+        },
       }),
       this.prisma.appointment.findMany({
         where: {
@@ -974,7 +976,9 @@ export class EventDashboardService {
         select: {
           event_id: true,
           lead_id: true,
+          source: true,
           scheduled_at: true,
+          confirmed_at: true,
           completed_at: true,
           lead: { select: { confirmation_status: true } },
         },
@@ -1056,6 +1060,96 @@ export class EventDashboardService {
       );
     });
 
+    type DashboardChannel = "rubinho" | "vendedores";
+    type ChannelLead = {
+      confirmed: boolean;
+      checkedIn: boolean;
+      scheduledAt: Date;
+    };
+    const channelsByEvent = new Map<
+      string,
+      Record<DashboardChannel, Map<string, ChannelLead>>
+    >();
+    const channelSalesByEvent = new Map<
+      string,
+      Record<DashboardChannel, number>
+    >();
+    const resolveChannel = (
+      source: AppointmentSource,
+    ): DashboardChannel | null =>
+      source === AppointmentSource.n8n_ai_agent
+        ? "rubinho"
+        : source === AppointmentSource.vendedor
+          ? "vendedores"
+          : null;
+
+    appointments.forEach((appointment) => {
+      const channel = resolveChannel(appointment.source);
+      if (!channel) return;
+      let eventChannels = channelsByEvent.get(appointment.event_id);
+      if (!eventChannels) {
+        eventChannels = { rubinho: new Map(), vendedores: new Map() };
+        channelsByEvent.set(appointment.event_id, eventChannels);
+      }
+      const checkedIn =
+        Boolean(appointment.completed_at) ||
+        appointment.lead.confirmation_status === ConfirmationStatus.checked_in;
+      const current = eventChannels[channel].get(appointment.lead_id);
+      eventChannels[channel].set(appointment.lead_id, {
+        confirmed:
+          Boolean(current?.confirmed) ||
+          Boolean(appointment.confirmed_at) ||
+          checkedIn,
+        checkedIn: Boolean(current?.checkedIn) || checkedIn,
+        scheduledAt: current?.scheduledAt ?? appointment.scheduled_at,
+      });
+    });
+    sales.forEach((sale) => {
+      const eventId = sale.appointment?.event_id;
+      const channel = sale.appointment
+        ? resolveChannel(sale.appointment.source)
+        : null;
+      if (!eventId || !channel) return;
+      const counts = channelSalesByEvent.get(eventId) ?? {
+        rubinho: 0,
+        vendedores: 0,
+      };
+      counts[channel] += 1;
+      channelSalesByEvent.set(eventId, counts);
+    });
+
+    const serializeChannel = (eventId: string, channel: DashboardChannel) => {
+      const rows = Array.from(
+        channelsByEvent.get(eventId)?.[channel].values() ?? [],
+      );
+      const salesCount = channelSalesByEvent.get(eventId)?.[channel] ?? 0;
+      const daily = new Map<string, { expected: number; came: number }>();
+      rows.forEach((row) => {
+        const date = this.toIsoDate(row.scheduledAt);
+        const bucket = daily.get(date) ?? { expected: 0, came: 0 };
+        bucket.expected += 1;
+        if (row.checkedIn) bucket.came += 1;
+        daily.set(date, bucket);
+      });
+      return {
+        funnel: {
+          leads: rows.length,
+          scheduled: rows.length,
+          confirmed: rows.filter((row) => row.confirmed).length,
+          checked_in: rows.filter((row) => row.checkedIn).length,
+          sold: salesCount,
+        },
+        attendance_by_day: Array.from(daily.entries())
+          .map(([date, bucket]) => ({
+            date,
+            expected: bucket.expected,
+            came: bucket.came,
+            missing: Math.max(bucket.expected - bucket.came, 0),
+          }))
+          .sort((left, right) => left.date.localeCompare(right.date)),
+      };
+    };
+
     return events.map((event) => ({
       id: event.id,
       name: event.name,
@@ -1076,6 +1170,10 @@ export class EventDashboardService {
           };
         })
         .sort((left, right) => left.date.localeCompare(right.date)),
+      channels: {
+        rubinho: serializeChannel(event.id, "rubinho"),
+        vendedores: serializeChannel(event.id, "vendedores"),
+      },
     }));
   }
 

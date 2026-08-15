@@ -299,6 +299,13 @@ export type ActiveEventSummary = {
     came: number;
     missing: number;
   }>;
+  channels: Record<
+    "rubinho" | "vendedores",
+    {
+      funnel: ActiveEventSummary["funnel"];
+      attendance_by_day: ActiveEventSummary["attendance_by_day"];
+    }
+  >;
 };
 
 export function getActiveEventsSummary(token: string, signal?: AbortSignal) {
