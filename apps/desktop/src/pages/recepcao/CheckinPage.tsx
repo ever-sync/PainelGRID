@@ -177,7 +177,6 @@ export function CheckinPage() {
   const [selectedEventId, setSelectedEventId] = useState("");
   const [leadsState, setLeadsState] = useState<Lead[]>([]);
   const [vendorsById, setVendorsById] = useState<Record<string, string>>({});
-  const [staffList, setStaffList] = useState<AuthUser[]>([]);
   const [vendorAvailability, setVendorAvailability] = useState<
     VendorAvailability[]
   >([]);
@@ -245,7 +244,6 @@ export function CheckinPage() {
     void listClientStaff(clientId, t)
       .then((rows) => {
         const mapped = rows.map(mapStaffToUser);
-        setStaffList(mapped);
         const map: Record<string, string> = {};
         mapped.forEach((u) => {
           map[u.id] = u.name;
@@ -254,7 +252,6 @@ export function CheckinPage() {
       })
       .catch(() => {
         setVendorsById({});
-        setStaffList([]);
       });
     void listVendorAvailability(t, clientId)
       .then(setVendorAvailability)
@@ -502,22 +499,20 @@ export function CheckinPage() {
     const linkedVendor = vendorAvailability.find(
       (vendor) => vendor.id === lead.assigned_vendor_id,
     );
-    const linkedVendorIsAvailable =
-      Boolean(lead.assigned_vendor_id) &&
-      vendorAvailability.some(
-        (vendor) => vendor.id === lead.assigned_vendor_id && vendor.eligible,
-      );
     setQuickCheckinError("");
     setQuickCheckinWristbands(parseWristbandNumbers(lead.wristband_number));
-    setQuickCheckinVendorId(
-      linkedVendorIsAvailable
-        ? (lead.assigned_vendor_id ?? "__automatic__")
-        : "__automatic__",
-    );
+    setQuickCheckinVendorId(lead.assigned_vendor_id ?? "__automatic__");
     setQuickCheckinCategory(
       linkedVendor ? (vendorCategories(linkedVendor)[0] ?? "") : "",
     );
     setQuickCheckinLead(lead);
+  };
+
+  const handleExistingLeadCheckin = () => {
+    if (!duplicatePhoneLead) return;
+    setCreateError("");
+    setShowModal(false);
+    openQuickCheckin(duplicatePhoneLead);
   };
 
   const handleCheckInByTokenValue = async (tokenValue: string) => {
@@ -661,12 +656,14 @@ export function CheckinPage() {
         await notifyVendorCall(
           quickCheckinLead.id,
           t,
-          quickCheckinVendorId === "__automatic__"
-            ? {
-                mode: "automatic",
-                category: quickCheckinCategory || undefined,
-              }
-            : { mode: "manual", vendor_id: quickCheckinVendorId },
+          linkedVendorId
+            ? { mode: "manual", vendor_id: linkedVendorId }
+            : quickCheckinVendorId === "__automatic__"
+              ? {
+                  mode: "automatic",
+                  category: quickCheckinCategory || undefined,
+                }
+              : { mode: "manual", vendor_id: quickCheckinVendorId },
         );
       }
 
@@ -1136,20 +1133,26 @@ export function CheckinPage() {
               Cancelar
             </Button>
             <Button
-              onClick={() => void handleCreateLead()}
+              onClick={() =>
+                duplicatePhoneLead
+                  ? handleExistingLeadCheckin()
+                  : void handleCreateLead()
+              }
               loading={createBusy}
               isDisabled={
-                !!duplicatePhoneLead ||
-                !selectedEventId ||
-                event?.allow_reception_quick_create !== true ||
-                !leadName.trim() ||
-                !normalizedLeadPhone ||
-                !isLeadEmailValid ||
-                !discoverySource ||
-                (discoverySource === "outro" && !discoverySourceOther.trim())
+                duplicatePhoneLead
+                  ? !normalizedLeadPhone || createBusy
+                  : !selectedEventId ||
+                    event?.allow_reception_quick_create !== true ||
+                    !leadName.trim() ||
+                    !normalizedLeadPhone ||
+                    !isLeadEmailValid ||
+                    !discoverySource ||
+                    (discoverySource === "outro" &&
+                      !discoverySourceOther.trim())
               }
             >
-              Cadastrar
+              {duplicatePhoneLead ? "Fazer check-in" : "Cadastrar"}
             </Button>
           </>
         }
@@ -1190,8 +1193,18 @@ export function CheckinPage() {
             </p>
           ) : null}
           {duplicatePhoneLead ? (
-            <Notice tone="error" className="text-xs">
-              Telefone já cadastrado para {duplicatePhoneLead.name}.
+            <Notice tone="warning" className="text-xs">
+              <div className="space-y-1">
+                <p>
+                  Este telefone já está cadastrado para{" "}
+                  <strong>{duplicatePhoneLead.name}</strong> neste evento.
+                </p>
+                <p>
+                  {duplicatePhoneLead.assigned_vendor_id
+                    ? `O check-in será encaminhado para ${vendorsById[duplicatePhoneLead.assigned_vendor_id] ?? "o vendedor vinculado"}.`
+                    : "Você poderá escolher um vendedor no próximo passo."}
+                </p>
+              </div>
             </Notice>
           ) : null}
           <Input
@@ -1476,6 +1489,7 @@ export function CheckinPage() {
                   label: vendor.name,
                 })),
             ]}
+            disabled={quickCheckinBusy || Boolean(linkedVendorId)}
           />
           <p
             className={clsx(
