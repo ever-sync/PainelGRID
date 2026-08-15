@@ -14,6 +14,7 @@ export type TeamMemberUser = {
 export type TeamMember = {
   team_id: string;
   user_id: string;
+  queue_position?: number | null;
   added_at: string;
   user: TeamMemberUser;
 };
@@ -82,4 +83,19 @@ export function removeTeamMember(
     method: "DELETE",
     token,
   });
+}
+
+export function reorderTeamMembers(
+  token: string,
+  teamId: string,
+  userIds: string[],
+) {
+  return httpRequest<{ team_id: string; user_ids: string[] }>(
+    `/sales-teams/${teamId}/members/order`,
+    {
+      method: "PATCH",
+      token,
+      body: { user_ids: userIds },
+    },
+  );
 }

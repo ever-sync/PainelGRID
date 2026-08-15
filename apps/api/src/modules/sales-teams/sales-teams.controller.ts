@@ -22,6 +22,7 @@ import { AuthenticatedUser } from "../auth/auth.types";
 import { AddTeamMemberDto } from "./dto/add-member.dto";
 import { CreateSalesTeamDto } from "./dto/create-sales-team.dto";
 import { UpdateSalesTeamDto } from "./dto/update-sales-team.dto";
+import { ReorderMembersDto } from "./dto/reorder-members.dto";
 import { SalesTeamsService } from "./sales-teams.service";
 
 @ApiTags("sales-teams")
@@ -100,5 +101,15 @@ export class SalesTeamsController {
     @Param("userId", new ParseUUIDPipe()) userId: string,
   ) {
     return this.service.removeMember(user, id, userId);
+  }
+
+  @Patch(":id/members/order")
+  @ApiOperation({ summary: "Reordena a fila de vendedores do time" })
+  reorderMembers(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: ReorderMembersDto,
+  ) {
+    return this.service.reorderMembers(user, id, dto);
   }
 }

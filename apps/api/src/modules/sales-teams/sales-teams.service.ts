@@ -10,6 +10,7 @@ import { AuthenticatedUser } from "../auth/auth.types";
 import { AddTeamMemberDto } from "./dto/add-member.dto";
 import { CreateSalesTeamDto } from "./dto/create-sales-team.dto";
 import { UpdateSalesTeamDto } from "./dto/update-sales-team.dto";
+import { ReorderMembersDto } from "./dto/reorder-members.dto";
 
 type EventTeamMetricsInput = {
   id: string;
@@ -310,7 +311,10 @@ export class SalesTeamsService {
                 },
               },
             },
-            orderBy: { added_at: "asc" },
+            orderBy: [
+              { queue_position: { sort: "asc", nulls: "last" } },
+              { added_at: "asc" },
+            ],
           },
         },
       });
@@ -339,7 +343,10 @@ export class SalesTeamsService {
               },
             },
           },
-          orderBy: { added_at: "asc" },
+          orderBy: [
+            { queue_position: { sort: "asc", nulls: "last" } },
+            { added_at: "asc" },
+          ],
         },
       },
     });
@@ -535,5 +542,37 @@ export class SalesTeamsService {
         },
       },
     });
+  }
+
+  async reorderMembers(
+    user: AuthenticatedUser,
+    teamId: string,
+    dto: ReorderMembersDto,
+  ) {
+    await this.getTeamForAccess(user, teamId);
+    const members = await this.prisma.salesTeamMember.findMany({
+      where: { team_id: teamId },
+      select: { user_id: true },
+    });
+    const currentIds = new Set(members.map((member) => member.user_id));
+    if (
+      dto.user_ids.length !== currentIds.size ||
+      dto.user_ids.some((userId) => !currentIds.has(userId))
+    ) {
+      throw new BadRequestException(
+        "A fila deve conter exatamente os vendedores deste time",
+      );
+    }
+
+    await this.prisma.$transaction(
+      dto.user_ids.map((userId, position) =>
+        this.prisma.salesTeamMember.update({
+          where: { team_id_user_id: { team_id: teamId, user_id: userId } },
+          data: { queue_position: position },
+        }),
+      ),
+    );
+
+    return { team_id: teamId, user_ids: dto.user_ids };
   }
 }

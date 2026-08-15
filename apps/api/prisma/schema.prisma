@@ -1374,9 +1374,10 @@ model SalesTeam {
 }
 
 model SalesTeamMember {
-  team_id  String    @db.Uuid
-  user_id  String    @db.Uuid
-  added_at DateTime  @default(now())
+  team_id        String    @db.Uuid
+  user_id        String    @db.Uuid
+  queue_position Int?
+  added_at       DateTime  @default(now())
   team     SalesTeam @relation(fields: [team_id], references: [id], onDelete: Cascade)
   user     User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 

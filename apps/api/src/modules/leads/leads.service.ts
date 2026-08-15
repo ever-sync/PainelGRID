@@ -4910,7 +4910,18 @@ export class LeadsService {
         vendor_categories: true,
         vendor_availability: true,
         sales_team_memberships: {
-          select: { team_id: true, team: { select: { name: true } } },
+          where: lead.event_interest_id
+            ? { team: { event_id: lead.event_interest_id } }
+            : undefined,
+          select: {
+            team_id: true,
+            queue_position: true,
+            team: { select: { name: true } },
+          },
+          orderBy: [
+            { queue_position: { sort: "asc", nulls: "last" } },
+            { added_at: "asc" },
+          ],
           take: 1,
         },
       },
@@ -4919,10 +4930,17 @@ export class LeadsService {
         { id: "asc" },
       ],
     });
+    const orderedCandidates = [...candidates].sort(
+      (a, b) =>
+        (a.sales_team_memberships[0]?.queue_position ??
+          Number.MAX_SAFE_INTEGER) -
+          (b.sales_team_memberships[0]?.queue_position ??
+            Number.MAX_SAFE_INTEGER) || a.id.localeCompare(b.id),
+    );
     const vendor = requestedVendorId
       ? candidates[0]
       : dto.category
-        ? candidates.find((candidate) =>
+        ? orderedCandidates.find((candidate) =>
             this.vendorMatchesQueueCategory(
               candidate.vendor_category,
               candidate.vendor_categories,
@@ -4930,12 +4948,12 @@ export class LeadsService {
             ),
           )
         : lead.team_id
-          ? candidates.find((candidate) =>
+          ? orderedCandidates.find((candidate) =>
               candidate.sales_team_memberships.some(
                 (membership) => membership.team_id === lead.team_id,
               ),
             )
-          : candidates[0];
+          : orderedCandidates[0];
     if (!vendor) {
       if (requestedVendorId && requestedVendorId === lead.assigned_vendor_id) {
         const responsibleVendor = await this.prisma.user.findFirst({
