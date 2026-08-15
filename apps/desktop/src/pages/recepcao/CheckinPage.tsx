@@ -204,6 +204,9 @@ export function CheckinPage() {
   const [discoverySourceOther, setDiscoverySourceOther] = useState("");
   const [createError, setCreateError] = useState("");
   const [createBusy, setCreateBusy] = useState(false);
+  const [createStep, setCreateStep] = useState<"identity" | "source">(
+    "identity",
+  );
   const [, setInviteToken] = useState("");
   const [tokenHint, setTokenHint] = useState("");
   const [tokenBusy, setTokenBusy] = useState(false);
@@ -546,6 +549,23 @@ export function CheckinPage() {
     openQuickCheckin(duplicatePhoneLead);
   };
 
+  const advanceCreateStep = () => {
+    if (!normalizedLeadPhone) {
+      setCreateError("Informe um telefone válido.");
+      return;
+    }
+    if (!leadName.trim()) {
+      setCreateError("Informe o nome do cliente.");
+      return;
+    }
+    if (!isLeadEmailValid) {
+      setCreateError("Informe um e-mail válido ou deixe o campo vazio.");
+      return;
+    }
+    setCreateError("");
+    setCreateStep("source");
+  };
+
   const handleCheckInByTokenValue = async (tokenValue: string) => {
     const t = readStoredSession()?.accessToken;
     const payload = normalizeCheckInPaste(tokenValue);
@@ -829,6 +849,7 @@ export function CheckinPage() {
       setLeadEmail("");
       setDiscoverySource(null);
       setDiscoverySourceOther("");
+      setCreateStep("identity");
       setShowModal(false);
       setSearch("");
       setCurrentPage(1);
@@ -1324,7 +1345,10 @@ export function CheckinPage() {
       <Modal
         open={showModal}
         onClose={() => {
-          if (!createBusy) setShowModal(false);
+          if (!createBusy) {
+            setShowModal(false);
+            setCreateStep("identity");
+          }
         }}
         title="Check-in sem QR Code"
         dark={isDarkMode}
@@ -1332,17 +1356,28 @@ export function CheckinPage() {
           <>
             <Button
               variant="secondary"
-              onClick={() => setShowModal(false)}
+              onClick={() => {
+                if (createStep === "source") {
+                  setCreateStep("identity");
+                  setCreateError("");
+                } else {
+                  setShowModal(false);
+                }
+              }}
               isDisabled={createBusy}
             >
-              Cancelar
+              {createStep === "source" ? "Voltar" : "Cancelar"}
             </Button>
             <Button
-              onClick={() =>
-                duplicatePhoneLead
-                  ? handleExistingLeadCheckin()
-                  : void handleCreateLead()
-              }
+              onClick={() => {
+                if (duplicatePhoneLead) {
+                  handleExistingLeadCheckin();
+                } else if (createStep === "identity") {
+                  advanceCreateStep();
+                } else {
+                  void handleCreateLead();
+                }
+              }}
               loading={createBusy}
               isDisabled={
                 duplicatePhoneLead
@@ -1352,103 +1387,128 @@ export function CheckinPage() {
                     !leadName.trim() ||
                     !normalizedLeadPhone ||
                     !isLeadEmailValid ||
-                    !discoverySource ||
-                    (discoverySource === "outro" &&
-                      !discoverySourceOther.trim())
+                    (createStep === "source" &&
+                      (!discoverySource ||
+                        (discoverySource === "outro" &&
+                          !discoverySourceOther.trim())))
               }
             >
-              {duplicatePhoneLead ? "Continuar check-in" : "Cadastrar cliente"}
+              {duplicatePhoneLead
+                ? "Continuar check-in"
+                : createStep === "identity"
+                  ? "Continuar"
+                  : "Cadastrar e ir ao check-in"}
             </Button>
           </>
         }
       >
         <div className="space-y-4">
-          <div className="rounded-2xl border border-[#E51838]/15 bg-gradient-to-br from-[#E51838]/10 to-transparent p-4">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#E51838]">
-              Primeiro passo
-            </p>
-            <h3 className="mt-1 text-lg font-black text-zinc-950 dark:text-white">
-              Localizar cliente pelo telefone
-            </h3>
-            <p className="mt-1 text-xs text-zinc-500">
-              Se o cliente já existir, usaremos o cadastro e o vendedor
-              vinculado.
-            </p>
-          </div>
-          <Input
-            label="Telefone do cliente *"
-            type="tel"
-            inputMode="tel"
-            value={leadPhone}
-            onChange={(inputEvent) => {
-              setLeadPhone(formatBrPhoneInput(inputEvent.target.value));
-              setCreateError("");
-            }}
-            placeholder="(12) 98109-2776"
-            autoComplete="tel"
-            isDisabled={createBusy}
-          />
-          {normalizedLeadPhone ? (
-            <p
-              className={clsx(
-                "text-xs",
-                isDarkMode ? "text-zinc-400" : "text-gray-500",
-              )}
-            >
-              Será salvo como: {normalizedLeadPhone}
-            </p>
-          ) : null}
-          {normalizedLeadPhone ? (
-            duplicatePhoneLead ? (
-              <Notice tone="success" className="text-xs">
-                <div className="space-y-1">
-                  <p className="font-bold">
-                    Cliente encontrado: {duplicatePhoneLead.name}
-                  </p>
-                  <p>
-                    {duplicatePhoneLead.assigned_vendor_id
-                      ? `Vendedor vinculado: ${vendorsById[duplicatePhoneLead.assigned_vendor_id] ?? "vendedor responsável"}.`
-                      : "Sem vendedor vinculado. Você poderá escolher no próximo passo."}
-                  </p>
-                </div>
-              </Notice>
-            ) : (
-              <Notice tone="info" className="text-xs">
-                Cliente não encontrado neste evento. Complete o cadastro abaixo.
-              </Notice>
-            )
-          ) : null}
+          {createStep === "identity" ? (
+            <>
+              <div className="rounded-2xl border border-[#E51838]/15 bg-gradient-to-br from-[#E51838]/10 to-transparent p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#E51838]">
+                  Primeiro passo
+                </p>
+                <h3 className="mt-1 text-lg font-black text-zinc-950 dark:text-white">
+                  Localizar cliente pelo telefone
+                </h3>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Se o cliente já existir, usaremos o cadastro e o vendedor
+                  vinculado.
+                </p>
+              </div>
+              <Input
+                label="Telefone do cliente *"
+                type="tel"
+                inputMode="tel"
+                value={leadPhone}
+                onChange={(inputEvent) => {
+                  setLeadPhone(formatBrPhoneInput(inputEvent.target.value));
+                  setCreateStep("identity");
+                  setCreateError("");
+                }}
+                placeholder="(12) 98109-2776"
+                autoComplete="tel"
+                isDisabled={createBusy}
+              />
+              {normalizedLeadPhone ? (
+                <p
+                  className={clsx(
+                    "text-xs",
+                    isDarkMode ? "text-zinc-400" : "text-gray-500",
+                  )}
+                >
+                  Será salvo como: {normalizedLeadPhone}
+                </p>
+              ) : null}
+              {normalizedLeadPhone ? (
+                duplicatePhoneLead ? (
+                  <Notice tone="success" className="text-xs">
+                    <div className="space-y-1">
+                      <p className="font-bold">
+                        Cliente encontrado: {duplicatePhoneLead.name}
+                      </p>
+                      <p>
+                        {duplicatePhoneLead.assigned_vendor_id
+                          ? `Vendedor vinculado: ${vendorsById[duplicatePhoneLead.assigned_vendor_id] ?? "vendedor responsável"}.`
+                          : "Sem vendedor vinculado. Você poderá escolher no próximo passo."}
+                      </p>
+                    </div>
+                  </Notice>
+                ) : (
+                  <Notice tone="info" className="text-xs">
+                    Cliente não encontrado neste evento. Complete o cadastro
+                    abaixo.
+                  </Notice>
+                )
+              ) : null}
 
-          {normalizedLeadPhone && !duplicatePhoneLead ? (
-            <div className="space-y-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-              <Input
-                label="Nome *"
-                value={leadName}
-                onChange={(inputEvent) => {
-                  setLeadName(inputEvent.target.value.slice(0, 255));
-                  setCreateError("");
-                }}
-                placeholder="Nome do cliente"
-                autoComplete="name"
-                isDisabled={createBusy}
-              />
-              <Input
-                label="E-mail (opcional)"
-                type="email"
-                value={leadEmail}
-                onChange={(inputEvent) => {
-                  setLeadEmail(inputEvent.target.value.slice(0, 255));
-                  setCreateError("");
-                }}
-                placeholder="cliente@exemplo.com"
-                autoComplete="email"
-                error={
-                  normalizedLeadEmail && !isLeadEmailValid
-                    ? "Informe um e-mail válido."
-                    : undefined
-                }
-                isDisabled={createBusy}
-              />
+              {normalizedLeadPhone && !duplicatePhoneLead ? (
+                <div className="space-y-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+                  <Input
+                    label="Nome *"
+                    value={leadName}
+                    onChange={(inputEvent) => {
+                      setLeadName(inputEvent.target.value.slice(0, 255));
+                      setCreateError("");
+                    }}
+                    placeholder="Nome do cliente"
+                    autoComplete="name"
+                    isDisabled={createBusy}
+                  />
+                  <Input
+                    label="E-mail (opcional)"
+                    type="email"
+                    value={leadEmail}
+                    onChange={(inputEvent) => {
+                      setLeadEmail(inputEvent.target.value.slice(0, 255));
+                      setCreateError("");
+                    }}
+                    placeholder="cliente@exemplo.com"
+                    autoComplete="email"
+                    error={
+                      normalizedLeadEmail && !isLeadEmailValid
+                        ? "Informe um e-mail válido."
+                        : undefined
+                    }
+                    isDisabled={createBusy}
+                  />
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-[#E51838]/15 bg-gradient-to-br from-[#E51838]/10 to-transparent p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#E51838]">
+                  Etapa 2 de 2
+                </p>
+                <h3 className="mt-1 text-lg font-black text-zinc-950 dark:text-white">
+                  Como ficou sabendo?
+                </h3>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {leadName} · {leadPhone}
+                </p>
+              </div>
               <fieldset className="space-y-2 pt-1">
                 <legend
                   className={clsx(
@@ -1504,7 +1564,7 @@ export function CheckinPage() {
                 />
               ) : null}
             </div>
-          ) : null}
+          )}
           {createError ? (
             <Notice tone="error" className="text-xs">
               {createError}
