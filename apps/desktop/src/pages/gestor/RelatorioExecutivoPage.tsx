@@ -968,6 +968,37 @@ function ExecutiveSummary({
           Grand Prix Performance
         </span>
       </div>
+      {report.coverage && (
+        <div
+          className={clsx(
+            "mb-6 grid gap-3 rounded-2xl border p-4 text-xs sm:grid-cols-2",
+            isDark
+              ? "border-zinc-800 bg-zinc-900/60 text-zinc-300"
+              : "border-zinc-200 bg-zinc-50 text-zinc-600",
+          )}
+        >
+          <div>
+            <span className="text-zinc-500">Cobertura Meta de leads</span>
+            <strong className="ml-2 text-sm text-[#FF0636]">
+              {pct(
+                report.coverage.attributed_leads,
+                report.coverage.total_leads,
+              ).toFixed(1)}
+              %
+            </strong>
+          </div>
+          <div>
+            <span className="text-zinc-500">Cobertura Meta de vendas</span>
+            <strong className="ml-2 text-sm text-[#FF0636]">
+              {pct(
+                report.coverage.attributed_sold,
+                report.coverage.total_sold,
+              ).toFixed(1)}
+              %
+            </strong>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-x-8 gap-y-4 md:grid-cols-3">
         <BigStat
           label="Investimento Total"
@@ -982,7 +1013,7 @@ function ExecutiveSummary({
           isDark={isDark}
         />
         <BigStat
-          label="Lucro Estimado"
+          label="Margem Estimada"
           value={formatCurrency(report.lucro)}
           isDark={isDark}
           est
@@ -1040,8 +1071,8 @@ function ExecutiveSummary({
             ` (${formatNumber((report.paidTraffic / report.investimento) * 100)}% do total)`}
         </span>
         <span>
-          Lucro estimado com margens por segmento — 0km 5% · Seminovo 12% ·
-          Venda Direta 3% · PcD 5%.
+          Margem estimada por segmento — 0km 5% · Seminovo 12% · Venda Direta 3%
+          · PcD 5%.
         </span>
       </div>
       <div
@@ -1797,17 +1828,20 @@ function ExecutiveVersusCard({
   metricLabel,
   rubinhoValue,
   sellerValue,
+  manualValue,
   isDark,
 }: {
   title: string;
   metricLabel: string;
   rubinhoValue: number;
   sellerValue: number;
+  manualValue: number;
   isDark: boolean;
 }) {
-  const total = rubinhoValue + sellerValue;
-  const rubinhoPercent = total ? (rubinhoValue / total) * 100 : 50;
-  const sellerPercent = total ? 100 - rubinhoPercent : 50;
+  const total = rubinhoValue + sellerValue + manualValue;
+  const rubinhoPercent = total ? (rubinhoValue / total) * 100 : 0;
+  const sellerPercent = total ? (sellerValue / total) * 100 : 0;
+  const manualPercent = total ? (manualValue / total) * 100 : 0;
 
   return (
     <div
@@ -1832,7 +1866,7 @@ function ExecutiveVersusCard({
               isDark ? "text-zinc-400" : "text-zinc-500",
             )}
           >
-            Rubinho vs vendedores
+            Origem dos resultados
           </p>
           <h3 className="mt-1 text-lg font-black">{title}</h3>
         </div>
@@ -1919,6 +1953,32 @@ function ExecutiveVersusCard({
         </div>
       </div>
 
+      <div
+        className={clsx(
+          "mt-5 flex items-center justify-between gap-4 rounded-2xl border px-4 py-3",
+          isDark
+            ? "border-amber-400/20 bg-amber-400/5"
+            : "border-amber-200 bg-amber-50",
+        )}
+      >
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-500">
+            Gestor ou operação manual
+          </p>
+          <p className="text-xs text-zinc-500">
+            Resultado sem origem Rubinho ou vendedor identificada.
+          </p>
+        </div>
+        <div className="text-right">
+          <strong className="text-2xl font-black tabular-nums text-amber-500">
+            {formatNumber(manualValue)}
+          </strong>
+          <p className="text-[9px] font-bold uppercase tracking-wide text-zinc-500">
+            {metricLabel}
+          </p>
+        </div>
+      </div>
+
       <div className="mt-6">
         <div
           className={clsx(
@@ -1928,6 +1988,7 @@ function ExecutiveVersusCard({
         >
           <span>{Math.round(rubinhoPercent)}%</span>
           <span>{Math.round(sellerPercent)}%</span>
+          <span>{Math.round(manualPercent)}%</span>
         </div>
         <div
           className={clsx(
@@ -1947,6 +2008,10 @@ function ExecutiveVersusCard({
                 : "from-zinc-500 to-zinc-900",
             )}
             style={{ width: `${sellerPercent}%` }}
+          />
+          <div
+            className="bg-gradient-to-r from-amber-300 to-amber-500"
+            style={{ width: `${manualPercent}%` }}
           />
         </div>
       </div>
@@ -1976,8 +2041,9 @@ function RubinhoPerformance({
     ? [
         {
           key: "rubinho",
-          label: "Agendado pelo Rubinho",
-          description: "Criado diretamente pelo agente de IA.",
+          label: "Origem Rubinho",
+          description:
+            "Lead Facebook/WhatsApp ou agendamento criado pelo agente de IA.",
           color: "#8b5cf6",
           value: ownership.rubinho,
         },
@@ -2061,6 +2127,7 @@ function RubinhoPerformance({
             metricLabel="Agendamentos"
             rubinhoValue={ownership.rubinho.appointments}
             sellerValue={ownership.seller.appointments}
+            manualValue={ownership.human_manual.appointments}
             isDark={isDark}
           />
           <ExecutiveVersusCard
@@ -2068,6 +2135,7 @@ function RubinhoPerformance({
             metricLabel="Vendas"
             rubinhoValue={ownership.rubinho.sales}
             sellerValue={ownership.seller.sales}
+            manualValue={ownership.human_manual.sales}
             isDark={isDark}
           />
         </div>
@@ -2138,9 +2206,8 @@ function RubinhoPerformance({
           isDark ? "text-zinc-500" : "text-zinc-400",
         )}
       >
-        O crédito do agendamento pertence exclusivamente a quem o criou.
-        Interações anteriores do Rubinho não transferem para a IA um agendamento
-        feito pelo vendedor.
+        Regra aplicada: leads com origem ou tag Facebook/WhatsApp pertencem ao
+        Rubinho. Nos demais casos, o crédito segue quem criou o agendamento.
         {journey && (
           <>
             {" "}

@@ -748,7 +748,7 @@ describe("EventDashboardService.getExecutiveReport attribution", () => {
           sales: 0,
           revenue: 0,
         },
-        rule: "appointment_creator",
+        rule: "lead_origin_or_appointment_creator",
       },
     });
     expect(result.commercial_revenue).toEqual({
@@ -950,7 +950,7 @@ describe("EventDashboardService.getExecutiveReport attribution", () => {
         sales: 1,
         revenue: 10000,
       },
-      rule: "appointment_creator",
+      rule: "lead_origin_or_appointment_creator",
     });
   });
 

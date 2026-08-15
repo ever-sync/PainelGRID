@@ -533,7 +533,7 @@ export type ExecutiveReportResponse = {
       rubinho: ExecutiveJourneyAttribution;
       seller: ExecutiveJourneyAttribution;
       human_manual: ExecutiveJourneyAttribution;
-      rule: "appointment_creator";
+      rule: "lead_origin_or_appointment_creator";
     };
   };
   commercial_revenue?: {

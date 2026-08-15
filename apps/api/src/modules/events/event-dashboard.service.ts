@@ -2030,7 +2030,7 @@ export class EventDashboardService {
       rubinho: presentBucket(ownerBuckets.rubinho),
       seller: presentBucket(ownerBuckets.seller),
       human_manual: presentBucket(ownerBuckets.human_manual),
-      rule: "appointment_creator" as const,
+      rule: "lead_origin_or_appointment_creator" as const,
     };
 
     const rubinhoConversationIds = [
