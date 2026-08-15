@@ -199,12 +199,14 @@ export class AppointmentsService {
         const alreadyInConfirmationStage =
           confirmationStage != null &&
           lead.crm_stage_id === confirmationStage.id;
-        // O cron executa às 00h15 do dia seguinte. No último dia, o evento
-        // precisa estar encerrado antes de qualquer resgate ser disparado.
-        // Eventos sem data final explícita são tratados como encerrados ao
-        // terminar o próprio dia agendado que está sendo processado.
+        // O cron executa às 00h15 do dia seguinte: processa normalmente os
+        // dias intermediários e, depois que o evento termina, também inclui o
+        // último dia (que antes ficava indevidamente fora do resgate).
         const effectiveEventEnd = group[0].event.event_end_date ?? end;
+        const eventContinuesAfterTargetDay = effectiveEventEnd >= end;
         const eventHasEnded = effectiveEventEnd.getTime() <= Date.now();
+        const dailyWindowHasClosed =
+          eventContinuesAfterTargetDay || eventHasEnded;
         return Boolean(
           scheduledStage != null &&
           lead.crm_stage_id === scheduledStage.id &&
@@ -212,7 +214,7 @@ export class AppointmentsService {
           !attended &&
           visitMatches &&
           !alreadyInConfirmationStage &&
-          eventHasEnded &&
+          dailyWindowHasClosed &&
           lead.phone,
         );
       })

@@ -1292,7 +1292,7 @@ describe("AppointmentsService", () => {
       ]);
     });
 
-    it("nao seleciona o ausente antes do encerramento do evento", async () => {
+    it("mantem o resgate dos dias intermediarios do evento", async () => {
       prisma.appointment.findMany.mockResolvedValue([
         {
           ...rescueAppointment,
@@ -1310,7 +1310,7 @@ describe("AppointmentsService", () => {
       });
 
       expect(result).toEqual(
-        expect.objectContaining({ eligible: 0, sent: 0, failed: 0 }),
+        expect.objectContaining({ eligible: 1, sent: 0, failed: 0 }),
       );
     });
   });
