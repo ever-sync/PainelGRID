@@ -701,31 +701,30 @@ export function EventDetailPage() {
     () => staff.filter((member) => !assignedVendorIds.has(member.id)),
     [assignedVendorIds, staff],
   );
-  const categoryQueueTeams = useMemo(
+  const categoryQueueMembers = useMemo(
     () =>
       teams
-        .map((team) => ({
-          ...team,
-          members: team.members
-            .filter((member) => {
-              const categories = member.user.vendor_categories?.length
-                ? member.user.vendor_categories
-                : member.user.vendor_category
-                  ? [member.user.vendor_category]
-                  : [];
-              return categories.includes(queueCategory);
-            })
-            .sort(
-              (a, b) =>
-                (a.queue_positions?.[queueCategory] ??
-                  a.queue_position ??
-                  Number.MAX_SAFE_INTEGER) -
-                (b.queue_positions?.[queueCategory] ??
-                  b.queue_position ??
-                  Number.MAX_SAFE_INTEGER),
-            ),
-        }))
-        .filter((team) => team.members.length > 0),
+        .flatMap((team) =>
+          team.members.map((member) => ({ ...member, teamId: team.id })),
+        )
+        .filter((member) => {
+          const categories = member.user.vendor_categories?.length
+            ? member.user.vendor_categories
+            : member.user.vendor_category
+              ? [member.user.vendor_category]
+              : [];
+          return categories.includes(queueCategory);
+        })
+        .sort(
+          (a, b) =>
+            (a.queue_positions?.[queueCategory] ??
+              a.queue_position ??
+              Number.MAX_SAFE_INTEGER) -
+              (b.queue_positions?.[queueCategory] ??
+                b.queue_position ??
+                Number.MAX_SAFE_INTEGER) ||
+            a.user.name.localeCompare(b.user.name, "pt-BR"),
+        ),
     [queueCategory, teams],
   );
   const participantClients = useMemo(
@@ -1401,35 +1400,20 @@ export function EventDetailPage() {
   }
 
   async function handleReorderCategoryMember(
-    team: SalesTeam,
     memberId: string,
     direction: -1 | 1,
   ) {
-    const fullTeam = teams.find((item) => item.id === team.id);
-    if (!fullTeam) return;
-    const categoryIndices = fullTeam.members
-      .map((member, index) => {
-        const categories = member.user.vendor_categories?.length
-          ? member.user.vendor_categories
-          : member.user.vendor_category
-            ? [member.user.vendor_category]
-            : [];
-        return categories.includes(queueCategory) ? index : -1;
-      })
-      .filter((index) => index >= 0);
-    const currentCategoryIndex = categoryIndices.findIndex(
-      (index) => fullTeam.members[index]?.user_id === memberId,
+    const currentCategoryIndex = categoryQueueMembers.findIndex(
+      (member) => member.user_id === memberId,
     );
     const nextCategoryIndex = currentCategoryIndex + direction;
     if (
       currentCategoryIndex < 0 ||
       nextCategoryIndex < 0 ||
-      nextCategoryIndex >= categoryIndices.length
+      nextCategoryIndex >= categoryQueueMembers.length
     )
       return;
-    const orderedCategoryMembers = categoryIndices.map(
-      (index) => fullTeam.members[index],
-    );
+    const orderedCategoryMembers = [...categoryQueueMembers];
     [
       orderedCategoryMembers[currentCategoryIndex],
       orderedCategoryMembers[nextCategoryIndex],
@@ -1443,30 +1427,30 @@ export function EventDetailPage() {
         position,
       ]),
     );
-    const reordered = fullTeam.members.map((member) =>
-      categoryOrder.has(member.user_id)
-        ? {
-            ...member,
-            queue_positions: {
-              ...(member.queue_positions ?? {}),
-              [queueCategory]: categoryOrder.get(member.user_id)!,
-            },
-          }
-        : member,
-    );
     const session = readStoredSession();
     if (!session?.accessToken) return;
     const previousTeams = teams;
-    setQueueSaving(`${team.id}:${memberId}`);
+    setQueueSaving(memberId);
     setTeams((current) =>
-      current.map((item) =>
-        item.id === team.id ? { ...item, members: reordered } : item,
-      ),
+      current.map((team) => ({
+        ...team,
+        members: team.members.map((member) =>
+          categoryOrder.has(member.user_id)
+            ? {
+                ...member,
+                queue_positions: {
+                  ...(member.queue_positions ?? {}),
+                  [queueCategory]: categoryOrder.get(member.user_id)!,
+                },
+              }
+            : member,
+        ),
+      })),
     );
     try {
       await reorderTeamMembers(
         session.accessToken,
-        team.id,
+        orderedCategoryMembers[0].teamId,
         orderedCategoryMembers.map((member) => member.user_id),
         queueCategory,
       );
@@ -2826,97 +2810,84 @@ export function EventDetailPage() {
               ))}
             </div>
           </div>
-          {categoryQueueTeams.length === 0 ? (
+          {categoryQueueMembers.length === 0 ? (
             <div className="mt-8 rounded-2xl border border-dashed border-zinc-200 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700">
               Nenhum vendedor vinculado a esta categoria neste evento.
             </div>
           ) : (
-            <div className="mt-6 grid gap-4 lg:grid-cols-2">
-              {categoryQueueTeams.map((team) => (
-                <div
-                  key={team.id}
+            <div
+              className={clsx(
+                "mt-6 rounded-2xl border p-4",
+                isDarkMode
+                  ? "border-zinc-800 bg-[#0b0b0b]"
+                  : "border-zinc-100 bg-zinc-50/50",
+              )}
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <p
                   className={clsx(
-                    "rounded-2xl border p-4",
-                    isDarkMode
-                      ? "border-zinc-800 bg-[#0b0b0b]"
-                      : "border-zinc-100 bg-zinc-50/50",
+                    "text-sm font-bold",
+                    isDarkMode ? "text-zinc-100" : "text-zinc-900",
                   )}
                 >
-                  <div className="mb-3 flex items-center justify-between">
-                    <p
+                  Ordem geral da categoria
+                </p>
+                <Badge variant="gray">
+                  {categoryQueueMembers.length} vendedores
+                </Badge>
+              </div>
+              <div className="space-y-2">
+                {categoryQueueMembers.map((member, index) => (
+                  <div
+                    key={member.user_id}
+                    className={clsx(
+                      "flex items-center gap-3 rounded-xl border px-3 py-2.5",
+                      isDarkMode
+                        ? "border-zinc-800 bg-[#111111]"
+                        : "border-zinc-200 bg-white",
+                    )}
+                  >
+                    <span className="w-5 text-center text-xs font-bold text-zinc-400">
+                      {index + 1}
+                    </span>
+                    <span
                       className={clsx(
-                        "text-sm font-bold",
+                        "min-w-0 flex-1 truncate text-sm font-semibold",
                         isDarkMode ? "text-zinc-100" : "text-zinc-900",
                       )}
                     >
-                      {team.name}
-                    </p>
-                    <Badge variant="gray">
-                      {team.members.length} vendedores
-                    </Badge>
-                  </div>
-                  <div className="space-y-2">
-                    {team.members.map((member, index) => (
-                      <div
-                        key={`${team.id}-${member.user_id}`}
-                        className={clsx(
-                          "flex items-center gap-3 rounded-xl border px-3 py-2.5",
-                          isDarkMode
-                            ? "border-zinc-800 bg-[#111111]"
-                            : "border-zinc-200 bg-white",
-                        )}
+                      {member.user.name}
+                    </span>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        aria-label="Mover para cima"
+                        disabled={index === 0 || queueSaving !== null}
+                        onClick={() =>
+                          void handleReorderCategoryMember(member.user_id, -1)
+                        }
+                        className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 disabled:opacity-30 dark:hover:bg-zinc-800"
                       >
-                        <span className="w-5 text-center text-xs font-bold text-zinc-400">
-                          {index + 1}
-                        </span>
-                        <span
-                          className={clsx(
-                            "min-w-0 flex-1 truncate text-sm font-semibold",
-                            isDarkMode ? "text-zinc-100" : "text-zinc-900",
-                          )}
-                        >
-                          {member.user.name}
-                        </span>
-                        <div className="flex gap-1">
-                          <button
-                            type="button"
-                            aria-label="Mover para cima"
-                            disabled={index === 0 || queueSaving !== null}
-                            onClick={() =>
-                              void handleReorderCategoryMember(
-                                team,
-                                member.user_id,
-                                -1,
-                              )
-                            }
-                            className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 disabled:opacity-30 dark:hover:bg-zinc-800"
-                          >
-                            <ChevronUp size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label="Mover para baixo"
-                            disabled={
-                              index === team.members.length - 1 ||
-                              queueSaving !== null
-                            }
-                            onClick={() =>
-                              void handleReorderCategoryMember(
-                                team,
-                                member.user_id,
-                                1,
-                              )
-                            }
-                            className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 disabled:opacity-30 dark:hover:bg-zinc-800"
-                          >
-                            <ChevronDown size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                        <ChevronUp size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Mover para baixo"
+                        disabled={
+                          index === categoryQueueMembers.length - 1 ||
+                          queueSaving !== null
+                        }
+                        onClick={() =>
+                          void handleReorderCategoryMember(member.user_id, 1)
+                        }
+                        className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 disabled:opacity-30 dark:hover:bg-zinc-800"
+                      >
+                        <ChevronDown size={16} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </Card>

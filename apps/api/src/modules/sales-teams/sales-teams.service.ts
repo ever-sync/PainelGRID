@@ -553,7 +553,64 @@ export class SalesTeamsService {
     teamId: string,
     dto: ReorderMembersDto,
   ) {
-    await this.getTeamForAccess(user, teamId);
+    const team = await this.getTeamForAccess(user, teamId);
+    if (dto.category && team.event_id) {
+      const eventMembers = await this.prisma.salesTeamMember.findMany({
+        where: { team: { event_id: team.event_id } },
+        select: {
+          team_id: true,
+          user_id: true,
+          queue_positions: true,
+          user: {
+            select: { vendor_category: true, vendor_categories: true },
+          },
+        },
+      });
+      const categoryMembers = eventMembers.filter((member) => {
+        const categories = member.user.vendor_categories.length
+          ? member.user.vendor_categories
+          : member.user.vendor_category
+            ? [member.user.vendor_category]
+            : [];
+        return categories.includes(dto.category as never);
+      });
+      const memberById = new Map(
+        categoryMembers.map((member) => [member.user_id, member]),
+      );
+      if (
+        dto.user_ids.length !== memberById.size ||
+        dto.user_ids.some((userId) => !memberById.has(userId))
+      ) {
+        throw new BadRequestException(
+          "A fila deve conter todos os vendedores desta categoria no evento",
+        );
+      }
+      await this.prisma.$transaction(
+        dto.user_ids.map((userId, position) => {
+          const member = memberById.get(userId)!;
+          const current = member.queue_positions;
+          return this.prisma.salesTeamMember.update({
+            where: {
+              team_id_user_id: {
+                team_id: member.team_id,
+                user_id: member.user_id,
+              },
+            },
+            data: {
+              queue_positions: {
+                ...(current &&
+                typeof current === "object" &&
+                !Array.isArray(current)
+                  ? current
+                  : {}),
+                [dto.category!]: position,
+              },
+            },
+          });
+        }),
+      );
+      return { event_id: team.event_id, user_ids: dto.user_ids };
+    }
     const members = await this.prisma.salesTeamMember.findMany({
       where: { team_id: teamId },
       select: { user_id: true, queue_positions: true },
