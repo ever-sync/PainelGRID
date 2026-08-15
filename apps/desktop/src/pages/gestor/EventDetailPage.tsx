@@ -1361,44 +1361,6 @@ export function EventDetailPage() {
     }
   }
 
-  async function handleReorderMembers(
-    team: SalesTeam,
-    memberIndex: number,
-    direction: -1 | 1,
-  ) {
-    const targetIndex = memberIndex + direction;
-    if (targetIndex < 0 || targetIndex >= team.members.length) return;
-    const session = readStoredSession();
-    if (!session?.accessToken) return;
-
-    const reordered = [...team.members];
-    [reordered[memberIndex], reordered[targetIndex]] = [
-      reordered[targetIndex],
-      reordered[memberIndex],
-    ];
-    const previousTeams = teams;
-    setQueueSaving(`${team.id}:${reordered[targetIndex].user_id}`);
-    setTeams((current) =>
-      current.map((item) =>
-        item.id === team.id ? { ...item, members: reordered } : item,
-      ),
-    );
-    try {
-      await reorderTeamMembers(
-        session.accessToken,
-        team.id,
-        reordered.map((member) => member.user_id),
-      );
-    } catch (queueError) {
-      setTeams(previousTeams);
-      setSettingsError(
-        getErrorMessage(queueError, "Não foi possível salvar a ordem da fila."),
-      );
-    } finally {
-      setQueueSaving(null);
-    }
-  }
-
   async function handleReorderCategoryMember(
     memberId: string,
     direction: -1 | 1,
@@ -2894,7 +2856,7 @@ export function EventDetailPage() {
       )}
 
       {activeTab === "time" && (
-        <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="grid items-start gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
           <Card
             className={clsx(
               "rounded-[28px] border",
@@ -3267,105 +3229,6 @@ export function EventDetailPage() {
                       </div>
                     )}
 
-                    {team.members.length > 0 && user.role === "gestor" ? (
-                      <div
-                        className={clsx(
-                          "border-b px-5 py-4",
-                          isDarkMode
-                            ? "border-zinc-800 bg-[#0b0b0b]"
-                            : "border-zinc-100 bg-zinc-50/50",
-                        )}
-                      >
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                          <div>
-                            <p
-                              className={clsx(
-                                "text-xs font-bold uppercase tracking-[0.14em]",
-                                isDarkMode ? "text-zinc-300" : "text-zinc-700",
-                              )}
-                            >
-                              Fila de vendedores
-                            </p>
-                            <p className="mt-1 text-xs text-zinc-400">
-                              A ordem abaixo define a prioridade deste time.
-                            </p>
-                          </div>
-                          <Badge variant="gray">
-                            {team.members.length} na fila
-                          </Badge>
-                        </div>
-                        <div className="space-y-2">
-                          {team.members.map((member, memberIndex) => (
-                            <div
-                              key={`queue-${team.id}-${member.user_id}`}
-                              className={clsx(
-                                "flex items-center gap-3 rounded-xl border px-3 py-2",
-                                isDarkMode
-                                  ? "border-zinc-800 bg-[#111111]"
-                                  : "border-zinc-200 bg-white",
-                              )}
-                            >
-                              <span className="w-5 text-center text-xs font-bold text-zinc-400">
-                                {memberIndex + 1}
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <p
-                                  className={clsx(
-                                    "truncate text-sm font-semibold",
-                                    isDarkMode
-                                      ? "text-zinc-100"
-                                      : "text-zinc-900",
-                                  )}
-                                >
-                                  {member.user.name}
-                                </p>
-                                <p className="truncate text-[11px] text-zinc-400">
-                                  {member.user.email}
-                                </p>
-                              </div>
-                              <div className="flex shrink-0 items-center gap-1">
-                                <button
-                                  type="button"
-                                  aria-label={`Mover ${member.user.name} para cima`}
-                                  disabled={
-                                    memberIndex === 0 || queueSaving !== null
-                                  }
-                                  onClick={() =>
-                                    void handleReorderMembers(
-                                      team,
-                                      memberIndex,
-                                      -1,
-                                    )
-                                  }
-                                  className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-800 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                                >
-                                  <ChevronUp size={16} />
-                                </button>
-                                <button
-                                  type="button"
-                                  aria-label={`Mover ${member.user.name} para baixo`}
-                                  disabled={
-                                    memberIndex === team.members.length - 1 ||
-                                    queueSaving !== null
-                                  }
-                                  onClick={() =>
-                                    void handleReorderMembers(
-                                      team,
-                                      memberIndex,
-                                      1,
-                                    )
-                                  }
-                                  className="rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-800 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                                >
-                                  <ChevronDown size={16} />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-
                     {team.members.length === 0 ? (
                       <p className="px-5 py-4 text-sm text-zinc-500">
                         Nenhum membro neste time ainda.
@@ -3392,7 +3255,7 @@ export function EventDetailPage() {
                                 {members.length !== 1 ? "s" : ""}
                               </Badge>
                             </div>
-                            <div className="space-y-2">
+                            <div className="grid gap-2 xl:grid-cols-2">
                               {members.map((member) => (
                                 <div
                                   key={member.user_id}
