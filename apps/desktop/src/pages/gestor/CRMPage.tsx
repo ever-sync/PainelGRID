@@ -87,7 +87,6 @@ import {
 
 import {
   CARD_SORT_OPTIONS,
-  CARD_SORT_STORAGE_KEY,
   compareLeads,
   useIsMobileViewport,
   type CardSort,
@@ -104,6 +103,7 @@ import { ToastStack } from "./crm/ToastStack";
 import { LeadDetailModal } from "./crm/LeadDetailModal";
 
 import { StageColumn } from "./crm/StageColumn";
+import { readCrmPreferences, writeCrmPreferences } from "./crm/crm-preferences";
 
 export function CRMPage() {
   const { user, setGestorClientId } = useGestorClient();
@@ -119,39 +119,19 @@ export function CRMPage() {
   });
   const requestedClientId = searchParams.get("client_id") ?? "";
   const requestedLeadId = searchParams.get("lead_id") ?? "";
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const stored = localStorage.getItem("crm_view_mode");
-    return (stored as ViewMode) || "kanban";
-  });
+  const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const isMobileViewport = useIsMobileViewport();
   const [mobileStageId, setMobileStageId] = useState<string | null>(null);
-  const [cardSort, setCardSort] = useState<CardSort>(() => {
-    const stored = localStorage.getItem(CARD_SORT_STORAGE_KEY);
-    return CARD_SORT_OPTIONS.some(([value]) => value === stored)
-      ? (stored as CardSort)
-      : "recent";
-  });
+  const [cardSort, setCardSort] = useState<CardSort>("recent");
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [hideMenuOpen, setHideMenuOpen] = useState(false);
-  const [hiddenStageIds, setHiddenStageIds] = useState<Set<string>>(() => {
-    try {
-      const stored = localStorage.getItem("crm_hidden_stages");
-      const parsed = stored ? (JSON.parse(stored) as unknown) : [];
-      return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
-    } catch {
-      return new Set();
-    }
-  });
+  const [hiddenStageIds, setHiddenStageIds] = useState<Set<string>>(new Set());
   const toggleHiddenStage = useCallback((stageId: string) => {
     setHiddenStageIds((current) => {
       const next = new Set(current);
       if (next.has(stageId)) next.delete(stageId);
       else next.add(stageId);
-      localStorage.setItem(
-        "crm_hidden_stages",
-        JSON.stringify(Array.from(next)),
-      );
       return next;
     });
   }, []);
@@ -199,6 +179,7 @@ export function CRMPage() {
   >({});
   const leadsAbortRef = useRef<AbortController | null>(null);
   const boardScrollRef = useRef<HTMLDivElement | null>(null);
+  const preferencesKeyRef = useRef("");
   const boardPanRef = useRef({
     pointerId: -1,
     startX: 0,
@@ -603,6 +584,60 @@ export function CRMPage() {
     if (typeof window === "undefined") return;
     window.localStorage.setItem("crm:selected-client-id", selectedClient);
   }, [selectedClient]);
+
+  useEffect(() => {
+    if (!selectedClient || typeof window === "undefined") return;
+    const preferences = readCrmPreferences(
+      window.localStorage,
+      user.id,
+      selectedClient,
+    );
+    preferencesKeyRef.current = "";
+    setViewMode(preferences.viewMode);
+    setCardSort(preferences.cardSort);
+    setSourceFilter(preferences.sourceFilter);
+    setVendorFilter(preferences.vendorFilter);
+    setTagFilter(preferences.tagFilter);
+    setStageFilter(preferences.stageFilter);
+    setConfirmationFilter(preferences.confirmationFilter);
+    setHiddenStageIds(new Set(preferences.hiddenStageIds));
+    window.requestAnimationFrame(() => {
+      if (boardScrollRef.current)
+        boardScrollRef.current.scrollLeft = preferences.scrollLeft;
+      preferencesKeyRef.current = `${user.id}:${selectedClient}`;
+    });
+  }, [selectedClient, user.id]);
+
+  useEffect(() => {
+    if (
+      !selectedClient ||
+      typeof window === "undefined" ||
+      preferencesKeyRef.current !== `${user.id}:${selectedClient}`
+    )
+      return;
+    writeCrmPreferences(window.localStorage, user.id, selectedClient, {
+      viewMode,
+      cardSort,
+      sourceFilter,
+      vendorFilter,
+      tagFilter,
+      stageFilter,
+      confirmationFilter,
+      hiddenStageIds: Array.from(hiddenStageIds),
+      scrollLeft: boardScrollRef.current?.scrollLeft ?? 0,
+    });
+  }, [
+    cardSort,
+    confirmationFilter,
+    hiddenStageIds,
+    selectedClient,
+    sourceFilter,
+    stageFilter,
+    tagFilter,
+    user.id,
+    vendorFilter,
+    viewMode,
+  ]);
 
   useEffect(() => {
     previousBoardSnapshotRef.current = new Map();
@@ -1869,7 +1904,6 @@ export function CRMPage() {
                   aria-label={label}
                   onClick={() => {
                     setViewMode(value);
-                    localStorage.setItem("crm_view_mode", value);
                   }}
                   className={clsx(
                     "inline-flex items-center justify-center rounded-full p-2.5 transition-colors",
@@ -1916,7 +1950,6 @@ export function CRMPage() {
                   onChange={(event) => {
                     const value = event.target.value as CardSort;
                     setCardSort(value);
-                    localStorage.setItem(CARD_SORT_STORAGE_KEY, value);
                   }}
                   title="Ordenar cards dentro da etapa"
                   aria-label="Ordenar cards dentro da etapa"
@@ -2242,6 +2275,26 @@ export function CRMPage() {
               onPointerUp={handleBoardPanEnd}
               onPointerCancel={handleBoardPanEnd}
               onClickCapture={preventClickAfterBoardPan}
+              onScroll={(event) => {
+                if (
+                  preferencesKeyRef.current !== `${user.id}:${selectedClient}`
+                )
+                  return;
+                const preferences = readCrmPreferences(
+                  window.localStorage,
+                  user.id,
+                  selectedClient,
+                );
+                writeCrmPreferences(
+                  window.localStorage,
+                  user.id,
+                  selectedClient,
+                  {
+                    ...preferences,
+                    scrollLeft: event.currentTarget.scrollLeft,
+                  },
+                );
+              }}
               className="min-h-0 max-h-full flex-1 cursor-grab select-none overflow-x-auto overflow-y-hidden pb-2 active:cursor-grabbing [-ms-overflow-style:none] [scrollbar-width:thin]"
             >
               <div
