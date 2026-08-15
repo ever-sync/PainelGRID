@@ -42,12 +42,20 @@ BEGIN
     UPDATE crm_stages
     SET display_order = display_order + 10000
     WHERE pipeline_id = current_stage.pipeline_id
-      AND id <> new_stage_id;
+      AND id <> new_stage_id
+      AND display_order >= current_stage.display_order + 1000;
 
     UPDATE crm_stages
     SET display_order = display_order - 999 - 10000
     WHERE pipeline_id = current_stage.pipeline_id
-      AND id <> new_stage_id;
+      AND id <> new_stage_id
+      AND display_order >= current_stage.display_order + 1000 + 10000;
+
+    UPDATE crm_stages
+    SET display_order = display_order - 1000
+    WHERE pipeline_id = current_stage.pipeline_id
+      AND id <> new_stage_id
+      AND display_order < current_stage.display_order + 1000;
   END LOOP;
 END $$;
 
