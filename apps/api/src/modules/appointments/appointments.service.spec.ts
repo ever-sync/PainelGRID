@@ -93,6 +93,8 @@ describe("AppointmentsService", () => {
       },
       event: {
         findUnique: jest.fn(),
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
       },
       eventParticipant: {
         findMany: jest.fn(),
@@ -1311,6 +1313,50 @@ describe("AppointmentsService", () => {
 
       expect(result).toEqual(
         expect.objectContaining({ eligible: 1, sent: 0, failed: 0 }),
+      );
+    });
+
+    it("varre todos os dias de todos os eventos encerrados", async () => {
+      prisma.event.findMany.mockResolvedValue([
+        {
+          id: eventId,
+          client_id: clientId,
+          name: "Evento encerrado",
+          event_date: new Date("2020-01-01T15:00:00.000Z"),
+          event_end_date: new Date("2020-01-03T22:00:00.000Z"),
+        },
+      ]);
+      const rescue = jest.spyOn(service, "runNoShowRescue").mockResolvedValue({
+        eligible: 1,
+        sent: 1,
+        already_sent: 0,
+        failed: 0,
+        results: [],
+      } as never);
+
+      const result = await service.runDueNoShowRescues({ dry_run: true });
+
+      expect(rescue).toHaveBeenCalledTimes(3);
+      expect(rescue).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          client_id: clientId,
+          event_id: eventId,
+          target_date: "2020-01-01",
+          dry_run: true,
+        }),
+      );
+      expect(rescue).toHaveBeenNthCalledWith(
+        3,
+        expect.objectContaining({ target_date: "2020-01-03" }),
+      );
+      expect(result).toEqual(
+        expect.objectContaining({
+          scanned_events: 1,
+          scanned_event_days: 3,
+          eligible: 3,
+          sent: 3,
+        }),
       );
     });
   });

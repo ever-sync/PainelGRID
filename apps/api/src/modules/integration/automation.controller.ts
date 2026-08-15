@@ -14,6 +14,7 @@ import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.
 import { AutomationKeyGuard } from "./automation-key.guard";
 import { SendCredentialEmailDto } from "./dto/send-credential-email.dto";
 import { ReconcileScheduledLeadDto } from "./dto/reconcile-scheduled-lead.dto";
+import { RunDueNoShowRescueDto } from "./dto/run-due-no-show-rescue.dto";
 import { RunNoShowRescueDto } from "./dto/run-no-show-rescue.dto";
 
 @ApiTags("automations")
@@ -76,6 +77,15 @@ export class AutomationController {
   })
   runNoShowRescue(@Body() dto: RunNoShowRescueDto) {
     return this.appointments.runNoShowRescue(dto);
+  }
+
+  @Post("no-show-rescue/due-events")
+  @ApiOperation({
+    summary:
+      "Varre todos os eventos encerrados recentemente e resgata seus ausentes",
+  })
+  runDueNoShowRescues(@Body() dto: RunDueNoShowRescueDto) {
+    return this.appointments.runDueNoShowRescues(dto);
   }
 
   @Post("initial-template/next")

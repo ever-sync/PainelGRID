@@ -6,6 +6,7 @@ describe("AutomationController", () => {
     deliverCredentialForLead: jest.fn(),
     reconcileScheduledLeadForAutomation: jest.fn(),
     runNoShowRescue: jest.fn(),
+    runDueNoShowRescues: jest.fn(),
   };
   const leads = {
     countInitialTemplateQueue: jest.fn(),
@@ -110,6 +111,20 @@ describe("AutomationController", () => {
       sent: 2,
     });
     expect(appointments.runNoShowRescue).toHaveBeenCalledWith(dto);
+  });
+
+  it("varre todos os eventos encerrados recentemente", async () => {
+    appointments.runDueNoShowRescues.mockResolvedValue({
+      scanned_events: 3,
+      sent: 8,
+    });
+    const dto = { lookback_hours: 48, dry_run: true };
+
+    await expect(controller.runDueNoShowRescues(dto)).resolves.toEqual({
+      scanned_events: 3,
+      sent: 8,
+    });
+    expect(appointments.runDueNoShowRescues).toHaveBeenCalledWith(dto);
   });
 
   it("encaminha status do WhatsApp recebidos pelo n8n", async () => {

@@ -40,6 +40,7 @@ import { NoShowAppointmentDto } from "./dto/no-show-appointment.dto";
 import { RescheduleAppointmentDto } from "./dto/reschedule-appointment.dto";
 import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.service";
 import type { ReconcileScheduledLeadDto } from "../integration/dto/reconcile-scheduled-lead.dto";
+import type { RunDueNoShowRescueDto } from "../integration/dto/run-due-no-show-rescue.dto";
 import type { RunNoShowRescueDto } from "../integration/dto/run-no-show-rescue.dto";
 
 const ACTIVE_APPOINTMENT_STATUSES = [
@@ -118,10 +119,32 @@ export class AppointmentsService {
       month: "2-digit",
       day: "2-digit",
     }).format(new Date());
-    if (dto.target_date >= todayInSaoPaulo) {
+    if (dto.target_date > todayInSaoPaulo) {
       throw new BadRequestException(
-        "O resgate so pode processar datas anteriores ao dia atual",
+        "O resgate nao pode processar datas futuras",
       );
+    }
+    if (dto.target_date === todayInSaoPaulo) {
+      if (!dto.event_id) {
+        throw new BadRequestException(
+          "event_id obrigatorio para resgatar o dia atual",
+        );
+      }
+      const event = await this.prisma.event.findFirst({
+        where: { id: dto.event_id, client_id: dto.client_id },
+        select: { event_end_date: true },
+      });
+      if (!event) {
+        throw new NotFoundException("Evento nao encontrado");
+      }
+      if (
+        !event.event_end_date ||
+        event.event_end_date.getTime() > Date.now()
+      ) {
+        throw new BadRequestException(
+          "O resgate do dia atual so pode iniciar depois do fim do evento",
+        );
+      }
     }
 
     const templateName = dto.template_name ?? "resgate_nao_comparecido_01";
@@ -346,6 +369,94 @@ export class AppointmentsService {
         .length,
       failed: results.filter((result) => result.status === "failed").length,
       results,
+    };
+  }
+
+  async runDueNoShowRescues(dto: RunDueNoShowRescueDto) {
+    const now = new Date();
+    const lookbackHours = dto.lookback_hours ?? 48;
+    const endedAfter = new Date(now.getTime() - lookbackHours * 60 * 60 * 1000);
+    const events = await this.prisma.event.findMany({
+      where: {
+        event_end_date: { gt: endedAfter, lte: now },
+        status: { in: [EventStatus.active, EventStatus.completed] },
+      },
+      select: {
+        id: true,
+        client_id: true,
+        name: true,
+        event_date: true,
+        event_end_date: true,
+      },
+      orderBy: { event_end_date: "asc" },
+    });
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const eventResults: Array<Record<string, unknown>> = [];
+
+    for (const event of events) {
+      const startDate = formatter.format(event.event_date);
+      const endDate = formatter.format(event.event_end_date!);
+      const cursor = new Date(`${startDate}T12:00:00.000Z`);
+      const lastDay = new Date(`${endDate}T12:00:00.000Z`);
+
+      for (
+        ;
+        cursor.getTime() <= lastDay.getTime();
+        cursor.setUTCDate(cursor.getUTCDate() + 1)
+      ) {
+        const targetDate = cursor.toISOString().slice(0, 10);
+        try {
+          const result = await this.runNoShowRescue({
+            client_id: event.client_id,
+            event_id: event.id,
+            target_date: targetDate,
+            template_name: dto.template_name ?? "resgate_nao_comparecido_01",
+            dry_run: dto.dry_run ?? false,
+          });
+          eventResults.push({
+            ...result,
+            event_id: event.id,
+            event_name: event.name,
+            target_date: targetDate,
+          });
+        } catch (error) {
+          eventResults.push({
+            event_id: event.id,
+            event_name: event.name,
+            target_date: targetDate,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    }
+
+    return {
+      dry_run: dto.dry_run ?? false,
+      lookback_hours: lookbackHours,
+      scanned_events: events.length,
+      scanned_event_days: eventResults.length,
+      eligible: eventResults.reduce(
+        (total, result) => total + Number(result.eligible ?? 0),
+        0,
+      ),
+      sent: eventResults.reduce(
+        (total, result) => total + Number(result.sent ?? 0),
+        0,
+      ),
+      already_sent: eventResults.reduce(
+        (total, result) => total + Number(result.already_sent ?? 0),
+        0,
+      ),
+      failed: eventResults.reduce(
+        (total, result) => total + Number(result.failed ?? 0),
+        0,
+      ),
+      events: eventResults,
     };
   }
 
