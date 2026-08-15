@@ -4994,6 +4994,149 @@ export class LeadsService {
     return updated;
   }
 
+  async changeAttendanceVendor(
+    user: AuthenticatedUser,
+    leadId: string,
+    nextVendorId: string,
+  ) {
+    const attendance = await this.prisma.vendorAttendance.findFirst({
+      where: {
+        lead_id: leadId,
+        status: VendorAttendanceStatus.accepted,
+        ...(user.client_id ? { client_id: user.client_id } : {}),
+      },
+      include: { lead: { select: { name: true } } },
+    });
+    if (!attendance) {
+      throw new NotFoundException("Atendimento ativo não encontrado");
+    }
+    if (attendance.vendor_id === nextVendorId) {
+      throw new BadRequestException("Selecione outro vendedor");
+    }
+
+    const nextVendor = await this.prisma.user.findFirst({
+      where: {
+        id: nextVendorId,
+        client_id: attendance.client_id,
+        role: Role.VENDEDOR,
+        is_active: true,
+        OR: [
+          { vendor_availability: null },
+          { vendor_availability: { status: VendorOperationalStatus.online } },
+        ],
+      },
+      select: { id: true, name: true },
+    });
+    if (!nextVendor) {
+      throw new BadRequestException(
+        "Vendedor não está disponível para atendimento",
+      );
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 30_000);
+    const nextAttendance = await this.prisma.$transaction(
+      async (tx) => {
+        const conflict = await tx.vendorAttendance.findFirst({
+          where: {
+            vendor_id: nextVendor.id,
+            status: { in: ["pending", "accepted"] },
+          },
+          select: { id: true },
+        });
+        if (conflict) {
+          throw new ConflictException("Vendedor já possui atendimento ativo");
+        }
+
+        await tx.vendorAttendance.update({
+          where: { id: attendance.id },
+          data: {
+            status: VendorAttendanceStatus.rejected,
+            finished_at: now,
+          },
+        });
+        await tx.vendorAvailability.upsert({
+          where: { vendor_id: attendance.vendor_id },
+          create: {
+            vendor_id: attendance.vendor_id,
+            client_id: attendance.client_id,
+            status: VendorOperationalStatus.online,
+          },
+          update: { status: VendorOperationalStatus.online },
+        });
+        await tx.vendorAvailability.upsert({
+          where: { vendor_id: nextVendor.id },
+          create: {
+            vendor_id: nextVendor.id,
+            client_id: attendance.client_id,
+            status: VendorOperationalStatus.busy,
+            last_assigned_at: now,
+          },
+          update: {
+            status: VendorOperationalStatus.busy,
+            last_assigned_at: now,
+          },
+        });
+        await tx.lead.update({
+          where: { id: leadId },
+          data: { assigned_vendor_id: nextVendor.id },
+        });
+        return tx.vendorAttendance.create({
+          data: {
+            client_id: attendance.client_id,
+            lead_id: leadId,
+            vendor_id: nextVendor.id,
+            event_id: attendance.event_id,
+            status: VendorAttendanceStatus.accepted,
+            called_at: now,
+            accepted_at: now,
+            expires_at: expiresAt,
+            created_by_id: user.sub,
+          },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+    this.realtimeEvents.emitVendorAttendanceUpdated(attendance.client_id, {
+      attendance_id: attendance.id,
+      lead_id: leadId,
+      vendor_id: attendance.vendor_id,
+      status: VendorAttendanceStatus.rejected,
+    });
+    const payload = {
+      id: nextAttendance.id,
+      attendance_id: nextAttendance.id,
+      lead_id: leadId,
+      lead_name: attendance.lead.name,
+      vendor_id: nextVendor.id,
+      vendor_name: nextVendor.name,
+      status: VendorAttendanceStatus.accepted,
+      accepted_at: now.toISOString(),
+      expires_at: expiresAt.toISOString(),
+    };
+    this.realtimeEvents.emitVendorCalled(attendance.client_id, payload);
+    this.realtimeEvents.emitVendorAttendanceUpdated(
+      attendance.client_id,
+      payload,
+    );
+    this.realtimeEvents.emitVendorAvailabilityChanged(attendance.client_id, {
+      vendor_id: attendance.vendor_id,
+      status: VendorOperationalStatus.online,
+    });
+    this.realtimeEvents.emitVendorAvailabilityChanged(attendance.client_id, {
+      vendor_id: nextVendor.id,
+      status: VendorOperationalStatus.busy,
+    });
+    this.realtimeEvents.emitLeadUpdated(attendance.client_id, {
+      client_id: attendance.client_id,
+      lead_id: leadId,
+      action: "attendance_vendor_changed",
+      updated_at: now.toISOString(),
+    });
+    return payload;
+  }
+
   private async awardAttendanceScoreMilestones(params: {
     clientId: string;
     vendorId: string;

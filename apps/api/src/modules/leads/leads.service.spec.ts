@@ -2038,6 +2038,63 @@ describe("LeadsService", () => {
     jest.useRealTimers();
   });
 
+  it("transfere atendimento ativo e libera o vendedor anterior", async () => {
+    const nextVendorId = "99999999-9999-4999-8999-999999999999";
+    prisma.vendorAttendance.findFirst
+      .mockResolvedValueOnce({
+        id: "attendance-current",
+        client_id: clientId,
+        lead_id: baseExistingLead.id,
+        vendor_id: vendorId,
+        event_id: eventId,
+        status: "accepted",
+        lead: { name: "Cliente Teste" },
+      })
+      .mockResolvedValueOnce(null);
+    prisma.user.findFirst.mockResolvedValueOnce({
+      id: nextVendorId,
+      name: "Novo Vendedor",
+    });
+    prisma.vendorAttendance.create.mockResolvedValueOnce({
+      id: "attendance-next",
+    });
+
+    const result = await service.changeAttendanceVendor(
+      {
+        sub: gestorId,
+        role: Role.RECEPCAO,
+        name: "Recepção",
+        email: "recepcao@example.com",
+        client_id: clientId,
+      } as never,
+      baseExistingLead.id,
+      nextVendorId,
+    );
+
+    expect(prisma.vendorAttendance.update).toHaveBeenCalledWith({
+      where: { id: "attendance-current" },
+      data: expect.objectContaining({ status: "rejected" }),
+    });
+    expect(prisma.lead.update).toHaveBeenCalledWith({
+      where: { id: baseExistingLead.id },
+      data: { assigned_vendor_id: nextVendorId },
+    });
+    expect(prisma.vendorAttendance.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        lead_id: baseExistingLead.id,
+        vendor_id: nextVendorId,
+        status: "accepted",
+      }),
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        vendor_id: nextVendorId,
+        vendor_name: "Novo Vendedor",
+        status: "accepted",
+      }),
+    );
+  });
+
   it("closeAttendance: move para COMPRARAM quando o vendedor confirma a venda", async () => {
     prisma.vendorAttendance.findFirst.mockResolvedValueOnce({
       id: "attendance-2",

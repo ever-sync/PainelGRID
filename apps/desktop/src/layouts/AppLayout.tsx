@@ -673,6 +673,8 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
       if (payload.vendor_id !== user.id) return;
       if (["rejected", "expired", "finished"].includes(payload.status)) {
         setVendorCallAlert(null);
+        setActiveAttendance(null);
+        localStorage.removeItem("active_vendor_attendance");
       }
     };
     socket.on("vendor_attendance_updated", handleAttendanceUpdated);

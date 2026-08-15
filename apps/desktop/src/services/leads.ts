@@ -502,6 +502,17 @@ export function acceptVendorCall(id: string, token: string) {
   });
 }
 
+export function changeAttendanceVendor(
+  id: string,
+  vendorId: string,
+  token: string,
+) {
+  return httpRequest<VendorAttendance>(
+    `/leads/${id}/change-attendance-vendor`,
+    { method: "POST", token, body: { vendor_id: vendorId } },
+  );
+}
+
 export function rejectVendorCall(id: string, token: string) {
   return httpRequest<{ success: boolean; vendor_id: string }>(
     `/leads/${id}/reject-vendor-call`,

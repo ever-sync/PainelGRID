@@ -10,6 +10,7 @@ import {
   Clock,
   Flag,
   Radio,
+  RefreshCw,
   UserCheck,
   Users,
 } from "lucide-react";
@@ -25,6 +26,7 @@ import {
   getReceptionQueue,
   getLead,
   closeLeadAttendance,
+  changeAttendanceVendor,
   listVendorAvailability,
   type ReceptionQueueLead,
   type VendorAvailability,
@@ -65,6 +67,12 @@ export function FilaPage() {
   const [finishingSold, setFinishingSold] = useState<"yes" | "no" | "">("");
   const [finishing, setFinishing] = useState(false);
   const [finishError, setFinishError] = useState("");
+  const [changingLead, setChangingLead] = useState<ReceptionQueueLead | null>(
+    null,
+  );
+  const [nextVendorId, setNextVendorId] = useState("");
+  const [changingVendor, setChangingVendor] = useState(false);
+  const [changeVendorError, setChangeVendorError] = useState("");
   const [activeQueueTab, setActiveQueueTab] = useState<QueueTab>("clients");
 
   const load = useCallback(async () => {
@@ -316,6 +324,42 @@ export function FilaPage() {
     }
   };
 
+  const openChangeVendor = (lead: ReceptionQueueLead) => {
+    setChangingLead(lead);
+    setNextVendorId("");
+    setChangeVendorError("");
+  };
+
+  const submitChangeVendor = async () => {
+    const token = readStoredSession()?.accessToken;
+    if (!token || !changingLead) return;
+    if (!nextVendorId) {
+      setChangeVendorError("Selecione o novo vendedor.");
+      return;
+    }
+    setChangingVendor(true);
+    setChangeVendorError("");
+    try {
+      await changeAttendanceVendor(changingLead.id, nextVendorId, token);
+      const vendor = vendors.find((row) => row.id === nextVendorId);
+      setSuccess(
+        `Atendimento de ${changingLead.name} transferido para ${vendor?.name ?? "o novo vendedor"}.`,
+      );
+      setChangingLead(null);
+      setNextVendorId("");
+      await load();
+      window.setTimeout(() => setSuccess(""), 5000);
+    } catch (cause) {
+      setChangeVendorError(
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível mudar o vendedor.",
+      );
+    } finally {
+      setChangingVendor(false);
+    }
+  };
+
   const { waitingQueue, activeService } = useMemo(() => {
     const sorted = [...leads].sort(
       (a, b) => arrivalTime(a).getTime() - arrivalTime(b).getTime(),
@@ -390,7 +434,7 @@ export function FilaPage() {
   }, [activeService, vendors]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 pb-28 sm:space-y-6 sm:pb-6">
       <PageHeader
         title="Fila de Atendimento"
         breadcrumbs={[
@@ -485,30 +529,30 @@ export function FilaPage() {
       ) : null}
 
       {activeQueueTab === "clients" ? (
-        <div className="relative overflow-hidden rounded-3xl border border-zinc-800 bg-[#09090b] p-4 text-white shadow-[0_24px_60px_rgba(0,0,0,0.28)] sm:p-6">
+        <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-[#09090b] p-3 text-white shadow-[0_24px_60px_rgba(0,0,0,0.28)] sm:rounded-3xl sm:p-6">
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,rgba(255,0,56,0.09),transparent_32%),repeating-linear-gradient(135deg,transparent_0,transparent_28px,rgba(255,255,255,0.015)_29px,transparent_30px)]" />
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-[#ff0038] via-[#ff0038]/50 to-transparent" />
 
           {eventName ? (
-            <div className="relative mb-5 flex flex-col justify-between gap-4 border-b border-white/[0.08] pb-5 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-4">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-[#ff0038]/30 bg-[#ff0038]/10">
+            <div className="relative mb-4 flex flex-col justify-between gap-3 border-b border-white/[0.08] pb-4 sm:mb-5 sm:flex-row sm:items-center sm:gap-4 sm:pb-5">
+              <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#ff0038]/30 bg-[#ff0038]/10 sm:h-14 sm:w-14">
                   <img
                     src={gpLogo}
                     alt="GP de Vendas"
-                    className="h-10 w-10 object-contain"
+                    className="h-8 w-8 object-contain sm:h-10 sm:w-10"
                   />
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#ff3159]">
+                <div className="min-w-0">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#ff3159] sm:text-[10px] sm:tracking-[0.3em]">
                     GP de Vendas · Atendimento ao vivo
                   </p>
-                  <p className="mt-1 text-xl font-black uppercase tracking-tight sm:text-2xl">
+                  <p className="mt-1 line-clamp-2 text-base font-black uppercase leading-tight tracking-tight sm:text-2xl">
                     {eventName}
                   </p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid w-full grid-cols-2 gap-2 sm:w-auto">
                 <QueueMetric
                   label="Aguardando"
                   value={queueTotals.waiting}
@@ -539,7 +583,7 @@ export function FilaPage() {
                 </p>
               </div>
             ) : (
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
                 <QueueSection
                   title="Fila de espera"
                   subtitle="Por ordem de chegada"
@@ -579,6 +623,11 @@ export function FilaPage() {
                         onFinish={
                           user.role === "recepcao"
                             ? openFinishAttendance
+                            : undefined
+                        }
+                        onChangeVendor={
+                          user.role === "recepcao"
+                            ? openChangeVendor
                             : undefined
                         }
                       />
@@ -680,6 +729,55 @@ export function FilaPage() {
               ))}
             </div>
           </fieldset>
+        </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(changingLead)}
+        onClose={() => {
+          if (!changingVendor) setChangingLead(null);
+        }}
+        title="Mudar vendedor"
+        size="sm"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              disabled={changingVendor}
+              onClick={() => setChangingLead(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              loading={changingVendor}
+              icon={<RefreshCw size={16} />}
+              onClick={() => void submitChangeVendor()}
+            >
+              Transferir atendimento
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-zinc-500">
+            Cliente: <strong>{changingLead?.name}</strong>
+          </p>
+          {changeVendorError ? (
+            <Notice tone="error">{changeVendorError}</Notice>
+          ) : null}
+          <Select
+            label="Novo vendedor"
+            value={nextVendorId}
+            placeholder="Selecione um vendedor disponível"
+            onValueChange={setNextVendorId}
+            options={vendors
+              .filter(
+                (vendor) =>
+                  vendor.eligible &&
+                  vendor.id !== changingLead?.assigned_vendor_id,
+              )
+              .map((vendor) => ({ value: vendor.id, label: vendor.name }))}
+          />
         </div>
       </Modal>
     </div>
@@ -998,11 +1096,13 @@ function QueueLeadRow({
   position,
   state,
   onFinish,
+  onChangeVendor,
 }: {
   lead: ReceptionQueueLead;
   position?: number;
   state: "waiting" | "active";
   onFinish?: (lead: ReceptionQueueLead) => void;
+  onChangeVendor?: (lead: ReceptionQueueLead) => void;
 }) {
   const active = state === "active";
   return (
@@ -1049,15 +1149,29 @@ function QueueLeadRow({
             ? lead.assigned_vendor_name || "Em atendimento"
             : "Aguardando"}
         </span>
-        {active && onFinish ? (
-          <button
-            type="button"
-            onClick={() => onFinish(lead)}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-2 text-xs font-black text-white shadow-[0_8px_20px_rgba(16,185,129,0.22)] transition-colors hover:bg-emerald-400"
-          >
-            <CheckCircle2 size={15} />
-            Finalizar
-          </button>
+        {active && (onFinish || onChangeVendor) ? (
+          <div className="flex gap-2">
+            {onChangeVendor ? (
+              <button
+                type="button"
+                onClick={() => onChangeVendor(lead)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-zinc-200 hover:bg-white/10"
+              >
+                <RefreshCw size={14} />
+                Mudar vendedor
+              </button>
+            ) : null}
+            {onFinish ? (
+              <button
+                type="button"
+                onClick={() => onFinish(lead)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-2 text-xs font-black text-white shadow-[0_8px_20px_rgba(16,185,129,0.22)] transition-colors hover:bg-emerald-400"
+              >
+                <CheckCircle2 size={15} />
+                Finalizar
+              </button>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </div>

@@ -26,6 +26,7 @@ import { AuthenticatedUser } from "../auth/auth.types";
 import { CheckLeadPhoneDto } from "./dto/check-lead-phone.dto";
 import { CheckInByTokenDto } from "./dto/check-in-by-token.dto";
 import { CloseAttendanceDto } from "./dto/close-attendance.dto";
+import { ChangeAttendanceVendorDto } from "./dto/change-attendance-vendor.dto";
 import { CallVendorDto } from "./dto/call-vendor.dto";
 import { CreateLeadDto } from "./dto/create-lead.dto";
 import { FindLeadsQueryDto } from "./dto/find-leads-query.dto";
@@ -268,6 +269,19 @@ export class LeadsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.leadsService.callVendor(user, id, dto);
+  }
+
+  @Post(":id/change-attendance-vendor")
+  @Roles(Role.RECEPCAO, Role.GESTOR)
+  @ApiOperation({
+    summary: "Transfere um atendimento ativo para outro vendedor",
+  })
+  changeAttendanceVendor(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: ChangeAttendanceVendorDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.leadsService.changeAttendanceVendor(user, id, dto.vendor_id);
   }
 
   @Post(":id/accept-vendor-call")
