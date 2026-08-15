@@ -158,6 +158,25 @@ const leadSelect = {
 
 type LeadWithRelations = Prisma.LeadGetPayload<{ select: typeof leadSelect }>;
 
+const historicalCampaignAttributionSelect = {
+  facebook_lead_id: true,
+  facebook_form_id: true,
+  facebook_ad_id: true,
+  facebook_ad_name: true,
+  facebook_ad_set_id: true,
+  facebook_ad_set_name: true,
+  facebook_campaign_id: true,
+  facebook_campaign_name: true,
+  preferred_contact_channel: true,
+  source_created_at: true,
+  source_payload: true,
+  created_at: true,
+} as const satisfies Prisma.LeadSelect;
+
+type HistoricalCampaignAttribution = Prisma.LeadGetPayload<{
+  select: typeof historicalCampaignAttributionSelect;
+}>;
+
 type FacebookLeadMetadata = {
   externalRef: string;
   facebookLeadId: string;
@@ -1489,6 +1508,22 @@ export class LeadsService {
       }
     }
 
+    const historicalAttribution =
+      user.role === Role.RECEPCAO && normalizedPhone
+        ? await this.findHistoricalCampaignAttribution(
+            targetClientId,
+            normalizedPhone,
+          )
+        : null;
+    const leadTags = historicalAttribution
+      ? [
+          ...new Set([
+            ...(dto.tags ?? []),
+            "attribution:historical_phone_match",
+          ]),
+        ]
+      : (dto.tags ?? []);
+
     if (dto.email) {
       const emailNorm = dto.email.toLowerCase().trim();
       const existingByEmail = await this.prisma.lead.findFirst({
@@ -1550,17 +1585,41 @@ export class LeadsService {
           name: this.normalizePersonName(dto.name),
           email: dto.email?.toLowerCase().trim() ?? null,
           phone: normalizedPhone,
-          source: dto.source,
-          tags: dto.tags ?? [],
+          source: historicalAttribution ? LeadSource.facebook_ads : dto.source,
+          tags: leadTags,
           event_interest_id: dto.event_interest_id ?? null,
           crm_pipeline_id: defaultPipelineId ?? null,
           crm_stage_id: defaultStageId ?? null,
           confirmation_status: confirmationStatus,
           assigned_vendor_id: assignedVendorId,
-          registered_by_id: assignedVendorId ?? null,
+          registered_by_id:
+            user.role === Role.RECEPCAO ? user.sub : (assignedVendorId ?? null),
           team_id: vendorBinding?.teamId ?? null,
           notes: dto.notes?.trim() ?? null,
           birth_date: dto.birth_date ? new Date(dto.birth_date) : null,
+          facebook_lead_id:
+            historicalAttribution?.facebook_lead_id ?? null,
+          facebook_form_id:
+            historicalAttribution?.facebook_form_id ?? null,
+          facebook_ad_id: historicalAttribution?.facebook_ad_id ?? null,
+          facebook_ad_name: historicalAttribution?.facebook_ad_name ?? null,
+          facebook_ad_set_id:
+            historicalAttribution?.facebook_ad_set_id ?? null,
+          facebook_ad_set_name:
+            historicalAttribution?.facebook_ad_set_name ?? null,
+          facebook_campaign_id:
+            historicalAttribution?.facebook_campaign_id ?? null,
+          facebook_campaign_name:
+            historicalAttribution?.facebook_campaign_name ?? null,
+          preferred_contact_channel:
+            historicalAttribution?.preferred_contact_channel ?? null,
+          source_created_at:
+            historicalAttribution?.source_created_at ??
+            historicalAttribution?.created_at ??
+            null,
+          ...(historicalAttribution?.source_payload != null
+            ? { source_payload: historicalAttribution.source_payload }
+            : {}),
         },
         select: leadSelect,
       })) as LeadWithRelations;
@@ -6229,6 +6288,80 @@ export class LeadsService {
       return normalized;
     }
     return null;
+  }
+
+  private async findHistoricalCampaignAttribution(
+    clientId: string,
+    phone?: string | null,
+  ): Promise<HistoricalCampaignAttribution | null> {
+    const candidateSet = buildLeadPhoneCandidates(phone);
+    if (!candidateSet) return null;
+
+    const client = await this.prisma.client.findUnique({
+      where: { id: clientId },
+      select: { gestor_id: true },
+    });
+    if (!client) return null;
+
+    const discoveryTags = [
+      "discovery_source:instagram",
+      "discovery_source:facebook",
+      "discovery_source:indicacao",
+      "discovery_source:passagem",
+      "discovery_source:outro",
+    ];
+    const campaignEvidence: Prisma.LeadWhereInput = {
+      OR: [
+        { facebook_lead_id: { not: null } },
+        { facebook_form_id: { not: null } },
+        { facebook_ad_id: { not: null } },
+        { facebook_campaign_id: { not: null } },
+        { meta_lead_imports: { some: {} } },
+        { whatsapp_attribution_events: { some: {} } },
+        {
+          source: LeadSource.facebook_ads,
+          NOT: { tags: { hasSome: discoveryTags } },
+        },
+      ],
+    };
+    const baseWhere: Prisma.LeadWhereInput = {
+      client: { gestor_id: client.gestor_id },
+      AND: [campaignEvidence],
+    };
+    const orderBy: Prisma.LeadOrderByWithRelationInput[] = [
+      { source_created_at: "desc" },
+      { created_at: "desc" },
+    ];
+
+    const exact = await this.prisma.lead.findFirst({
+      where: {
+        ...baseWhere,
+        OR: candidateSet.candidates.map((candidate) => ({ phone: candidate })),
+      },
+      orderBy,
+      select: historicalCampaignAttributionSelect,
+    });
+    if (exact) return exact;
+
+    const suffixes = new Set<string>();
+    if (candidateSet.digits.length >= 10)
+      suffixes.add(candidateSet.digits.slice(-10));
+    if (candidateSet.digits.length >= 11)
+      suffixes.add(candidateSet.digits.slice(-11));
+    if (candidateSet.digits.length >= 12)
+      suffixes.add(candidateSet.digits.slice(-12));
+    if (suffixes.size === 0) return null;
+
+    return this.prisma.lead.findFirst({
+      where: {
+        ...baseWhere,
+        OR: Array.from(suffixes).map((suffix) => ({
+          phone: { endsWith: suffix },
+        })),
+      },
+      orderBy,
+      select: historicalCampaignAttributionSelect,
+    });
   }
 
   private assertPipelineStageConsistency(
