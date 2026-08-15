@@ -5,6 +5,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Evita o zoom automático do Safari ao focar campos, mantendo o zoom manual acessível. */
+@media (max-width: 767px) and (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 @layer base {
   * {
     box-sizing: border-box;
