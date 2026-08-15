@@ -12,6 +12,9 @@ import {
   CalendarDays,
   QrCode,
   Trash2,
+  Pencil,
+  UserRound,
+  RefreshCw,
 } from "lucide-react";
 import { PageHeader } from "../../components/shared/PageHeader";
 import { Button } from "../../components/ui/Button";
@@ -34,6 +37,7 @@ import {
   checkLeadPhone,
   checkInLeadByToken,
   closeLeadAttendance,
+  changeAttendanceVendor,
   createLead,
   fetchAllLeads,
   listVendorAvailability,
@@ -220,6 +224,14 @@ export function CheckinPage() {
   const [finishCurrentAttendance, setFinishCurrentAttendance] = useState<
     "yes" | "no" | null
   >(null);
+  const [changeVendorLead, setChangeVendorLead] = useState<Lead | null>(null);
+  const [changeVendorId, setChangeVendorId] = useState("");
+  const [changeVendorBusy, setChangeVendorBusy] = useState(false);
+  const [changeVendorError, setChangeVendorError] = useState("");
+  const [finishLead, setFinishLead] = useState<Lead | null>(null);
+  const [finishSold, setFinishSold] = useState<"yes" | "no" | null>(null);
+  const [finishBusy, setFinishBusy] = useState(false);
+  const [finishError, setFinishError] = useState("");
 
   const refreshCheckinData = useCallback(() => {
     const t = readStoredSession()?.accessToken;
@@ -836,6 +848,67 @@ export function CheckinPage() {
     }
   };
 
+  const submitChangeVendor = async () => {
+    const token = readStoredSession()?.accessToken;
+    if (!token || !changeVendorLead || !changeVendorId) return;
+    setChangeVendorBusy(true);
+    setChangeVendorError("");
+    try {
+      await changeAttendanceVendor(changeVendorLead.id, changeVendorId, token);
+      pushToast({
+        type: "success",
+        message: `Atendimento de ${changeVendorLead.name} transferido com sucesso.`,
+      });
+      setChangeVendorLead(null);
+      setChangeVendorId("");
+      refreshCheckinData();
+    } catch (error) {
+      setChangeVendorError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível mudar o vendedor.",
+      );
+    } finally {
+      setChangeVendorBusy(false);
+    }
+  };
+
+  const submitFinishAttendance = async () => {
+    const token = readStoredSession()?.accessToken;
+    if (!token || !finishLead || !finishLead.assigned_vendor_id) return;
+    if (!finishSold) {
+      setFinishError("Informe se o cliente comprou.");
+      return;
+    }
+    setFinishBusy(true);
+    setFinishError("");
+    try {
+      await closeLeadAttendance(
+        finishLead.id,
+        {
+          sold: finishSold === "yes",
+          attended_by_vendor_id: finishLead.assigned_vendor_id,
+        },
+        token,
+      );
+      pushToast({
+        type: "success",
+        message: `Atendimento de ${finishLead.name} finalizado.`,
+      });
+      setFinishLead(null);
+      setFinishSold(null);
+      refreshCheckinData();
+    } catch (error) {
+      setFinishError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível finalizar o atendimento.",
+      );
+    } finally {
+      setFinishBusy(false);
+    }
+  };
+
   const StatusIcon = ({
     status,
     dark,
@@ -990,6 +1063,17 @@ export function CheckinPage() {
             ? vendorsById[lead.assigned_vendor_id]
             : undefined;
           const isCheckedIn = lead.confirmation_status === "checked_in";
+          const activeVendor = vendorAvailability.find(
+            (vendor) => vendor.active_attendance?.lead_id === lead.id,
+          );
+          const isInAttendance = Boolean(activeVendor);
+          const serviceStatus = isInAttendance
+            ? "Em atendimento"
+            : isCheckedIn
+              ? lead.assigned_vendor_id
+                ? "Aguardando vendedor"
+                : "Aguardando na fila"
+              : "Aguardando check-in";
 
           return (
             <div
@@ -1011,7 +1095,7 @@ export function CheckinPage() {
                       : "bg-blue-100 text-blue-600",
                   )}
                 >
-                  {lead.name[0]}
+                  <UserRound size={20} />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
@@ -1027,6 +1111,20 @@ export function CheckinPage() {
                       status={lead.confirmation_status}
                       dark={isDarkMode}
                     />
+                    {isInAttendance ? (
+                      <button
+                        type="button"
+                        aria-label="Mudar vendedor do atendimento"
+                        onClick={() => {
+                          setChangeVendorLead(lead);
+                          setChangeVendorId("");
+                          setChangeVendorError("");
+                        }}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 text-zinc-500 transition-colors hover:border-[#E51838] hover:text-[#E51838] dark:border-zinc-700"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    ) : null}
                   </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
                     <div
@@ -1099,31 +1197,84 @@ export function CheckinPage() {
                       </div>
                     )}
                   </div>
+                  <span
+                    className={clsx(
+                      "mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide",
+                      isInAttendance
+                        ? "bg-[#E51838]/10 text-[#E51838]"
+                        : isCheckedIn
+                          ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                          : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800",
+                    )}
+                  >
+                    <span
+                      className={clsx(
+                        "h-1.5 w-1.5 rounded-full",
+                        isInAttendance
+                          ? "animate-pulse bg-[#E51838]"
+                          : isCheckedIn
+                            ? "bg-amber-500"
+                            : "bg-zinc-400",
+                      )}
+                    />
+                    {serviceStatus}
+                  </span>
                 </div>
               </div>
 
               <div className="grid w-full shrink-0 grid-cols-2 gap-2 sm:mt-0 sm:w-auto">
-                <button
-                  type="button"
-                  onClick={openScanner}
-                  className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl bg-[#e51838] px-4 py-2.5 text-xs sm:text-sm font-semibold text-white transition-all hover:bg-[#c91432] active:scale-95 shadow-sm"
-                >
-                  <QrCode size={16} />
-                  <span>Ler QR Code</span>
-                </button>
-                <button
-                  type="button"
-                  disabled={isCheckedIn}
-                  onClick={() => {
-                    openQuickCheckin(lead);
-                  }}
-                  className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs sm:text-sm font-semibold text-white transition-all hover:bg-emerald-700 active:scale-95 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <CheckCircle2 size={16} />
-                  <span>
-                    {isCheckedIn ? "Check-in feito" : "Check-in Rápido"}
-                  </span>
-                </button>
+                {isInAttendance ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setChangeVendorLead(lead);
+                        setChangeVendorId("");
+                        setChangeVendorError("");
+                      }}
+                      className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-xs font-bold text-zinc-700 transition-colors hover:border-[#E51838] hover:text-[#E51838] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                    >
+                      <RefreshCw size={15} />
+                      Mudar vendedor
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFinishLead(lead);
+                        setFinishSold(null);
+                        setFinishError("");
+                      }}
+                      className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-black text-white transition-colors hover:bg-emerald-700"
+                    >
+                      <CheckCircle2 size={16} />
+                      Finalizar atendimento
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={openScanner}
+                      className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl bg-[#e51838] px-4 py-2.5 text-xs sm:text-sm font-semibold text-white transition-all hover:bg-[#c91432] active:scale-95 shadow-sm"
+                    >
+                      <QrCode size={16} />
+                      <span>Ler QR Code</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isCheckedIn}
+                      onClick={() => {
+                        openQuickCheckin(lead);
+                      }}
+                      className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs sm:text-sm font-semibold text-white transition-all hover:bg-emerald-700 active:scale-95 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <CheckCircle2 size={16} />
+                      <span>
+                        {isCheckedIn ? "Check-in feito" : "Check-in Rápido"}
+                      </span>
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           );
@@ -1359,6 +1510,126 @@ export function CheckinPage() {
               {createError}
             </Notice>
           ) : null}
+        </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(changeVendorLead)}
+        onClose={() => {
+          if (!changeVendorBusy) setChangeVendorLead(null);
+        }}
+        title="Mudar vendedor"
+        dark={isDarkMode}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setChangeVendorLead(null)}
+              isDisabled={changeVendorBusy}
+            >
+              Cancelar
+            </Button>
+            <Button
+              icon={<RefreshCw size={16} />}
+              onClick={() => void submitChangeVendor()}
+              loading={changeVendorBusy}
+              isDisabled={!changeVendorId}
+            >
+              Transferir atendimento
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Notice tone="info">
+            Cliente: <strong>{changeVendorLead?.name}</strong>
+          </Notice>
+          <Select
+            label="Novo vendedor"
+            value={changeVendorId}
+            onChange={(event) => {
+              setChangeVendorId(event.target.value);
+              setChangeVendorError("");
+            }}
+            dark={isDarkMode}
+            placeholder="Selecione um vendedor disponível"
+            options={vendorAvailability
+              .filter(
+                (vendor) =>
+                  vendor.eligible &&
+                  vendor.id !== changeVendorLead?.assigned_vendor_id,
+              )
+              .map((vendor) => ({ value: vendor.id, label: vendor.name }))}
+          />
+          {changeVendorError ? (
+            <Notice tone="error">{changeVendorError}</Notice>
+          ) : null}
+        </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(finishLead)}
+        onClose={() => {
+          if (!finishBusy) setFinishLead(null);
+        }}
+        title="Finalizar atendimento"
+        dark={isDarkMode}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setFinishLead(null)}
+              isDisabled={finishBusy}
+            >
+              Cancelar
+            </Button>
+            <Button
+              icon={<CheckCircle2 size={16} />}
+              onClick={() => void submitFinishAttendance()}
+              loading={finishBusy}
+              isDisabled={!finishSold}
+            >
+              Finalizar
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Notice tone="success">
+            Atendimento de <strong>{finishLead?.name}</strong>
+            {finishLead?.assigned_vendor_id
+              ? ` com ${vendorsById[finishLead.assigned_vendor_id] ?? "o vendedor"}`
+              : ""}
+            .
+          </Notice>
+          <fieldset>
+            <legend className="mb-2 text-sm font-bold">
+              O cliente comprou?
+            </legend>
+            <div className="grid grid-cols-2 gap-2">
+              {(["no", "yes"] as const).map((choice) => (
+                <button
+                  key={choice}
+                  type="button"
+                  onClick={() => {
+                    setFinishSold(choice);
+                    setFinishError("");
+                  }}
+                  className={clsx(
+                    "rounded-xl border px-3 py-3 text-sm font-black transition-colors",
+                    finishSold === choice
+                      ? choice === "yes"
+                        ? "border-emerald-600 bg-emerald-600 text-white"
+                        : "border-zinc-800 bg-zinc-800 text-white"
+                      : "border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300",
+                  )}
+                >
+                  {choice === "yes" ? "Sim, comprou" : "Não comprou"}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          {finishError ? <Notice tone="error">{finishError}</Notice> : null}
         </div>
       </Modal>
 
