@@ -81,6 +81,11 @@ const leadSelect = {
   email: true,
   phone: true,
   source: true,
+  original_source: true,
+  original_attribution: true,
+  qualification: true,
+  first_contact_at: true,
+  last_contact_at: true,
   tags: true,
   crm_pipeline_id: true,
   crm_stage_id: true,
@@ -1655,6 +1660,11 @@ export class LeadsService {
       email: lead.email,
       phone: lead.phone,
       source: lead.source,
+      original_source: lead.original_source,
+      original_attribution: lead.original_attribution,
+      qualification: lead.qualification,
+      first_contact_at: lead.first_contact_at,
+      last_contact_at: lead.last_contact_at,
       crm_pipeline_id: lead.crm_pipeline_id,
       crm_stage_id: lead.crm_stage_id,
       assigned_vendor_id: lead.assigned_vendor_id,
@@ -5864,6 +5874,9 @@ export class LeadsService {
     }
     if (dto.source !== undefined) {
       data.source = dto.source;
+    }
+    if (dto.qualification !== undefined) {
+      data.qualification = dto.qualification as Prisma.InputJsonValue;
     }
     if (dto.tags !== undefined) {
       data.tags = dto.tags;

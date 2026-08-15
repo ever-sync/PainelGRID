@@ -6,12 +6,16 @@ import {
   IsEmail,
   IsEnum,
   IsOptional,
+  IsObject,
   IsString,
   IsUUID,
   MaxLength,
 } from "class-validator";
 
 export class UpdateLeadDto {
+  @IsOptional()
+  @IsObject()
+  qualification?: Record<string, unknown>;
   @IsOptional()
   @IsString()
   @MaxLength(255)

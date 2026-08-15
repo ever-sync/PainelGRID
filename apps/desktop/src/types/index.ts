@@ -86,6 +86,20 @@ export interface Lead {
   email: string;
   phone: string;
   source: LeadSource;
+  original_source?: LeadSource | null;
+  original_attribution?: Record<string, unknown>;
+  qualification?: {
+    interest_category?:
+      "novo" | "seminovo" | "pcd" | "venda_direta" | "assinatura";
+    desired_model?: string;
+    trade_in?: boolean;
+    payment_method?: string;
+    price_range?: string;
+    purchase_timeline?: string;
+    temperature?: "quente" | "morno" | "frio";
+  };
+  first_contact_at?: string | null;
+  last_contact_at?: string | null;
   crm_stage: CrmStage;
   crm_stage_id: string | null;
   crm_stage_code?: string | null;

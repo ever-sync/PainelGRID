@@ -304,6 +304,11 @@ model Lead {
   email                       String?                    @db.VarChar(255)
   phone                       String?                    @db.VarChar(20)
   source                      LeadSource
+  original_source             LeadSource?
+  original_attribution        Json                       @default("{}")
+  qualification               Json                       @default("{}")
+  first_contact_at            DateTime?
+  last_contact_at             DateTime?
   crm_stage_id                String?                    @db.Uuid
   tags                        String[]                   @default([])
   event_interest_id           String?                    @db.Uuid
@@ -379,6 +384,8 @@ model Lead {
   @@index([crm_pipeline_id])
   @@index([crm_stage_id])
   @@index([source])
+  @@index([original_source])
+  @@index([last_contact_at])
   @@index([confirmation_status])
   @@index([store_visit_datetime])
   @@index([deleted_at])
@@ -1374,13 +1381,13 @@ model SalesTeam {
 }
 
 model SalesTeamMember {
-  team_id        String    @db.Uuid
-  user_id        String    @db.Uuid
-  queue_position Int?
+  team_id         String    @db.Uuid
+  user_id         String    @db.Uuid
+  queue_position  Int?
   queue_positions Json      @default("{}")
-  added_at       DateTime  @default(now())
-  team     SalesTeam @relation(fields: [team_id], references: [id], onDelete: Cascade)
-  user     User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  added_at        DateTime  @default(now())
+  team            SalesTeam @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@id([team_id, user_id])
   @@index([user_id])

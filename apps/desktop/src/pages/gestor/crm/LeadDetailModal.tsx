@@ -65,7 +65,12 @@ export function LeadDetailModal({
   onMoveStage: (lead: Lead, stageId: string) => Promise<Lead | null>;
 }) {
   const [activeTab, setActiveTab] = useState<
-    "pessoais" | "atendimento" | "veiculo" | "meta" | "historico"
+    | "pessoais"
+    | "atendimento"
+    | "qualificacao"
+    | "veiculo"
+    | "meta"
+    | "historico"
   >("pessoais");
   const [lead, setLead] = useState(initialLead);
   const [editing, setEditing] = useState(false);
@@ -91,6 +96,9 @@ export function LeadDetailModal({
   const [editBirthDate, setEditBirthDate] = useState(
     lead.birth_date?.slice(0, 10) ?? "",
   );
+  const [editQualification, setEditQualification] = useState<
+    NonNullable<Lead["qualification"]>
+  >(lead.qualification ?? {});
   const [history, setHistory] = useState<ApiLeadTimelineItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [movingStageId, setMovingStageId] = useState<string | null>(null);
@@ -141,6 +149,7 @@ export function LeadDetailModal({
     setEditFirstName(initialLead.first_name ?? "");
     setEditLastName(initialLead.last_name ?? "");
     setEditBirthDate(initialLead.birth_date?.slice(0, 10) ?? "");
+    setEditQualification(initialLead.qualification ?? {});
   }, [initialLead]);
 
   // Fecha ao pressionar Esc
@@ -187,6 +196,7 @@ export function LeadDetailModal({
           first_name: editFirstName || null,
           last_name: editLastName || null,
           birth_date: editBirthDate || null,
+          qualification: editQualification,
         },
         token,
       );
@@ -203,6 +213,7 @@ export function LeadDetailModal({
         first_name: updated.first_name ?? "",
         last_name: updated.last_name ?? "",
         birth_date: updated.birth_date ?? null,
+        qualification: updated.qualification ?? {},
       };
       setLead(mapped);
       onLeadUpdated(mapped);
@@ -290,6 +301,49 @@ export function LeadDetailModal({
     },
   ];
 
+  const qualificationRows: InfoRow[] = [
+    {
+      label: "Categoria de interesse",
+      value: lead.qualification?.interest_category ?? null,
+      icon: Target,
+    },
+    {
+      label: "Modelo desejado",
+      value: lead.qualification?.desired_model ?? null,
+      icon: Car,
+    },
+    {
+      label: "Temperatura",
+      value: lead.qualification?.temperature ?? null,
+      icon: TrendingUp,
+    },
+    {
+      label: "Prazo de compra",
+      value: lead.qualification?.purchase_timeline ?? null,
+      icon: Clock,
+    },
+    {
+      label: "Forma de pagamento",
+      value: lead.qualification?.payment_method ?? null,
+      icon: FileText,
+    },
+    {
+      label: "Faixa de valor",
+      value: lead.qualification?.price_range ?? null,
+      icon: TrendingUp,
+    },
+    {
+      label: "Possui usado na troca",
+      value:
+        lead.qualification?.trade_in == null
+          ? null
+          : lead.qualification.trade_in
+            ? "Sim"
+            : "Não",
+      icon: Car,
+    },
+  ];
+
   const metaRows: InfoRow[] = [
     {
       label: "ID do lead Meta",
@@ -357,7 +411,9 @@ export function LeadDetailModal({
         ? attendanceRows
         : activeTab === "veiculo"
           ? vehicleRows
-          : metaRows;
+          : activeTab === "qualificacao"
+            ? qualificationRows
+            : metaRows;
 
   return (
     <div
@@ -899,6 +955,7 @@ export function LeadDetailModal({
                 [
                   { id: "pessoais", label: "Dados pessoais" },
                   { id: "atendimento", label: "Atendimento" },
+                  { id: "qualificacao", label: "Qualificação" },
                   { id: "veiculo", label: "Veículo" },
                   { id: "meta", label: "Origem Meta" },
                   { id: "historico", label: "Histórico" },
@@ -1047,87 +1104,180 @@ export function LeadDetailModal({
                 </div>
               )}
 
-              {activeTab !== "historico" && (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {tabRows.map(({ label, value, icon: Icon }) => (
-                    <div
-                      key={label}
-                      className={clsx(
-                        "rounded-2xl border p-4",
-                        dark
-                          ? "border-[#242424] bg-[#111]"
-                          : "border-zinc-100 bg-zinc-50/70",
-                        label === "Respostas do formulário" && "sm:col-span-2",
-                      )}
+              {activeTab === "qualificacao" && editing && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {[
+                    [
+                      "Categoria de interesse",
+                      "interest_category",
+                      ["novo", "seminovo", "pcd", "venda_direta", "assinatura"],
+                    ],
+                    ["Temperatura", "temperature", ["quente", "morno", "frio"]],
+                  ].map(([label, key, options]) => (
+                    <label
+                      key={String(key)}
+                      className="space-y-1 text-xs font-semibold"
                     >
-                      <div className="flex items-center gap-2">
-                        <Icon
-                          size={14}
-                          className={dark ? "text-zinc-500" : "text-zinc-400"}
-                        />
-                        <p
-                          className={clsx(
-                            "text-[10px] font-semibold uppercase tracking-[0.14em]",
-                            dark ? "text-zinc-500" : "text-zinc-400",
-                          )}
-                        >
-                          {label}
-                        </p>
-                      </div>
-                      {label === "Respostas do formulário" && value ? (
-                        <pre
-                          className={clsx(
-                            "mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xl p-3 text-[12px] leading-5",
-                            dark
-                              ? "bg-black/30 text-zinc-300"
-                              : "bg-white text-zinc-700",
-                          )}
-                        >
-                          {value}
-                        </pre>
-                      ) : (
-                        <p
-                          className={clsx(
-                            "mt-3 break-words text-[13px] font-medium leading-5",
-                            value
-                              ? dark
-                                ? "text-zinc-100"
-                                : "text-zinc-900"
-                              : dark
-                                ? "text-zinc-600"
-                                : "text-zinc-400",
-                          )}
-                        >
-                          {value ?? "—"}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-
-                  {activeTab === "atendimento" && lead.notes && (
-                    <div
-                      className={clsx(
-                        "rounded-2xl border p-4 sm:col-span-2",
-                        dark
-                          ? "border-[#242424] bg-[#111]"
-                          : "border-zinc-100 bg-zinc-50/70",
-                      )}
-                    >
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
-                        Observações
-                      </p>
-                      <p
+                      {String(label)}
+                      <select
+                        value={String(
+                          editQualification[
+                            key as keyof typeof editQualification
+                          ] ?? "",
+                        )}
+                        onChange={(event) =>
+                          setEditQualification((current) => ({
+                            ...current,
+                            [String(key)]: event.target.value || undefined,
+                          }))
+                        }
                         className={clsx(
-                          "mt-3 whitespace-pre-wrap text-[13px] leading-6",
-                          dark ? "text-zinc-300" : "text-zinc-700",
+                          "w-full rounded-xl border px-3 py-2.5",
+                          dark
+                            ? "border-zinc-700 bg-[#111]"
+                            : "border-zinc-200 bg-white",
                         )}
                       >
-                        {lead.notes}
-                      </p>
-                    </div>
-                  )}
+                        <option value="">Não informado</option>
+                        {(options as string[]).map((option) => (
+                          <option key={option} value={option}>
+                            {option.replace(/_/g, " ")}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                  {[
+                    ["Modelo desejado", "desired_model"],
+                    ["Prazo de compra", "purchase_timeline"],
+                    ["Forma de pagamento", "payment_method"],
+                    ["Faixa de valor", "price_range"],
+                  ].map(([label, key]) => (
+                    <label
+                      key={key}
+                      className="space-y-1 text-xs font-semibold"
+                    >
+                      {label}
+                      <input
+                        value={String(
+                          editQualification[
+                            key as keyof typeof editQualification
+                          ] ?? "",
+                        )}
+                        onChange={(event) =>
+                          setEditQualification((current) => ({
+                            ...current,
+                            [key]: event.target.value,
+                          }))
+                        }
+                        className={clsx(
+                          "w-full rounded-xl border px-3 py-2.5",
+                          dark
+                            ? "border-zinc-700 bg-[#111]"
+                            : "border-zinc-200 bg-white",
+                        )}
+                      />
+                    </label>
+                  ))}
+                  <label className="flex items-center gap-3 rounded-xl border p-3 text-sm sm:col-span-2">
+                    <input
+                      type="checkbox"
+                      checked={editQualification.trade_in ?? false}
+                      onChange={(event) =>
+                        setEditQualification((current) => ({
+                          ...current,
+                          trade_in: event.target.checked,
+                        }))
+                      }
+                    />
+                    Possui veículo usado na troca
+                  </label>
                 </div>
               )}
+
+              {activeTab !== "historico" &&
+                !(activeTab === "qualificacao" && editing) && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {tabRows.map(({ label, value, icon: Icon }) => (
+                      <div
+                        key={label}
+                        className={clsx(
+                          "rounded-2xl border p-4",
+                          dark
+                            ? "border-[#242424] bg-[#111]"
+                            : "border-zinc-100 bg-zinc-50/70",
+                          label === "Respostas do formulário" &&
+                            "sm:col-span-2",
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Icon
+                            size={14}
+                            className={dark ? "text-zinc-500" : "text-zinc-400"}
+                          />
+                          <p
+                            className={clsx(
+                              "text-[10px] font-semibold uppercase tracking-[0.14em]",
+                              dark ? "text-zinc-500" : "text-zinc-400",
+                            )}
+                          >
+                            {label}
+                          </p>
+                        </div>
+                        {label === "Respostas do formulário" && value ? (
+                          <pre
+                            className={clsx(
+                              "mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xl p-3 text-[12px] leading-5",
+                              dark
+                                ? "bg-black/30 text-zinc-300"
+                                : "bg-white text-zinc-700",
+                            )}
+                          >
+                            {value}
+                          </pre>
+                        ) : (
+                          <p
+                            className={clsx(
+                              "mt-3 break-words text-[13px] font-medium leading-5",
+                              value
+                                ? dark
+                                  ? "text-zinc-100"
+                                  : "text-zinc-900"
+                                : dark
+                                  ? "text-zinc-600"
+                                  : "text-zinc-400",
+                            )}
+                          >
+                            {value ?? "—"}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+
+                    {activeTab === "atendimento" && lead.notes && (
+                      <div
+                        className={clsx(
+                          "rounded-2xl border p-4 sm:col-span-2",
+                          dark
+                            ? "border-[#242424] bg-[#111]"
+                            : "border-zinc-100 bg-zinc-50/70",
+                        )}
+                      >
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
+                          Observações
+                        </p>
+                        <p
+                          className={clsx(
+                            "mt-3 whitespace-pre-wrap text-[13px] leading-6",
+                            dark ? "text-zinc-300" : "text-zinc-700",
+                          )}
+                        >
+                          {lead.notes}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
             </div>
           </main>
         </div>

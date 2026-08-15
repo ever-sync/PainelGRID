@@ -9,6 +9,11 @@ export type ApiLead = {
   email: string | null;
   phone: string | null;
   source: LeadSource;
+  original_source?: LeadSource | null;
+  original_attribution?: Record<string, unknown> | null;
+  qualification?: Lead["qualification"] | null;
+  first_contact_at?: string | null;
+  last_contact_at?: string | null;
   tags: string[];
   crm_pipeline_id: string | null;
   crm_pipeline_code: string | null;
@@ -122,6 +127,11 @@ export function mapApiLeadToLead(row: ApiLead): Lead {
     email: row.email ?? "",
     phone: row.phone ?? "",
     source: row.source,
+    original_source: row.original_source ?? row.source,
+    original_attribution: row.original_attribution ?? {},
+    qualification: row.qualification ?? {},
+    first_contact_at: row.first_contact_at ?? null,
+    last_contact_at: row.last_contact_at ?? null,
     crm_stage: crmStageFromApiCode(row.crm_stage_code, row.crm_stage_name),
     crm_stage_id: row.crm_stage_id ?? null,
     crm_stage_code: row.crm_stage_code ?? null,
@@ -376,6 +386,7 @@ export type UpdateLeadBody = {
   email?: string | null;
   phone?: string | null;
   source?: LeadSource;
+  qualification?: Lead["qualification"];
   notes?: string | null;
   store_visit_datetime?: string | null;
   event_interest_id?: string | null;
