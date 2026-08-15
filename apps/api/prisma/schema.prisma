@@ -10,53 +10,53 @@ datasource db {
 }
 
 model User {
-  id                           String             @id @default(uuid()) @db.Uuid
-  name                         String             @db.VarChar(255)
-  email                        String             @unique @db.VarChar(255)
+  id                           String              @id @default(uuid()) @db.Uuid
+  name                         String              @db.VarChar(255)
+  email                        String              @unique @db.VarChar(255)
   /// Nulo enquanto o vendedor auto-cadastrado nao criou a senha pelo link do e-mail.
-  password_hash                String?            @db.VarChar(255)
+  password_hash                String?             @db.VarChar(255)
   role                         Role
-  avatar_url                   String?            @db.VarChar(500)
-  phone                        String?            @db.VarChar(20)
-  is_active                    Boolean            @default(true)
-  created_at                   DateTime           @default(now())
-  updated_at                   DateTime           @updatedAt
-  client_id                    String?            @db.Uuid
+  avatar_url                   String?             @db.VarChar(500)
+  phone                        String?             @db.VarChar(20)
+  is_active                    Boolean             @default(true)
+  created_at                   DateTime            @default(now())
+  updated_at                   DateTime            @updatedAt
+  client_id                    String?             @db.Uuid
   /// Token do gestor após OAuth Meta (uma conta para todos os clientes do gestor).
   meta_gestor_access_token     String?
   meta_gestor_token_expires_at DateTime?
-  meta_gestor_scopes           String[]           @default([])
+  meta_gestor_scopes           String[]            @default([])
   meta_gestor_connected_at     DateTime?
   vendor_category              VendorCategory?
-  vendor_categories            VendorCategory[]   @default([])
-  auth_provider_id             String?            @unique @db.VarChar(255)
+  vendor_categories            VendorCategory[]    @default([])
+  auth_provider_id             String?             @unique @db.VarChar(255)
   /// Token do link publico de avaliacao de atendimento (somente vendedores).
-  rating_token                 String?            @unique @db.VarChar(64)
+  rating_token                 String?             @unique @db.VarChar(64)
   /// Estado do auto-cadastro publico. `approved` para todo usuario criado pelo painel.
   /// Nao substitui `is_active`: quem esta pendente tem is_active=false, mas o inverso
   /// nao vale (desativado manualmente continua approved).
-  approval_status              UserApprovalStatus @default(approved)
+  approval_status              UserApprovalStatus  @default(approved)
   approved_at                  DateTime?
-  approved_by_id               String?            @db.Uuid
-  approved_by                  User?              @relation("UserApprovals", fields: [approved_by_id], references: [id], onDelete: SetNull)
-  approvals_made               User[]             @relation("UserApprovals")
+  approved_by_id               String?             @db.Uuid
+  approved_by                  User?               @relation("UserApprovals", fields: [approved_by_id], references: [id], onDelete: SetNull)
+  approvals_made               User[]              @relation("UserApprovals")
   campaign_vendors             CampaignVendor[]
-  managed_clients              Client[]           @relation("GestorClients")
+  managed_clients              Client[]            @relation("GestorClients")
   course_progress              CourseProgress[]
   crm_changes                  CrmHistory[]
-  assigned_leads               Lead[]             @relation("VendorLeads")
-  attended_leads               Lead[]             @relation("LeadAttendantUser")
-  registered_leads             Lead[]             @relation("LeadRegisteredBy")
-  sold_leads                   Lead[]             @relation("LeadSoldByVendor")
-  sales                        Sale[]             @relation("VendorSales")
+  assigned_leads               Lead[]              @relation("VendorLeads")
+  attended_leads               Lead[]              @relation("LeadAttendantUser")
+  registered_leads             Lead[]              @relation("LeadRegisteredBy")
+  sold_leads                   Lead[]              @relation("LeadSoldByVendor")
+  sales                        Sale[]              @relation("VendorSales")
   sales_team_memberships       SalesTeamMember[]
-  score_events                 ScoreEvent[]       @relation("VendorScoreEvents")
+  score_events                 ScoreEvent[]        @relation("VendorScoreEvents")
   service_ratings              ServiceRating[]
-  client                       Client?            @relation("ClientStaff", fields: [client_id], references: [id])
+  client                       Client?             @relation("ClientStaff", fields: [client_id], references: [id])
   notifications                Notification[]
   vendor_availability          VendorAvailability?
-  vendor_attendances           VendorAttendance[] @relation("VendorAttendanceVendor")
-  vendor_attendances_created   VendorAttendance[] @relation("VendorAttendanceCreator")
+  vendor_attendances           VendorAttendance[]  @relation("VendorAttendanceVendor")
+  vendor_attendances_created   VendorAttendance[]  @relation("VendorAttendanceCreator")
 
   @@index([client_id])
   @@index([client_id, approval_status])
@@ -368,7 +368,7 @@ model Lead {
   sales                       Sale[]
   score_events                ScoreEvent[]
   whatsapp_attribution_events WhatsAppAttributionEvent[]
-  vendor_attendances           VendorAttendance[]
+  vendor_attendances          VendorAttendance[]
 
   @@unique([client_id, external_ref], map: "lead_client_external_ref")
   @@index([client_id])
@@ -413,19 +413,19 @@ model Event {
   sales_target                  Int?
   scheduled_target              Int?
   require_wristband             Boolean                  @default(false)
-  allow_vendor_checkin          Boolean                  @default(true)
-  allow_vendor_fipe             Boolean                  @default(true)
-  allow_vendor_create_sale      Boolean                  @default(true)
+  allow_vendor_checkin          Boolean                  @default(false)
+  allow_vendor_fipe             Boolean                  @default(false)
+  allow_vendor_create_sale      Boolean                  @default(false)
   allow_vendor_edit_sale        Boolean                  @default(false)
   allow_vendor_delete_sale      Boolean                  @default(false)
-  allow_vendor_edit_own_lead    Boolean                  @default(true)
+  allow_vendor_edit_own_lead    Boolean                  @default(false)
   allow_vendor_delete_own_lead  Boolean                  @default(false)
-  allow_reception_create_sale   Boolean                  @default(true)
+  allow_reception_create_sale   Boolean                  @default(false)
   allow_reception_edit_sale     Boolean                  @default(false)
   allow_reception_delete_sale   Boolean                  @default(false)
   allow_reception_edit_lead     Boolean                  @default(false)
   allow_reception_delete_lead   Boolean                  @default(false)
-  allow_reception_quick_create  Boolean                  @default(true)
+  allow_reception_quick_create  Boolean                  @default(false)
   event_days                    Json?
   total_investment              Decimal?                 @db.Decimal(12, 2)
   paid_traffic_investment       Decimal?                 @db.Decimal(12, 2)
@@ -1470,13 +1470,13 @@ model Vehicle {
 }
 
 model VehicleCatalog {
-  id          String   @id @default(uuid()) @db.Uuid
-  brand_code  String   @db.VarChar(30)
-  brand       String   @db.VarChar(100)
-  model_code  String   @db.VarChar(30)
-  model       String   @db.VarChar(180)
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+  id         String   @id @default(uuid()) @db.Uuid
+  brand_code String   @db.VarChar(30)
+  brand      String   @db.VarChar(100)
+  model_code String   @db.VarChar(30)
+  model      String   @db.VarChar(180)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   @@unique([brand_code, model_code])
   @@index([brand])

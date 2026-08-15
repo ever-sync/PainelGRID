@@ -398,19 +398,19 @@ export function ConfiguracaoPage() {
   );
   const [selectedEventSettingsId, setSelectedEventSettingsId] = useState("");
   const [eventPermissions, setEventPermissions] = useState({
-    allow_vendor_checkin: true,
-    allow_vendor_fipe: true,
-    allow_vendor_create_sale: true,
+    allow_vendor_checkin: false,
+    allow_vendor_fipe: false,
+    allow_vendor_create_sale: false,
     allow_vendor_edit_sale: false,
     allow_vendor_delete_sale: false,
-    allow_vendor_edit_own_lead: true,
+    allow_vendor_edit_own_lead: false,
     allow_vendor_delete_own_lead: false,
-    allow_reception_create_sale: true,
+    allow_reception_create_sale: false,
     allow_reception_edit_sale: false,
     allow_reception_delete_sale: false,
     allow_reception_edit_lead: false,
     allow_reception_delete_lead: false,
-    allow_reception_quick_create: true,
+    allow_reception_quick_create: false,
   });
   const [eventSettingsLoading, setEventSettingsLoading] = useState(false);
   const [eventSettingsSaving, setEventSettingsSaving] = useState(false);
@@ -533,12 +533,19 @@ export function ConfiguracaoPage() {
           allow_vendor_checkin: eventPermissions.allow_vendor_checkin,
           allow_vendor_fipe: eventPermissions.allow_vendor_fipe,
           allow_vendor_create_sale: eventPermissions.allow_vendor_create_sale,
+          allow_vendor_edit_sale: eventPermissions.allow_vendor_edit_sale,
+          allow_vendor_delete_sale: eventPermissions.allow_vendor_delete_sale,
           allow_vendor_edit_own_lead:
             eventPermissions.allow_vendor_edit_own_lead,
           allow_vendor_delete_own_lead:
             eventPermissions.allow_vendor_delete_own_lead,
           allow_reception_quick_create:
             eventPermissions.allow_reception_quick_create,
+          allow_reception_create_sale:
+            eventPermissions.allow_reception_create_sale,
+          allow_reception_edit_sale: eventPermissions.allow_reception_edit_sale,
+          allow_reception_delete_sale:
+            eventPermissions.allow_reception_delete_sale,
           allow_reception_edit_lead: eventPermissions.allow_reception_edit_lead,
           allow_reception_delete_lead:
             eventPermissions.allow_reception_delete_lead,
@@ -1369,20 +1376,20 @@ export function ConfiguracaoPage() {
   useEffect(() => {
     if (!selectedEventSettings) return;
     setEventPermissions({
-      allow_vendor_checkin: selectedEventSettings.allow_vendor_checkin ?? true,
-      allow_vendor_fipe: selectedEventSettings.allow_vendor_fipe ?? true,
+      allow_vendor_checkin: selectedEventSettings.allow_vendor_checkin ?? false,
+      allow_vendor_fipe: selectedEventSettings.allow_vendor_fipe ?? false,
       allow_vendor_create_sale:
-        selectedEventSettings.allow_vendor_create_sale ?? true,
+        selectedEventSettings.allow_vendor_create_sale ?? false,
       allow_vendor_edit_sale:
         selectedEventSettings.allow_vendor_edit_sale ?? false,
       allow_vendor_delete_sale:
         selectedEventSettings.allow_vendor_delete_sale ?? false,
       allow_vendor_edit_own_lead:
-        selectedEventSettings.allow_vendor_edit_own_lead ?? true,
+        selectedEventSettings.allow_vendor_edit_own_lead ?? false,
       allow_vendor_delete_own_lead:
         selectedEventSettings.allow_vendor_delete_own_lead ?? false,
       allow_reception_create_sale:
-        selectedEventSettings.allow_reception_create_sale ?? true,
+        selectedEventSettings.allow_reception_create_sale ?? false,
       allow_reception_edit_sale:
         selectedEventSettings.allow_reception_edit_sale ?? false,
       allow_reception_delete_sale:
@@ -1392,7 +1399,7 @@ export function ConfiguracaoPage() {
       allow_reception_delete_lead:
         selectedEventSettings.allow_reception_delete_lead ?? false,
       allow_reception_quick_create:
-        selectedEventSettings.allow_reception_quick_create ?? true,
+        selectedEventSettings.allow_reception_quick_create ?? false,
     });
     setEventSettingsMessage("");
   }, [selectedEventSettings]);
