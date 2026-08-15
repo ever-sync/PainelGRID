@@ -67,6 +67,8 @@ type RequestOptions = {
   suppressAuthRedirect?: boolean;
   /** Interno: evita loop após uma tentativa de refresh + retry. */
   _retryAfterRefresh?: boolean;
+  /** Interno: tentativas curtas para GET limitado temporariamente pela API. */
+  _rateLimitRetry?: number;
 };
 
 function extractErrorMessage(parsed: unknown, status: number): string {
@@ -263,6 +265,30 @@ export async function httpRequest<T>(
   const parsed = raw ? safeJsonParse(raw) : null;
 
   if (!response.ok) {
+    const method = options.method ?? "GET";
+    const rateLimitRetry = options._rateLimitRetry ?? 0;
+    if (response.status === 429 && method === "GET" && rateLimitRetry < 2) {
+      const retryAfterSeconds = Number(response.headers.get("retry-after"));
+      const delayMs = Number.isFinite(retryAfterSeconds)
+        ? Math.min(Math.max(retryAfterSeconds * 1000, 300), 4_000)
+        : 500 * 2 ** rateLimitRetry;
+      await new Promise<void>((resolve, reject) => {
+        const timer = globalThis.setTimeout(resolve, delayMs);
+        options.signal?.addEventListener(
+          "abort",
+          () => {
+            globalThis.clearTimeout(timer);
+            reject(new DOMException("Aborted", "AbortError"));
+          },
+          { once: true },
+        );
+      });
+      return httpRequest<T>(path, {
+        ...options,
+        _rateLimitRetry: rateLimitRetry + 1,
+      });
+    }
+
     /** Access JWT expira cedo (~15m). Antes de deslogar, tenta `/auth/refresh` uma vez. */
     const canAttemptRefreshRetry =
       response.status === 401 && !!options.token && !options._retryAfterRefresh;

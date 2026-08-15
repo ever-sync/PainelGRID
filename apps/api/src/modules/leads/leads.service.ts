@@ -936,9 +936,24 @@ export class LeadsService {
       where: cursorRow
         ? {
             ...where,
-            OR: [
-              { created_at: { lt: cursorRow.created_at } },
-              { created_at: cursorRow.created_at, id: { lt: cursorRow.id } },
+            // Nao sobrescreve o OR da busca textual ao paginar. Sem o AND,
+            // procurar e carregar a segunda pagina removia o filtro e misturava
+            // leads de outras buscas no Kanban.
+            AND: [
+              ...(Array.isArray(where.AND)
+                ? where.AND
+                : where.AND
+                  ? [where.AND]
+                  : []),
+              {
+                OR: [
+                  { created_at: { lt: cursorRow.created_at } },
+                  {
+                    created_at: cursorRow.created_at,
+                    id: { lt: cursorRow.id },
+                  },
+                ],
+              },
             ],
           }
         : where,
@@ -5985,6 +6000,23 @@ export class LeadsService {
         { name: { contains: term, mode: "insensitive" } },
         { email: { contains: term, mode: "insensitive" } },
         { phone: { contains: term, mode: "insensitive" } },
+        { cpf: { contains: term, mode: "insensitive" } },
+        { external_ref: { contains: term, mode: "insensitive" } },
+        { vehicle_brand: { contains: term, mode: "insensitive" } },
+        { vehicle_model: { contains: term, mode: "insensitive" } },
+        { facebook_campaign_name: { contains: term, mode: "insensitive" } },
+        { facebook_ad_set_name: { contains: term, mode: "insensitive" } },
+        { facebook_ad_name: { contains: term, mode: "insensitive" } },
+        {
+          sales: {
+            some: {
+              OR: [
+                { order_number: { contains: term, mode: "insensitive" } },
+                { model: { contains: term, mode: "insensitive" } },
+              ],
+            },
+          },
+        },
       ];
     }
 

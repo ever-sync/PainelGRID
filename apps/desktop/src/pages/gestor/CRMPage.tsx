@@ -802,6 +802,28 @@ export function CRMPage() {
       .finally(() => setBoardLoadingMore(false));
   }, [apiStages, boardLoadingMore, boardNextCursor, selectedClient]);
 
+  // Completa o quadro em paginas sequenciais. Mantem a primeira pintura rapida,
+  // mas elimina a dependencia do botao "Carregar mais" e garante que filtros
+  // locais, totais e movimentacoes encontrem todos os leads do cliente.
+  useEffect(() => {
+    if (
+      !boardHasNextPage ||
+      boardLoading ||
+      boardLoadingMore ||
+      !boardNextCursor
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(loadMoreBoardLeads, 250);
+    return () => window.clearTimeout(timer);
+  }, [
+    boardHasNextPage,
+    boardLoading,
+    boardLoadingMore,
+    boardNextCursor,
+    loadMoreBoardLeads,
+  ]);
+
   const refreshBoardRef = useRef(refreshBoard);
   useEffect(() => {
     refreshBoardRef.current = refreshBoard;
