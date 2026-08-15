@@ -1,3 +1,12 @@
+---
+tipo: jornada
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-produto-operacao
+criticidade: media
+tags: [painelgrid, jornada]
+---
+
 # Check-in e Fila de Atendimento
 
 ## Entrada
@@ -24,6 +33,8 @@ flowchart LR
 - Oferta tem expiração e idempotência.
 - Aceite muda disponibilidade para ocupado.
 - Recepção visualiza estado e exceções em tempo real.
+- A ordem de chamada pode variar por categoria do atendimento; a posição específica prevalece no respectivo recorte.
+- A recepção pode trocar o vendedor chamado e, com permissão do evento, registrar venda rápida.
 
 ## Métricas
 
@@ -38,4 +49,3 @@ flowchart LR
 - [[Vendedores e Atendimento]]
 - [[Realtime e Filas]]
 - [[Atendimento ate Venda]]
-

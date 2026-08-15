@@ -1,3 +1,12 @@
+---
+tipo: integracao
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-integracoes
+criticidade: alta
+tags: [painelgrid, integracao]
+---
+
 # Redis e Filas
 
 ## Responsabilidades

@@ -1,5 +1,10 @@
 ---
 tags: [arquitetura, monorepo]
+tipo: arquitetura
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-arquitetura
+criticidade: media
 ---
 
 # Monorepo e Pacotes
@@ -21,7 +26,9 @@ PainelGRID/
 
 ## Comandos principais
 
-- `npm run dev`: API e frontend em desenvolvimento.
+- `npm run dev`: somente a API em desenvolvimento.
+- `npm run dev:desktop`: somente o frontend Vite.
+- `npm run dev:full`: API e frontend em paralelo.
 - `npm run build`: build da API e bundle de implantação.
 - `npm run build:ci`: build API + desktop.
 - `npm run test`, `npm run test:e2e`: testes.
@@ -30,3 +37,4 @@ PainelGRID/
 
 O workspace raiz coordena dependências; comandos específicos também podem ser executados nos workspaces `apps/api` e `apps/desktop`.
 
+Inventário detalhado: [[Inventario do Repositorio]]. Setup reproduzível: [[Guia de Desenvolvimento Local]].

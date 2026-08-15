@@ -1,3 +1,12 @@
+---
+tipo: referencia
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-engenharia
+criticidade: media
+tags: [painelgrid, referencia]
+---
+
 # Scripts e Migrações
 
 ## Prisma

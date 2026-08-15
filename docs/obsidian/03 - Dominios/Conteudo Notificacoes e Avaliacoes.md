@@ -1,3 +1,12 @@
+---
+tipo: dominio
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-produto-engenharia
+criticidade: media
+tags: [painelgrid, dominio]
+---
+
 # Conteudo, Notificacoes e Avaliacoes
 
 ## Responsabilidade

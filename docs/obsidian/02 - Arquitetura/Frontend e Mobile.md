@@ -1,5 +1,10 @@
 ---
 tags: [arquitetura, frontend, mobile]
+tipo: arquitetura
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-arquitetura
+criticidade: media
 ---
 
 # Frontend e Mobile
@@ -26,7 +31,8 @@ As páginas ficam em `apps/desktop/src/pages`, separadas por gestor, cliente, ve
 
 Veja o inventário em [[Mapa de Telas]].
 
+Rotas exatas, services, componentes de maior responsabilidade e variáveis públicas estão em [[Catalogo Frontend]].
+
 ## Mobile
 
 Os diretórios `apps/desktop/ios` e `apps/desktop/android` são shells Capacitor do mesmo produto. Mudanças de autenticação, deep link, câmera e notificações precisam ser validadas também nos dispositivos.
-

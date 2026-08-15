@@ -1,5 +1,10 @@
 ---
 tags: [arquitetura, realtime, bullmq, redis]
+tipo: arquitetura
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-arquitetura
+criticidade: media
 ---
 
 # Realtime e Filas

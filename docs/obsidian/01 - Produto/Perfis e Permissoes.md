@@ -1,5 +1,10 @@
 ---
 tags: [produto, rbac, usuarios]
+tipo: produto
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-produto
+criticidade: media
 ---
 
 # Perfis e Permissões

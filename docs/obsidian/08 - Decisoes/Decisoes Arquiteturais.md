@@ -1,3 +1,12 @@
+---
+tipo: decisao
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-arquitetura
+criticidade: media
+tags: [painelgrid, decisao]
+---
+
 # Decisões Arquiteturais
 
 ## Decisões vigentes

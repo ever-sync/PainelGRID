@@ -1,3 +1,12 @@
+---
+tipo: operacao
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-plataforma
+criticidade: alta
+tags: [painelgrid, operacao]
+---
+
 # Ambientes e Deploy
 
 ## Componentes implantáveis

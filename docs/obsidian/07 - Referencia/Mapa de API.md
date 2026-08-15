@@ -1,7 +1,18 @@
+---
+tipo: referencia
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-engenharia
+criticidade: media
+tags: [painelgrid, referencia]
+---
+
 # Mapa de API
 
 > [!info] Objetivo
 > Índice de consulta rápida dos contratos HTTP. A implementação fica em `apps/api/src`; este mapa organiza as rotas por responsabilidade, sem substituir Swagger nem os DTOs.
+
+Para o inventário por controller e as rotas de integração/Meta, veja [[Catalogo Backend]]. Todas as rotas abaixo recebem o prefixo `/api`.
 
 ## Entrada e identidade
 
@@ -18,7 +29,7 @@
 | Grupo | Responsabilidade |
 |---|---|
 | `leads` | busca, criação, edição, exclusão e perfil do lead |
-| `crm` | pipelines, etapas, movimentação, histórico e timeline |
+| `crm` | tarefas/próximas ações, pipelines, etapas, movimentação, histórico e timeline |
 | `events` | eventos, participantes, resumo, auditoria e relatórios |
 | `appointments` | agendamentos, check-in, cancelamento e reagendamento |
 | `sales` | vendas e atribuição a vendedor/equipe |
@@ -34,7 +45,7 @@
 | `agent` | contexto do agente, estado, eventos, auditoria e handoff |
 | `rubinho` | resolução determinística de contexto |
 | `rubinho-agent` | configuração, FAQ e documentos do agente |
-| `vendor` / `performance` | disponibilidade, fila, atendimento e indicadores do vendedor |
+| `leads` / `vendor` | disponibilidade, fila, atendimento, score e ranking do vendedor |
 | `notifications` | notificações internas e leitura |
 
 ## Meta, WhatsApp e automações
@@ -63,7 +74,7 @@
 
 - Check-in e avaliação por token.
 - Cadastro de vendedor por convite.
-- Telas públicas de fila e TV do evento.
+- As telas TV exigem sessão de gestor/cliente; não são endpoints públicos anônimos.
 
 ## Convenções críticas
 
@@ -80,4 +91,3 @@
 - [[Auditoria e Estado]]
 - [[n8n]]
 - [[Runbook Operacional]]
-

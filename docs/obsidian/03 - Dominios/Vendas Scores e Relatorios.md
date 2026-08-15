@@ -1,3 +1,12 @@
+---
+tipo: dominio
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-produto-engenharia
+criticidade: media
+tags: [painelgrid, dominio]
+---
+
 # Vendas, Scores e Relatorios
 
 ## Responsabilidade
@@ -21,6 +30,9 @@ Consolida resultados comerciais, atribuição, receita, avaliação, performance
 - Classificar jornadas de forma exclusiva: Rubinho, vendedor, influenciada, recuperação ou manual.
 - Exibir janela e cobertura de atribuição.
 - Métricas sem instrumentação devem ser marcadas como estimativas ou removidas.
+- A venda também pode registrar `order_number`.
+- Criação rápida pode ser iniciada pela recepção quando o evento autoriza; edição e exclusão possuem permissões independentes por papel.
+- Editar ou excluir venda deve reconciliar atribuição do lead, score, relatório e eventos realtime, não apenas a linha de `Sale`.
 
 ## Relatórios
 
@@ -34,4 +46,3 @@ Consolida resultados comerciais, atribuição, receita, avaliação, performance
 - [[Campanhas e Meta]]
 - [[Eventos e Agendamentos]]
 - [[Mapa de Dados]]
-

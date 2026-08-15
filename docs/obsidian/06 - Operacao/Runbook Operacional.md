@@ -1,3 +1,12 @@
+---
+tipo: runbook
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-plataforma
+criticidade: alta
+tags: [painelgrid, runbook]
+---
+
 # Runbook Operacional
 
 ## Lead Meta não entrou

@@ -1,3 +1,12 @@
+---
+tipo: referencia
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-engenharia
+criticidade: media
+tags: [painelgrid, referencia]
+---
+
 # Mapa de Telas
 
 ## Públicas
@@ -44,6 +53,8 @@
 
 - Check-in.
 - Fila de chegada.
+- Ordem geral e por categoria dos vendedores.
+- Venda rápida quando autorizada pelo evento.
 - Configurações operacionais.
 
 ## Regras de navegação
@@ -60,4 +71,3 @@
 - [[Leads e CRM]]
 - [[Vendedores e Atendimento]]
 - [[Vendas Scores e Relatorios]]
-

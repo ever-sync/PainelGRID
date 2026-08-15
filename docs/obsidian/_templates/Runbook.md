@@ -1,7 +1,11 @@
 ---
 tipo: runbook
 status: rascunho
-servico: 
+atualizado: "{{date}}"
+responsavel: a-definir
+criticidade: alta
+servico:
+tags: [painelgrid, operacao, runbook]
 ---
 
 # Runbook — Incidente
@@ -38,4 +42,3 @@ Quando e para quem encaminhar.
 
 - [[Runbook Operacional]]
 - [[Observabilidade]]
-

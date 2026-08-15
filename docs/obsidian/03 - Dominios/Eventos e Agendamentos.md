@@ -1,3 +1,12 @@
+---
+tipo: dominio
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-produto-engenharia
+criticidade: media
+tags: [painelgrid, dominio]
+---
+
 # Eventos e Agendamentos
 
 ## Responsabilidade
@@ -17,6 +26,8 @@ Modela o evento comercial, datas, endereço, participantes, credenciamento, agen
 - `scheduled`, confirmação final, check-in, conclusão e no-show são estados diferentes.
 - Ao escolher a data, o fluxo pode mover silenciosamente o card para presença agendada sem considerar o credenciamento concluído.
 - A credencial depende de um agendamento ativo coerente com lead e evento.
+- Permissões do evento controlam separadamente check-in/FIPE do vendedor, venda e manutenção de lead para vendedor e recepção.
+- As permissões operacionais nascem desabilitadas; API e interface devem validar a mesma flag.
 
 ## Linha de estado
 
@@ -24,6 +35,8 @@ Modela o evento comercial, datas, endereço, participantes, credenciamento, agen
 stateDiagram-v2
   [*] --> Pendente
   Pendente --> Agendado: escolhe data
+  Pendente --> PreAgendado: intenção registrada
+  PreAgendado --> Agendado: data válida definida
   Agendado --> Confirmado: conclui credenciamento
   Agendado --> Reagendado: troca a data
   Agendado --> Cancelado
@@ -37,4 +50,3 @@ stateDiagram-v2
 - [[Credenciamento Rubinho e QR Code]]
 - [[Check-in e Fila de Atendimento]]
 - [[Vendas Scores e Relatorios]]
-

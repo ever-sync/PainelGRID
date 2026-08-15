@@ -1,3 +1,12 @@
+---
+tipo: referencia
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-engenharia
+criticidade: media
+tags: [painelgrid, referencia]
+---
+
 # Mapa de Dados
 
 ## Identidade e tenancy
@@ -12,10 +21,11 @@
 - `Lead`: centro da jornada comercial.
 - `CrmPipeline`, `CrmStage`, `CrmHistory`: posição e movimentação no funil.
 - `LeadTimeline`: trilha consolidada do lead.
+- `CrmTask`: ligação, WhatsApp, agendamento, proposta ou follow-up com prazo e responsável.
 - `Event`, `EventParticipant`: evento e participantes.
 - `Appointment`: visita agendada, check-in, cancelamento e no-show.
 - `Sale`: venda, valor, vendedor e equipe.
-- `Vehicle`: dados consultados por placa e FIPE.
+- `Vehicle`: estoque do cliente; `VehicleCatalog`: catálogo global de marca/modelo. Campos de troca/FIPE também existem no lead.
 
 ## Conversa e automação
 
@@ -69,6 +79,9 @@ erDiagram
 - Exclusão de lead deve remover conversa, memória, disparos, agendamentos, auditoria e rastros relacionados.
 - Números de campanha sem nome devem ser enriquecidos pela Meta, nunca apresentados como se fossem campanhas distintas conhecidas.
 - Métricas executivas devem preferir eventos reais a estimativas.
+- Permissões operacionais do evento têm default desabilitado e devem ser conferidas no backend.
+- `SalesTeamMember` guarda ordem geral e ordens por categoria.
+- Uma venda por agendamento pode conter número do pedido e precisa manter score/atribuição coerentes após edição ou exclusão.
 
 ## Relacionamentos
 
@@ -77,4 +90,3 @@ erDiagram
 - [[Credenciamento Rubinho e QR Code]]
 - [[Campanhas e Meta]]
 - [[Scripts e Migracoes]]
-

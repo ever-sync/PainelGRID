@@ -2,6 +2,10 @@
 tipo: adr
 status: proposta
 data: YYYY-MM-DD
+atualizado: "{{date}}"
+responsavel: a-definir
+criticidade: media
+tags: [painelgrid, arquitetura, decisao]
 ---
 
 # ADR — Título
@@ -36,4 +40,3 @@ Como saberemos que a decisão funcionou?
 ## Relacionamentos
 
 - [[Decisoes Arquiteturais]]
-

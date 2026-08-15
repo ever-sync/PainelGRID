@@ -1,5 +1,10 @@
 ---
 tags: [arquitetura, dados, prisma]
+tipo: arquitetura
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-arquitetura
+criticidade: media
 ---
 
 # Banco de Dados
@@ -37,3 +42,4 @@ erDiagram
 
 Veja [[Mapa de Dados]] para o catálogo completo.
 
+O catálogo modelo a modelo, incluindo enums, permissões recentes e invariantes, está em [[Catalogo do Banco]].

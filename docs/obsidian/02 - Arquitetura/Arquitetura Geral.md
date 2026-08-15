@@ -1,5 +1,10 @@
 ---
 tags: [arquitetura, mapa]
+tipo: arquitetura
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-arquitetura
+criticidade: media
 ---
 
 # Arquitetura Geral

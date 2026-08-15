@@ -1,0 +1,64 @@
+filters:
+  and:
+    - 'file.ext == "md"'
+    - '!file.inFolder("_templates")'
+properties:
+  file.name:
+    displayName: Nota
+  tipo:
+    displayName: Tipo
+  status:
+    displayName: Status
+  criticidade:
+    displayName: Criticidade
+  responsavel:
+    displayName: Responsável
+  atualizado:
+    displayName: Atualizado
+views:
+  - type: table
+    name: Toda documentação
+    groupBy:
+      property: tipo
+      direction: ASC
+    order:
+      - file.name
+      - status
+      - criticidade
+      - responsavel
+      - atualizado
+  - type: table
+    name: Revisão necessária
+    filters:
+      and:
+        - 'status != "mantido"'
+        - 'status != "gerado"'
+    order:
+      - file.name
+      - tipo
+      - status
+      - criticidade
+      - responsavel
+      - atualizado
+  - type: table
+    name: Alta criticidade
+    filters:
+      and:
+        - 'criticidade == "alta"'
+    groupBy:
+      property: tipo
+      direction: ASC
+    order:
+      - file.name
+      - status
+      - responsavel
+      - atualizado
+  - type: table
+    name: Atualizações recentes
+    filters:
+      and:
+        - 'atualizado >= today() - "30d"'
+    order:
+      - file.name
+      - tipo
+      - atualizado

@@ -1,3 +1,12 @@
+---
+tipo: operacao
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-plataforma
+criticidade: alta
+tags: [painelgrid, operacao]
+---
+
 # Testes e CI
 
 ## GitHub Actions
@@ -9,6 +18,8 @@ O workflow `.github/workflows/ci.yml` usa Node 20 e executa, em essência:
 3. Comando agregado `npm run ci`.
 4. Verificações Lighthouse.
 5. Publicação de artefatos quando aplicável.
+
+O comando agregado também executa `npm run docs:check`, que valida o vault sem precisar abrir o Obsidian. O snapshot [[Inventario Automatico]] permite detectar controllers, endpoints, rotas do frontend, models, enums e variáveis que mudaram sem regeneração por `npm run docs:sync`.
 
 ## Camadas de teste
 
@@ -33,8 +44,8 @@ O workflow `.github/workflows/ci.yml` usa Node 20 e executa, em essência:
 
 ```bash
 npm run ci
+npm run docs:check
 git diff --check
 ```
 
 Relacionados: [[Ambientes e Deploy]], [[Riscos e Divida Tecnica]], [[Runbook Operacional]].
-

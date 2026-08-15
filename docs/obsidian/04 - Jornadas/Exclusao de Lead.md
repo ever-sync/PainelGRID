@@ -1,3 +1,12 @@
+---
+tipo: jornada
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-produto-operacao
+criticidade: media
+tags: [painelgrid, jornada]
+---
+
 # Exclusao de Lead
 
 ## Objetivo

@@ -1,5 +1,10 @@
 ---
 tags: [arquitetura, backend, nestjs]
+tipo: arquitetura
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-arquitetura
+criticidade: media
 ---
 
 # Backend API
@@ -23,6 +28,8 @@ tags: [arquitetura, backend, nestjs]
 
 Cada domínio vive em `apps/api/src/modules/<dominio>` e normalmente contém controller, service, DTOs e testes. Os contratos públicos principais estão resumidos em [[Mapa de API]].
 
+O inventário completo dos módulos, controllers, rotas e dependências transversais está em [[Catalogo Backend]].
+
 ## Regras transversais
 
 - `ValidationPipe` usa whitelist e rejeita propriedades desconhecidas.
@@ -30,4 +37,3 @@ Cada domínio vive em `apps/api/src/modules/<dominio>` e normalmente contém con
 - O escopo do cliente deve ser verificado nas consultas e integrações.
 - Operações externas sensíveis usam chaves de integração ou automação.
 - Webhooks preservam o body bruto para conferência de assinatura.
-

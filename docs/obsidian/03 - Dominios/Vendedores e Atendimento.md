@@ -1,3 +1,12 @@
+---
+tipo: dominio
+status: mantido
+atualizado: 2026-08-15
+responsavel: equipe-produto-engenharia
+criticidade: media
+tags: [painelgrid, dominio]
+---
+
 # Vendedores e Atendimento
 
 ## Responsabilidade
@@ -6,7 +15,7 @@ Organiza equipes, disponibilidade, fila, oferta de atendimento, aceite/recusa, a
 
 ## Componentes
 
-- API: `vendor-queue`, `sales-teams`, `sales`, `vendor-score` e notificações.
+- API: operações de fila em `leads`, além de `sales-teams`, `sales`, `vendor-score`, realtime e notificações.
 - Persistência: `VendorAvailability`, `VendorAttendance`, `SalesTeam`, `SalesTeamMember`, `Sale` e `ScoreEvent`.
 - Interfaces: painel do vendedor, recepção, fila e ranking.
 
@@ -38,10 +47,12 @@ flowchart LR
 - O modal de atendimento só encerra com finalização explícita.
 - O resultado “comprou?” encerra a sessão e devolve o vendedor à fila.
 - Distribuição e recusa precisam ser auditáveis.
+- A recepção pode definir uma ordem geral e ordens independentes por categoria (`novo`, `semininovo`, `pdc`, `consorcio`, `assinatura`).
+- A posição geral fica em `queue_position`; posições por categoria ficam em `queue_positions`.
+- Trocar o vendedor de um atendimento ativo precisa liberar/ocupar os estados corretos e emitir atualização realtime.
 
 ## Relacionamentos
 
 - [[Check-in e Fila de Atendimento]]
 - [[Atendimento ate Venda]]
 - [[Vendas Scores e Relatorios]]
-
