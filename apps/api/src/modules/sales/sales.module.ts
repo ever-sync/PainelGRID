@@ -4,9 +4,15 @@ import { ScoreEventsModule } from "../score-events/score-events.module";
 import { SalesController } from "./sales.controller";
 import { SalesService } from "./sales.service";
 import { DispatchTrackingModule } from "../dispatch-tracking/dispatch-tracking.module";
+import { MetaModule } from "../meta/meta.module";
 
 @Module({
-  imports: [ScoreEventsModule, RealtimeModule, DispatchTrackingModule],
+  imports: [
+    ScoreEventsModule,
+    RealtimeModule,
+    DispatchTrackingModule,
+    MetaModule,
+  ],
   controllers: [SalesController],
   providers: [SalesService],
 })

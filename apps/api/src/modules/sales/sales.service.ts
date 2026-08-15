@@ -3,8 +3,10 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import {
   AppointmentActorType,
   AppointmentChannel,
@@ -14,6 +16,7 @@ import {
   Prisma,
 } from "@prisma/client";
 import { Role } from "../../common/types";
+import { generateRatingToken } from "../../common/utils/crypto.util";
 import { PrismaService } from "../../config/prisma.service";
 import { AuthenticatedUser } from "../auth/auth.types";
 import { RealtimeEventsService } from "../realtime/realtime-events.service";
@@ -23,14 +26,19 @@ import { CreateSaleDto } from "./dto/create-sale.dto";
 import { CreateQuickSaleDto } from "./dto/create-quick-sale.dto";
 import { UpdateSaleDto } from "./dto/update-sale.dto";
 import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.service";
+import { MetaService } from "../meta/meta.service";
 
 @Injectable()
 export class SalesService {
+  private readonly logger = new Logger(SalesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly scoreEvents: ScoreEventsService,
     private readonly realtimeEvents: RealtimeEventsService,
     private readonly dispatchTracking: DispatchTrackingService,
+    private readonly metaService: MetaService,
+    private readonly config: ConfigService,
   ) {}
 
   async create(
@@ -246,7 +254,83 @@ export class SalesService {
       })
       .catch(() => undefined);
 
+    await this.sendSaleFeedbackWhatsapp({
+      clientId: vendorBinding.clientId,
+      vendorId: creditedVendorId,
+      leadName: appointment.lead.name,
+      leadPhone: appointment.lead.phone,
+      saleId: sale.id,
+    });
+
     return this.toResponse(sale);
+  }
+
+  private async sendSaleFeedbackWhatsapp(input: {
+    clientId: string;
+    vendorId: string;
+    leadName: string;
+    leadPhone: string | null;
+    saleId: string;
+  }): Promise<void> {
+    if (!input.leadPhone?.trim()) {
+      this.logger.warn(
+        `Feedback da venda não enviado: lead sem telefone sale=${input.saleId}`,
+      );
+      return;
+    }
+
+    try {
+      const vendor = await this.prisma.user.findFirst({
+        where: {
+          id: input.vendorId,
+          client_id: input.clientId,
+          role: Role.VENDEDOR,
+        },
+        select: { id: true, name: true, rating_token: true },
+      });
+      if (!vendor) {
+        this.logger.warn(
+          `Feedback da venda não enviado: vendedor não encontrado sale=${input.saleId}`,
+        );
+        return;
+      }
+
+      let ratingToken = vendor.rating_token;
+      if (!ratingToken) {
+        ratingToken = generateRatingToken();
+        await this.prisma.user.update({
+          where: { id: vendor.id },
+          data: { rating_token: ratingToken },
+        });
+      }
+
+      const configuredOrigin = this.config
+        .get<string>("FRONTEND_URL")
+        ?.split(",")[0]
+        ?.trim();
+      const publicOrigin = (
+        configuredOrigin || "https://gpdevendas.app"
+      ).replace(/\/$/, "");
+      const feedbackUrl = `${publicOrigin}/avaliacao/${ratingToken}`;
+      const firstName = input.leadName.trim().split(/\s+/)[0] || "cliente";
+      const message =
+        `Olá, ${firstName}! Obrigado pela sua compra. ` +
+        `Conte como foi seu atendimento com ${vendor.name}:\n${feedbackUrl}`;
+
+      await this.metaService.sendClientWhatsappMessage(
+        input.clientId,
+        input.leadPhone,
+        message,
+      );
+      this.logger.log(
+        `Feedback da venda enviado via WhatsApp sale=${input.saleId}`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Falha ao enviar feedback da venda via WhatsApp sale=${input.saleId}: ${message}`,
+      );
+    }
   }
 
   async createQuickSale(user: AuthenticatedUser, dto: CreateQuickSaleDto) {

@@ -35,6 +35,8 @@ describe("SalesService", () => {
     sale: null,
     lead: {
       id: leadId,
+      name: "Cliente Teste",
+      phone: "5512999999999",
       crm_pipeline_id: null,
       crm_stage_id: null,
       confirmation_status: ConfirmationStatus.pending,
@@ -95,6 +97,14 @@ describe("SalesService", () => {
       lead: {
         update: jest.fn(),
       },
+      user: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: vendorId,
+          name: "Vendedor Teste",
+          rating_token: "rating-token-vendedor",
+        }),
+        update: jest.fn(),
+      },
       crmStage: {
         findFirst: jest.fn(),
       },
@@ -111,6 +121,12 @@ describe("SalesService", () => {
       scoreEvents as any,
       { emitLeadUpdated: jest.fn() } as any,
       { markConversion: jest.fn().mockResolvedValue(null) } as any,
+      {
+        sendClientWhatsappMessage: jest.fn().mockResolvedValue("wamid-1"),
+      } as any,
+      {
+        get: jest.fn().mockReturnValue("https://gpdevendas.app"),
+      } as any,
     );
   });
 
@@ -240,6 +256,31 @@ describe("SalesService", () => {
     );
     expect(result).toEqual(
       expect.objectContaining({ id: saleId, value: "120000.00" }),
+    );
+  });
+
+  it("envia ao comprador o link de avaliacao do vendedor depois da venda", async () => {
+    prisma.appointment.findUnique.mockResolvedValue(baseAppointment);
+    prisma.salesTeamMember.findFirst.mockResolvedValue({
+      team_id: teamId,
+      user: { client_id: clientId },
+    });
+    prisma.sale.create.mockResolvedValue(sale);
+
+    await service.create(user as any, {
+      appointment_id: appointmentId,
+      type: SaleType.NOVO,
+      product: "Onix",
+      value: "120000",
+    });
+
+    const metaService = (service as any).metaService;
+    expect(metaService.sendClientWhatsappMessage).toHaveBeenCalledWith(
+      clientId,
+      "5512999999999",
+      expect.stringContaining(
+        "https://gpdevendas.app/avaliacao/rating-token-vendedor",
+      ),
     );
   });
 
