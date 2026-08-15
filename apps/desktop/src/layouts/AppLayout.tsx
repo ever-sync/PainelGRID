@@ -967,7 +967,7 @@ export function AppLayout({ user, onLogout }: AppLayoutProps) {
     type: "success" | "error";
     text: string;
   } | null>(null);
-  const [checkinLoading, setCheckinLoading] = useState(false);
+  const [, setCheckinLoading] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
   const [vendorQuickActionPermissions, setVendorQuickActionPermissions] =
     useState({

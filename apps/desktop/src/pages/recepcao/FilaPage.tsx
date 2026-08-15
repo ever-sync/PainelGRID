@@ -502,83 +502,84 @@ export function FilaPage() {
               </div>
             ) : (
               <>
-              <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-                {QUEUE_CATEGORIES.map((category) => {
-                  const count = waitingQueue.filter(
-                    (lead) => (lead.queue_category ?? "novo") === category.value,
-                  ).length;
-                  return (
-                    <button
-                      key={category.value}
-                      type="button"
-                      onClick={() => setActiveClientCategory(category.value)}
-                      className={`shrink-0 rounded-xl border px-4 py-2 text-xs font-black uppercase tracking-wide transition-colors ${
-                        activeClientCategory === category.value
-                          ? "border-[#ff3159] bg-[#ff0038] text-white"
-                          : "border-white/10 bg-white/[0.035] text-zinc-400 hover:border-white/20"
-                      }`}
-                    >
-                      {category.label} · {count}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="grid gap-3 sm:gap-4 xl:grid-cols-2">
-                <QueueSection
-                  title={`Fila ${QUEUE_CATEGORIES.find((item) => item.value === activeClientCategory)?.label ?? "Novo"}`}
-                  subtitle="Clientes aguardando atendimento nesta categoria"
-                  icon={<Clock size={19} />}
-                  count={categoryQueue.length}
-                  tone="waiting"
-                >
-                  {categoryQueue.length ? (
-                    categoryQueue.map((lead, index) => (
-                      <QueueLeadRow
-                        key={lead.id}
-                        lead={lead}
-                        position={index + 1}
-                        state="waiting"
-                      />
-                    ))
-                  ) : (
-                    <QueueEmpty icon={<Flag size={28} />}>
-                      Ninguém aguardando nesta categoria.
-                    </QueueEmpty>
-                  )}
-                </QueueSection>
+                <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+                  {QUEUE_CATEGORIES.map((category) => {
+                    const count = waitingQueue.filter(
+                      (lead) =>
+                        (lead.queue_category ?? "novo") === category.value,
+                    ).length;
+                    return (
+                      <button
+                        key={category.value}
+                        type="button"
+                        onClick={() => setActiveClientCategory(category.value)}
+                        className={`shrink-0 rounded-xl border px-4 py-2 text-xs font-black uppercase tracking-wide transition-colors ${
+                          activeClientCategory === category.value
+                            ? "border-[#ff3159] bg-[#ff0038] text-white"
+                            : "border-white/10 bg-white/[0.035] text-zinc-400 hover:border-white/20"
+                        }`}
+                      >
+                        {category.label} · {count}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="grid gap-3 sm:gap-4 xl:grid-cols-2">
+                  <QueueSection
+                    title={`Fila ${QUEUE_CATEGORIES.find((item) => item.value === activeClientCategory)?.label ?? "Novo"}`}
+                    subtitle="Clientes aguardando atendimento nesta categoria"
+                    icon={<Clock size={19} />}
+                    count={categoryQueue.length}
+                    tone="waiting"
+                  >
+                    {categoryQueue.length ? (
+                      categoryQueue.map((lead, index) => (
+                        <QueueLeadRow
+                          key={lead.id}
+                          lead={lead}
+                          position={index + 1}
+                          state="waiting"
+                        />
+                      ))
+                    ) : (
+                      <QueueEmpty icon={<Flag size={28} />}>
+                        Ninguém aguardando nesta categoria.
+                      </QueueEmpty>
+                    )}
+                  </QueueSection>
 
-                <QueueSection
-                  title="Em atendimento"
-                  subtitle="Clientes com vendedor"
-                  icon={<UserCheck size={19} />}
-                  count={queueTotals.active}
-                  tone="active"
-                >
-                  {activeService.length ? (
-                    activeService.map((lead) => (
-                      <QueueLeadRow
-                        key={lead.id}
-                        lead={lead}
-                        state="active"
-                        onFinish={
-                          user.role === "recepcao"
-                            ? openFinishAttendance
-                            : undefined
-                        }
-                        onChangeVendor={
-                          user.role === "recepcao"
-                            ? openChangeVendor
-                            : undefined
-                        }
-                      />
-                    ))
-                  ) : (
-                    <QueueEmpty icon={<UserCheck size={28} />}>
-                      Nenhum atendimento iniciado.
-                    </QueueEmpty>
-                  )}
-                </QueueSection>
-              </div>
+                  <QueueSection
+                    title="Em atendimento"
+                    subtitle="Clientes com vendedor"
+                    icon={<UserCheck size={19} />}
+                    count={queueTotals.active}
+                    tone="active"
+                  >
+                    {activeService.length ? (
+                      activeService.map((lead) => (
+                        <QueueLeadRow
+                          key={lead.id}
+                          lead={lead}
+                          state="active"
+                          onFinish={
+                            user.role === "recepcao"
+                              ? openFinishAttendance
+                              : undefined
+                          }
+                          onChangeVendor={
+                            user.role === "recepcao"
+                              ? openChangeVendor
+                              : undefined
+                          }
+                        />
+                      ))
+                    ) : (
+                      <QueueEmpty icon={<UserCheck size={28} />}>
+                        Nenhum atendimento iniciado.
+                      </QueueEmpty>
+                    )}
+                  </QueueSection>
+                </div>
               </>
             )}
             {queueHasNextPage && !loading ? (

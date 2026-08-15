@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowLeft,
+  ArrowRight,
   Check,
   CheckCircle2,
   Plus,
@@ -92,9 +94,22 @@ export function QuickSaleModal({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
 
   const selectedEvent = events.find((event) => event.id === eventId);
   const creatingLead = leadId === NEW_LEAD;
+  const stepOneComplete = Boolean(
+    clientId &&
+    eventId &&
+    vendorId &&
+    leadId &&
+    (!creatingLead || (leadName.trim() && leadPhone.trim())),
+  );
+  const stepTwoComplete = Boolean(
+    vehicleId &&
+    (vehicleId !== NEW_VEHICLE ||
+      (newVehicleBrand.trim() && newVehicleModel.trim())),
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -103,6 +118,7 @@ export function QuickSaleModal({
     setLoading(true);
     setMessage("");
     setSuccess(false);
+    setStep(1);
     const clientsRequest =
       (user.role === "recepcao" || user.role === "cliente") && user.client_id
         ? getClient(user.client_id, token).then((client) => [client])
@@ -418,324 +434,388 @@ export function QuickSaleModal({
           </div>
         </div>
 
+        {!success ? (
+          <div
+            className="grid grid-cols-3 gap-2"
+            aria-label={`Etapa ${step} de 3`}
+          >
+            {["Cliente", "Veículo", "Venda"].map((label, index) => {
+              const number = (index + 1) as 1 | 2 | 3;
+              const active = step === number;
+              const complete = step > number;
+              return (
+                <div key={label} className="min-w-0">
+                  <div
+                    className={`mb-2 h-1.5 rounded-full transition-colors ${
+                      active || complete ? "bg-[#E51838]" : "bg-muted"
+                    }`}
+                  />
+                  <p
+                    className={`truncate text-center text-xs font-bold ${
+                      active ? "text-[#E51838]" : "text-muted-foreground"
+                    }`}
+                  >
+                    {number}. {label}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
         {message && (
           <Notice tone={success ? "success" : "error"}>{message}</Notice>
         )}
 
         {!success && (
           <>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Select
-                label="Empresa / cliente"
-                value={clientId}
-                onValueChange={setClientId}
-                options={clients.map((client) => ({
-                  value: client.id,
-                  label: client.company_name,
-                }))}
-                placeholder="Selecione a empresa"
-                disabled={loading}
-              />
-              <Select
-                label="Evento"
-                value={eventId}
-                onValueChange={setEventId}
-                options={eventOptions}
-                placeholder="Selecione o evento"
-                disabled={loading || !clientId}
-              />
-              <Select
-                label="Vendedor"
-                value={vendorId}
-                onValueChange={setVendorId}
-                options={vendors.map((vendor) => ({
-                  value: vendor.id,
-                  label: vendor.name,
-                }))}
-                placeholder="Selecione o vendedor"
-                disabled={loading || !clientId}
-              />
-              <div className="relative flex flex-col gap-1">
-                <label
-                  htmlFor="quick-sale-buyer"
-                  className="text-sm font-medium text-foreground"
-                >
-                  Comprador
-                </label>
-                <div className="relative">
-                  <Search
-                    size={16}
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            {step === 1 ? (
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Select
+                    label="Empresa / cliente"
+                    value={clientId}
+                    onValueChange={setClientId}
+                    options={clients.map((client) => ({
+                      value: client.id,
+                      label: client.company_name,
+                    }))}
+                    placeholder="Selecione a empresa"
+                    disabled={loading}
                   />
-                  <input
-                    id="quick-sale-buyer"
-                    value={buyerSearch}
+                  <Select
+                    label="Evento"
+                    value={eventId}
+                    onValueChange={setEventId}
+                    options={eventOptions}
+                    placeholder="Selecione o evento"
                     disabled={loading || !clientId}
-                    autoComplete="off"
-                    placeholder="Digite o nome ou telefone"
-                    onFocus={() => setBuyerResultsOpen(true)}
-                    onBlur={() =>
-                      window.setTimeout(() => setBuyerResultsOpen(false), 150)
-                    }
-                    onChange={(event) => {
-                      setBuyerSearch(event.target.value);
-                      setLeadId("");
-                      setBuyerResultsOpen(true);
-                    }}
-                    className="h-9 w-full rounded-2xl border border-input bg-background py-2 pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
                   />
+                  <Select
+                    label="Vendedor"
+                    value={vendorId}
+                    onValueChange={setVendorId}
+                    options={vendors.map((vendor) => ({
+                      value: vendor.id,
+                      label: vendor.name,
+                    }))}
+                    placeholder="Selecione o vendedor"
+                    disabled={loading || !clientId}
+                  />
+                  <div className="relative flex flex-col gap-1">
+                    <label
+                      htmlFor="quick-sale-buyer"
+                      className="text-sm font-medium text-foreground"
+                    >
+                      Comprador
+                    </label>
+                    <div className="relative">
+                      <Search
+                        size={16}
+                        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                      />
+                      <input
+                        id="quick-sale-buyer"
+                        value={buyerSearch}
+                        disabled={loading || !clientId}
+                        autoComplete="off"
+                        placeholder="Digite o nome ou telefone"
+                        onFocus={() => setBuyerResultsOpen(true)}
+                        onBlur={() =>
+                          window.setTimeout(
+                            () => setBuyerResultsOpen(false),
+                            150,
+                          )
+                        }
+                        onChange={(event) => {
+                          setBuyerSearch(event.target.value);
+                          setLeadId("");
+                          setBuyerResultsOpen(true);
+                        }}
+                        className="h-9 w-full rounded-2xl border border-input bg-background py-2 pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                    </div>
+
+                    {buyerResultsOpen && !loading && clientId && (
+                      <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-y-auto rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-2xl">
+                        <button
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => {
+                            setLeadId(NEW_LEAD);
+                            setBuyerSearch("");
+                            setBuyerResultsOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-[#E51838] transition hover:bg-muted"
+                        >
+                          <UserPlus size={16} />
+                          Cadastrar novo comprador
+                        </button>
+
+                        {sortedBuyerResults.map((lead) => (
+                          <button
+                            key={lead.id}
+                            type="button"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => {
+                              setLeadId(lead.id);
+                              setBuyerSearch(
+                                `${lead.name}${lead.phone ? ` · ${lead.phone}` : ""}`,
+                              );
+                              setBuyerResultsOpen(false);
+                            }}
+                            className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition hover:bg-muted"
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate font-semibold">
+                                {lead.name}
+                              </span>
+                              <span className="block truncate text-xs text-muted-foreground">
+                                {lead.phone ||
+                                  lead.email ||
+                                  "Sem contato informado"}
+                              </span>
+                            </span>
+                            {leadId === lead.id && (
+                              <Check
+                                size={16}
+                                className="shrink-0 text-[#E51838]"
+                              />
+                            )}
+                          </button>
+                        ))}
+
+                        {sortedBuyerResults.length === 0 && (
+                          <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+                            {buyersLoading
+                              ? "Buscando compradores..."
+                              : "Nenhum comprador encontrado."}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {buyerResultsOpen && !loading && clientId && (
-                  <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-72 overflow-y-auto rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-2xl">
-                    <button
-                      type="button"
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => {
-                        setLeadId(NEW_LEAD);
-                        setBuyerSearch("");
-                        setBuyerResultsOpen(false);
-                      }}
-                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-[#E51838] transition hover:bg-muted"
-                    >
-                      <UserPlus size={16} />
-                      Cadastrar novo comprador
-                    </button>
-
-                    {sortedBuyerResults.map((lead) => (
-                      <button
-                        key={lead.id}
-                        type="button"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => {
-                          setLeadId(lead.id);
-                          setBuyerSearch(
-                            `${lead.name}${lead.phone ? ` · ${lead.phone}` : ""}`,
-                          );
-                          setBuyerResultsOpen(false);
-                        }}
-                        className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition hover:bg-muted"
-                      >
-                        <span className="min-w-0">
-                          <span className="block truncate font-semibold">
-                            {lead.name}
-                          </span>
-                          <span className="block truncate text-xs text-muted-foreground">
-                            {lead.phone ||
-                              lead.email ||
-                              "Sem contato informado"}
-                          </span>
-                        </span>
-                        {leadId === lead.id && (
-                          <Check
-                            size={16}
-                            className="shrink-0 text-[#E51838]"
-                          />
-                        )}
-                      </button>
-                    ))}
-
-                    {sortedBuyerResults.length === 0 && (
-                      <p className="px-3 py-4 text-center text-sm text-muted-foreground">
-                        {buyersLoading
-                          ? "Buscando compradores..."
-                          : "Nenhum comprador encontrado."}
-                      </p>
-                    )}
+                {creatingLead && (
+                  <div className="grid gap-4 rounded-2xl border border-border bg-muted/30 p-4 md:grid-cols-3">
+                    <Input
+                      label="Nome do comprador"
+                      value={leadName}
+                      onChange={(event) => setLeadName(event.target.value)}
+                    />
+                    <Input
+                      label="Telefone"
+                      value={leadPhone}
+                      onChange={(event) => setLeadPhone(event.target.value)}
+                    />
+                    <Input
+                      label="E-mail (opcional)"
+                      type="email"
+                      value={leadEmail}
+                      onChange={(event) => setLeadEmail(event.target.value)}
+                    />
                   </div>
                 )}
               </div>
-            </div>
+            ) : null}
 
-            {creatingLead && (
-              <div className="grid gap-4 rounded-2xl border border-border bg-muted/30 p-4 md:grid-cols-3">
-                <Input
-                  label="Nome do comprador"
-                  value={leadName}
-                  onChange={(event) => setLeadName(event.target.value)}
-                />
-                <Input
-                  label="Telefone"
-                  value={leadPhone}
-                  onChange={(event) => setLeadPhone(event.target.value)}
-                />
-                <Input
-                  label="E-mail (opcional)"
-                  type="email"
-                  value={leadEmail}
-                  onChange={(event) => setLeadEmail(event.target.value)}
-                />
-              </div>
-            )}
-
-            <section className="space-y-3 rounded-2xl border border-border bg-muted/20 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-bold text-foreground">Veículo</p>
-                  <p className="text-xs text-muted-foreground">
-                    Busque pelo nome, marca ou modelo e clique para selecionar.
-                  </p>
+            {step === 2 ? (
+              <section className="space-y-3 rounded-2xl border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-foreground">Veículo</p>
+                    <p className="text-xs text-muted-foreground">
+                      Busque pelo nome, marca ou modelo e clique para
+                      selecionar.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-background px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                    {vehiclesLoading
+                      ? "Buscando..."
+                      : `${filteredVehicles.length} encontrado(s)`}
+                  </span>
                 </div>
-                <span className="rounded-full bg-background px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                  {vehiclesLoading
-                    ? "Buscando..."
-                    : `${filteredVehicles.length} encontrado(s)`}
-                </span>
-              </div>
-              <Input
-                label="Buscar veículo"
-                value={vehicleSearch}
-                onChange={(event) => setVehicleSearch(event.target.value)}
-                placeholder="Ex.: Nivus, T-Cross, Volkswagen..."
-                icon={<Search size={16} />}
-                disabled={loading || !clientId}
-              />
-              <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
-                {filteredVehicles.map((vehicle) => {
-                  const selected = vehicleId === vehicle.id;
-                  return (
-                    <button
-                      key={vehicle.id}
-                      type="button"
-                      onClick={() => {
-                        setVehicleId(vehicle.id);
-                        setNewVehicleBrand("");
-                        setNewVehicleModel("");
-                        setNewVehicleYearOrKm("");
-                        if (!value && Number(vehicle.price) > 0) {
-                          setValue(vehicle.price);
+                <Input
+                  label="Buscar veículo"
+                  value={vehicleSearch}
+                  onChange={(event) => setVehicleSearch(event.target.value)}
+                  placeholder="Ex.: Nivus, T-Cross, Volkswagen..."
+                  icon={<Search size={16} />}
+                  disabled={loading || !clientId}
+                />
+                <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
+                  {filteredVehicles.map((vehicle) => {
+                    const selected = vehicleId === vehicle.id;
+                    return (
+                      <button
+                        key={vehicle.id}
+                        type="button"
+                        onClick={() => {
+                          setVehicleId(vehicle.id);
+                          setNewVehicleBrand("");
+                          setNewVehicleModel("");
+                          setNewVehicleYearOrKm("");
+                          if (!value && Number(vehicle.price) > 0) {
+                            setValue(vehicle.price);
+                          }
+                        }}
+                        className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-3 text-left transition-colors ${
+                          selected
+                            ? "border-[#E51838] bg-[#E51838]/10"
+                            : "border-border bg-background hover:border-[#E51838]/40"
+                        }`}
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-bold text-foreground">
+                            {vehicle.brand} {vehicle.model}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {vehicle.year_or_km || "Ano a definir"}
+                            {Number(vehicle.price) > 0
+                              ? ` · R$ ${Number(vehicle.price).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                              : ""}
+                          </span>
+                        </span>
+                        {selected ? (
+                          <CheckCircle2
+                            size={19}
+                            className="shrink-0 text-[#E51838]"
+                          />
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                  {!vehiclesLoading && filteredVehicles.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
+                      Nenhum veículo encontrado com esta busca.
+                    </p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setVehicleId(NEW_VEHICLE)}
+                  className={`flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-bold transition-colors ${
+                    vehicleId === NEW_VEHICLE
+                      ? "border-[#E51838] bg-[#E51838]/10 text-[#E51838]"
+                      : "border-dashed border-[#E51838]/40 text-[#E51838] hover:bg-[#E51838]/5"
+                  }`}
+                >
+                  <Plus size={16} />
+                  Cadastrar carro que não está na lista
+                </button>
+                {vehicleId === NEW_VEHICLE ? (
+                  <div className="rounded-2xl border border-[#E51838]/20 bg-[#E51838]/5 p-4">
+                    <div className="mb-3 flex items-center gap-2 text-sm font-bold text-[#E51838]">
+                      <Plus size={16} />
+                      Cadastrar novo carro na vitrine
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <Input
+                        label="Marca"
+                        value={newVehicleBrand}
+                        onChange={(event) =>
+                          setNewVehicleBrand(event.target.value)
                         }
-                      }}
-                      className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-3 text-left transition-colors ${
-                        selected
-                          ? "border-[#E51838] bg-[#E51838]/10"
-                          : "border-border bg-background hover:border-[#E51838]/40"
-                      }`}
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-bold text-foreground">
-                          {vehicle.brand} {vehicle.model}
-                        </span>
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {vehicle.year_or_km || "Ano a definir"}
-                          {Number(vehicle.price) > 0
-                            ? ` · R$ ${Number(vehicle.price).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
-                            : ""}
-                        </span>
-                      </span>
-                      {selected ? (
-                        <CheckCircle2
-                          size={19}
-                          className="shrink-0 text-[#E51838]"
-                        />
-                      ) : null}
-                    </button>
-                  );
-                })}
-                {!vehiclesLoading && filteredVehicles.length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
-                    Nenhum veículo encontrado com esta busca.
-                  </p>
+                        placeholder="Ex.: Volkswagen"
+                      />
+                      <Input
+                        label="Modelo"
+                        value={newVehicleModel}
+                        onChange={(event) =>
+                          setNewVehicleModel(event.target.value)
+                        }
+                        placeholder="Ex.: T-Cross Highline"
+                      />
+                      <Input
+                        label="Ano / KM (opcional)"
+                        value={newVehicleYearOrKm}
+                        onChange={(event) =>
+                          setNewVehicleYearOrKm(event.target.value)
+                        }
+                        placeholder="Ex.: 2026 / 0 km"
+                      />
+                    </div>
+                  </div>
                 ) : null}
-              </div>
-              <button
-                type="button"
-                onClick={() => setVehicleId(NEW_VEHICLE)}
-                className={`flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-bold transition-colors ${
-                  vehicleId === NEW_VEHICLE
-                    ? "border-[#E51838] bg-[#E51838]/10 text-[#E51838]"
-                    : "border-dashed border-[#E51838]/40 text-[#E51838] hover:bg-[#E51838]/5"
-                }`}
-              >
-                <Plus size={16} />
-                Cadastrar carro que não está na lista
-              </button>
-              {vehicleId === NEW_VEHICLE ? (
-                <div className="rounded-2xl border border-[#E51838]/20 bg-[#E51838]/5 p-4">
-                  <div className="mb-3 flex items-center gap-2 text-sm font-bold text-[#E51838]">
-                    <Plus size={16} />
-                    Cadastrar novo carro na vitrine
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <Input
-                      label="Marca"
-                      value={newVehicleBrand}
-                      onChange={(event) =>
-                        setNewVehicleBrand(event.target.value)
-                      }
-                      placeholder="Ex.: Volkswagen"
-                    />
-                    <Input
-                      label="Modelo"
-                      value={newVehicleModel}
-                      onChange={(event) =>
-                        setNewVehicleModel(event.target.value)
-                      }
-                      placeholder="Ex.: T-Cross Highline"
-                    />
-                    <Input
-                      label="Ano / KM (opcional)"
-                      value={newVehicleYearOrKm}
-                      onChange={(event) =>
-                        setNewVehicleYearOrKm(event.target.value)
-                      }
-                      placeholder="Ex.: 2026 / 0 km"
-                    />
-                  </div>
-                </div>
-              ) : null}
-            </section>
+              </section>
+            ) : null}
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <Select
-                label="Tipo da venda"
-                value={saleType}
-                onValueChange={(next) => setSaleType(next as SaleType)}
-                options={[
-                  { value: "NOVO", label: "Novo" },
-                  { value: "SEMINOVO", label: "Seminovo" },
-                  { value: "VENDA_DIRETA", label: "Venda direta" },
-                  { value: "PCD", label: "PCD" },
-                ]}
-              />
-              <Input
-                label="Valor do carro"
-                value={value}
-                onChange={(event) => setValue(event.target.value)}
-                placeholder="R$ 120.000,00"
-                inputMode="decimal"
-              />
-              <Input
-                label="Data da venda"
-                type="datetime-local"
-                value={soldAt}
-                onChange={(event) => setSoldAt(event.target.value)}
-              />
-              <Input
-                label="Número do pedido"
-                value={orderNumber}
-                onChange={(event) => setOrderNumber(event.target.value)}
-              />
-              {selectedEvent?.require_wristband && (
-                <Input
-                  label="Número da pulseira"
-                  value={wristband}
-                  onChange={(event) => setWristband(event.target.value)}
+            {step === 3 ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <Select
+                  label="Tipo da venda"
+                  value={saleType}
+                  onValueChange={(next) => setSaleType(next as SaleType)}
+                  options={[
+                    { value: "NOVO", label: "Novo" },
+                    { value: "SEMINOVO", label: "Seminovo" },
+                    { value: "VENDA_DIRETA", label: "Venda direta" },
+                    { value: "PCD", label: "PCD" },
+                  ]}
                 />
-              )}
-            </div>
+                <Input
+                  label="Valor do carro"
+                  value={value}
+                  onChange={(event) => setValue(event.target.value)}
+                  placeholder="R$ 120.000,00"
+                  inputMode="decimal"
+                />
+                <Input
+                  label="Data da venda"
+                  type="datetime-local"
+                  value={soldAt}
+                  onChange={(event) => setSoldAt(event.target.value)}
+                />
+                <Input
+                  label="Número do pedido"
+                  value={orderNumber}
+                  onChange={(event) => setOrderNumber(event.target.value)}
+                />
+                {selectedEvent?.require_wristband && (
+                  <Input
+                    label="Número da pulseira"
+                    value={wristband}
+                    onChange={(event) => setWristband(event.target.value)}
+                  />
+                )}
+              </div>
+            ) : null}
 
-            <div className="flex justify-end gap-3 border-t border-border pt-4">
-              <Button variant="secondary" onClick={onClose}>
-                Cancelar
-              </Button>
+            <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
               <Button
-                loading={saving}
-                icon={<Plus size={16} />}
-                onClick={() => void submit()}
+                variant="secondary"
+                icon={step > 1 ? <ArrowLeft size={16} /> : undefined}
+                onClick={() => {
+                  if (step === 1) onClose();
+                  else setStep((step - 1) as 1 | 2);
+                }}
               >
-                Registrar venda
+                {step === 1 ? "Cancelar" : "Voltar"}
               </Button>
+              {step < 3 ? (
+                <Button
+                  disabled={
+                    (step === 1 && !stepOneComplete) ||
+                    (step === 2 && !stepTwoComplete)
+                  }
+                  icon={<ArrowRight size={16} />}
+                  onClick={() => {
+                    setMessage("");
+                    setStep((step + 1) as 2 | 3);
+                  }}
+                >
+                  Continuar
+                </Button>
+              ) : (
+                <Button
+                  loading={saving}
+                  icon={<Plus size={16} />}
+                  onClick={() => void submit()}
+                >
+                  Registrar venda
+                </Button>
+              )}
             </div>
           </>
         )}

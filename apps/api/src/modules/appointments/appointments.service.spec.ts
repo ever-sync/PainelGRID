@@ -253,7 +253,7 @@ describe("AppointmentsService", () => {
     );
   });
 
-  it("ao criar agendamento por vendedor, move para PRESENCA_AGENDADA e nao altera confirmation_status", async () => {
+  it("ao criar agendamento por vendedor, move para PRE_AGENDADO e nao altera confirmation_status", async () => {
     prisma.lead.findUnique.mockResolvedValue(lead);
     prisma.event.findUnique.mockResolvedValue(event);
     prisma.eventParticipant.findMany.mockResolvedValue([
@@ -296,7 +296,7 @@ describe("AppointmentsService", () => {
     expect(prisma.crmStage.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          code: "2222222222224222_PRESENCA_AGENDADA",
+          code: "2222222222224222_PRE_AGENDADO",
         }),
       }),
     );

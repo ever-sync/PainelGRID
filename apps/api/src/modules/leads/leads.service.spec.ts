@@ -378,6 +378,7 @@ describe("LeadsService", () => {
           attendance_started_at: null,
           queue_state: "general_waiting",
           queue_origin: "rotation",
+          queue_category: "novo",
         },
       ],
       page_info: {
@@ -393,17 +394,27 @@ describe("LeadsService", () => {
     });
     expect(prisma.lead.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {
+        where: expect.objectContaining({
           client_id: clientId,
           event_interest_id: eventId,
           confirmation_status: ConfirmationStatus.checked_in,
           deleted_at: null,
-        },
+          confirmation_date: expect.objectContaining({
+            gte: expect.any(Date),
+            lt: expect.any(Date),
+          }),
+        }),
         select: {
           id: true,
           name: true,
           assigned_vendor_id: true,
-          assigned_vendor: { select: { name: true } },
+          assigned_vendor: {
+            select: {
+              name: true,
+              vendor_category: true,
+              vendor_categories: true,
+            },
+          },
           vendor_attendances: {
             where: { status: "accepted" },
             select: { id: true, accepted_at: true },
