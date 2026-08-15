@@ -54,7 +54,7 @@ import { Notice } from "../../components/ui/Notice";
 import { Select } from "../../components/ui/Select";
 import { Tabs } from "../../components/ui/Tabs";
 import { Drawer, Modal } from "../../components/ui/Modal";
-import type { Client, Event, Lead } from "../../types";
+import type { Client, Event, Lead, VendorCategory } from "../../types";
 import { readStoredSession } from "../../services/auth";
 import { listClients, mapApiClientToClient } from "../../services/clients";
 import { listLeadHistory, type ApiCrmHistoryItem } from "../../services/crm";
@@ -99,7 +99,8 @@ import type { AppOutletContext } from "../../layouts/AppLayout";
 import { useOutletContext } from "react-router-dom";
 import type { ConfirmationStatus, LeadSource } from "../../types";
 
-type EventDetailTab = "dados" | "leads" | "vendas" | "time" | "configuracoes";
+type EventDetailTab =
+  "dados" | "leads" | "vendas" | "time" | "fila" | "configuracoes";
 type LeadDrawerTab = "historico" | "dados";
 type LeadDrawerMode = "view" | "edit";
 
@@ -127,6 +128,7 @@ const EVENT_TABS: Array<{
   { id: "leads", label: "Leads", icon: <ArrowUpRight size={14} /> },
   { id: "vendas", label: "Vendas", icon: <ShoppingCart size={14} /> },
   { id: "time", label: "Time", icon: <Users size={14} /> },
+  { id: "fila", label: "Fila", icon: <ChevronRight size={14} /> },
   { id: "configuracoes", label: "Configurações", icon: <Settings size={14} /> },
 ];
 
@@ -145,6 +147,15 @@ const FIXED_TEAMS: Array<{ name: string; logoUrl: string }> = [
   { name: "Silver Volt", logoUrl: "/team-logos/silver-volt.png" },
   { name: "Veloce Union", logoUrl: "/team-logos/veloce-union.png" },
 ];
+
+const EVENT_QUEUE_CATEGORIES: Array<{ value: VendorCategory; label: string }> =
+  [
+    { value: "novo", label: "Novo" },
+    { value: "semininovo", label: "Seminovo" },
+    { value: "pdc", label: "PCD" },
+    { value: "consorcio", label: "Venda direta" },
+    { value: "assinatura", label: "Assinatura" },
+  ];
 
 const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
   facebook_ads: "Facebook Ads",
@@ -358,6 +369,7 @@ export function EventDetailPage() {
   const [leadHistoryLoading, setLeadHistoryLoading] = useState(false);
   const [exportingLeads, setExportingLeads] = useState(false);
   const [activeTab, setActiveTab] = useState<EventDetailTab>("dados");
+  const [queueCategory, setQueueCategory] = useState<VendorCategory>("novo");
   const [refreshing, setRefreshing] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsDeleting, setSettingsDeleting] = useState(false);
@@ -688,6 +700,33 @@ export function EventDetailPage() {
   const availableVendors = useMemo(
     () => staff.filter((member) => !assignedVendorIds.has(member.id)),
     [assignedVendorIds, staff],
+  );
+  const categoryQueueTeams = useMemo(
+    () =>
+      teams
+        .map((team) => ({
+          ...team,
+          members: team.members
+            .filter((member) => {
+              const categories = member.user.vendor_categories?.length
+                ? member.user.vendor_categories
+                : member.user.vendor_category
+                  ? [member.user.vendor_category]
+                  : [];
+              return categories.includes(queueCategory);
+            })
+            .sort(
+              (a, b) =>
+                (a.queue_positions?.[queueCategory] ??
+                  a.queue_position ??
+                  Number.MAX_SAFE_INTEGER) -
+                (b.queue_positions?.[queueCategory] ??
+                  b.queue_position ??
+                  Number.MAX_SAFE_INTEGER),
+            ),
+        }))
+        .filter((team) => team.members.length > 0),
+    [queueCategory, teams],
   );
   const participantClients = useMemo(
     () =>
@@ -1361,6 +1400,86 @@ export function EventDetailPage() {
     }
   }
 
+  async function handleReorderCategoryMember(
+    team: SalesTeam,
+    memberId: string,
+    direction: -1 | 1,
+  ) {
+    const fullTeam = teams.find((item) => item.id === team.id);
+    if (!fullTeam) return;
+    const categoryIndices = fullTeam.members
+      .map((member, index) => {
+        const categories = member.user.vendor_categories?.length
+          ? member.user.vendor_categories
+          : member.user.vendor_category
+            ? [member.user.vendor_category]
+            : [];
+        return categories.includes(queueCategory) ? index : -1;
+      })
+      .filter((index) => index >= 0);
+    const currentCategoryIndex = categoryIndices.findIndex(
+      (index) => fullTeam.members[index]?.user_id === memberId,
+    );
+    const nextCategoryIndex = currentCategoryIndex + direction;
+    if (
+      currentCategoryIndex < 0 ||
+      nextCategoryIndex < 0 ||
+      nextCategoryIndex >= categoryIndices.length
+    )
+      return;
+    const orderedCategoryMembers = categoryIndices.map(
+      (index) => fullTeam.members[index],
+    );
+    [
+      orderedCategoryMembers[currentCategoryIndex],
+      orderedCategoryMembers[nextCategoryIndex],
+    ] = [
+      orderedCategoryMembers[nextCategoryIndex],
+      orderedCategoryMembers[currentCategoryIndex],
+    ];
+    const categoryOrder = new Map(
+      orderedCategoryMembers.map((member, position) => [
+        member.user_id,
+        position,
+      ]),
+    );
+    const reordered = fullTeam.members.map((member) =>
+      categoryOrder.has(member.user_id)
+        ? {
+            ...member,
+            queue_positions: {
+              ...(member.queue_positions ?? {}),
+              [queueCategory]: categoryOrder.get(member.user_id)!,
+            },
+          }
+        : member,
+    );
+    const session = readStoredSession();
+    if (!session?.accessToken) return;
+    const previousTeams = teams;
+    setQueueSaving(`${team.id}:${memberId}`);
+    setTeams((current) =>
+      current.map((item) =>
+        item.id === team.id ? { ...item, members: reordered } : item,
+      ),
+    );
+    try {
+      await reorderTeamMembers(
+        session.accessToken,
+        team.id,
+        orderedCategoryMembers.map((member) => member.user_id),
+        queueCategory,
+      );
+    } catch (queueError) {
+      setTeams(previousTeams);
+      setSettingsError(
+        getErrorMessage(queueError, "Não foi possível salvar a ordem da fila."),
+      );
+    } finally {
+      setQueueSaving(null);
+    }
+  }
+
   function handleRemoveMember(team: SalesTeam, member: TeamMemberUser) {
     setEventDeleteAction({ kind: "member", team, member });
   }
@@ -1767,7 +1886,11 @@ export function EventDetailPage() {
       </Card>
 
       <Tabs
-        tabs={EVENT_TABS}
+        tabs={
+          user.role === "gestor"
+            ? EVENT_TABS
+            : EVENT_TABS.filter((tab) => tab.id !== "fila")
+        }
         active={activeTab}
         onChange={(tab) => setActiveTab(tab as EventDetailTab)}
       />
@@ -2656,6 +2779,147 @@ export function EventDetailPage() {
             </Card>
           )}
         </div>
+      )}
+
+      {activeTab === "fila" && user.role === "gestor" && (
+        <Card
+          className={clsx(
+            "rounded-[28px] border",
+            isDarkMode
+              ? "border-zinc-800 bg-[#111111]"
+              : "border-zinc-100 bg-white",
+          )}
+          padding="lg"
+        >
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+            <div>
+              <h3
+                className={clsx(
+                  "text-lg font-black tracking-tight",
+                  isDarkMode ? "text-zinc-100" : "text-zinc-950",
+                )}
+              >
+                Fila por categoria
+              </h3>
+              <p className="mt-1 text-sm text-zinc-500">
+                Reorganize a prioridade dos vendedores de cada categoria deste
+                evento.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {EVENT_QUEUE_CATEGORIES.map((category) => (
+                <button
+                  key={category.value}
+                  type="button"
+                  onClick={() => setQueueCategory(category.value)}
+                  className={clsx(
+                    "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+                    queueCategory === category.value
+                      ? "border-[#E51838] bg-[#E51838] text-white"
+                      : isDarkMode
+                        ? "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                        : "border-zinc-200 text-zinc-600 hover:bg-zinc-50",
+                  )}
+                >
+                  {category.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {categoryQueueTeams.length === 0 ? (
+            <div className="mt-8 rounded-2xl border border-dashed border-zinc-200 p-8 text-center text-sm text-zinc-500 dark:border-zinc-700">
+              Nenhum vendedor vinculado a esta categoria neste evento.
+            </div>
+          ) : (
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              {categoryQueueTeams.map((team) => (
+                <div
+                  key={team.id}
+                  className={clsx(
+                    "rounded-2xl border p-4",
+                    isDarkMode
+                      ? "border-zinc-800 bg-[#0b0b0b]"
+                      : "border-zinc-100 bg-zinc-50/50",
+                  )}
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <p
+                      className={clsx(
+                        "text-sm font-bold",
+                        isDarkMode ? "text-zinc-100" : "text-zinc-900",
+                      )}
+                    >
+                      {team.name}
+                    </p>
+                    <Badge variant="gray">
+                      {team.members.length} vendedores
+                    </Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {team.members.map((member, index) => (
+                      <div
+                        key={`${team.id}-${member.user_id}`}
+                        className={clsx(
+                          "flex items-center gap-3 rounded-xl border px-3 py-2.5",
+                          isDarkMode
+                            ? "border-zinc-800 bg-[#111111]"
+                            : "border-zinc-200 bg-white",
+                        )}
+                      >
+                        <span className="w-5 text-center text-xs font-bold text-zinc-400">
+                          {index + 1}
+                        </span>
+                        <span
+                          className={clsx(
+                            "min-w-0 flex-1 truncate text-sm font-semibold",
+                            isDarkMode ? "text-zinc-100" : "text-zinc-900",
+                          )}
+                        >
+                          {member.user.name}
+                        </span>
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            aria-label="Mover para cima"
+                            disabled={index === 0 || queueSaving !== null}
+                            onClick={() =>
+                              void handleReorderCategoryMember(
+                                team,
+                                member.user_id,
+                                -1,
+                              )
+                            }
+                            className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 disabled:opacity-30 dark:hover:bg-zinc-800"
+                          >
+                            <ChevronUp size={16} />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Mover para baixo"
+                            disabled={
+                              index === team.members.length - 1 ||
+                              queueSaving !== null
+                            }
+                            onClick={() =>
+                              void handleReorderCategoryMember(
+                                team,
+                                member.user_id,
+                                1,
+                              )
+                            }
+                            className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 disabled:opacity-30 dark:hover:bg-zinc-800"
+                          >
+                            <ChevronDown size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
       )}
 
       {activeTab === "time" && (

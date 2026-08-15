@@ -9,12 +9,15 @@ export type TeamMemberUser = {
   client_id?: string | null;
   is_active: boolean;
   avatar_url?: string | null;
+  vendor_category?: string | null;
+  vendor_categories?: string[];
 };
 
 export type TeamMember = {
   team_id: string;
   user_id: string;
   queue_position?: number | null;
+  queue_positions?: Record<string, number>;
   added_at: string;
   user: TeamMemberUser;
 };
@@ -89,13 +92,14 @@ export function reorderTeamMembers(
   token: string,
   teamId: string,
   userIds: string[],
+  category?: string,
 ) {
   return httpRequest<{ team_id: string; user_ids: string[] }>(
     `/sales-teams/${teamId}/members/order`,
     {
       method: "PATCH",
       token,
-      body: { user_ids: userIds },
+      body: { user_ids: userIds, ...(category ? { category } : {}) },
     },
   );
 }

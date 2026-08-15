@@ -308,6 +308,8 @@ export class SalesTeamsService {
                   client_id: true,
                   is_active: true,
                   avatar_url: true,
+                  vendor_category: true,
+                  vendor_categories: true,
                 },
               },
             },
@@ -340,6 +342,8 @@ export class SalesTeamsService {
                 client_id: true,
                 is_active: true,
                 avatar_url: true,
+                vendor_category: true,
+                vendor_categories: true,
               },
             },
           },
@@ -552,11 +556,11 @@ export class SalesTeamsService {
     await this.getTeamForAccess(user, teamId);
     const members = await this.prisma.salesTeamMember.findMany({
       where: { team_id: teamId },
-      select: { user_id: true },
+      select: { user_id: true, queue_positions: true },
     });
     const currentIds = new Set(members.map((member) => member.user_id));
     if (
-      dto.user_ids.length !== currentIds.size ||
+      (!dto.category && dto.user_ids.length !== currentIds.size) ||
       dto.user_ids.some((userId) => !currentIds.has(userId))
     ) {
       throw new BadRequestException(
@@ -564,13 +568,32 @@ export class SalesTeamsService {
       );
     }
 
+    const memberById = new Map(
+      members.map((member) => [member.user_id, member]),
+    );
     await this.prisma.$transaction(
-      dto.user_ids.map((userId, position) =>
-        this.prisma.salesTeamMember.update({
+      dto.user_ids.map((userId, position) => {
+        if (!dto.category) {
+          return this.prisma.salesTeamMember.update({
+            where: { team_id_user_id: { team_id: teamId, user_id: userId } },
+            data: { queue_position: position },
+          });
+        }
+        const current = memberById.get(userId)?.queue_positions;
+        return this.prisma.salesTeamMember.update({
           where: { team_id_user_id: { team_id: teamId, user_id: userId } },
-          data: { queue_position: position },
-        }),
-      ),
+          data: {
+            queue_positions: {
+              ...(current &&
+              typeof current === "object" &&
+              !Array.isArray(current)
+                ? current
+                : {}),
+              [dto.category]: position,
+            },
+          },
+        });
+      }),
     );
 
     return { team_id: teamId, user_ids: dto.user_ids };

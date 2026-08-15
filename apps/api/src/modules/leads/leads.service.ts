@@ -975,6 +975,14 @@ export class LeadsService {
 
     const page = Math.max(query.page ?? 1, 1);
     const take = Math.min(Math.max(query.take ?? 50, 1), 100);
+    const saoPauloDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+    const todayStart = new Date(`${saoPauloDate}T00:00:00-03:00`);
+    const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
 
     if (!event) {
       return {
@@ -995,6 +1003,7 @@ export class LeadsService {
       client_id: user.client_id,
       event_interest_id: event.id,
       confirmation_status: ConfirmationStatus.checked_in,
+      confirmation_date: { gte: todayStart, lt: tomorrowStart },
       deleted_at: null,
       ...(user.role === Role.VENDEDOR ? { assigned_vendor_id: user.sub } : {}),
     };
@@ -1038,7 +1047,13 @@ export class LeadsService {
           id: true,
           name: true,
           assigned_vendor_id: true,
-          assigned_vendor: { select: { name: true } },
+          assigned_vendor: {
+            select: {
+              name: true,
+              vendor_category: true,
+              vendor_categories: true,
+            },
+          },
           vendor_attendances: {
             where: { status: VendorAttendanceStatus.accepted },
             select: { id: true, accepted_at: true },
@@ -1072,12 +1087,26 @@ export class LeadsService {
             : lead.assigned_vendor_id
               ? "personal_waiting"
               : "general_waiting";
+          const vendorCategory =
+            assigned_vendor?.vendor_categories?.[0] ??
+            assigned_vendor?.vendor_category;
+          const queueCategory =
+            vendorCategory === "semininovo"
+              ? "seminovo"
+              : vendorCategory === "pdc"
+                ? "pcd"
+                : vendorCategory === "consorcio"
+                  ? "vd"
+                  : vendorCategory === "assinatura"
+                    ? "assinatura"
+                    : "novo";
           return {
             ...lead,
             assigned_vendor_name: assigned_vendor?.name ?? null,
             attendance_id: activeAttendance?.id ?? null,
             attendance_started_at: activeAttendance?.accepted_at ?? null,
             queue_state: queueState,
+            queue_category: queueCategory,
             queue_origin:
               queueState === "personal_waiting" ||
               (registered_by_id && registered_by_id === lead.assigned_vendor_id)
@@ -4916,6 +4945,7 @@ export class LeadsService {
           select: {
             team_id: true,
             queue_position: true,
+            queue_positions: true,
             team: { select: { name: true } },
           },
           orderBy: [
@@ -4930,13 +4960,22 @@ export class LeadsService {
         { id: "asc" },
       ],
     });
-    const orderedCandidates = [...candidates].sort(
-      (a, b) =>
-        (a.sales_team_memberships[0]?.queue_position ??
-          Number.MAX_SAFE_INTEGER) -
-          (b.sales_team_memberships[0]?.queue_position ??
-            Number.MAX_SAFE_INTEGER) || a.id.localeCompare(b.id),
-    );
+    const orderedCandidates = [...candidates].sort((a, b) => {
+      const categoryPosition = (candidate: (typeof candidates)[number]) => {
+        const positions = candidate.sales_team_memberships[0]?.queue_positions;
+        const value =
+          dto.category && positions && typeof positions === "object"
+            ? (positions as Record<string, unknown>)[dto.category]
+            : undefined;
+        return typeof value === "number"
+          ? value
+          : (candidate.sales_team_memberships[0]?.queue_position ??
+              Number.MAX_SAFE_INTEGER);
+      };
+      return (
+        categoryPosition(a) - categoryPosition(b) || a.id.localeCompare(b.id)
+      );
+    });
     const vendor = requestedVendorId
       ? candidates[0]
       : dto.category
