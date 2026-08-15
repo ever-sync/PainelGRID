@@ -1597,14 +1597,11 @@ export class LeadsService {
           team_id: vendorBinding?.teamId ?? null,
           notes: dto.notes?.trim() ?? null,
           birth_date: dto.birth_date ? new Date(dto.birth_date) : null,
-          facebook_lead_id:
-            historicalAttribution?.facebook_lead_id ?? null,
-          facebook_form_id:
-            historicalAttribution?.facebook_form_id ?? null,
+          facebook_lead_id: historicalAttribution?.facebook_lead_id ?? null,
+          facebook_form_id: historicalAttribution?.facebook_form_id ?? null,
           facebook_ad_id: historicalAttribution?.facebook_ad_id ?? null,
           facebook_ad_name: historicalAttribution?.facebook_ad_name ?? null,
-          facebook_ad_set_id:
-            historicalAttribution?.facebook_ad_set_id ?? null,
+          facebook_ad_set_id: historicalAttribution?.facebook_ad_set_id ?? null,
           facebook_ad_set_name:
             historicalAttribution?.facebook_ad_set_name ?? null,
           facebook_campaign_id:

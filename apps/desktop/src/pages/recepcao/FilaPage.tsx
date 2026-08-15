@@ -96,7 +96,8 @@ export function FilaPage() {
 
   const load = useCallback(async () => {
     const token = readStoredSession()?.accessToken;
-    const eventId = localStorage.getItem("reception:selected-event") ?? undefined;
+    const eventId =
+      localStorage.getItem("reception:selected-event") ?? undefined;
     if (!token || !clientId) {
       setError("Não foi possível identificar a empresa deste acesso.");
       setLoading(false);
@@ -147,7 +148,10 @@ export function FilaPage() {
     const refreshSelectedEvent = () => void load();
     window.addEventListener("reception-event-changed", refreshSelectedEvent);
     return () =>
-      window.removeEventListener("reception-event-changed", refreshSelectedEvent);
+      window.removeEventListener(
+        "reception-event-changed",
+        refreshSelectedEvent,
+      );
   }, [load]);
 
   useLeadRealtimeSync(clientId, load, {
@@ -161,7 +165,8 @@ export function FilaPage() {
 
     setLoadingMore(true);
     try {
-      const eventId = localStorage.getItem("reception:selected-event") ?? undefined;
+      const eventId =
+        localStorage.getItem("reception:selected-event") ?? undefined;
       const queue = await getReceptionQueue(token, {
         event_id: eventId,
         page: queuePage + 1,

@@ -29,7 +29,8 @@ describe("LeadsService", () => {
     crmStage: { findFirst: jest.Mock; findUnique: jest.Mock };
     crmPipeline: { findFirst: jest.Mock };
     crmHistory: { create: jest.Mock; deleteMany: jest.Mock };
-    event: { findFirst: jest.Mock };
+    event: { findFirst: jest.Mock; findUnique: jest.Mock };
+    client: { findUnique: jest.Mock };
     user: { findMany: jest.Mock; findFirst: jest.Mock; findUnique: jest.Mock };
     vendorAttendance: {
       findMany: jest.Mock;
@@ -114,7 +115,8 @@ describe("LeadsService", () => {
       crmStage: { findFirst: jest.fn(), findUnique: jest.fn() },
       crmPipeline: { findFirst: jest.fn() },
       crmHistory: { create: jest.fn(), deleteMany: jest.fn() },
-      event: { findFirst: jest.fn() },
+      event: { findFirst: jest.fn(), findUnique: jest.fn() },
+      client: { findUnique: jest.fn() },
       user: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
@@ -176,6 +178,10 @@ describe("LeadsService", () => {
     prisma.crmHistory.create.mockResolvedValue({ id: "hist-1" });
     prisma.crmHistory.deleteMany.mockResolvedValue({ count: 0 });
     prisma.event.findFirst.mockResolvedValue(null);
+    prisma.event.findUnique.mockResolvedValue({
+      allow_reception_quick_create: true,
+    });
+    prisma.client.findUnique.mockResolvedValue({ gestor_id: gestorId });
     prisma.user.findUnique.mockResolvedValue({ id: gestorId });
     prisma.user.findMany.mockResolvedValue([]);
     prisma.vendorAttendance.findMany.mockResolvedValue([]);
@@ -716,6 +722,75 @@ describe("LeadsService", () => {
           registered_by_id: vendorId,
           event_interest_id: eventId,
           team_id: teamId,
+        }),
+      }),
+    );
+  });
+
+  it("preserva atribuicao de campanha ao cadastrar telefone pela recepcao", async () => {
+    const sourceCreatedAt = new Date("2026-08-10T12:00:00.000Z");
+    prisma.lead.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        facebook_lead_id: "meta-lead-1",
+        facebook_form_id: "meta-form-1",
+        facebook_ad_id: "meta-ad-1",
+        facebook_ad_name: "Anuncio Nivus",
+        facebook_ad_set_id: "meta-adset-1",
+        facebook_ad_set_name: "Publico SJC",
+        facebook_campaign_id: "meta-campaign-1",
+        facebook_campaign_name: "Campanha GPV",
+        preferred_contact_channel: "whatsapp",
+        source_created_at: sourceCreatedAt,
+        source_payload: { id: "meta-lead-1" },
+        created_at: sourceCreatedAt,
+      });
+    prisma.event.findFirst.mockResolvedValue({ id: eventId });
+    prisma.lead.create.mockResolvedValue({
+      ...baseExistingLead,
+      id: "lead-recepcao",
+      client_id: clientId,
+      event_interest_id: eventId,
+      source: LeadSource.facebook_ads,
+      tags: ["discovery_source:passagem", "attribution:historical_phone_match"],
+    });
+
+    await service.create(
+      {
+        sub: "reception-1",
+        role: Role.RECEPCAO,
+        name: "Recepcao",
+        email: "recepcao@teste.com",
+        client_id: clientId,
+      },
+      {
+        client_id: clientId,
+        name: "Cliente de passagem",
+        phone: "11977777777",
+        source: LeadSource.manual,
+        event_interest_id: eventId,
+        tags: ["discovery_source:passagem"],
+      } as never,
+    );
+
+    expect(prisma.client.findUnique).toHaveBeenCalledWith({
+      where: { id: clientId },
+      select: { gestor_id: true },
+    });
+    expect(prisma.lead.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          source: LeadSource.facebook_ads,
+          registered_by_id: "reception-1",
+          facebook_campaign_id: "meta-campaign-1",
+          facebook_campaign_name: "Campanha GPV",
+          source_created_at: sourceCreatedAt,
+          source_payload: { id: "meta-lead-1" },
+          tags: [
+            "discovery_source:passagem",
+            "attribution:historical_phone_match",
+          ],
         }),
       }),
     );
