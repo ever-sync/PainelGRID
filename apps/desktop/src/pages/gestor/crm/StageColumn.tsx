@@ -65,13 +65,19 @@ export const LeadCard = memo(function LeadCard({
     : undefined;
   const navigate = useNavigate();
   const wasDraggingRef = useRef(false);
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({
-      id: lead.id,
-      // Em modo selecao, so cards selecionados arrastam (movem a selecao inteira).
-      // Os nao-selecionados continuam apenas clicaveis para entrar na selecao.
-      disabled: selectionMode && !selected,
-    });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    isDragging,
+  } = useDraggable({
+    id: lead.id,
+    // Em modo selecao, so cards selecionados arrastam (movem a selecao inteira).
+    // Os nao-selecionados continuam apenas clicaveis para entrar na selecao.
+    disabled: selectionMode && !selected,
+  });
 
   const openChat = (event: MouseEvent) => {
     event.stopPropagation();
@@ -139,11 +145,8 @@ export const LeadCard = memo(function LeadCard({
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
       role="group"
       tabIndex={0}
-      aria-roledescription="Lead arrastável"
       aria-label={clsx(
         `Lead ${lead.name}, etapa ${lead.crm_stage}, fonte ${lead.source}`,
         onKeyboardMove && "— Alt e seta esquerda ou direita move de etapa",
@@ -216,16 +219,25 @@ export const LeadCard = memo(function LeadCard({
             </div>
           )}
         </div>
-        {!selectionMode && (
-          <GripVertical
-            size={13}
+        {(!selectionMode || selected) && (
+          <button
+            ref={setActivatorNodeRef}
+            type="button"
+            data-crm-drag-handle
+            {...attributes}
+            {...listeners}
+            onClick={(event) => event.stopPropagation()}
+            aria-label={`Mover ${lead.name} para outra etapa`}
+            title="Arrastar lead"
             className={clsx(
-              "mt-0.5 shrink-0 transition-opacity",
+              "mt-0.5 inline-flex h-7 w-6 shrink-0 cursor-grab items-center justify-center rounded-md transition-colors active:cursor-grabbing",
               dark
-                ? "text-zinc-700 opacity-0 group-hover:opacity-100"
-                : "text-zinc-300 opacity-0 group-hover:opacity-100",
+                ? "text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300"
+                : "text-zinc-300 hover:bg-zinc-100 hover:text-zinc-600",
             )}
-          />
+          >
+            <GripVertical size={15} />
+          </button>
         )}
       </div>
 

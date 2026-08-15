@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import {
@@ -190,6 +198,13 @@ export function CRMPage() {
     Record<string, StageMotionKind>
   >({});
   const leadsAbortRef = useRef<AbortController | null>(null);
+  const boardScrollRef = useRef<HTMLDivElement | null>(null);
+  const boardPanRef = useRef({
+    pointerId: -1,
+    startX: 0,
+    startScrollLeft: 0,
+    moved: false,
+  });
   // Busca aplicada no servidor (ref para nao recriar refreshBoard a cada tecla).
   const searchTermRef = useRef("");
   const searchDebounceMountRef = useRef(false);
@@ -262,6 +277,56 @@ export function CRMPage() {
       activationConstraint: { delay: 250, tolerance: 8 },
     }),
   );
+
+  const handleBoardPanStart = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "touch" || event.button !== 0) return;
+    const target = event.target as HTMLElement;
+    if (
+      target.closest(
+        "button, input, select, textarea, a, [data-crm-drag-handle]",
+      )
+    ) {
+      return;
+    }
+    const board = boardScrollRef.current;
+    if (!board) return;
+    boardPanRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startScrollLeft: board.scrollLeft,
+      moved: false,
+    };
+    board.setPointerCapture(event.pointerId);
+  };
+
+  const handleBoardPanMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const board = boardScrollRef.current;
+    const pan = boardPanRef.current;
+    if (!board || pan.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - pan.startX;
+    if (Math.abs(deltaX) > 4) pan.moved = true;
+    if (!pan.moved) return;
+    board.scrollLeft = pan.startScrollLeft - deltaX;
+    event.preventDefault();
+  };
+
+  const handleBoardPanEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const board = boardScrollRef.current;
+    if (!board || boardPanRef.current.pointerId !== event.pointerId) return;
+    if (board.hasPointerCapture(event.pointerId)) {
+      board.releasePointerCapture(event.pointerId);
+    }
+    boardPanRef.current.pointerId = -1;
+  };
+
+  const preventClickAfterBoardPan = (
+    event: ReactMouseEvent<HTMLDivElement>,
+  ) => {
+    if (!boardPanRef.current.moved) return;
+    event.preventDefault();
+    event.stopPropagation();
+    boardPanRef.current.moved = false;
+  };
 
   const vendors = useMemo(
     () => staffUsers.filter((user) => user.role === "vendedor"),
@@ -2148,7 +2213,15 @@ export function CRMPage() {
               )}
             </div>
           ) : (
-            <div className="min-h-0 max-h-full flex-1 overflow-x-auto overflow-y-hidden pb-2 [-ms-overflow-style:none] [scrollbar-width:thin]">
+            <div
+              ref={boardScrollRef}
+              onPointerDown={handleBoardPanStart}
+              onPointerMove={handleBoardPanMove}
+              onPointerUp={handleBoardPanEnd}
+              onPointerCancel={handleBoardPanEnd}
+              onClickCapture={preventClickAfterBoardPan}
+              className="min-h-0 max-h-full flex-1 cursor-grab select-none overflow-x-auto overflow-y-hidden pb-2 active:cursor-grabbing [-ms-overflow-style:none] [scrollbar-width:thin]"
+            >
               <div
                 className="flex h-full min-h-0 max-h-full items-stretch gap-3"
                 style={{ minWidth: "max-content" }}
