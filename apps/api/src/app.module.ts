@@ -3,7 +3,8 @@ import IORedis from "ioredis";
 import { BullModule } from "@nestjs/bullmq";
 import { ConfigModule } from "@nestjs/config";
 import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
-import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
+import { ThrottlerModule } from "@nestjs/throttler";
+import { UserAwareThrottlerGuard } from "./common/guards/user-aware-throttler.guard";
 import { getApiEnvFilePaths } from "./config/env-paths";
 import { validateEnvironment } from "./config/env.validation";
 import { PrismaModule } from "./config/prisma.module";
@@ -145,11 +146,11 @@ const envFilePaths = getApiEnvFilePaths();
   providers: [
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: JwtAuthGuard,
     },
     {
       provide: APP_GUARD,
-      useClass: JwtAuthGuard,
+      useClass: UserAwareThrottlerGuard,
     },
     {
       provide: APP_GUARD,
