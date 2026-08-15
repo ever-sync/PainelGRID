@@ -14,6 +14,7 @@ import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.
 import { AutomationKeyGuard } from "./automation-key.guard";
 import { SendCredentialEmailDto } from "./dto/send-credential-email.dto";
 import { ReconcileScheduledLeadDto } from "./dto/reconcile-scheduled-lead.dto";
+import { RunNoShowRescueDto } from "./dto/run-no-show-rescue.dto";
 
 @ApiTags("automations")
 @Controller("integrations/v1/automations")
@@ -66,6 +67,15 @@ export class AutomationController {
   })
   initialTemplateStatus() {
     return this.leads.countInitialTemplateQueue();
+  }
+
+  @Post("no-show-rescue")
+  @ApiOperation({
+    summary:
+      "Resgata ausentes do dia anterior por template WhatsApp, sem duplicidade",
+  })
+  runNoShowRescue(@Body() dto: RunNoShowRescueDto) {
+    return this.appointments.runNoShowRescue(dto);
   }
 
   @Post("initial-template/next")

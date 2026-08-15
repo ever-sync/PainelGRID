@@ -5,6 +5,7 @@ describe("AutomationController", () => {
     sendEventCredentialEmailForAutomation: jest.fn(),
     deliverCredentialForLead: jest.fn(),
     reconcileScheduledLeadForAutomation: jest.fn(),
+    runNoShowRescue: jest.fn(),
   };
   const leads = {
     countInitialTemplateQueue: jest.fn(),
@@ -94,6 +95,21 @@ describe("AutomationController", () => {
     expect(leads.dispatchInitialWhatsappTemplatePilot).toHaveBeenCalledWith(
       leadId,
     );
+  });
+
+  it("executa o resgate automatico de ausentes", async () => {
+    appointments.runNoShowRescue.mockResolvedValue({ eligible: 2, sent: 2 });
+    const dto = {
+      client_id: "99640561-bdb7-4bfb-9236-f27ecaedf538",
+      target_date: "2026-08-14",
+      dry_run: true,
+    };
+
+    await expect(controller.runNoShowRescue(dto)).resolves.toEqual({
+      eligible: 2,
+      sent: 2,
+    });
+    expect(appointments.runNoShowRescue).toHaveBeenCalledWith(dto);
   });
 
   it("encaminha status do WhatsApp recebidos pelo n8n", async () => {

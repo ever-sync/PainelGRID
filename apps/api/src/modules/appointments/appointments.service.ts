@@ -40,6 +40,7 @@ import { NoShowAppointmentDto } from "./dto/no-show-appointment.dto";
 import { RescheduleAppointmentDto } from "./dto/reschedule-appointment.dto";
 import { DispatchTrackingService } from "../dispatch-tracking/dispatch-tracking.service";
 import type { ReconcileScheduledLeadDto } from "../integration/dto/reconcile-scheduled-lead.dto";
+import type { RunNoShowRescueDto } from "../integration/dto/run-no-show-rescue.dto";
 
 const ACTIVE_APPOINTMENT_STATUSES = [
   AppointmentStatus.proposed,
@@ -103,6 +104,225 @@ export class AppointmentsService {
       "JWT_SECRET",
       "leadflow_access_secret",
     );
+  }
+
+  async runNoShowRescue(dto: RunNoShowRescueDto) {
+    const start = new Date(`${dto.target_date}T03:00:00.000Z`);
+    if (Number.isNaN(start.getTime())) {
+      throw new BadRequestException("target_date invalida");
+    }
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    const todayInSaoPaulo = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+    if (dto.target_date >= todayInSaoPaulo) {
+      throw new BadRequestException(
+        "O resgate so pode processar datas anteriores ao dia atual",
+      );
+    }
+
+    const templateName = dto.template_name ?? "resgate_nao_comparecido_01";
+    const clientCodeBase = dto.client_id
+      .replace(/-/g, "")
+      .toUpperCase()
+      .slice(0, 16);
+    const confirmationStage = await this.prisma.crmStage.findFirst({
+      where: {
+        client_id: dto.client_id,
+        code: `${clientCodeBase}_ENVIAR_CONFIRMACAO`,
+      },
+      select: { id: true },
+    });
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        client_id: dto.client_id,
+        ...(dto.event_id ? { event_id: dto.event_id } : {}),
+        scheduled_at: { gte: start, lt: end },
+        lead: { deleted_at: null },
+      },
+      include: {
+        lead: true,
+        event: { select: { id: true, name: true, event_end_date: true } },
+      },
+      orderBy: { created_at: "desc" },
+    });
+
+    const grouped = new Map<string, typeof appointments>();
+    for (const appointment of appointments) {
+      const key = `${appointment.event_id}:${appointment.lead_id}`;
+      const group = grouped.get(key) ?? [];
+      group.push(appointment);
+      grouped.set(key, group);
+    }
+
+    const candidates = [...grouped.values()]
+      .filter((group) => {
+        const lead = group[0].lead;
+        const hasTrustedActiveAppointment = group.some(
+          (appointment) =>
+            appointment.channel === AppointmentChannel.whatsapp &&
+            (appointment.status === AppointmentStatus.scheduled ||
+              appointment.status === AppointmentStatus.confirmed),
+        );
+        const attended =
+          group.some(
+            (appointment) =>
+              appointment.status === AppointmentStatus.completed ||
+              Boolean(appointment.completed_at),
+          ) ||
+          lead.confirmation_status === ConfirmationStatus.checked_in ||
+          lead.confirmation_status === ConfirmationStatus.closed;
+        const visitMatches =
+          lead.store_visit_datetime != null &&
+          lead.store_visit_datetime >= start &&
+          lead.store_visit_datetime < end;
+        const alreadyInConfirmationStage =
+          confirmationStage != null &&
+          lead.crm_stage_id === confirmationStage.id;
+        const eventContinuesNextDay =
+          group[0].event.event_end_date != null &&
+          group[0].event.event_end_date >= end;
+        return Boolean(
+          hasTrustedActiveAppointment &&
+          !attended &&
+          visitMatches &&
+          !alreadyInConfirmationStage &&
+          eventContinuesNextDay &&
+          lead.phone,
+        );
+      })
+      .map((group) => group[0]);
+
+    const results: Array<Record<string, unknown>> = [];
+    for (const appointment of candidates) {
+      const dispatchKey = `no-show-rescue:${appointment.event_id}:${dto.target_date}:${appointment.lead_id}:${templateName}`;
+      const existing = await this.prisma.dispatchEvent.findUnique({
+        where: {
+          client_id_dispatch_key: {
+            client_id: appointment.client_id,
+            dispatch_key: dispatchKey,
+          },
+        },
+        select: { status: true, provider_message_id: true },
+      });
+      if (
+        existing &&
+        ["sent", "delivered", "read", "replied"].includes(existing.status)
+      ) {
+        results.push({
+          lead_id: appointment.lead_id,
+          lead_name: appointment.lead.name,
+          status: "already_sent",
+          provider_message_id: existing.provider_message_id,
+        });
+        continue;
+      }
+      if (dto.dry_run) {
+        results.push({
+          lead_id: appointment.lead_id,
+          lead_name: appointment.lead.name,
+          status: "eligible",
+        });
+        continue;
+      }
+
+      await this.dispatchTracking.upsert(appointment.client_id, {
+        lead_id: appointment.lead_id,
+        event_id: appointment.event_id,
+        appointment_id: appointment.id,
+        dispatch_key: dispatchKey,
+        workflow_key: "daily-no-show-rescue",
+        dispatch_type: "no_show_rescue",
+        channel: "whatsapp",
+        provider: "meta",
+        template_name: templateName,
+        status: "queued",
+        occurred_at: new Date().toISOString(),
+        metadata: { target_date: dto.target_date },
+      });
+
+      try {
+        const providerMessageId =
+          await this.metaService.sendClientWhatsappTemplate({
+            clientId: appointment.client_id,
+            to: appointment.lead.phone!,
+            templateName,
+            language: "pt_BR",
+            parameters: [],
+          });
+        await this.dispatchTracking.upsert(appointment.client_id, {
+          lead_id: appointment.lead_id,
+          event_id: appointment.event_id,
+          appointment_id: appointment.id,
+          dispatch_key: dispatchKey,
+          workflow_key: "daily-no-show-rescue",
+          dispatch_type: "no_show_rescue",
+          channel: "whatsapp",
+          provider: "meta",
+          provider_message_id: providerMessageId ?? undefined,
+          template_name: templateName,
+          status: "sent",
+          occurred_at: new Date().toISOString(),
+          metadata: { target_date: dto.target_date },
+        });
+        await this.prisma.$transaction(async (tx) => {
+          await this.syncCrmStage(
+            tx,
+            appointment.lead,
+            null,
+            ["ENVIAR_CONFIRMACAO"],
+            `Template ${templateName} enviado pelo resgate automatico de ausentes`,
+            true,
+          );
+        });
+        results.push({
+          lead_id: appointment.lead_id,
+          lead_name: appointment.lead.name,
+          status: "sent",
+          provider_message_id: providerMessageId,
+        });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        await this.dispatchTracking.upsert(appointment.client_id, {
+          lead_id: appointment.lead_id,
+          event_id: appointment.event_id,
+          appointment_id: appointment.id,
+          dispatch_key: dispatchKey,
+          workflow_key: "daily-no-show-rescue",
+          dispatch_type: "no_show_rescue",
+          channel: "whatsapp",
+          provider: "meta",
+          template_name: templateName,
+          status: "failed",
+          occurred_at: new Date().toISOString(),
+          failure_reason: reason,
+          metadata: { target_date: dto.target_date },
+        });
+        results.push({
+          lead_id: appointment.lead_id,
+          lead_name: appointment.lead.name,
+          status: "failed",
+          reason,
+        });
+      }
+    }
+
+    return {
+      target_date: dto.target_date,
+      client_id: dto.client_id,
+      event_id: dto.event_id ?? null,
+      template_name: templateName,
+      dry_run: dto.dry_run ?? false,
+      eligible: candidates.length,
+      sent: results.filter((result) => result.status === "sent").length,
+      already_sent: results.filter((result) => result.status === "already_sent")
+        .length,
+      failed: results.filter((result) => result.status === "failed").length,
+      results,
+    };
   }
 
   async create(dto: CreateAppointmentDto, idempotencyKey?: string) {
