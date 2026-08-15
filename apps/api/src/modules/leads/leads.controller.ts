@@ -165,8 +165,11 @@ export class LeadsController {
 
   @Get("vendor-availability")
   @Roles(Role.RECEPCAO, Role.GESTOR, Role.CLIENTE, Role.VENDEDOR)
-  listVendorAvailability(@CurrentUser() user: AuthenticatedUser) {
-    return this.leadsService.listVendorAvailability(user);
+  listVendorAvailability(
+    @Query("event_id") eventId: string | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.leadsService.listVendorAvailability(user, eventId);
   }
 
   @Get("vendor-attendance/current")

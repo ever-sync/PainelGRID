@@ -951,7 +951,7 @@ export class LeadsService {
 
   async getReceptionQueue(
     user: AuthenticatedUser,
-    query: { page?: number; take?: number } = {},
+    query: { event_id?: string; page?: number; take?: number } = {},
   ) {
     if (!user.client_id) {
       throw new ForbiddenException("Usuario sem empresa vinculada");
@@ -962,6 +962,12 @@ export class LeadsService {
     };
     const eventSelect = { id: true, name: true } as const;
     const event =
+      (query.event_id
+        ? await this.prisma.event.findFirst({
+            where: { ...eventScope, id: query.event_id },
+            select: eventSelect,
+          })
+        : null) ??
       (await this.prisma.event.findFirst({
         where: { ...eventScope, status: "active" },
         orderBy: { event_date: "desc" },
@@ -4781,7 +4787,7 @@ export class LeadsService {
     }
   }
 
-  async listVendorAvailability(user: AuthenticatedUser) {
+  async listVendorAvailability(user: AuthenticatedUser, eventId?: string) {
     const clientId = user.client_id;
     if (!clientId) throw new ForbiddenException("Cliente não identificado");
     await this.expireStaleVendorAttendances(clientId);
@@ -4807,6 +4813,7 @@ export class LeadsService {
           client_id: clientId,
           status: VendorAttendanceStatus.accepted,
           vendor_id: { in: vendors.map((vendor) => vendor.id) },
+          ...(eventId ? { event_id: eventId } : {}),
         },
         select: {
           id: true,
@@ -4820,10 +4827,12 @@ export class LeadsService {
       activeAttendances.map((attendance) => [attendance.vendor_id, attendance]),
     );
     return vendors.map((vendor) => {
-      const operational_status =
-        vendor.vendor_availability?.status ?? VendorOperationalStatus.online;
-      const connected = onlineIds.has(vendor.id);
       const activeAttendance = attendanceByVendor.get(vendor.id);
+      const operational_status = activeAttendance
+        ? VendorOperationalStatus.busy
+        : (vendor.vendor_availability?.status ??
+          VendorOperationalStatus.online);
+      const connected = onlineIds.has(vendor.id);
       return {
         id: vendor.id,
         name: vendor.name,

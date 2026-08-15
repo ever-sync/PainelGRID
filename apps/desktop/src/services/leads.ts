@@ -354,9 +354,10 @@ export type ReceptionQueueResponse = {
 
 export function getReceptionQueue(
   token: string,
-  params: { page?: number; take?: number } = {},
+  params: { event_id?: string; page?: number; take?: number } = {},
 ) {
   const query = new URLSearchParams();
+  if (params.event_id) query.set("event_id", params.event_id);
   if (params.page) query.set("page", String(params.page));
   if (params.take) query.set("take", String(params.take));
   const suffix = query.size ? `?${query.toString()}` : "";
@@ -468,8 +469,15 @@ export type VendorAttendance = {
   accepted_at?: string | null;
 };
 
-export function listVendorAvailability(token: string, clientId?: string) {
-  const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : "";
+export function listVendorAvailability(
+  token: string,
+  clientId?: string,
+  eventId?: string,
+) {
+  const query = new URLSearchParams();
+  if (clientId) query.set("client_id", clientId);
+  if (eventId) query.set("event_id", eventId);
+  const qs = query.size ? `?${query.toString()}` : "";
   return httpRequest<VendorAvailability[]>(`/leads/vendor-availability${qs}`, {
     method: "GET",
     token,

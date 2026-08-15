@@ -96,6 +96,7 @@ export function FilaPage() {
 
   const load = useCallback(async () => {
     const token = readStoredSession()?.accessToken;
+    const eventId = localStorage.getItem("reception:selected-event") ?? undefined;
     if (!token || !clientId) {
       setError("Não foi possível identificar a empresa deste acesso.");
       setLoading(false);
@@ -104,8 +105,8 @@ export function FilaPage() {
 
     try {
       const [queue, vendorRows] = await Promise.all([
-        getReceptionQueue(token, { page: 1, take: 50 }),
-        listVendorAvailability(token),
+        getReceptionQueue(token, { event_id: eventId, page: 1, take: 50 }),
+        listVendorAvailability(token, clientId, eventId),
       ]);
       if (!queue.event) {
         setError("Nenhum evento disponível para exibir a fila.");
@@ -142,6 +143,13 @@ export function FilaPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const refreshSelectedEvent = () => void load();
+    window.addEventListener("reception-event-changed", refreshSelectedEvent);
+    return () =>
+      window.removeEventListener("reception-event-changed", refreshSelectedEvent);
+  }, [load]);
+
   useLeadRealtimeSync(clientId, load, {
     refreshOnEvent: false,
     onEvent: () => void load(),
@@ -153,7 +161,9 @@ export function FilaPage() {
 
     setLoadingMore(true);
     try {
+      const eventId = localStorage.getItem("reception:selected-event") ?? undefined;
       const queue = await getReceptionQueue(token, {
+        event_id: eventId,
         page: queuePage + 1,
         take: 50,
       });

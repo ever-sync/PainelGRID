@@ -1,7 +1,11 @@
 import { Type } from "class-transformer";
-import { IsInt, IsOptional, Max, Min } from "class-validator";
+import { IsInt, IsOptional, IsUUID, Max, Min } from "class-validator";
 
 export class ReceptionQueueQueryDto {
+  @IsOptional()
+  @IsUUID()
+  event_id?: string;
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()
