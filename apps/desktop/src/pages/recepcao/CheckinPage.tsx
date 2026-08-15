@@ -33,6 +33,7 @@ import { listEvents, mapApiEventToEvent } from "../../services/events";
 import {
   checkLeadPhone,
   checkInLeadByToken,
+  closeLeadAttendance,
   createLead,
   fetchAllLeads,
   listVendorAvailability,
@@ -216,6 +217,9 @@ export function CheckinPage() {
   const [quickCheckinWristbands, setQuickCheckinWristbands] = useState([""]);
   const [quickCheckinBusy, setQuickCheckinBusy] = useState(false);
   const [quickCheckinError, setQuickCheckinError] = useState("");
+  const [finishCurrentAttendance, setFinishCurrentAttendance] = useState<
+    "yes" | "no" | null
+  >(null);
 
   const refreshCheckinData = useCallback(() => {
     const t = readStoredSession()?.accessToken;
@@ -337,6 +341,11 @@ export function CheckinPage() {
         (vendor) => vendor.id === linkedVendorId && vendor.eligible,
       )
     : false;
+  const linkedVendorAvailability = linkedVendorId
+    ? vendorAvailability.find((vendor) => vendor.id === linkedVendorId)
+    : null;
+  const linkedVendorActiveAttendance =
+    linkedVendorAvailability?.active_attendance ?? null;
   const leadsForEvent = useMemo(
     () => leadsState.filter((l) => l.event_id === selectedEventId),
     [leadsState, selectedEventId],
@@ -509,6 +518,7 @@ export function CheckinPage() {
       (vendor) => vendor.id === lead.assigned_vendor_id,
     );
     setQuickCheckinError("");
+    setFinishCurrentAttendance(null);
     setQuickCheckinWristbands(parseWristbandNumbers(lead.wristband_number));
     setQuickCheckinVendorId(lead.assigned_vendor_id ?? "__automatic__");
     setQuickCheckinCategory(
@@ -662,6 +672,30 @@ export function CheckinPage() {
       }
 
       if (sendToQueue) {
+        if (
+          linkedVendorId &&
+          linkedVendorActiveAttendance &&
+          finishCurrentAttendance === null
+        ) {
+          setQuickCheckinError(
+            "Escolha se deseja finalizar o atendimento atual do vendedor.",
+          );
+          return;
+        }
+        if (
+          linkedVendorId &&
+          linkedVendorActiveAttendance &&
+          finishCurrentAttendance === "yes"
+        ) {
+          await closeLeadAttendance(
+            linkedVendorActiveAttendance.lead_id,
+            {
+              sold: false,
+              attended_by_vendor_id: linkedVendorId,
+            },
+            t,
+          );
+        }
         const callResult = await notifyVendorCall(
           quickCheckinLead.id,
           t,
@@ -850,12 +884,14 @@ export function CheckinPage() {
         isDarkMode && "bg-black",
       )}
     >
-      <PageHeader
-        title="Check-in"
-        breadcrumbs={[{ label: "Recepção" }, { label: "Check-in" }]}
-        dark={isDarkMode}
-        subtitle={`Evento: ${event?.name ?? "Selecione um evento"} — ${today.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}`}
-      />
+      <div className="hidden md:block">
+        <PageHeader
+          title="Check-in"
+          breadcrumbs={[{ label: "Recepção" }, { label: "Check-in" }]}
+          dark={isDarkMode}
+          subtitle={`Evento: ${event?.name ?? "Selecione um evento"} — ${today.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}`}
+        />
+      </div>
 
       {pendingCount > 0 && (
         <div className="mb-4 mt-2 flex items-center justify-between rounded-lg bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-amber-200">
@@ -905,7 +941,7 @@ export function CheckinPage() {
           className="w-full sm:max-w-sm"
           dark={isDarkMode}
         />
-        <div className="flex gap-2 w-full sm:w-auto shrink-0">
+        <div className="hidden gap-2 md:flex md:w-auto md:shrink-0">
           <Button
             variant="secondary"
             icon={<QrCode size={16} />}
@@ -1139,7 +1175,7 @@ export function CheckinPage() {
         onClose={() => {
           if (!createBusy) setShowModal(false);
         }}
-        title="Cadastrar lead"
+        title="Check-in sem QR Code"
         dark={isDarkMode}
         footer={
           <>
@@ -1170,25 +1206,26 @@ export function CheckinPage() {
                       !discoverySourceOther.trim())
               }
             >
-              {duplicatePhoneLead ? "Fazer check-in" : "Cadastrar"}
+              {duplicatePhoneLead ? "Continuar check-in" : "Cadastrar cliente"}
             </Button>
           </>
         }
       >
-        <div className="space-y-3">
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-[#E51838]/15 bg-gradient-to-br from-[#E51838]/10 to-transparent p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#E51838]">
+              Primeiro passo
+            </p>
+            <h3 className="mt-1 text-lg font-black text-zinc-950 dark:text-white">
+              Localizar cliente pelo telefone
+            </h3>
+            <p className="mt-1 text-xs text-zinc-500">
+              Se o cliente já existir, usaremos o cadastro e o vendedor
+              vinculado.
+            </p>
+          </div>
           <Input
-            label="Nome *"
-            value={leadName}
-            onChange={(inputEvent) => {
-              setLeadName(inputEvent.target.value.slice(0, 255));
-              setCreateError("");
-            }}
-            placeholder="Nome do cliente"
-            autoComplete="name"
-            isDisabled={createBusy}
-          />
-          <Input
-            label="Telefone *"
+            label="Telefone do cliente *"
             type="tel"
             inputMode="tel"
             value={leadPhone}
@@ -1210,91 +1247,112 @@ export function CheckinPage() {
               Será salvo como: {normalizedLeadPhone}
             </p>
           ) : null}
-          {duplicatePhoneLead ? (
-            <Notice tone="warning" className="text-xs">
-              <div className="space-y-1">
-                <p>
-                  Este telefone já está cadastrado para{" "}
-                  <strong>{duplicatePhoneLead.name}</strong> neste evento.
-                </p>
-                <p>
-                  {duplicatePhoneLead.assigned_vendor_id
-                    ? `O check-in será encaminhado para ${vendorsById[duplicatePhoneLead.assigned_vendor_id] ?? "o vendedor vinculado"}.`
-                    : "Você poderá escolher um vendedor no próximo passo."}
-                </p>
-              </div>
-            </Notice>
+          {normalizedLeadPhone ? (
+            duplicatePhoneLead ? (
+              <Notice tone="success" className="text-xs">
+                <div className="space-y-1">
+                  <p className="font-bold">
+                    Cliente encontrado: {duplicatePhoneLead.name}
+                  </p>
+                  <p>
+                    {duplicatePhoneLead.assigned_vendor_id
+                      ? `Vendedor vinculado: ${vendorsById[duplicatePhoneLead.assigned_vendor_id] ?? "vendedor responsável"}.`
+                      : "Sem vendedor vinculado. Você poderá escolher no próximo passo."}
+                  </p>
+                </div>
+              </Notice>
+            ) : (
+              <Notice tone="info" className="text-xs">
+                Cliente não encontrado neste evento. Complete o cadastro abaixo.
+              </Notice>
+            )
           ) : null}
-          <Input
-            label="E-mail (opcional)"
-            type="email"
-            value={leadEmail}
-            onChange={(inputEvent) => {
-              setLeadEmail(inputEvent.target.value.slice(0, 255));
-              setCreateError("");
-            }}
-            placeholder="cliente@exemplo.com"
-            autoComplete="email"
-            error={
-              normalizedLeadEmail && !isLeadEmailValid
-                ? "Informe um e-mail válido."
-                : undefined
-            }
-            isDisabled={createBusy}
-          />
-          <fieldset className="space-y-2 pt-1">
-            <legend
-              className={clsx(
-                "text-xs font-semibold uppercase tracking-wide",
-                isDarkMode ? "text-zinc-300" : "text-zinc-700",
-              )}
-            >
-              Como ficou sabendo? <span className="text-red-500">*</span>
-            </legend>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {DISCOVERY_SOURCE_OPTIONS.map((option) => (
-                <label
-                  key={option.value}
+
+          {normalizedLeadPhone && !duplicatePhoneLead ? (
+            <div className="space-y-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+              <Input
+                label="Nome *"
+                value={leadName}
+                onChange={(inputEvent) => {
+                  setLeadName(inputEvent.target.value.slice(0, 255));
+                  setCreateError("");
+                }}
+                placeholder="Nome do cliente"
+                autoComplete="name"
+                isDisabled={createBusy}
+              />
+              <Input
+                label="E-mail (opcional)"
+                type="email"
+                value={leadEmail}
+                onChange={(inputEvent) => {
+                  setLeadEmail(inputEvent.target.value.slice(0, 255));
+                  setCreateError("");
+                }}
+                placeholder="cliente@exemplo.com"
+                autoComplete="email"
+                error={
+                  normalizedLeadEmail && !isLeadEmailValid
+                    ? "Informe um e-mail válido."
+                    : undefined
+                }
+                isDisabled={createBusy}
+              />
+              <fieldset className="space-y-2 pt-1">
+                <legend
                   className={clsx(
-                    "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
-                    discoverySource === option.value
-                      ? isDarkMode
-                        ? "border-[#e51838] bg-[#e51838]/10 text-white"
-                        : "border-[#e51838] bg-red-50 text-zinc-900"
-                      : isDarkMode
-                        ? "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-                        : "border-gray-300 text-zinc-700 hover:bg-gray-50",
+                    "text-xs font-semibold uppercase tracking-wide",
+                    isDarkMode ? "text-zinc-300" : "text-zinc-700",
                   )}
                 >
-                  <input
-                    type="radio"
-                    name="discovery-source"
-                    value={option.value}
-                    checked={discoverySource === option.value}
-                    onChange={() => {
-                      setDiscoverySource(option.value);
-                      if (option.value !== "outro") {
-                        setDiscoverySourceOther("");
-                      }
-                      setCreateError("");
-                    }}
-                    className="h-4 w-4 accent-[#e51838]"
-                  />
-                  {option.label}
-                </label>
-              ))}
+                  Como ficou sabendo? <span className="text-red-500">*</span>
+                </legend>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {DISCOVERY_SOURCE_OPTIONS.map((option) => (
+                    <label
+                      key={option.value}
+                      className={clsx(
+                        "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
+                        discoverySource === option.value
+                          ? isDarkMode
+                            ? "border-[#e51838] bg-[#e51838]/10 text-white"
+                            : "border-[#e51838] bg-red-50 text-zinc-900"
+                          : isDarkMode
+                            ? "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                            : "border-gray-300 text-zinc-700 hover:bg-gray-50",
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="discovery-source"
+                        value={option.value}
+                        checked={discoverySource === option.value}
+                        onChange={() => {
+                          setDiscoverySource(option.value);
+                          if (option.value !== "outro") {
+                            setDiscoverySourceOther("");
+                          }
+                          setCreateError("");
+                        }}
+                        className="h-4 w-4 accent-[#e51838]"
+                      />
+                      {option.label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              {discoverySource === "outro" ? (
+                <Input
+                  label="Qual? *"
+                  value={discoverySourceOther}
+                  onChange={(event) =>
+                    setDiscoverySourceOther(event.target.value.slice(0, 450))
+                  }
+                  placeholder="Digite como o cliente ficou sabendo"
+                  dark={isDarkMode}
+                />
+              ) : null}
             </div>
-          </fieldset>
-          {discoverySource === "outro" ? (
-            <Input
-              label="Qual? *"
-              value={discoverySourceOther}
-              onChange={(event) =>
-                setDiscoverySourceOther(event.target.value.slice(0, 450))
-              }
-              placeholder="Digite como o cliente ficou sabendo"
-              dark={isDarkMode}
-            />
           ) : null}
           {createError ? (
             <Notice tone="error" className="text-xs">
@@ -1455,12 +1513,47 @@ export function CheckinPage() {
             ) : null}
           </div>
           {linkedVendorName ? (
-            <Notice tone={linkedVendorIsAvailable ? "success" : "warning"}>
-              Vendedor vinculado: <strong>{linkedVendorName}</strong>
-              {!linkedVendorIsAvailable
-                ? ". Ele está indisponível; escolha outro vendedor ou o próximo da fila."
-                : ""}
-            </Notice>
+            <div className="space-y-3">
+              <Notice tone={linkedVendorIsAvailable ? "success" : "warning"}>
+                Vendedor vinculado: <strong>{linkedVendorName}</strong>
+                {linkedVendorActiveAttendance
+                  ? ` está atendendo ${linkedVendorActiveAttendance.lead_name}.`
+                  : !linkedVendorIsAvailable
+                    ? " está indisponível no momento."
+                    : " está disponível para receber este cliente."}
+              </Notice>
+              {linkedVendorActiveAttendance ? (
+                <fieldset className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
+                  <legend className="px-1 text-sm font-black text-amber-900 dark:text-amber-200">
+                    Finalizar o outro atendimento?
+                  </legend>
+                  <p className="mb-3 mt-1 text-xs text-amber-800/75 dark:text-amber-200/70">
+                    Se escolher “não”, este cliente aguardará na fila interna de{" "}
+                    {linkedVendorName}.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["no", "yes"] as const).map((choice) => (
+                      <button
+                        key={choice}
+                        type="button"
+                        onClick={() => {
+                          setFinishCurrentAttendance(choice);
+                          setQuickCheckinError("");
+                        }}
+                        className={clsx(
+                          "rounded-xl border px-3 py-2.5 text-sm font-bold transition-colors",
+                          finishCurrentAttendance === choice
+                            ? "border-[#E51838] bg-[#E51838] text-white"
+                            : "border-amber-300 bg-white text-amber-900 dark:border-amber-500/30 dark:bg-zinc-900 dark:text-amber-200",
+                        )}
+                      >
+                        {choice === "yes" ? "Sim, finalizar" : "Não, aguardar"}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+              ) : null}
+            </div>
           ) : (
             <Notice tone="info">
               Este cliente ainda não possui vendedor vinculado.

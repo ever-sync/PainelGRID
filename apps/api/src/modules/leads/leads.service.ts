@@ -4772,10 +4772,29 @@ export class LeadsService {
       },
       orderBy: { name: "asc" },
     });
+    const activeAttendances =
+      (await this.prisma.vendorAttendance.findMany({
+        where: {
+          client_id: clientId,
+          status: VendorAttendanceStatus.accepted,
+          vendor_id: { in: vendors.map((vendor) => vendor.id) },
+        },
+        select: {
+          id: true,
+          vendor_id: true,
+          lead_id: true,
+          accepted_at: true,
+          lead: { select: { name: true } },
+        },
+      })) ?? [];
+    const attendanceByVendor = new Map(
+      activeAttendances.map((attendance) => [attendance.vendor_id, attendance]),
+    );
     return vendors.map((vendor) => {
       const operational_status =
         vendor.vendor_availability?.status ?? VendorOperationalStatus.online;
       const connected = onlineIds.has(vendor.id);
+      const activeAttendance = attendanceByVendor.get(vendor.id);
       return {
         id: vendor.id,
         name: vendor.name,
@@ -4789,6 +4808,14 @@ export class LeadsService {
         // celular não deve removê-lo da fila de atendimento.
         eligible: operational_status === "online",
         last_assigned_at: vendor.vendor_availability?.last_assigned_at ?? null,
+        active_attendance: activeAttendance
+          ? {
+              id: activeAttendance.id,
+              lead_id: activeAttendance.lead_id,
+              lead_name: activeAttendance.lead.name,
+              accepted_at: activeAttendance.accepted_at,
+            }
+          : null,
       };
     });
   }

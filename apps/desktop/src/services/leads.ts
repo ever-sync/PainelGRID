@@ -447,6 +447,12 @@ export type VendorAvailability = {
   operational_status: VendorOperationalStatus;
   eligible: boolean;
   last_assigned_at: string | null;
+  active_attendance?: {
+    id: string;
+    lead_id: string;
+    lead_name: string;
+    accepted_at: string | null;
+  } | null;
 };
 
 export type VendorAttendance = {
