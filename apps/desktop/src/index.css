@@ -1,6 +1,36 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* A fila da recepção segue o mesmo tema claro do dashboard. Algumas partes
+   antigas da fila ainda usam classes do painel operacional escuro; este
+   escopo converte somente essa tela, sem alterar o modo escuro do restante
+   do sistema. */
+.reception-queue-light [class*="bg-[#0d0d10]"],
+.reception-queue-light [class*="bg-[#09090b]"],
+.reception-queue-light [class*="bg-[#111114]"],
+.reception-queue-light [class*="bg-black/20"] {
+  background-color: #ffffff !important;
+  color: #18181b !important;
+}
+
+.reception-queue-light [class*="border-zinc-800"],
+.reception-queue-light [class*="border-white/"] {
+  border-color: #e4e4e7 !important;
+}
+
+.reception-queue-light [class*="border-b border-white/"] {
+  border-bottom-color: #e4e4e7 !important;
+}
+
+.reception-queue-light [class*="text-white"] {
+  color: #18181b !important;
+}
+
+.reception-queue-light [class*="bg-[#ff0038]"][class*="text-white"],
+.reception-queue-light button[class*="bg-[#ff0038]"] {
+  color: #ffffff !important;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

@@ -361,7 +361,7 @@ export function FilaPage() {
   );
 
   return (
-    <div className="space-y-4 pb-28 sm:space-y-6 sm:pb-6">
+    <div className="reception-queue-light space-y-4 pb-28 sm:space-y-6 sm:pb-6">
       <PageHeader
         title="Fila de Atendimento"
         breadcrumbs={[
