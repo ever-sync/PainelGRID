@@ -31,6 +31,7 @@ describe("CrmService", () => {
       },
       client: {
         count: jest.fn(),
+        findUnique: jest.fn().mockResolvedValue({ webhook_url_n8n: null }),
       },
       crmPipeline: {
         findFirst: jest.fn(),
@@ -102,6 +103,7 @@ describe("CrmService", () => {
         id: "66666666-6666-4666-8666-666666666666",
         ...data,
         status: "pending",
+        lead: { id: leadId, name: "Lead Teste", phone: "+5512999999999" },
         assigned_user: { id: userId, name: "Vendedor" },
         created_by: { id: userId, name: "Gestor" },
       }),

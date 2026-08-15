@@ -48,6 +48,30 @@ export function getCrmStageCounts(clientId: string, token: string) {
   );
 }
 
+export type CrmDashboardReport = {
+  meta: { total: number; converted: number; conversion_rate: number };
+  stage_distribution: Array<{ stage: string; count: number }>;
+  source_distribution: Array<{ source: string; count: number }>;
+  execution: {
+    pending_tasks: number;
+    overdue_tasks: number;
+    completed_tasks: number;
+    leads_without_next_action: number;
+    forgotten_leads_24h: number;
+    contacted_leads: number;
+    average_first_contact_minutes: number | null;
+    sales: number;
+    sales_conversion_rate: number;
+  };
+};
+
+export function getCrmDashboardReport(clientId: string, token: string) {
+  return httpRequest<CrmDashboardReport>(
+    `/crm/reports/dashboard?client_id=${encodeURIComponent(clientId)}`,
+    { method: "GET", token },
+  );
+}
+
 export type ApiCrmHistoryItem = {
   id: string;
   from_stage: { id: string; name: string; code: string; color: string } | null;
@@ -202,6 +226,42 @@ export function updateCrmTask(
     method: "PATCH",
     token,
     body,
+  });
+}
+
+export type DuplicateLeadCandidate = {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  cpf: string | null;
+  source: string;
+  created_at: string;
+  matches: string[];
+  assigned_vendor: { id: string; name: string } | null;
+  crm_stage: { id: string; name: string } | null;
+};
+
+export function findCrmLeadDuplicates(leadId: string, token: string) {
+  return httpRequest<{ total: number; candidates: DuplicateLeadCandidate[] }>(
+    `/crm/leads/${leadId}/duplicates`,
+    { method: "GET", token },
+  );
+}
+
+export function mergeCrmLead(
+  leadId: string,
+  duplicateLeadId: string,
+  token: string,
+) {
+  return httpRequest<{
+    merged: boolean;
+    target_lead_id: string;
+    archived_lead_id: string;
+  }>(`/crm/leads/${leadId}/merge`, {
+    method: "POST",
+    token,
+    body: { duplicate_lead_id: duplicateLeadId },
   });
 }
 

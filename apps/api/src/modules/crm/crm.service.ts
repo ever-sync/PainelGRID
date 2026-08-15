@@ -92,6 +92,35 @@ export class CrmService {
     }).format(new Date());
   }
 
+  private async dispatchCrmAutomationEvent(
+    clientId: string,
+    eventType: string,
+    payload: Prisma.InputJsonValue,
+  ) {
+    try {
+      const client = await this.prisma.client.findUnique({
+        where: { id: clientId },
+        select: { webhook_url_n8n: true },
+      });
+      if (!client?.webhook_url_n8n) return null;
+      const event = await this.prisma.webhookEvent.create({
+        data: {
+          client_id: clientId,
+          event_type: eventType,
+          destination_url: client.webhook_url_n8n,
+          payload,
+        },
+      });
+      await this.webhookDispatch.enqueue(event.id);
+      return event.id;
+    } catch (error) {
+      this.logger.warn(
+        `Falha ao preparar automacao ${eventType}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
+    }
+  }
+
   async listTasks(query: ListCrmTasksQueryDto, user: AuthenticatedUser) {
     await this.assertUserCanAccessPipelineClient(user, query.client_id);
 
@@ -211,6 +240,18 @@ export class CrmService {
       action: "task_created",
       updated_at: new Date().toISOString(),
     });
+    await this.dispatchCrmAutomationEvent(dto.client_id, "crm.task.created", {
+      task_id: task.id,
+      lead_id: task.lead_id,
+      lead_name: task.lead.name,
+      lead_phone: task.lead.phone,
+      assigned_user_id: task.assigned_user_id,
+      assigned_user_name: task.assigned_user?.name ?? null,
+      task_type: task.type,
+      title: task.title,
+      due_at: task.due_at.toISOString(),
+      created_by_id: user.sub,
+    });
     return task;
   }
 
@@ -299,6 +340,20 @@ export class CrmService {
         notes: task.title,
         metadata: { task_id: task.id, task_type: task.type },
       });
+      await this.dispatchCrmAutomationEvent(
+        current.client_id,
+        "crm.task.completed",
+        {
+          task_id: task.id,
+          lead_id: task.lead_id,
+          lead_name: task.lead.name,
+          lead_phone: task.lead.phone,
+          task_type: task.type,
+          title: task.title,
+          completed_at: task.completed_at?.toISOString() ?? null,
+          completed_by_id: user.sub,
+        },
+      );
     }
     this.realtimeEvents.emitLeadUpdated(current.client_id, {
       client_id: current.client_id,
@@ -307,6 +362,210 @@ export class CrmService {
       updated_at: new Date().toISOString(),
     });
     return task;
+  }
+
+  private normalizeLeadMatch(value?: string | null) {
+    return (value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+
+  async findLeadDuplicates(leadId: string, user: AuthenticatedUser) {
+    const lead = await this.prisma.lead.findFirst({
+      where: { id: leadId, deleted_at: null },
+      select: {
+        id: true,
+        client_id: true,
+        phone: true,
+        email: true,
+        cpf: true,
+      },
+    });
+    if (!lead) throw new NotFoundException("Lead nao encontrado");
+    await this.assertUserCanAccessPipelineClient(user, lead.client_id);
+
+    const phone = this.normalizeLeadMatch(lead.phone);
+    const email = lead.email?.trim().toLowerCase() ?? "";
+    const cpf = this.normalizeLeadMatch(lead.cpf);
+    if (!phone && !email && !cpf) return { total: 0, candidates: [] };
+
+    const broad = await this.prisma.lead.findMany({
+      where: {
+        client_id: lead.client_id,
+        deleted_at: null,
+        id: { not: lead.id },
+        OR: [
+          ...(lead.phone ? [{ phone: lead.phone }] : []),
+          ...(email
+            ? [{ email: { equals: email, mode: "insensitive" as const } }]
+            : []),
+          ...(lead.cpf ? [{ cpf: lead.cpf }] : []),
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        cpf: true,
+        source: true,
+        created_at: true,
+        assigned_vendor: { select: { id: true, name: true } },
+        crm_stage: { select: { id: true, name: true } },
+      },
+      orderBy: { created_at: "asc" },
+      take: 50,
+    });
+    const candidates = broad
+      .map((candidate) => {
+        const matches = [
+          phone && this.normalizeLeadMatch(candidate.phone) === phone
+            ? "telefone"
+            : null,
+          email && candidate.email?.trim().toLowerCase() === email
+            ? "email"
+            : null,
+          cpf && this.normalizeLeadMatch(candidate.cpf) === cpf ? "cpf" : null,
+        ].filter((value): value is string => Boolean(value));
+        return { ...candidate, matches };
+      })
+      .filter((candidate) => candidate.matches.length > 0);
+    return { total: candidates.length, candidates };
+  }
+
+  async mergeLead(
+    targetLeadId: string,
+    duplicateLeadId: string,
+    user: AuthenticatedUser,
+  ) {
+    if (targetLeadId === duplicateLeadId) {
+      throw new BadRequestException("Selecione dois leads diferentes");
+    }
+    const [target, duplicate] = await Promise.all([
+      this.prisma.lead.findFirst({
+        where: { id: targetLeadId, deleted_at: null },
+      }),
+      this.prisma.lead.findFirst({
+        where: { id: duplicateLeadId, deleted_at: null },
+      }),
+    ]);
+    if (!target || !duplicate) {
+      throw new NotFoundException("Lead principal ou duplicado nao encontrado");
+    }
+    if (target.client_id !== duplicate.client_id) {
+      throw new BadRequestException("Os leads pertencem a clientes diferentes");
+    }
+    await this.assertUserCanAccessPipelineClient(user, target.client_id);
+
+    const matchPhone =
+      this.normalizeLeadMatch(target.phone) &&
+      this.normalizeLeadMatch(target.phone) ===
+        this.normalizeLeadMatch(duplicate.phone);
+    const matchEmail =
+      target.email?.trim().toLowerCase() &&
+      target.email.trim().toLowerCase() === duplicate.email?.trim().toLowerCase();
+    const matchCpf =
+      this.normalizeLeadMatch(target.cpf) &&
+      this.normalizeLeadMatch(target.cpf) === this.normalizeLeadMatch(duplicate.cpf);
+    if (!matchPhone && !matchEmail && !matchCpf) {
+      throw new BadRequestException("Os cadastros nao possuem telefone, email ou CPF em comum");
+    }
+
+    const prefer = <T>(primary: T | null | undefined, fallback: T | null | undefined) =>
+      primary ?? fallback ?? null;
+    const targetQualification =
+      target.qualification && typeof target.qualification === "object"
+        ? (target.qualification as Record<string, unknown>)
+        : {};
+    const duplicateQualification =
+      duplicate.qualification && typeof duplicate.qualification === "object"
+        ? (duplicate.qualification as Record<string, unknown>)
+        : {};
+    const merged = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.lead.update({
+        where: { id: target.id },
+        data: {
+          name: target.name || duplicate.name,
+          phone: prefer(target.phone, duplicate.phone),
+          email: prefer(target.email, duplicate.email),
+          cpf: prefer(target.cpf, duplicate.cpf),
+          notes: [target.notes, duplicate.notes]
+            .filter(Boolean)
+            .filter((value, index, values) => values.indexOf(value) === index)
+            .join("\n") || null,
+          tags: Array.from(new Set([...target.tags, ...duplicate.tags])),
+          assigned_vendor_id: prefer(
+            target.assigned_vendor_id,
+            duplicate.assigned_vendor_id,
+          ),
+          event_interest_id: prefer(
+            target.event_interest_id,
+            duplicate.event_interest_id,
+          ),
+          vehicle_brand: prefer(target.vehicle_brand, duplicate.vehicle_brand),
+          vehicle_model: prefer(target.vehicle_model, duplicate.vehicle_model),
+          vehicle_year: prefer(target.vehicle_year, duplicate.vehicle_year),
+          first_contact_at:
+            target.first_contact_at && duplicate.first_contact_at
+              ? new Date(
+                  Math.min(
+                    target.first_contact_at.getTime(),
+                    duplicate.first_contact_at.getTime(),
+                  ),
+                )
+              : prefer(target.first_contact_at, duplicate.first_contact_at),
+          last_contact_at:
+            target.last_contact_at && duplicate.last_contact_at
+              ? new Date(
+                  Math.max(
+                    target.last_contact_at.getTime(),
+                    duplicate.last_contact_at.getTime(),
+                  ),
+                )
+              : prefer(target.last_contact_at, duplicate.last_contact_at),
+          qualification: {
+            ...duplicateQualification,
+            ...targetQualification,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      await tx.lead.update({
+        where: { id: duplicate.id },
+        data: {
+          deleted_at: new Date(),
+          notes: `${duplicate.notes?.trim() ? `${duplicate.notes.trim()}\n` : ""}Mesclado ao lead ${target.id} por ${user.name}`,
+        },
+      });
+      return updated;
+    });
+
+    await this.leadTimeline.record({
+      clientId: target.client_id,
+      leadId: target.id,
+      eventType: "action_recorded",
+      origin: user.role === Role.GESTOR ? "gestor" : "crm",
+      actorId: user.sub,
+      actorLabel: user.name,
+      notes: `Cadastro duplicado ${duplicate.name} mesclado`,
+      metadata: { duplicate_lead_id: duplicate.id, action: "lead_merged" },
+    });
+    this.realtimeEvents.emitLeadUpdated(target.client_id, {
+      client_id: target.client_id,
+      lead_id: duplicate.id,
+      action: "deleted",
+      updated_at: new Date().toISOString(),
+    });
+    this.realtimeEvents.emitLeadUpdated(target.client_id, {
+      client_id: target.client_id,
+      lead_id: target.id,
+      action: "updated",
+      updated_at: new Date().toISOString(),
+    });
+    await this.dispatchCrmAutomationEvent(target.client_id, "crm.lead.merged", {
+      target_lead_id: target.id,
+      archived_lead_id: duplicate.id,
+      merged_by_id: user.sub,
+      merged_at: new Date().toISOString(),
+    });
+    return { merged: true, target_lead_id: target.id, archived_lead_id: duplicate.id, lead: merged };
   }
 
   private confirmationStatusLabel(status: string) {
@@ -324,7 +583,11 @@ export class CrmService {
     return notes?.trim() ? `${notes.trim()}\n${suffix}` : suffix;
   }
 
-  async getDashboardReport(query: GetDashboardReportQueryDto) {
+  async getDashboardReport(
+    query: GetDashboardReportQueryDto,
+    user?: AuthenticatedUser,
+  ) {
+    if (user) await this.assertUserCanAccessPipelineClient(user, query.client_id);
     const client = await this.prisma.client.findUnique({
       where: { id: query.client_id },
       select: { id: true, company_name: true, plan: true },
@@ -343,6 +606,8 @@ export class CrmService {
           source: true,
           tags: true,
           created_at: true,
+          first_contact_at: true,
+          last_contact_at: true,
           crm_stage: { select: { name: true } },
           campaign: { select: { name: true } },
           event_interest: { select: { name: true } },
@@ -432,6 +697,42 @@ export class CrmService {
     const conversionRate =
       total > 0 ? Number(((convertedCount / total) * 100).toFixed(1)) : 0;
 
+    const now = new Date();
+    const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const [pendingTasks, completedTasks, salesCount] = await Promise.all([
+      this.prisma.crmTask.findMany({
+        where: { client_id: query.client_id, status: CrmTaskStatus.pending },
+        select: { lead_id: true, due_at: true },
+      }),
+      this.prisma.crmTask.count({
+        where: { client_id: query.client_id, status: CrmTaskStatus.completed },
+      }),
+      this.prisma.sale.count({ where: { client_id: query.client_id } }),
+    ]);
+    const leadsWithNextAction = new Set(pendingTasks.map((task) => task.lead_id));
+    const contactDurations = leads
+      .filter((lead) => lead.first_contact_at)
+      .map(
+        (lead) =>
+          (lead.first_contact_at!.getTime() - lead.created_at.getTime()) /
+          60000,
+      )
+      .filter((minutes) => minutes >= 0);
+    const averageFirstContactMinutes = contactDurations.length
+      ? Math.round(
+          contactDurations.reduce((totalMinutes, value) => totalMinutes + value, 0) /
+            contactDurations.length,
+        )
+      : null;
+    const withoutNextAction = leads.filter(
+      (lead) => !leadsWithNextAction.has(lead.id),
+    ).length;
+    const forgotten = leads.filter(
+      (lead) =>
+        !leadsWithNextAction.has(lead.id) &&
+        (lead.last_contact_at ?? lead.created_at) < dayAgo,
+    ).length;
+
     return {
       client: {
         id: client.id,
@@ -450,6 +751,18 @@ export class CrmService {
       source_distribution: sourceDistribution,
       records,
       costs,
+      execution: {
+        pending_tasks: pendingTasks.length,
+        overdue_tasks: pendingTasks.filter((task) => task.due_at < now).length,
+        completed_tasks: completedTasks,
+        leads_without_next_action: withoutNextAction,
+        forgotten_leads_24h: forgotten,
+        contacted_leads: contactDurations.length,
+        average_first_contact_minutes: averageFirstContactMinutes,
+        sales: salesCount,
+        sales_conversion_rate:
+          total > 0 ? Number(((salesCount / total) * 100).toFixed(1)) : 0,
+      },
     };
   }
 

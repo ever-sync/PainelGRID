@@ -27,6 +27,7 @@ import { FindPipelinesQueryDto } from "./dto/find-pipelines-query.dto";
 import { GetDashboardReportQueryDto } from "./dto/get-dashboard-report-query.dto";
 import { BulkMoveLeadsDto } from "./dto/bulk-move-leads.dto";
 import { MoveLeadDto } from "./dto/move-lead.dto";
+import { MergeLeadDto } from "./dto/merge-lead.dto";
 import {
   CreateCrmTaskDto,
   ListCrmTasksQueryDto,
@@ -84,8 +85,11 @@ export class CrmController {
   @ApiOperation({ summary: "Retorna relatório de dashboard do CRM" })
   @ApiResponse({ status: 200, description: "Relatório retornado com sucesso" })
   @ApiResponse({ status: 403, description: "Acesso restrito ao gestor" })
-  getDashboardReport(@Query() query: GetDashboardReportQueryDto) {
-    return this.crmService.getDashboardReport(query);
+  getDashboardReport(
+    @Query() query: GetDashboardReportQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.crmService.getDashboardReport(query, user);
   }
 
   @Get("leads/stage-counts")
@@ -173,6 +177,27 @@ export class CrmController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.crmService.getLeadHistory(leadId, user);
+  }
+
+  @Get("leads/:leadId/duplicates")
+  @Roles(Role.GESTOR, Role.CLIENTE)
+  @ApiOperation({ summary: "Localiza possiveis duplicados do lead" })
+  findLeadDuplicates(
+    @Param("leadId", new ParseUUIDPipe()) leadId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.crmService.findLeadDuplicates(leadId, user);
+  }
+
+  @Post("leads/:leadId/merge")
+  @Roles(Role.GESTOR, Role.CLIENTE)
+  @ApiOperation({ summary: "Mescla e arquiva um cadastro duplicado" })
+  mergeLead(
+    @Param("leadId", new ParseUUIDPipe()) leadId: string,
+    @Body() dto: MergeLeadDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.crmService.mergeLead(leadId, dto.duplicate_lead_id, user);
   }
 
   @Get("leads/:leadId/timeline")

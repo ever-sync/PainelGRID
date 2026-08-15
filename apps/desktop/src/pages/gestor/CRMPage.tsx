@@ -35,6 +35,7 @@ import {
   List,
   EyeOff,
   CalendarCheck,
+  BarChart3,
 } from "lucide-react";
 import { Card } from "../../components/ui/Card";
 import { ConfirmationBadge, SourceBadge } from "../../components/ui/Badge";
@@ -106,6 +107,7 @@ import { LeadDetailModal } from "./crm/LeadDetailModal";
 import { StageColumn } from "./crm/StageColumn";
 import { readCrmPreferences, writeCrmPreferences } from "./crm/crm-preferences";
 import { MyDayPanel } from "./crm/MyDayPanel";
+import { CrmInsightsPanel } from "./crm/CrmInsightsPanel";
 
 export function CRMPage() {
   const { user, setGestorClientId } = useGestorClient();
@@ -156,6 +158,7 @@ export function CRMPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [openLead, setOpenLead] = useState<Lead | null>(null);
   const [myDayOpen, setMyDayOpen] = useState(false);
+  const [insightsOpen, setInsightsOpen] = useState(false);
   const [openLeadHistoryVersion, setOpenLeadHistoryVersion] = useState(0);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastCounterRef = useRef(0);
@@ -1907,6 +1910,20 @@ export function CRMPage() {
                 <CalendarCheck size={15} />
                 Meu Dia
               </button>
+              <button
+                type="button"
+                onClick={() => setInsightsOpen(true)}
+                disabled={!selectedClient}
+                title="Indicadores do CRM"
+                className={clsx(
+                  "inline-flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-xs font-black transition-colors disabled:opacity-40",
+                  isDarkMode
+                    ? "border-zinc-700 bg-[#111] text-zinc-200"
+                    : "border-zinc-200 bg-white text-zinc-700",
+                )}
+              >
+                <BarChart3 size={15} /> Indicadores
+              </button>
               {(
                 [
                   ["kanban", "Kanban", KanbanSquare],
@@ -2467,6 +2484,13 @@ export function CRMPage() {
               setMyDayOpen(false);
             });
           }}
+        />
+      )}
+      {insightsOpen && selectedClient && (
+        <CrmInsightsPanel
+          clientId={selectedClient}
+          dark={isDarkMode}
+          onClose={() => setInsightsOpen(false)}
         />
       )}
       {selectionMode && selectedLeadIds.size > 0 && (

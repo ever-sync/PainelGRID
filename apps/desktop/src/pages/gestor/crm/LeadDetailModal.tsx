@@ -25,11 +25,14 @@ import type { KanbanColumn } from "../../../lib/crm-kanban";
 import { readStoredSession } from "../../../services/auth";
 import {
   createCrmTask,
+  findCrmLeadDuplicates,
   listCrmTasks,
   listLeadTimeline,
+  mergeCrmLead,
   updateCrmTask,
   type ApiCrmTask,
   type CrmTaskType,
+  type DuplicateLeadCandidate,
   type ApiLeadTimelineItem,
 } from "../../../services/crm";
 import { updateLead } from "../../../services/leads";
@@ -121,6 +124,9 @@ export function LeadDetailModal({
       .slice(0, 16);
   });
   const [movingStageId, setMovingStageId] = useState<string | null>(null);
+  const [duplicates, setDuplicates] = useState<DuplicateLeadCandidate[] | null>(null);
+  const [duplicatesLoading, setDuplicatesLoading] = useState(false);
+  const [mergingLeadId, setMergingLeadId] = useState<string | null>(null);
 
   const vendorName = lead.assigned_vendor_id
     ? vendorsById[lead.assigned_vendor_id]
@@ -241,6 +247,32 @@ export function LeadDetailModal({
     if (!token) return;
     await updateCrmTask(taskId, { status: "completed" }, token);
     await loadTasks();
+  };
+
+  const handleFindDuplicates = async () => {
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+    setDuplicatesLoading(true);
+    try {
+      const result = await findCrmLeadDuplicates(lead.id, token);
+      setDuplicates(result.candidates);
+    } finally {
+      setDuplicatesLoading(false);
+    }
+  };
+
+  const handleMergeDuplicate = async (candidate: DuplicateLeadCandidate) => {
+    const token = readStoredSession()?.accessToken;
+    if (!token) return;
+    if (!window.confirm(`Mesclar o cadastro de ${candidate.name} em ${lead.name}? O duplicado será arquivado e poderá ser auditado.`)) return;
+    setMergingLeadId(candidate.id);
+    try {
+      await mergeCrmLead(lead.id, candidate.id, token);
+      setDuplicates((current) => current?.filter((item) => item.id !== candidate.id) ?? []);
+      setHistory((current) => current);
+    } finally {
+      setMergingLeadId(null);
+    }
   };
 
   const handleSave = async () => {
@@ -1283,6 +1315,71 @@ export function LeadDetailModal({
                     )}
                   </section>
                 </div>
+              )}
+
+              {activeTab === "pessoais" && !editing && (
+                <section
+                  className={clsx(
+                    "mb-5 rounded-2xl border p-4",
+                    dark
+                      ? "border-zinc-800 bg-[#111]"
+                      : "border-zinc-200 bg-zinc-50",
+                  )}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-black">Cadastros duplicados</h3>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        Compara telefone, e-mail e CPF sem apagar o histórico.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleFindDuplicates}
+                      disabled={duplicatesLoading}
+                      className={clsx(
+                        "rounded-xl border px-3 py-2 text-xs font-bold",
+                        dark ? "border-zinc-700" : "border-zinc-300 bg-white",
+                      )}
+                    >
+                      {duplicatesLoading ? "Verificando…" : "Verificar duplicados"}
+                    </button>
+                  </div>
+                  {duplicates && (
+                    <div className="mt-4 space-y-2">
+                      {duplicates.length === 0 ? (
+                        <p className="text-xs font-semibold text-emerald-500">
+                          Nenhum cadastro duplicado encontrado.
+                        </p>
+                      ) : (
+                        duplicates.map((candidate) => (
+                          <div
+                            key={candidate.id}
+                            className={clsx(
+                              "flex items-center justify-between gap-3 rounded-xl border p-3",
+                              dark ? "border-zinc-800" : "border-zinc-200 bg-white",
+                            )}
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-bold">{candidate.name}</p>
+                              <p className="truncate text-xs text-zinc-500">
+                                {candidate.phone || candidate.email || candidate.cpf} · coincide por {candidate.matches.join(", ")}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={mergingLeadId === candidate.id}
+                              onClick={() => handleMergeDuplicate(candidate)}
+                              className="shrink-0 rounded-xl bg-[#FF0636] px-3 py-2 text-xs font-black text-white disabled:opacity-50"
+                            >
+                              {mergingLeadId === candidate.id ? "Mesclando…" : "Mesclar"}
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </section>
               )}
 
               {activeTab === "qualificacao" && editing && (
