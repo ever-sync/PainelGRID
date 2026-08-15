@@ -24,7 +24,8 @@ BEGIN
 
     new_stage_id := gen_random_uuid();
     INSERT INTO crm_stages (
-      id, client_id, pipeline_id, code, name, display_order, color, is_final_stage
+      id, client_id, pipeline_id, code, name, display_order, color, is_final_stage,
+      created_at, updated_at
     ) VALUES (
       new_stage_id,
       current_stage.client_id,
@@ -33,7 +34,9 @@ BEGIN
       'Pré-agendado',
       current_stage.display_order,
       COALESCE(current_stage.color, '#6366F1'),
-      false
+      false,
+      NOW(),
+      NOW()
     );
 
     UPDATE crm_stages
