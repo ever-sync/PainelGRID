@@ -113,6 +113,11 @@ const FilaRecepcaoPage = lazy(() =>
     default: module.FilaPage,
   })),
 );
+const OrdemVendedoresRecepcaoPage = lazy(() =>
+  import("./pages/recepcao/OrdemVendedoresPage").then((module) => ({
+    default: module.OrdemVendedoresPage,
+  })),
+);
 const ChatPage = lazy(() =>
   import("./pages/gestor/ChatPage").then((module) => ({
     default: module.ChatPage,
@@ -569,6 +574,10 @@ export default function App() {
             <Route element={<RoleGuard allow="recepcao" />}>
               <Route path="/recepcao/checkin" element={<CheckinPage />} />
               <Route path="/recepcao/fila" element={<FilaRecepcaoPage />} />
+              <Route
+                path="/recepcao/ordem-vendedores"
+                element={<OrdemVendedoresRecepcaoPage />}
+              />
               <Route
                 path="/recepcao/configuracao"
                 element={<ConfiguracaoPage />}

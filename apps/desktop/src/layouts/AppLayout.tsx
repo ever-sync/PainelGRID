@@ -44,6 +44,7 @@ import {
   Bell,
   ShieldAlert,
   Plus,
+  ListOrdered,
 } from "lucide-react";
 import clsx from "clsx";
 import type { User } from "../types";
@@ -305,6 +306,11 @@ function getNavItems(user: User): NavItem[] {
           href: "/recepcao/fila",
           icon: <Users size={18} />,
           label: "Fila",
+        },
+        {
+          href: "/recepcao/ordem-vendedores",
+          icon: <ListOrdered size={18} />,
+          label: "Ordem vendedores",
         },
       ];
     default:
