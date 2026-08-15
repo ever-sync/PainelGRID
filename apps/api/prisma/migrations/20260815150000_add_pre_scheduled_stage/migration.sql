@@ -9,7 +9,7 @@ BEGIN
   FOR current_stage IN
     SELECT id, pipeline_id, client_id, code, display_order, color
     FROM crm_stages
-    WHERE code LIKE '%\_PRESENCA_AGENDADA' ESCAPE '\\'
+    WHERE right(code, length('_PRESENCA_AGENDADA')) = '_PRESENCA_AGENDADA'
   LOOP
     new_code := regexp_replace(current_stage.code, '_PRESENCA_AGENDADA$', '_PRE_AGENDADO');
 
@@ -53,7 +53,7 @@ SET
   updated_at = NOW()
 FROM appointments AS a
 JOIN crm_stages AS s
-  ON s.code LIKE '%\_PRE_AGENDADO' ESCAPE '\\'
+  ON right(s.code, length('_PRE_AGENDADO')) = '_PRE_AGENDADO'
 WHERE a.lead_id = l.id
   AND s.client_id = l.client_id
   AND a.status IN ('proposed'::"AppointmentStatus", 'scheduled'::"AppointmentStatus", 'confirmed'::"AppointmentStatus")
